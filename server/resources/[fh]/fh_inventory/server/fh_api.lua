@@ -148,6 +148,11 @@ function Fh.TransferAll(fromRef, toRef)
     if not from then return false, fromId end
     local to, toId, toView = Resolve(toRef)
     if not to then return false, toId end
+    if toId == fromId then -- equipped <-> backpack of one player: sibling views of one split share a group
+        for _, v in ipairs(InvCore.FhViews(from)) do
+            if v.type == toRef.type then toView = v elseif v.type == fromRef.type then fromView = v end
+        end
+    end
     local plan, leftovers = FhRules.planTransferAll(fromView, toView)
     local moved = {}
     for _, step in ipairs(plan) do
