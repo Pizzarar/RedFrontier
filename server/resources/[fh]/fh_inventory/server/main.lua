@@ -433,11 +433,14 @@ local function FhCheckMove(from, to, fromSlot, toSlot, amount)
     return plan ~= nil, why
 end
 
--- FH: is a whole player layout (SetInventory) allowed? -> ok, reason
+-- FH: is a whole layout (SetInventory, a new drop's items) allowed in c? -> ok, reason
+-- Every key must be an integer slot of c: FhRules only counts integer slots, so a 1.5 or 0 key would skip the veto.
 local function FhCheckLayout(c, items)
-    local layout = { id = c.id, type = c.type, items = items, slots = c.slots, maxWeight = c.maxWeight }
+    local layout = { id = c.id, type = c.type, fhType = c.fhType, items = items, slots = c.slots,
+        maxWeight = c.maxWeight }
     for slot, it in pairs(items) do
-        if slot < 1 or slot > c.slots or not SharedItem(it.name) then return false, 'fh_bad_slot' end
+        if math.type(slot) ~= 'integer' or slot < 1 or slot > c.slots then return false, 'fh_bad_slot' end
+        if type(it) ~= 'table' or not SharedItem(it.name) then return false, 'fh_unknown_item' end
     end
     if TotalWeight(items) > c.maxWeight then return false, 'fh_too_heavy' end
     for _, v in ipairs(FhViews(layout) or {}) do
