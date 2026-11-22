@@ -227,3 +227,5 @@ do not build on any of these. Source: `alloc8or` = RDR3 native DB, `cfx` = docs.
 | `SET_MODEL_AS_NO_LONGER_NEEDED` | `0x4AD96EF928BD4F9A` | alloc8or | **candidate, unproven** |
 | `GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS` | `0x1899F328B0E12848` | alloc8or | **candidate, unproven** |
 | `GET_ENTITY_HEADING` | `0xC230DD956E2F5507` | alloc8or | **candidate, unproven** |
+
+Dev client-error return (`client/safe.lua`, `server/dev_errors.lua`): Cfx infra only, **unverified in-game**: `GetConvarInt('fh_dev')` (client reads the replicated convar set by `setr fh_dev 1`; server reads it too), `TriggerServerEvent`, `GetResourcePath`, `io.open`, `os.date`/`os.time`, `lib.addCommand` (`fh_clienterr`, `group.admin`). No game natives.
