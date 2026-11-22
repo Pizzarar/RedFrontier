@@ -49,3 +49,14 @@ Spec: docs/FRONTIER_HOMESTEAD_SPEC.md (§4 contracts, §6 M0/M1).
 - L2, L5–L10 systems; NUI beyond what rsg-inventory already ships; balance; spike resources themselves (@spk).
 
 Lead: Core lead (Lead - Claude), spawned by Buddy.
+
+## Amendment 2026-11-22: machine split (hub)
+- **DevPC (this box):** repo, FXServer, MariaDB, server.cfg, Cfx key (untracked). Agents start/stop/ensure and read the console directly. txAdmin is **optional** for Aub's web UI. Default stays plain FXServer so the headless boot-check still works.
+- **Main PC:** RDR2 + RedM client only. F8 `connect 100.83.196.251:30120` (DevPC Tailscale) or DevPC LAN IP. server.cfg already binds 0.0.0.0:30120 tcp+udp (server.cfg:4-5).
+- **Block B-dev (allowed during the live-boot hold, infra only, no new natives):**
+  1. OWNER-STEPS.md rewrite for the split. Owner runs once, elevated on DevPC: `New-NetFirewallRule -DisplayName "RedM 30120" -Direction Inbound -Protocol TCP -LocalPort 30120 -Action Allow` + the same for UDP. Add 40120 only if Aub opts into txAdmin. Owner-only because it changes system settings.
+  2. Client error return: `fh_core` client helper `FH.safe(fn)` / wrapped thread+event helpers pcall our client code. On error it sends `fh:dev:clientError` (resource, msg, traceback) to the server, which appends it to `server/logs/client-errors.log` (gitignored) and prints to console. Gated by convar `fh_dev 1`, rate-limited. All `[fh]` client handlers use it. Root cause for our code. Workaround for non-fh resources (RSG): Aub sends the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` (path to be confirmed on Main). Follow-up: Open item "RSG client errors".
+  - Done-check: a spec for the server log handler; a deliberate client error via an admin cmd lands in client-errors.log at the live boot.
+| Block | Touches | Clashes with |
+|---|---|---|
+| B-dev | OWNER-STEPS.md, fh_core client/server dev helpers, .gitignore, [fh] client handlers | B6a client code (wraps it) |

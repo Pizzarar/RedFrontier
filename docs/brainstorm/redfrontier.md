@@ -12,6 +12,7 @@
 
 ## Decided
 - 2026-11-22: optimize for owner time-to-first-play. @core carries M0 straight into the M1 slice; @spikes = 5-min in-game probes on Core's dev server.
+- 2026-11-22: machine split. DevPC hosts repo + FXServer + txAdmin + MariaDB. Main PC runs RDR2 + RedM client only and connects on port 30120.
 
 ## Open
 - (none recorded yet)
