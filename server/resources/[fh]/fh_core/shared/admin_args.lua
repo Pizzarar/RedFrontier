@@ -58,6 +58,26 @@ function M.parseDump(args, containers)
     return { ref = { type = ctype, id = id } }
 end
 
+-- Default models for fh_spawn_horse / fh_spawn_ped. GUESSES, unverified in-game (ped model copied from spk_camp).
+M.DEFAULT_MODELS = { horse = 'a_c_horse_morgan_bay', ped = 'g_m_m_unibanditos_01' }
+
+---`fh_spawn_horse [model]` / `fh_spawn_ped [model]`: model is a name ([%w_], max 64) or a numeric hash
+function M.parseSpawn(args, kind)
+    local model = args[1] or M.DEFAULT_MODELS[kind]
+    if args[2] ~= nil then return nil, 'fh_bad_model' end
+    if type(model) ~= 'string' or #model > 64 or not model:match('^%-?[%w_]+$') then return nil, 'fh_bad_model' end
+    local n = tonumber(model)
+    if model:sub(1, 1) == '-' and not n then return nil, 'fh_bad_model' end
+    return { model = model }
+end
+
+---`fh_despawn <requestId>`
+function M.parseDespawn(args)
+    local id = int(args[1])
+    if not id or id <= 0 or args[2] ~= nil then return nil, 'fh_bad_request' end
+    return { requestId = id }
+end
+
 if GetCurrentResourceName then
     FhAdminArgs = M
 else
