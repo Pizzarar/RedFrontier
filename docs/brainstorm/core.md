@@ -25,9 +25,10 @@
 - Push to GitHub: owner OK needed.
 
 ## In flight
-- Plan docs/brainstorm/plans/core-01-boot-to-m1.md (B1 boot → B2 boot-check+busted → B3 inventory → B4 §4 → B5 admin+natives → B6+ M1). Lead Cor2 rn-428940b6f1c5. Local main cdbd1a9 (B1-B4b + spikes + specfix), 157 specs/0 fail, unpushed. B5 after VS restart 616dede2. Live boot + B4c wait on Aub key / S1.
+- Plan docs/brainstorm/plans/core-01-boot-to-m1.md (B1 boot → B2 boot-check+busted → B3 inventory → B4 §4 → B5 admin+natives → B6+ M1). Lead Cor2 rn-428940b6f1c5. Main b0eacf6 (B1-B5), 163 specs, unpushed. B6a (plot+chest) running; nothing past B6a until live boot passes. Live boot + B4c wait on Aub key / S1.
 - B3 PASS (f9a6e63 on core-b3; Gemini review PASS): fork-and-patch rsg-inventory into [fh]/fh_inventory.
 - B4b PASS (c427eee on core-b4b; Gemini re-review PASS): fh_economy ledger, fh_buffs, regions, events.md. Specs unexecuted (no Lua runner yet).
-- B4a PASS (7d32208 on core-b4a2; Gemini re-review PASS): fh_core container API + fh_inventory fork. Lead Cor2 rn-428940b6f1c5. Local main cdbd1a9 (B1-B4b + spikes + specfix), 157 specs/0 fail, unpushed. B5 after VS restart 616dede2. Live boot + B4c wait on Aub key / S1.
+- B4a PASS (7d32208 on core-b4a2; Gemini re-review PASS): fh_core container API + fh_inventory fork. Lead Cor2 rn-428940b6f1c5. Main b0eacf6 (B1-B5), 163 specs, unpushed. B6a (plot+chest) running; nothing past B6a until live boot passes. Live boot + B4c wait on Aub key / S1.
 - Spec runner fix PASS (18cd2be, merged to main cdbd1a9): all 8 specs on fh_prelude runner, 157 tests green. Next: keyed boot (Cfx key), then B4c after S1, B5.
 - B5 PASS (ef41125 on core-b5; Gemini re-review PASS; merged to main b0eacf6): admin cmds fh_give/fh_heat(stub)/fh_tp/fh_dump, natives.md (spike natives candidate, unproven), rep() pcall. 163 specs green. Spawn cmds moved to B4c.
+- B6a PASS-WITH-NITS (bff072e on core-b6a; Gemini re-review; merged main 65f750f): fh_homestead plot claim + owner chest, migration 0003. 171 specs green. Not runtime-tested. HOLD further core dispatch until Aub's live boot.
