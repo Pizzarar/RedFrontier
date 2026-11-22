@@ -26,5 +26,8 @@ The emitting lane owns the name and documents it in its README.
 | `fh:economy:paid` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
 | `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason }` |
 | `fh:buffs:applied` | fh_buffs | `{ src, buff_id, magnitude, expires_at, refreshed }` |
+| `fh:homestead:claimed` | fh_homestead | `{ src, citizenid, plot_id, region_id }` |
+| `fh:homestead:open_chest` | fh_homestead (client -> server request) | `{ plotId }` (string); server revalidates owner + reach, `src` from `source` |
+| `fh:homestead:unclaimed` | fh_homestead | `{ src, citizenid, plot_id }` (citizenid = former owner; src 0 = console) |
 
 Payloads for events not emitted by B4b are a contract proposal; the emitting lane may extend them additively.
