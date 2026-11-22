@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS `fh_ledger` (
   `citizenid` varchar(50) NOT NULL,
   `kind` enum('pay','rep') NOT NULL,
   `amount` double NOT NULL,
-  `reason` varchar(100) NOT NULL,
+  `reason` varchar(128) NOT NULL,
   `region_id` varchar(50) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),

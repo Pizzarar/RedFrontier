@@ -55,6 +55,9 @@ case('invalid input is refused without touching state', function()
         { 'well_fed', 1, 0, 'invalid_duration' },
         { 'well_fed', 1, -5, 'invalid_duration' },
         { 'well_fed', '1', 10, 'invalid_magnitude' },
+        { 'well_fed', math.huge, 10, 'invalid_magnitude' },
+        { 'well_fed', 0/0, 10, 'invalid_magnitude' },
+        { 'well_fed', 1, math.huge, 'invalid_duration' },
         { nil, 1, 10, 'unknown_buff' },
     }
     for _, c in ipairs(cases) do

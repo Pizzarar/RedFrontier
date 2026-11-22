@@ -19,4 +19,6 @@ client_scripts {
     'client/main.lua', -- stub: no effects yet
 }
 
+dependencies { 'rsg-core' }
+
 server_exports { 'apply', 'get' }

@@ -13,7 +13,9 @@ local logic = {}
 ---@return boolean ok, string? err
 function logic.validate(caps, buff_id, magnitude, duration)
     if type(buff_id) ~= 'string' or caps[buff_id] == nil then return false, 'unknown_buff' end
-    if type(magnitude) ~= 'number' or magnitude ~= magnitude or magnitude <= 0 then return false, 'invalid_magnitude' end
+    if type(magnitude) ~= 'number' or magnitude ~= magnitude or magnitude <= 0 or magnitude == math.huge then
+        return false, 'invalid_magnitude'
+    end
     if type(duration) ~= 'number' or duration ~= duration or duration <= 0 or duration == math.huge then
         return false, 'invalid_duration'
     end

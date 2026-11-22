@@ -24,7 +24,7 @@ The emitting lane owns the name and documents it in its README.
 | `fh:death:recovered` | death lane | `{ src, citizenid, container_id }` |
 | `fh:zones:camp_cleared` | zones lane | `{ src, territory_id, tier }` |
 | `fh:economy:paid` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
-| `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason, ledger_id }` |
+| `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason }` |
 | `fh:buffs:applied` | fh_buffs | `{ src, buff_id, magnitude, expires_at, refreshed }` |
 
 Payloads for events not emitted by B4b are a contract proposal; the emitting lane may extend them additively.

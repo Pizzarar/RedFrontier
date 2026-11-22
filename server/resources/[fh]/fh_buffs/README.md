@@ -11,7 +11,8 @@ Buff interface (spec 4.5). Server state only; the client side is a stub (no effe
 - Different buffs stack.
 - Same buff (still active) refreshes: expiry = now + duration, magnitude = max(old, new).
 - Magnitude is capped per buff (`config.caps`). Unknown buff ids are refused (`unknown_buff`).
-- Invalid magnitude/duration (<= 0, NaN, non-number) refused.
+- Invalid magnitude/duration (<= 0, NaN, infinite, non-number) refused.
+- `src` must be a number with a loaded rsg-core character (`no_player` otherwise); nothing is allocated before validation.
 
 ## Events
 - Emits: `fh:buffs:applied`; client sync `fh:buffs:sync` (server -> client, snapshot table).

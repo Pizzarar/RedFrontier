@@ -8,7 +8,11 @@ local function now() return GetGameTimer() / 1000.0 end
 
 ---@return boolean ok, table|string result
 local function apply(src, buff_id, magnitude, duration)
-    if type(src) ~= 'number' or not GetPlayerName(tostring(src)) then return false, 'no_player' end
+    if type(src) ~= 'number' or src ~= src or src <= 0 or src % 1 ~= 0 then return false, 'no_player' end
+    local valid, verr = logic.validate(cfg.caps, buff_id, magnitude, duration)
+    if not valid then return false, verr end
+    -- must be a loaded rsg-core character, not just a connected client
+    if not exports['rsg-core']:GetPlayer(src) then return false, 'no_player' end
     states[src] = states[src] or {}
     local ok, res = logic.apply(states[src], cfg.caps, buff_id, magnitude, duration, now())
     if not ok then return false, res end
@@ -35,6 +39,7 @@ CreateThread(function()
             if #logic.expire(st, t) > 0 then
                 TriggerClientEvent('fh:buffs:sync', src, logic.snapshot(st, t))
             end
+            if next(st) == nil then states[src] = nil end -- prune empty tables (safe during pairs)
         end
     end
 end)

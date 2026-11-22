@@ -3,7 +3,21 @@ local case = dofile('./spec/_harness.lua').case
 local logic = require('ledger_logic')
 local regions = require('regions')
 
-local ctx = { isKnownRegion = regions.isKnownRegion, maxPay = 1000, maxRepDelta = 100 }
+local ctx = { isKnownRegion = regions.isKnownRegion, maxPay = 1000, maxRepDelta = 100, maxReason = 128 }
+
+case('reason longer than maxReason is refused (pay and rep)', function()
+    local long = string.rep('x', 129)
+    local ok, err = logic.validatePay({ amount = 5, reason = long, region_id = 'heartlands' }, ctx)
+    assert(ok == false and err == 'invalid_reason')
+    ok, err = logic.validateRep({ delta = 5, reason = long, region_id = 'heartlands' }, ctx)
+    assert(ok == false and err == 'invalid_reason')
+    assert(logic.validatePay({ amount = 5, reason = string.rep('x', 128), region_id = 'heartlands' }, ctx) == true)
+end)
+case('validSrc accepts only positive integer numbers', function()
+    assert(logic.validSrc(7) == true)
+    for _, bad in ipairs({ '7', 0, -1, 1.5, 0/0, true }) do assert(logic.validSrc(bad) == false, tostring(bad)) end
+    assert(logic.validSrc(nil) == false)
+end)
 local function pay(a, r, g) return logic.validatePay({ amount = a, reason = r, region_id = g }, ctx) end
 local function rep(d, r, g) return logic.validateRep({ delta = d, reason = r, region_id = g }, ctx) end
 
