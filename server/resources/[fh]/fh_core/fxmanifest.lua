@@ -7,6 +7,7 @@ lua54 'yes'
 description 'RedFrontier core contracts (pure-Lua shared modules are unit-tested with busted)'
 
 shared_scripts {
+    '@ox_lib/init.lua',
     'config.lua',
     'shared/*.lua', -- modules resolve each other at call time, so glob order does not matter
 }

@@ -8,3 +8,11 @@
 6. Test: create a character, spawn in, walk around, press the inventory key. There's no HUD yet; that's expected.
 7. To stop: Ctrl+C in the server window, then `tools/stop-server.ps1`.
 8. Report anything odd to Core, and include the last lines of `server/logs/fxserver.log`.
+
+## B5 admin commands (needs your account in `group.admin`; none of this is runtime-tested yet)
+
+1. `fh_give <yourId> bread 2` then open the inventory: 2 bread in your backpack (anything that does not fit stays in a drop bag and the reply says so).
+2. `fh_give <yourId> notanitem` replies `fh_unknown_item`.
+3. `fh_tp 0 0 100` moves you; `fh_tp <otherId>` moves you to them.
+4. `fh_dump backpack <yourId>` prints the snapshot JSON in the server console.
+5. `fh_heat <yourId> 40` replies "heat stub" (no effect until fh_zones exists).

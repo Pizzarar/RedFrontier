@@ -56,8 +56,10 @@ local function rep(src, region_id, delta, reason)
     })
     if not done or not committed then return false, 'ledger_failed' end
 
-    local value = MySQL.scalar.await('SELECT `value` FROM fh_rep WHERE citizenid = ? AND region_id = ?',
+    -- The write already committed: a failed read-back must not turn into a failure. Emit with value = nil instead.
+    local readOk, value = pcall(MySQL.scalar.await, 'SELECT `value` FROM fh_rep WHERE citizenid = ? AND region_id = ?',
         { citizenid, region_id })
+    if not readOk then value = nil end
     TriggerEvent('fh:economy:rep_changed', { src = src, citizenid = citizenid, region_id = region_id,
         delta = delta, value = value, reason = reason })
     return true
