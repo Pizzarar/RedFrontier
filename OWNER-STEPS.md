@@ -1,13 +1,29 @@
 # Owner steps: first join (only Aub can do these)
 
-1. Get a server key at https://portal.cfx.re/servers/registration-keys (any name, IP/host `localhost`).
+Two machines. **DevPC** has the repo, FXServer, MariaDB, `server/server.cfg` and the Cfx key. **Main PC** runs only RDR2 + RedM.
+
+## On the DevPC
+
+1. Get a server key at https://portal.cfx.re/servers/registration-keys (any name). Set the IP/host to the **DevPC's** address (its Tailscale IP `100.83.196.251` or its LAN IP), not `localhost`.
 2. Open `server/secrets.cfg` (setup already created it) and replace `REPLACE_WITH_CFX_LICENSE_KEY` with the key. This file is gitignored; never commit it or paste the key anywhere.
-3. You need RDR2 (your own legit copy) and the RedM client installed.
-4. In PowerShell from the repo root: `tools/setup-server.ps1` (only the first time; it downloads for about 10 minutes), then `tools/start-server.ps1` in its own window.
-5. Open RedM, press F8, type `connect localhost:30120`.
-6. Test: create a character, spawn in, walk around, press the inventory key. There's no HUD yet; that's expected.
-7. To stop: Ctrl+C in the server window, then `tools/stop-server.ps1`.
-8. Report anything odd to Core, and include the last lines of `server/logs/fxserver.log`.
+3. In PowerShell from the repo root: `tools/setup-server.ps1` (only the first time; it downloads for about 10 minutes), then `tools/start-server.ps1` in its own window. This is the one way to start the server (plain FXServer; the headless boot-check uses it too). txAdmin is optional and not needed.
+4. **Owner-only, once** (changes system settings): open the firewall from an elevated PowerShell on the DevPC:
+   ```powershell
+   New-NetFirewallRule -DisplayName "RedM 30120 TCP" -Direction Inbound -Protocol TCP -LocalPort 30120 -Action Allow
+   New-NetFirewallRule -DisplayName "RedM 30120 UDP" -Direction Inbound -Protocol UDP -LocalPort 30120 -Action Allow
+   ```
+
+## On the Main PC
+
+5. You need RDR2 (your own legit copy) and the RedM client installed.
+6. Open RedM, press F8, type `connect 100.83.196.251:30120` (DevPC Tailscale) or `connect <DevPC LAN IP>:30120`.
+7. Test: create a character, spawn in, walk around, press the inventory key. There's no HUD yet; that's expected.
+
+## Stopping and reporting
+
+8. To stop: Ctrl+C in the server window on the DevPC, then `tools/stop-server.ps1`.
+9. Report anything odd to Core, and include the last lines of `server/logs/fxserver.log` (DevPC). If the RSG client log is needed, send the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` from the Main PC (path to be confirmed).
+10. With `fh_dev` on (see `server.cfg`), client script errors are also appended to `server/logs/client-errors.log` on the DevPC. To check the pipe, run `fh_clienterr` in game (admin): expect a line in that file.
 
 ## B5 admin commands (needs your account in `group.admin`; none of this is runtime-tested yet)
 
