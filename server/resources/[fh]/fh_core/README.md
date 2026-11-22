@@ -1,0 +1,170 @@
+# fh_core
+
+Core lane contracts for RedFrontier: the item registry (spec §4.1), the container rules and the one
+server-side container API (spec §4.2). Other lanes never touch inventory tables; they call `exports.fh_core`.
+
+Start order in `server.cfg`: `rsg-core`, then `fh_core`, then `fh_inventory`.
+
+## Files
+
+| File | Global (FXServer) | Purpose |
+|---|---|---|
+| `config.lua` | `FhConfig` | Tuning: container slots/weights, reach, item definitions and overrides |
+| `shared/items.lua` | `FhItems` | Item definitions: validate, define, resolve, instance fields |
+| `shared/containers.lua` | `FhContainers` | Size-class allow-list per container, coords rule, reach check |
+| `shared/rules.lua` | `FhRules` | The veto: `canFit`, `getWeight`, `playerViews`, `planMove`, `planTransferAll` |
+| `shared/util.lua` | `FhUtil` | Small helpers |
+| `server/inventory.lua` | - | The exports below |
+
+The shared modules are pure Lua (no natives). Under FXServer they set their global; under busted they `return`
+the module. They look each other up at call time, so load order inside `shared/*.lua` does not matter.
+`FhConfig` is never named `Config`: fh_inventory's vendored code owns `Config`.
+
+fh_inventory loads the same files so both resources run the same rules:
+
+```lua
+shared_scripts { '@fh_core/config.lua', '@fh_core/shared/items.lua', '@fh_core/shared/containers.lua', '@fh_core/shared/rules.lua' }
+```
+
+## Items (§4.1)
+
+Resolved definition: `{ name, label, weight, size_class, stackable, value_base, illicit, fast_travel }`.
+
+- Existing rsg items get their fh fields from `FhConfig.ItemOverrides[name]` (`size_class`, `value_base`,
+  `illicit`, `stackable`); anything unlisted is `pocket`, value 0, legal, stackable unless rsg says `unique`.
+- New items go in `FhConfig.Items` or `exports.fh_core:registerItems`. fh_core pushes both, plus the overrides,
+  into `RSGCore.Shared.Items` with `exports['rsg-core']:SetItems` on start (and again if rsg-core restarts).
+- Per-instance data lives in `item.info`, because rsg-inventory persists only `{name, amount, info, slot}`:
+  `info.condition` (nullable 0-100) and `info.stars` (nullable 1-3, the spec's "quality"; `info.quality` is
+  already rsg's 0-100 freshness). Read them with `FhItems.condition(item)` / `FhItems.stars(item)`: items saved
+  before the fields existed return `nil`, never an error.
+- `cargo` items have `fast_travel = false`.
+
+## Containers (§4.2)
+
+| Type | Accepts | Coords | Default slots / weight (g) |
+|---|---|---|---|
+| `equipped` | pocket | carried | 5 / 8 000 (first player slots = hotbar) |
+| `backpack` | pocket | carried | rest of the player slots / total carry minus equipped |
+| `saddlebag` | pocket, bulky | required | 20 / 60 000 |
+| `wagon` | pocket, bulky, cargo | required (reach 5.0 m) | 60 / 500 000 |
+| `chest` | pocket, bulky, cargo | required | 50 / 1 000 000 |
+| `drop_bag` | pocket, bulky | required | 30 / 1 000 000 |
+| `fence_stash` | pocket, bulky | required | 20 / 200 000 |
+
+`drop_bag` and `fence_stash` are not in the spec table; they take pocket and bulky, never cargo.
+Default reach is `FhConfig.Access.InteractDistance` (3.5 m). A world container without coords is refused.
+
+The player's total carry weight stays with rsg-inventory. `FhRules.playerViews` splits it: each section's cap is
+`min(own cap, total - the other section's weight)`, so equipped has its own 8 kg sub-cap and the backpack gets
+whatever the total leaves.
+
+### Views (what `FhRules` works on)
+
+```lua
+view = {
+  type = 'chest', items = { [slot] = item }, slots = 50, maxWeight = 1000000,
+  slotRange = { first, last } | nil, coords = vector3 | nil,
+  -- optional, set by playerViews: ownMaxWeight, group (shared by equipped + backpack), id
+}
+```
+
+Items are rsg runtime items (`name, amount, weight` per unit, `unique, info, slot`). Only slots inside the view's
+range count.
+
+### FhRules
+
+| Function | Returns |
+|---|---|
+| `FhRules.canFit(view, item, amount, opts)` | `ok, reason, slot`; `opts = { slot, replacing, freed, siblingFreed }` |
+| `FhRules.getWeight(view)` | grams |
+| `FhRules.playerViews(playerItems, totalCap, totalSlots?)` | `equippedView, backpackView` |
+| `FhRules.planMove(fromView, toView, fromSlot, toSlot, amount)` | `plan` or `nil, reason` |
+| `FhRules.planTransferAll(fromView, toView)` | `plan, leftovers` |
+
+- `item` may be an item name. `amount` defaults to `item.amount`.
+- `replacing`: an item leaving the view in the same operation (its slot is free, its weight removed).
+  `freed`: grams leaving this view. `siblingFreed`: grams leaving the sibling section (equipped/backpack).
+- `planMove` plan: `{ kind = 'move'|'stack'|'swap', name, fromSlot, toSlot, amount, fromType, toType,
+  swapName, swapAmount }`. A swap needs the whole source stack. Both legs of a swap are checked.
+- `planTransferAll` plan: an array of `{ kind = 'move'|'stack', name, fromSlot, toSlot, amount, fromType, toType }`;
+  leftovers: `{ slot, name, amount, reason }`. Stackables move partially when only part fits; non-stackables
+  move whole or not at all.
+- Nothing in `FhRules` mutates its arguments.
+
+## Server API
+
+A container ref is `{ type = <container type>, id = <id> }`: `id` is the player server id for `equipped` and
+`backpack`, otherwise the fh_inventory stash/drop id (`fh:saddle:<horse>`, `fh:wagon:<wagon>`,
+`fh:chest:<homestead>:<n>`, `fh:fence:<citizenid>:<fence>`, `fh:dropbag:<n>`).
+
+| Export | Returns |
+|---|---|
+| `move(fromRef, toRef, fromSlot, toSlot, amount?, src?)` | `ok, reason` |
+| `canFit(ref, item, amount, opts?)` | `ok, reason` (`item` may be a name; rsg shared items are looked up) |
+| `getWeight(ref)` | `grams` or `nil, reason` |
+| `snapshot(ref)` | deep copy `{ [slot] = item }` or `nil, reason` |
+| `transferAll(fromRef, toRef, src?)` | `true, moved, leftovers` or `false, reason` |
+| `registerContainer(ref, { coords, slots?, maxWeight?, label? })` | `ok, reason` |
+| `setContainerCoords(ref, coords)` | `ok, reason` |
+| `open(src, ref)` | `ok, reason` (reach checked from the server-side ped position) |
+| `createDropBag(coords, items, { owner?, label? })` | `id` or `nil, reason` |
+| `registerItems({ [name] = def })` | `ok, err, badName` (validates every entry before applying any) |
+
+- `registerContainer` refuses `equipped`/`backpack` (`fh_not_registrable`) and any world container without
+  valid coords (`fh_no_coords`). Registrations are kept and re-sent when fh_inventory restarts, so register once
+  from your resource's start; it is fine to call before fh_inventory is up.
+- `move` from server code is trusted: no reach check. `open` is the player-facing path and checks reach.
+- If fh_inventory is not running, calls fail with `fh_inventory_down`.
+
+### fh_inventory adapter (what fh_core calls)
+
+fh_inventory exports these; only fh_core may call them. They re-check with `FhRules` under fh_inventory's own
+state before mutating.
+
+| Export | Returns |
+|---|---|
+| `FhView(ref)` | `view` (player refs via `FhRules.playerViews`) or `nil, reason` |
+| `FhSnapshot(ref)` | deep-copied items or `nil, reason` |
+| `FhMove(fromRef, toRef, fromSlot, toSlot, amount?)` | `ok, reason` |
+| `FhTransferAll(fromRef, toRef)` | `true, moved, leftovers` or `false, reason` |
+| `FhRegisterContainer(ref, { slots, maxWeight, coords, label })` | `ok, reason` |
+| `FhSetCoords(ref, coords)` | `ok, reason` |
+| `FhOpen(src, ref)` | `ok, reason` |
+| `FhCreateDropBag(coords, items, opts)` | `id` or `nil, reason` |
+
+### Reason codes
+
+Locale keys (fh_inventory's `en.json` carries the text): `fh_unknown_container`, `fh_unknown_item`,
+`fh_bad_size_class`, `fh_size_class`, `fh_bad_amount`, `fh_bad_slot`, `fh_too_heavy`, `fh_slot_taken`,
+`fh_no_slot`, `fh_no_item`, `fh_same_slot`, `fh_no_coords`, `fh_no_player_coords`, `fh_out_of_reach`,
+`fh_bad_ref`, `fh_not_registrable`, `fh_no_player`, `fh_no_container`, `fh_refused`, `fh_inventory_down`,
+`fh_inventory_error`. Item validation: `fh_item_not_table`, `fh_bad_item_name`, `fh_bad_label`, `fh_bad_weight`,
+`fh_bad_value_base`, `fh_bad_illicit`, `fh_bad_stackable`.
+
+## Events
+
+Emitted (server-local `TriggerEvent`, one table, see `docs/events.md`):
+
+| Event | When | Payload |
+|---|---|---|
+| `fh:inventory:moved` | `move` succeeded | `{ src, citizenid, from, to, item, count }` |
+| `fh:inventory:refused` | `move` refused | `{ src, citizenid, from, to, item, count, reason }` |
+| `fh:inventory:transferred` | `transferAll` ran | `{ src, citizenid, from, to, moved, leftovers }` |
+
+`from`/`to` are container refs. `src` is the acting player (the `src` argument, else the player side of the
+move); it may be nil for container-to-container moves. Moves the player makes by dragging in the inventory UI
+are checked inside fh_inventory and do not go through these events.
+
+Consumed: `onResourceStart` (fh_core, rsg-core, fh_inventory), `RSGCore:Server:UpdateObject`.
+
+## Natives
+
+See `docs/natives.md`.
+
+## Tests
+
+`spec/items_spec.lua`, `spec/containers_spec.lua`, `spec/rules_spec.lua` (repo root). Run `tools/test.ps1`
+(busted). Each spec also runs standalone with plain Lua 5.4 (`lua spec/rules_spec.lua`) through
+`spec/support/fh_prelude.lua`. The server API is not covered by specs; it was smoke-tested against stubbed
+natives and fh_inventory exports only.

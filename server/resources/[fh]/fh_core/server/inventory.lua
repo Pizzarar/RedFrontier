@@ -1,0 +1,299 @@
+-- fh_core server container API (spec §4.2). The one inventory API other lanes use:
+--   exports.fh_core:move / canFit / getWeight / snapshot / transferAll
+--   exports.fh_core:registerContainer / setContainerCoords / open / createDropBag / registerItems
+-- fh_core never reads or writes inventory tables. Everything goes through fh_inventory's Fh* exports, which re-check
+-- with FhRules under their own state before mutating anything.
+--
+-- A container ref is { type = <container type>, id = <id> }:
+--   equipped / backpack : id = player server id (number)
+--   every other type    : id = the fh_inventory stash/drop id string (e.g. 'fh:chest:<homestead>:<n>')
+-- Natives used here: GetPlayerPed, GetEntityCoords (see docs/natives.md).
+
+local INV = 'fh_inventory'
+
+local registered = {}   -- key -> { ref, opts } : re-sent when fh_inventory (re)starts
+local RSGCore
+
+local function core()
+    if not RSGCore and GetResourceState('rsg-core') == 'started' then
+        RSGCore = exports['rsg-core']:GetCoreObject()
+    end
+    return RSGCore
+end
+
+AddEventHandler('RSGCore:Server:UpdateObject', function()
+    if GetResourceState('rsg-core') == 'started' then RSGCore = exports['rsg-core']:GetCoreObject() end
+end)
+
+local function refKey(ref) return tostring(ref.type) .. '|' .. tostring(ref.id) end
+
+local function validRef(ref)
+    if type(ref) ~= 'table' or not FhContainers.isType(ref.type) then return false, 'fh_unknown_container' end
+    if FhContainers.CARRIED[ref.type] then
+        if type(ref.id) ~= 'number' then return false, 'fh_bad_ref' end
+    elseif type(ref.id) ~= 'string' or ref.id == '' then
+        return false, 'fh_bad_ref'
+    end
+    return true
+end
+
+---Call an fh_inventory export. Returns false, 'fh_inventory_down' when it isn't running or the call throws.
+local function inv(fn, ...)
+    if GetResourceState(INV) ~= 'started' then return false, 'fh_inventory_down' end
+    local res = table.pack(pcall(exports[INV][fn], exports[INV], ...))
+    if not res[1] then
+        print(('^1[fh_core] %s.%s failed: %s^7'):format(INV, fn, tostring(res[2])))
+        return false, 'fh_inventory_error'
+    end
+    return table.unpack(res, 2, res.n)
+end
+
+local function citizenidOf(src)
+    local c = type(src) == 'number' and core()
+    local p = c and c.Functions.GetPlayer(src)
+    return p and p.PlayerData.citizenid or nil
+end
+
+local function actorOf(fromRef, toRef, src)
+    if type(src) == 'number' then return src end
+    if FhContainers.CARRIED[fromRef.type] then return fromRef.id end
+    if FhContainers.CARRIED[toRef.type] then return toRef.id end
+    return nil
+end
+
+-- Payloads follow fh_core/docs/events.md: one table, src first, additive fields only.
+local function emit(name, src, fields)
+    local payload = { src = src, citizenid = citizenidOf(src) }
+    for k, v in pairs(fields) do payload[k] = v end
+    TriggerEvent(name, payload)
+end
+
+local function view(ref)
+    local ok, reason = validRef(ref)
+    if not ok then return nil, reason end
+    local v, err = inv('FhView', ref)
+    if type(v) ~= 'table' then return nil, err or 'fh_no_container' end
+    return v
+end
+
+-- ---------------------------------------------------------------- queries
+
+---@param item table|string runtime item, or an item name (looked up in RSGCore.Shared.Items, then fh definitions)
+---@return boolean ok, string|nil reason
+local function canFit(ref, item, amount, opts)
+    local v, reason = view(ref)
+    if not v then return false, reason end
+    if type(item) == 'string' then
+        local c = core()
+        local s = c and c.Shared.Items[item]
+        if s then item = { name = item, weight = s.weight, unique = s.unique, info = {} } end
+    end
+    local ok, why = FhRules.canFit(v, item, amount, opts)
+    return ok, why
+end
+
+---@return number|nil grams, string|nil reason
+local function getWeight(ref)
+    local v, reason = view(ref)
+    if not v then return nil, reason end
+    return FhRules.getWeight(v)
+end
+
+---Deep copy of the container's items (slot -> item), safe to keep.
+---@return table|nil items, string|nil reason
+local function snapshot(ref)
+    local ok, reason = validRef(ref)
+    if not ok then return nil, reason end
+    local items, err = inv('FhSnapshot', ref)
+    if type(items) ~= 'table' then return nil, err or 'fh_no_container' end
+    return items
+end
+
+-- ---------------------------------------------------------------- mutations
+
+---Move `amount` (nil = whole stack) from fromRef[fromSlot] to toRef[toSlot]. fh_inventory re-plans and applies.
+---@param src number|nil acting player for events (defaults to the player side of the move)
+---@return boolean ok, string|nil reason
+local function move(fromRef, toRef, fromSlot, toSlot, amount, src)
+    local ok, reason = validRef(fromRef)
+    if ok then ok, reason = validRef(toRef) end
+    local actor = ok and actorOf(fromRef, toRef, src) or src
+    local item, count
+    if ok then
+        local fromView, toView
+        fromView, reason = view(fromRef)
+        if fromView then toView, reason = view(toRef) end
+        ok = fromView ~= nil and toView ~= nil
+        if ok then
+            local plan
+            plan, reason = FhRules.planMove(fromView, toView, fromSlot, toSlot, amount)
+            ok = plan ~= nil
+            if plan then item, count = plan.name, plan.amount end
+        end
+    end
+    if ok then ok, reason = inv('FhMove', fromRef, toRef, fromSlot, toSlot, amount) end
+    if ok then
+        emit('fh:inventory:moved', actor, { from = fromRef, to = toRef, item = item, count = count })
+        return true
+    end
+    emit('fh:inventory:refused', actor,
+        { from = fromRef, to = toRef, item = item, count = count or amount, reason = reason or 'fh_refused' })
+    return false, reason or 'fh_refused'
+end
+
+---Move everything that fits from fromRef to toRef (stackables partially).
+---@return boolean ok, table|string movedOrReason, table|nil leftovers
+--- moved/leftovers: arrays as FhRules.planTransferAll returns them, as actually applied by fh_inventory
+local function transferAll(fromRef, toRef, src)
+    local ok, reason = validRef(fromRef)
+    if ok then ok, reason = validRef(toRef) end
+    if not ok then return false, reason end
+    local moved, leftovers
+    ok, moved, leftovers = inv('FhTransferAll', fromRef, toRef)
+    if not ok then return false, moved or 'fh_refused' end
+    moved, leftovers = moved or {}, leftovers or {}
+    emit('fh:inventory:transferred', actorOf(fromRef, toRef, src),
+        { from = fromRef, to = toRef, moved = moved, leftovers = leftovers })
+    return true, moved, leftovers
+end
+
+-- ---------------------------------------------------------------- containers
+
+---Register a world container. opts = { coords (required), slots?, maxWeight?, label? }. Defaults from FhConfig.
+---Carried types (equipped/backpack) are not registrable. A world container without valid coords is refused.
+---Stored and re-sent to fh_inventory whenever it (re)starts.
+---@return boolean ok, string|nil reason
+local function registerContainer(ref, opts)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    opts = opts or {}
+    if not FhContainers.validCoords(opts.coords) then return false, 'fh_no_coords' end
+    local d = FhContainers.defaults(ref.type) or {}
+    local entry = {
+        slots = tonumber(opts.slots) or d.slots,
+        maxWeight = tonumber(opts.maxWeight) or d.maxWeight,
+        coords = opts.coords,
+        label = opts.label,
+    }
+    registered[refKey(ref)] = { ref = { type = ref.type, id = ref.id }, opts = entry }
+    if GetResourceState(INV) ~= 'started' then return true end -- applied on fh_inventory start
+    return inv('FhRegisterContainer', ref, entry)
+end
+
+---@return boolean ok, string|nil reason
+local function setContainerCoords(ref, coords)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    if not FhContainers.validCoords(coords) then return false, 'fh_no_coords' end
+    local reg = registered[refKey(ref)]
+    if reg then reg.opts.coords = coords end
+    return inv('FhSetCoords', ref, coords)
+end
+
+---Open a container's UI for player `src`. Reach is checked here from the server-side ped position and again by
+---fh_inventory (FhOpen) before it opens.
+---@return boolean ok, string|nil reason
+local function open(src, ref)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if type(src) ~= 'number' or GetPlayerPed(src) == 0 then return false, 'fh_no_player' end
+    if not FhContainers.CARRIED[ref.type] then
+        local v
+        v, reason = view(ref)
+        if not v then return false, reason end
+        local ped = GetPlayerPed(src)
+        ok, reason = FhContainers.canReach(ref.type, v.coords, GetEntityCoords(ped))
+        if not ok then return false, reason end
+    end
+    return inv('FhOpen', src, ref)
+end
+
+---Create a drop bag (death / spill) at coords holding `items` (array of {name, amount, info}).
+---opts = { owner = citizenid?, label? }.
+---@return string|nil id, string|nil reason
+local function createDropBag(coords, items, opts)
+    if not FhContainers.validCoords(coords) then return nil, 'fh_no_coords' end
+    local id, reason = inv('FhCreateDropBag', coords, items or {}, opts or {})
+    if type(id) ~= 'string' then return nil, reason or 'fh_refused' end
+    return id
+end
+
+-- ---------------------------------------------------------------- items
+
+-- Push fh definitions and ItemOverrides into RSGCore.Shared.Items (one SetItems broadcast).
+local function pushItems(names)
+    local c = core()
+    if not c then return false, 'rsg_core_down' end
+    local shared = c.Shared.Items
+    local batch = {}
+    local defs = FhItems.all()
+    if names then
+        for _, n in ipairs(names) do batch[n] = FhItems.toRsg(n, defs[n], shared[n]) end
+    else
+        for n, def in pairs(defs) do batch[n] = FhItems.toRsg(n, def, shared[n]) end
+        for n, over in pairs(FhConfig.ItemOverrides or {}) do
+            if shared[n] and not batch[n] then batch[n] = FhItems.toRsg(n, over, shared[n]) end
+        end
+    end
+    if next(batch) == nil then return true end
+    return exports['rsg-core']:SetItems(batch)
+end
+
+---Define items at runtime: defs = { name = { label, weight, size_class, stackable, value_base, illicit, ... } }.
+---Validates every entry before applying any. Returns ok, err, badName.
+local function registerItems(defs)
+    if type(defs) ~= 'table' then return false, 'fh_item_not_table' end
+    for name, def in pairs(defs) do
+        if type(name) ~= 'string' or name == '' then return false, 'fh_bad_item_name', name end
+        local ok, err = FhItems.validate(def)
+        if not ok then return false, err, name end
+    end
+    local names = {}
+    for name, def in pairs(defs) do
+        FhItems.define(name, def)
+        names[#names + 1] = name
+    end
+    return pushItems(names)
+end
+
+-- ---------------------------------------------------------------- lifecycle
+
+local function validateConfigItems()
+    for name, def in pairs(FhConfig.Items or {}) do
+        local ok, err = FhItems.validate(def)
+        if not ok then print(('^1[fh_core] FhConfig.Items.%s invalid: %s^7'):format(name, err)) end
+    end
+    for name, over in pairs(FhConfig.ItemOverrides or {}) do
+        local ok, err = FhItems.validate(over, true)
+        if not ok then print(('^1[fh_core] FhConfig.ItemOverrides.%s invalid: %s^7'):format(name, err)) end
+    end
+end
+
+local function resendContainers()
+    for _, reg in pairs(registered) do inv('FhRegisterContainer', reg.ref, reg.opts) end
+end
+
+AddEventHandler('onResourceStart', function(res)
+    if res == GetCurrentResourceName() then
+        validateConfigItems()
+        pushItems()
+    elseif res == 'rsg-core' then
+        RSGCore = nil
+        pushItems()
+    elseif res == INV then
+        resendContainers()
+    end
+end)
+
+exports('move', move)
+exports('canFit', canFit)
+exports('getWeight', getWeight)
+exports('snapshot', snapshot)
+exports('transferAll', transferAll)
+exports('registerContainer', registerContainer)
+exports('setContainerCoords', setContainerCoords)
+exports('open', open)
+exports('createDropBag', createDropBag)
+exports('registerItems', registerItems)

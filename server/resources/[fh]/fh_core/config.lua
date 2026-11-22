@@ -20,7 +20,7 @@ M.Containers = {
     -- equipped = the first `slots` player slots (rsg-inventory hotbar). Its own weight sub-cap sits inside the
     -- player's total; backpack gets the rest of the player slots and the rest of the total.
     equipped    = { slots = 5,  maxWeight = 8000 },
-    backpack    = { slots = 20, maxWeight = 35000 },
+    backpack    = { slots = 20 }, -- no own cap: total carry weight minus equipped (set maxWeight to add one)
     saddlebag   = { slots = 20, maxWeight = 60000 },
     wagon       = { slots = 60, maxWeight = 500000, interactDistance = 5.0 },
     chest       = { slots = 50, maxWeight = 1000000 },

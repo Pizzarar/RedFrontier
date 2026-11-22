@@ -10,3 +10,7 @@ shared_scripts {
     'config.lua',
     'shared/*.lua', -- modules resolve each other at call time, so glob order does not matter
 }
+
+server_scripts {
+    'server/*.lua',
+}
