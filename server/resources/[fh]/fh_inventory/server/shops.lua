@@ -1,4 +1,5 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
+AddEventHandler('RSGCore:Server:UpdateObject', function() RSGCore = exports['rsg-core']:GetCoreObject() end) -- FH: keep items fresh
 
 -- Shops are containers of type 'shop' stored in InvCore.Inventories as 'shop-<name>'.
 -- Drag from shop -> player buys, drag player -> shop sells (if the item has a buyPrice).
@@ -84,7 +85,8 @@ end
 function Shops.OpenShop(src, name)
     local shop = name and InvCore.Inventories[ShopId(name)]
     if not shop then return false end
-    if shop.shopCoords and #(GetEntityCoords(GetPlayerPed(src)) - shop.shopCoords) > 10.0 then return false end
+    -- FH: a shop with no coords is refused (was: open from anywhere)
+    if not shop.shopCoords or #(GetEntityCoords(GetPlayerPed(src)) - shop.shopCoords) > Config.ShopDistance then return false end
     return InvCore.OpenFor(src, shop.id)
 end
 
@@ -108,7 +110,8 @@ end
 
 local function InRange(src, shop)
     if InvCore.OpenInv[src] ~= shop.id then return false end
-    return not shop.shopCoords or #(GetEntityCoords(GetPlayerPed(src)) - shop.shopCoords) <= 10.0
+    -- FH: no coords = out of range (was: always in range)
+    return shop.shopCoords ~= nil and #(GetEntityCoords(GetPlayerPed(src)) - shop.shopCoords) <= Config.ShopDistance
 end
 
 function Shops.Buy(src, shop, slot, amount, toSlot)

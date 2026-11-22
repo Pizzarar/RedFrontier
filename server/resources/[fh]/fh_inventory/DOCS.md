@@ -32,7 +32,7 @@ Guide for server owners and developers. For a feature overview and installation 
 | `server/main.lua` | Core: containers, add/remove, move, give, drop, use, stashes, drops, saving, commands |
 | `server/shops.lua` | Shop registration, buy / sell, stock persistence and restock |
 | `server/compat.lua` | Legacy exports, `Player.Functions.*` methods, export registration |
-| `server/versionchecker.lua` | Version check on start |
+| ~~`server/versionchecker.lua`~~ | FH: removed in the fh_inventory fork |
 | `client/main.lua` | Key mappings, NUI bridge, drop props, item box, client exports |
 | `html/` | NUI (index.html, style.css, app.js, images/) |
 | `locales/*.json` | Translations (loaded through `@rsg-core/shared/locale.lua`) |

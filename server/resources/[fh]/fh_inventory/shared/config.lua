@@ -7,12 +7,13 @@ Config.ItemNotifications = false -- also show an rsg-core toast for every item a
 Config.Debug          = false    -- print why moves / shop purchases are rejected to the server console
 Config.AutoDatabase   = true     -- create the database tables on start; set false to import install.sql manually
 
-Config.ImagePath      = 'nui://rsg-inventory/html/images/' -- item images folder
+Config.ImagePath      = 'nui://fh_inventory/html/images/' -- item images folder (FH: fork folder name)
 
 -- Player defaults (fallbacks if rsg-core PlayerData has no slots/weight)
 Config.PlayerSlots    = 25
 Config.PlayerMaxWeight = 35000
-Config.HotbarSlots    = 5        -- first N slots are the hotbar
+-- FH: the hotbar IS fh_core's 'equipped' section, so its size comes from FhConfig (see FhEquippedSlots below)
+Config.HotbarSlots    = 5        -- fallback only
 
 -- Keybinds
 -- Rebindable keys: registered with rsg-core RegisterKey (RegisterKeyMapping). The names below are only the
@@ -67,7 +68,7 @@ Config.Drop = {
     Lifetime     = 15,           -- minutes before an untouched drop is removed
     SyncDistance = 120.0,        -- drops are only sent to players this close (keep above RenderDistance)
     SyncInterval = 3,            -- seconds between nearby-drop updates
-    Persist      = false,        -- true = drops survive a restart (saved to inventory_drops, timer restarts on load)
+    Persist      = true,         -- FH: drop bags survive a restart (saved to inventory_drops, timer restarts on load)
 }
 
 -- Extra carrying capacity granted by other resources (satchels, horses, wagons...) through
@@ -116,3 +117,8 @@ Config.CategoryLabels = {
 
 -- Shops (created by other resources via exports['rsg-inventory']:CreateShop)
 Config.ShopRestockMinutes = 60 -- restock shops (and save persistent stock) every N minutes
+
+-- FH: reach rules. A shop with no coords can't be opened; this is how close the player must stand.
+Config.ShopDistance = 10.0
+-- FH: stash reach when fh_core's FhConfig.Access is missing (fh_core is a hard dependency, so this is a guard only)
+Config.FhFallbackReach = 3.5

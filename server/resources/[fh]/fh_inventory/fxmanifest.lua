@@ -20,7 +20,7 @@ server_scripts {
     'server/main.lua',
     'server/shops.lua',
     'server/compat.lua',
-    'server/versionchecker.lua',
+    'server/fh_api.lua', -- FH: exports only fh_core may call
 }
 
 client_scripts {

@@ -88,5 +88,11 @@
     "item_trashed": "Item destroyed",
     "key_open": "Open inventory",
     "key_hotbar": "Show hotbar",
-    "key_slot": "Use hotbar slot %s"
+    "key_slot": "Use hotbar slot %s",
+    "fh_too_far": "You are too far away from that",
+    "fh_vetoed": "That can't go there",
+    "fh_size_class": "That is too big to go there",
+    "fh_too_heavy": "That is too heavy",
+    "fh_no_space": "There is no room for that",
+    "fh_locked": "That layout isn't allowed"
 }

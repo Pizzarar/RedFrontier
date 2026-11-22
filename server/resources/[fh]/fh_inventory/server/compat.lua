@@ -1,4 +1,5 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
+AddEventHandler('RSGCore:Server:UpdateObject', function() RSGCore = exports['rsg-core']:GetCoreObject() end) -- FH
 
 -- Legacy rsg-inventory exports and player methods, so existing RSG scripts keep working.
 -- All of these are thin wrappers over the API in server/main.lua.
@@ -37,9 +38,14 @@ local function SetInventory(src, items)
     InvCore.Refresh(src)
 end
 
+-- FH: item keys SetItemData may not touch (they change where an item fits or how much there is)
+local FH_STRUCTURAL = { name = true, slot = true, amount = true, weight = true, unique = true, type = true }
+
 local function SetItemData(src, itemName, key, val)
     local c = InvCore.GetContainer(src)
     if not c or not itemName or not key then return false end
+    -- FH: structural keys go through AddItem/RemoveItem/move (and the fh_core veto), never through here
+    if FH_STRUCTURAL[key] then return false end
     itemName = tostring(itemName):lower()
     local item
     for _, it in pairs(c.items) do
@@ -65,17 +71,20 @@ end
 -- removes the stash from memory AND the database (a later stash with the same id starts empty)
 local function DeleteInventory(id)
     if type(id) ~= 'string' then return false end
+    if InvCore.FhMeta[id] and not InvCore.FhCallerAllowed() then return false end -- FH: fh_core containers
     local inv = InvCore.Inventories[id]
     if inv and inv.type ~= 'stash' then return false end
     for watcher, openId in pairs(InvCore.OpenInv) do
         if openId == id then API.CloseInventory(watcher) end
     end
     InvCore.Inventories[id] = nil
+    InvCore.FhMeta[id] = nil -- FH
     MySQL.prepare('DELETE FROM inventories WHERE identifier = ?', { id })
     return true
 end
 
 local function ClearStash(id)
+    if type(id) == 'string' and InvCore.FhMeta[id] and not InvCore.FhCallerAllowed() then return end -- FH
     local c = InvCore.GetContainer(id)
     if c and c.type == 'stash' then API.ClearInventory(id) end
 end

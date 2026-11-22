@@ -1,4 +1,6 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
+-- FH: the core object is a copy; refresh it when rsg-core's items change (fh_core pushes SetItems)
+AddEventHandler('RSGCore:Server:UpdateObject', function() RSGCore = exports['rsg-core']:GetCoreObject() end)
 
 --------------------------------------------------------------------------------
 -- State
@@ -19,6 +21,15 @@ local CapacityBonus = {}  -- [src] = { [key] = { slots, weight } } extra capacit
 local DropSeen     = {}   -- [src] = { [dropId] = true } drops that client currently knows about
 local dropCount    = 0
 local API          = {}
+-- FH: [stash id] = { fhType, coords } for fh_core containers. Kept outside Inventories so it survives
+-- a stash being unloaded and re-registered from the database.
+local FhMeta       = {}
+
+-- FH: true when the current export call comes from fh_core or from this resource itself
+local function FhCallerAllowed()
+    local caller = GetInvokingResource()
+    return caller == nil or caller == GetCurrentResourceName() or caller == 'fh_core'
+end
 
 local function SharedItem(name)
     return name and RSGCore.Shared.Items[tostring(name):lower()]
@@ -29,6 +40,15 @@ local function DeepClone(t)
     local out = {}
     for k, v in pairs(t) do out[k] = DeepClone(v) end
     return out
+end
+
+-- FH: vector3 / {x,y,z} -> vector3, anything else -> nil
+local function ToVec3(c)
+    if type(c) == 'vector3' then return c end
+    if type(c) == 'table' and tonumber(c.x) and tonumber(c.y) and tonumber(c.z) then
+        return vector3(tonumber(c.x), tonumber(c.y), tonumber(c.z))
+    end
+    return nil
 end
 
 local function Notify(src, key, kind)
@@ -478,6 +498,8 @@ function API.SetItemInfo(target, slot, info)
 end
 
 function API.ClearInventory(target, keep)
+    -- FH: only fh_core (or this resource) may wipe an fh_core container
+    if type(target) == 'string' and FhMeta[target] and not FhCallerAllowed() then return false end
     local c = GetContainer(target)
     if not c then return false end
     local keepSet = {}
@@ -539,6 +561,9 @@ end
 function API.RegisterStash(id, opts)
     if type(id) ~= 'string' or id == '' or #id > 100 then return nil end
     opts = opts or {}
+    -- FH: an fh_core container's shape is owned by fh_core; other callers only get it as it is
+    local fhOwner = FhCallerAllowed()
+    if FhMeta[id] and not fhOwner then opts = {} end
     local inv = Inventories[id]
     if not inv then
         local row = MySQL.scalar.await('SELECT items FROM inventories WHERE identifier = ?', { id })
@@ -548,10 +573,27 @@ function API.RegisterStash(id, opts)
             Inventories[id] = inv
         end
     end
-    inv.label     = opts.label or inv.label or id
-    inv.slots     = math.max(1, math.min(tonumber(opts.slots) or inv.slots or Config.Stash.DefaultSlots, Config.Stash.MaxSlots))
-    inv.maxWeight = math.max(1, math.min(tonumber(opts.maxWeight) or inv.maxWeight or Config.Stash.DefaultMaxWeight, Config.Stash.MaxWeight))
+    -- FH: fh_core container type, world position (no coords = nobody can open or use it) and shape.
+    -- Kept in FhMeta so a stash that was unloaded comes back with the same caps, not the defaults.
+    if fhOwner and (opts.fhType ~= nil or opts.coords ~= nil) then
+        local meta = FhMeta[id] or {}
+        if type(opts.fhType) == 'string' then meta.fhType = opts.fhType end
+        if opts.coords ~= nil then meta.coords = ToVec3(opts.coords) end
+        FhMeta[id] = meta
+    end
+    local meta = FhMeta[id]
+    if meta and fhOwner then
+        meta.label     = opts.label or meta.label
+        meta.slots     = tonumber(opts.slots) or meta.slots
+        meta.maxWeight = tonumber(opts.maxWeight) or meta.maxWeight
+    end
+    local label, slots, maxWeight = opts.label, tonumber(opts.slots), tonumber(opts.maxWeight)
+    if meta then label, slots, maxWeight = meta.label, meta.slots, meta.maxWeight end
+    inv.label     = label or inv.label or id
+    inv.slots     = math.max(1, math.min(slots or inv.slots or Config.Stash.DefaultSlots, Config.Stash.MaxSlots))
+    inv.maxWeight = math.max(1, math.min(maxWeight or inv.maxWeight or Config.Stash.DefaultMaxWeight, Config.Stash.MaxWeight))
     if opts.actions ~= nil then inv.actions = SanitizeActions(opts.actions) end -- false / {} removes the buttons
+    if meta then inv.fhType, inv.coords = meta.fhType, meta.coords end
     return inv
 end
 
@@ -632,6 +674,7 @@ function API.CreateDrop(coords, items)
         id = id, type = 'drop', label = locale('ground'),
         slots = Config.Drop.Slots, maxWeight = Config.Drop.MaxWeight,
         items = items or {}, coords = coords, touched = os.time(),
+        fhType = 'drop_bag', -- FH: every ground pile is a drop bag for fh_core's rules
     }
     Inventories[id].dirty = true
     AnnounceDrop(id)
@@ -689,6 +732,7 @@ local function LoadDrops()
                 id = row.id, type = 'drop', label = locale('ground'),
                 slots = Config.Drop.Slots, maxWeight = Config.Drop.MaxWeight,
                 items = items, coords = vector3(c.x, c.y, c.z), touched = now, dirty = true, -- lifetime restarts
+                fhType = 'drop_bag', -- FH
             }
             loaded = loaded + 1
         else
@@ -773,6 +817,25 @@ local function Dist(src, coords)
     return #(GetEntityCoords(GetPlayerPed(src)) - coords)
 end
 
+-- FH: how close a player must be to use a container. Stashes use fh_core's
+-- FhConfig.Access (InteractDistance, per-type override); drops and shops keep rsg's ranges.
+local function ReachFor(inv)
+    if inv.type == 'drop' then return Config.Drop.OpenDistance + 3.0 end
+    if inv.type == 'shop' then return Config.ShopDistance end
+    local access = FhConfig and FhConfig.Access or {}
+    local per = access.PerType or access.TypeDistance or {}
+    return tonumber(inv.fhType and per[inv.fhType]) or tonumber(access.InteractDistance) or Config.FhFallbackReach
+end
+
+-- FH: a stash, drop or shop with no coords is refused, and so is anything out of reach
+local function InReach(src, inv)
+    local coords = inv.coords or inv.shopCoords
+    if not coords then return false end
+    local ped = GetPlayerPed(src)
+    if ped == 0 then return false end
+    return #(GetEntityCoords(ped) - coords) <= ReachFor(inv)
+end
+
 local function CanAccess(src, id)
     if id == src then return true end
     if id == nil or OpenInv[src] ~= id then return false end
@@ -782,11 +845,10 @@ local function CanAccess(src, id)
         if AdminView[src] == id then return true end -- /viewinv works from any distance
         return Dist(src, GetEntityCoords(ped)) <= Config.GiveDistance + 2.0
     end
-    if id == 'newdrop' then return true end
+    if id == 'newdrop' then return true end -- the ground at the player's own feet
     local inv = Inventories[id]
     if not inv then return false end
-    if inv.coords then return Dist(src, inv.coords) <= Config.Drop.OpenDistance + 3.0 end
-    return true
+    return InReach(src, inv) -- FH: was "no coords = any distance"
 end
 
 -- Stash and player rows are written together so a server crash can't leave an
@@ -808,6 +870,10 @@ local function OpenFor(src, otherId)
     elseif otherId then
         local oc = GetContainer(otherId)
         if not oc then return false end
+        if type(otherId) == 'string' and not InReach(src, oc) then -- FH: coords + reach before opening
+            Notify(src, 'fh_too_far')
+            return false
+        end
         other = ClientInv(oc)
     end
     OpenInv[src] = otherId
@@ -863,6 +929,8 @@ RegisterNetEvent('rsg-inventory:server:stashAction', function(actionId)
     local id = OpenInv[src]
     local inv = type(id) == 'string' and Inventories[id]
     if type(actionId) ~= 'string' or not inv or inv.type ~= 'stash' or not inv.actions then return end
+    -- FH: the button only works while the player can still use the stash
+    if IsIncapacitated(RSGCore.Functions.GetPlayer(src)) or not CanAccess(src, id) then return end
     local now = GetGameTimer()
     if ActionCooldown[src] and now - ActionCooldown[src] < 1000 then return end
     for _, action in ipairs(inv.actions) do
@@ -1290,6 +1358,10 @@ InvCore = {
     GetContainer = GetContainer, Commit = Commit, Refresh = Refresh, OpenFor = OpenFor,
     AddTo = AddTo, BuildItem = BuildItem, TotalWeight = TotalWeight, SharedItem = SharedItem,
     RemoveDrop = RemoveDrop, Notify = Notify, Log = Log, DeepClone = DeepClone,
+    -- FH: used by server/compat.lua and server/fh_api.lua
+    FhMeta = FhMeta, FhCallerAllowed = FhCallerAllowed, InReach = InReach, ToVec3 = ToVec3,
+    RemoveFrom = RemoveFrom, CountIn = CountIn, ClientInv = ClientInv, CheckWeapon = CheckWeapon,
+    SavePlayer = SavePlayer, SaveStash = SaveStash, CleanupDropIfEmpty = CleanupDropIfEmpty,
 }
 
 --------------------------------------------------------------------------------
