@@ -27,4 +27,6 @@
 ## Unsplit threads
 - Spec: docs/FRONTIER_HOMESTEAD_SPEC.md (owner, 2026-11-22). Priority #3 behind VibeSquad, EFI.
 - Hub feasibility read (2026-11-22): M0 + M1 slice feasible; biggest unknowns = rsg-inventory vs fh_core container ownership, owner-as-only-tester bottleneck, mounted wagon chase AI, homestead "clearing" of world objects.
-- L1–L10 feature lanes: wait until @core locks §4 contracts.
+- §4 contracts merged in @core (B4a container API, B4b ledger/buffs/regions/events; main 6307f28+). Only B4c spawn contract still flagged on S1.
+- NEXT LANE lined up (2026-11-22): L2 Survival (`fh_survival`). Needs only fh_buffs.apply/get (fh_buffs/README.md). Owns fh_survival only; fh_buffs client effects (currently a stub) go via contract request to @core. Well-Rested-from-comfort waits on L1 comfort score. Spin-off block posted, waiting on owner click.
+- Later: L5 Weapons/Crafting (needs homestead station slots), L10 UI shell, L8 Hunting (needs S2 pelt verdict). L4 death and L3 zones stay inside @core (M1 slice).

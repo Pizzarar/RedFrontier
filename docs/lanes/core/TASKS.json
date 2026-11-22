@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-22T20:51:50.100Z",
+  "updatedAt": "2026-11-22T23:52:12.818Z",
   "units": [
     {
       "id": "B5",
@@ -16,7 +16,9 @@
       "goal": "spawn-request contract: client creates, server adopts netId. Wait for S1 verdict incl. server CreateVehicle 0xDD75460A",
       "files": [],
       "doneCheck": "",
-      "status": "blocked"
+      "status": "done",
+      "branch": "core-b4c",
+      "commit": "ca9aaff"
     },
     {
       "id": "B1-live",
@@ -42,6 +44,22 @@
       "status": "done",
       "branch": "core-b6anit",
       "commit": "30d4468"
+    },
+    {
+      "id": "B6b",
+      "goal": "fh_zones T1 outlaw camp via B4c, loot stash (worn rifle + cargo safe)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-b6b"
+    },
+    {
+      "id": "B6c",
+      "goal": "fh_death soft death: keep equipped, backpack+saddlebag -> drop_bag via B4c prop, owner recover, expiry",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-b6c"
     }
   ]
 }
