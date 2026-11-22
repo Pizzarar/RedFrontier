@@ -124,6 +124,13 @@ local function move(fromRef, toRef, fromSlot, toSlot, amount, src)
         fromView, reason = view(fromRef)
         if fromView then toView, reason = view(toRef) end
         ok = fromView ~= nil and toView ~= nil
+        if ok and fromRef.id == toRef.id and FhContainers.CARRIED[fromRef.type] and FhContainers.CARRIED[toRef.type] then
+            -- equipped + backpack of one player are sibling views of one split. They came back from two FhView
+            -- calls (msgpack'd), so their group tokens are distinct tables: share one again so planMove credits
+            -- the grams leaving the sibling section (siblingFreed), as fh_inventory's own re-check does.
+            local group = {}
+            fromView.group, toView.group = group, group
+        end
         if ok then
             local plan
             plan, reason = FhRules.planMove(fromView, toView, fromSlot, toSlot, amount)
