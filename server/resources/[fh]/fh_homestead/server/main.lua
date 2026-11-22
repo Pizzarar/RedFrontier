@@ -119,10 +119,11 @@ end
 
 -- Client prompt -> request. The server revalidates ownership and reach (fh_core.open re-checks distance from the
 -- server-side ped position; fh_inventory checks again).
-RegisterNetEvent('fh:homestead:open_chest', function(plotId)
+RegisterNetEvent('fh:homestead:open_chest', function(payload)
     local src = source
     if not ready then return end
-    local plot = type(plotId) == 'string' and cfg.plots[plotId]
+    if type(payload) ~= 'table' or type(payload.plot_id) ~= 'string' then return end
+    local plot = cfg.plots[payload.plot_id]
     if not plot then return end
     local ok, why = rules.canOpenChest(plot.id, citizenidOf(src), claims)
     if not ok then return reply(src, 'chest: ' .. why) end

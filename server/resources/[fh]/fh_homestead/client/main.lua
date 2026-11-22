@@ -44,7 +44,7 @@ FH.thread(function()
             onEnter = FH.wrap(function() lib.showTextUI('[E] Homestead chest') end),
             onExit = FH.wrap(function() lib.hideTextUI() end),
             nearby = FH.wrap(function()
-                if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:open_chest', p.id) end
+                if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:open_chest', { plot_id = p.id }) end
             end),
         })
     end
