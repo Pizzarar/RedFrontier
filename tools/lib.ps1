@@ -33,7 +33,7 @@ function Start-Db {
 function Stop-Db {
     $bin = Get-MariaBin
     if (Test-DbUp) {
-        & (Join-Path $bin 'mariadb-admin.exe') -uroot --protocol=tcp -h127.0.0.1 "-P$(Get-DbPort)" shutdown 2>&1 | Out-Null
+        & (Join-Path $bin 'mariadb-admin.exe') -uroot --protocol=tcp '-h127.0.0.1' "-P$(Get-DbPort)" shutdown 2>&1 | Out-Null
         for ($i = 0; $i -lt 40 -and (Test-DbUp); $i++) { Start-Sleep -Milliseconds 500 }
     }
 }

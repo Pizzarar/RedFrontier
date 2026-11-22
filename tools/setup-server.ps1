@@ -86,7 +86,8 @@ $applied = @(Invoke-Sql 'SELECT name FROM schema_migrations;' $DbName)
 foreach ($f in Get-ChildItem (Join-Path $Server 'migrations') -Filter '*.sql' | Sort-Object Name) {
     if ($applied -contains $f.Name) { Write-Host "migration: skip $($f.Name)"; continue }
     Write-Host "migration: applying $($f.Name)"
-    Get-Content $f.FullName -Raw -Encoding UTF8 | & (Join-Path $bin 'mariadb.exe') -uroot --protocol=tcp -h127.0.0.1 "-P$port" $DbName
+    $src = $f.FullName -replace '\\', '/'
+    & (Join-Path $bin 'mariadb.exe') -uroot --protocol=tcp '-h127.0.0.1' "-P$port" $DbName -e "source $src" 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "migration failed: $($f.Name)" }
     Invoke-Sql "INSERT INTO schema_migrations (name) VALUES ('$($f.Name)');" $DbName
 }
