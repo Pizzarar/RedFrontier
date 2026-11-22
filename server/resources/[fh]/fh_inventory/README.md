@@ -1,4 +1,55 @@
-# rsg-inventory
+# fh_inventory (RedFrontier fork of rsg-inventory)
+
+Fork of [rsg-inventory](https://github.com/Rexshack-RedM/rsg-inventory) by Rexshack-RedM at
+`a151ee4c27a8d251ae69e85f92f83bdd9175b13c`, still GPL-3 (`LICENSE`). Everything marked `-- FH:` in the code is ours;
+`git log --follow` from commit 671f2b7 (the unchanged move) shows every change. The upstream README follows the
+fork notes below.
+
+## What the fork changes
+
+- **Stands in for rsg-inventory.** `provide 'rsg-inventory'` plus `shared/fh_provide.lua`, which aliases every export
+  as `rsg-inventory:<fn>`, so rsg-core, rsg-character and RSG scripts keep calling it by the old name.
+- **fh_core rules are the veto.** The manifest loads `@fh_core/config.lua`, `shared/items.lua`, `containers.lua` and
+  `rules.lua` into this resource (`FhConfig`, `FhItems`, `FhContainers`, `FhRules`). Every add, move, swap and
+  layout write is checked by `FhRules` before anything changes. The player inventory is two sections: **equipped**
+  (the hotbar, `FhConfig.Containers.equipped.slots`, sets `Config.HotbarSlots`) and **backpack** (the rest).
+  Size classes decide what goes where (e.g. cargo is refused in the backpack, accepted in a chest).
+- **World containers need coords.** A stash, drop or shop with no coords, or out of reach, can't be opened or used.
+  Every ground drop is a `drop_bag` and persists (`Config.Drop.Persist`).
+- **fh_core owns fh containers.** Only fh_core (or this resource) can register, reshape, clear or delete a
+  container that fh_core registered, or call the `Fh*` exports (`server/fh_api.lua`). Game code calls fh_core's
+  exports (`move`, `transferAll`, `registerContainer`, `open`, `createDropBag`, ...), never these.
+- **Runtime-registered items** resolve through `RSGCore.Shared.Items` (`FhItems.sharedLookup`), so an item fh_core
+  pushed with its `size_class` is classed correctly here.
+
+## Fail-closed behaviour (on purpose)
+
+When the rules can't place something, the mutation is refused and nothing changes:
+
+- **Non-fh stashes refuse items.** A stash registered by plain `RegisterStash` without an fh type gets view type
+  `stash`, which `FhRules` doesn't know, so `AddItem`, moves and transfers into it fail, and a non-fh stash with no
+  coords can't be opened at all. No vendored resource uses stashes today; anything that needs a stash registers it
+  through `exports.fh_core:registerContainer`.
+- **`Fh*` refs never create containers.** An unknown id, a shop, `newdrop`, a non-fh stash or a ref whose `type`
+  doesn't match the container's fh type is refused with `fh_unknown_container`.
+- **`SetInventory` is all-or-nothing.** The whole layout must pass (`FhCheckLayout`): valid slots, known items,
+  size classes per section, section and total weight. Otherwise it returns `false, reason`, logs the refusal and
+  leaves the inventory as it was.
+- **Locked fields.** `SetItemData` refuses `name`, `slot`, `amount`, `weight`, `unique` and `type`.
+- **Reasons** are `fh_*` locale keys (`locales/en.json`), shown to the player when a drag is refused.
+
+Allowed without a veto (they only remove items or rewrite info): decay, trash, sort, `RemoveItem`,
+`SetItemInfo`, shop Sell, `WeaponDefaults` info backfill, and coin conversion (`ConvertCoins`, same value).
+
+## Not verified yet
+
+- `GetInvokingResource()` for internal and net-event calls: `FhCallerAllowed` accepts both `nil` and this
+  resource's own name.
+- `provide` + export aliasing in a live boot (whether every `exports['rsg-inventory']:X` call lands here).
+
+---
+
+## Upstream README (rsg-inventory)
 
 Slot/weight inventory for the RSG Framework (rsg-core) with a hotbar, persistent stashes, ground drops, shops with persistent stock, category filters, automatic coin exchange and a legacy-compatible API so existing RSG scripts keep working.
 
