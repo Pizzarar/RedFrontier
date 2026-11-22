@@ -793,15 +793,32 @@ local function SyncDropsFor(src, drops)
     end
 end
 
+-- FH: refuses a drop without a position (nobody could reach it, and AnnounceDrop / SyncDropsFor need coords) and
+-- vetoes the starting items like any other add: slot -> item, rebuilt from the shared item defs (the caller's
+-- weight is not trusted), then FhCheckLayout under drop_bag rules (no cargo, slot range, weight cap).
+-- -> id | nil, reason. Nothing is created on refusal.
 function API.CreateDrop(coords, items)
-    dropCount = dropCount + 1
-    local id = ('drop-%d-%d'):format(os.time(), dropCount)
-    Inventories[id] = {
-        id = id, type = 'drop', label = locale('ground'),
+    coords = ToVec3(coords)
+    if not coords then return nil, 'fh_no_coords' end
+    local drop = {
+        type = 'drop', label = locale('ground'),
         slots = Config.Drop.Slots, maxWeight = Config.Drop.MaxWeight,
-        items = items or {}, coords = coords, touched = os.time(),
+        items = {}, coords = coords, touched = os.time(),
         fhType = 'drop_bag', -- FH: every ground pile is a drop bag for fh_core's rules
     }
+    for slot, it in pairs(Normalize(type(items) == 'table' and items or {})) do
+        local amount = math.tointeger(tonumber(it.amount))
+        if not amount or amount < 1 then return nil, 'fh_bad_amount' end
+        local built = BuildItem(it.name, amount, it.info, slot)
+        if not built then return nil, 'fh_unknown_item' end
+        drop.items[slot] = built
+    end
+    local ok, why = FhCheckLayout(drop, drop.items)
+    if not ok then return nil, why end
+    dropCount = dropCount + 1
+    local id = ('drop-%d-%d'):format(os.time(), dropCount)
+    drop.id = id
+    Inventories[id] = drop
     Inventories[id].dirty = true
     AnnounceDrop(id)
     return id
@@ -902,7 +919,7 @@ local function EnforceCapacity(src)
             c.items[free] = it
         else
             if not dropId then dropId = API.CreateDrop(GetEntityCoords(GetPlayerPed(src)), {}) end
-            if AddTo(Inventories[dropId], it.name, it.amount, DeepClone(it.info)) then
+            if dropId and AddTo(Inventories[dropId], it.name, it.amount, DeepClone(it.info)) then
                 CheckWeapon(src, it)
                 dropped = true
             else
@@ -1218,6 +1235,7 @@ RegisterNetEvent('rsg-inventory:server:move', function(data)
     if toId == 'newdrop' then
         if toSlot < 1 or toSlot > Config.Drop.Slots then return Refresh(src) end -- don't create an empty drop for a bad slot
         toId = API.CreateDrop(GetEntityCoords(GetPlayerPed(src)), {})
+        if not toId then return Refresh(src) end
         OpenInv[src] = toId
     end
 
@@ -1467,6 +1485,7 @@ RegisterNetEvent('rsg-inventory:server:drop', function(slot, amount)
     local drop = type(dropId) == 'string' and Inventories[dropId]
     if not drop or drop.type ~= 'drop' or not CanAccess(src, dropId) then
         dropId = API.CreateDrop(GetEntityCoords(GetPlayerPed(src)), {})
+        if not dropId then return Refresh(src) end
         drop = Inventories[dropId]
         if OpenInv[src] == 'newdrop' or OpenInv[src] == nil then OpenInv[src] = dropId end
     end

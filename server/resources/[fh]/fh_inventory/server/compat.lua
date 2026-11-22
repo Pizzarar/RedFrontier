@@ -105,6 +105,7 @@ local function ForceDropItem(src, item, amount, info, reason)
     local ped = GetPlayerPed(src)
     if ped == 0 then return false end
     local id = API.CreateDrop(GetEntityCoords(ped), {})
+    if not id then return false end
     if not InvCore.AddTo(InvCore.Inventories[id], item, amount, info) then
         InvCore.RemoveDrop(id)
         return false
