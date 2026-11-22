@@ -12,7 +12,7 @@ Config.ImagePath      = 'nui://fh_inventory/html/images/' -- item images folder 
 -- Player defaults (fallbacks if rsg-core PlayerData has no slots/weight)
 Config.PlayerSlots    = 25
 Config.PlayerMaxWeight = 35000
--- FH: the hotbar IS fh_core's 'equipped' section, so its size comes from FhConfig (see FhEquippedSlots below)
+-- FH: the hotbar IS fh_core's 'equipped' section, so its size comes from FhConfig.Containers.equipped.slots (set at the end of this file)
 Config.HotbarSlots    = 5        -- fallback only
 
 -- Keybinds
@@ -122,3 +122,8 @@ Config.ShopRestockMinutes = 60 -- restock shops (and save persistent stock) ever
 Config.ShopDistance = 10.0
 -- FH: stash reach when fh_core's FhConfig.Access is missing (fh_core is a hard dependency, so this is a guard only)
 Config.FhFallbackReach = 3.5
+
+-- FH: the hotbar is fh_core's 'equipped' section; its size is owned by fh_core.
+if FhConfig and FhConfig.Containers and FhConfig.Containers.equipped and FhConfig.Containers.equipped.slots then
+    Config.HotbarSlots = FhConfig.Containers.equipped.slots
+end

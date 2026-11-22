@@ -89,10 +89,19 @@
     "key_open": "Open inventory",
     "key_hotbar": "Show hotbar",
     "key_slot": "Use hotbar slot %s",
-    "fh_too_far": "You are too far away from that",
-    "fh_vetoed": "That can't go there",
     "fh_size_class": "That is too big to go there",
     "fh_too_heavy": "That is too heavy",
-    "fh_no_space": "There is no room for that",
-    "fh_locked": "That layout isn't allowed"
+    "fh_unknown_container": "That container doesn't exist",
+    "fh_unknown_item": "Unknown item",
+    "fh_bad_size_class": "That item has an invalid size",
+    "fh_bad_amount": "Invalid amount",
+    "fh_bad_slot": "That slot can't be used",
+    "fh_slot_taken": "That slot is taken",
+    "fh_no_slot": "There is no room for that",
+    "fh_no_item": "There is nothing there",
+    "fh_same_slot": "That item is already there",
+    "fh_no_coords": "That can't be opened right now",
+    "fh_no_player_coords": "Can't tell where you are",
+    "fh_out_of_reach": "You are too far away from that",
+    "fh_refused": "That can't go there"
 }

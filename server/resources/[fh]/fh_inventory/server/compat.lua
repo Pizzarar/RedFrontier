@@ -31,11 +31,23 @@ local function GetFreeWeight(target)
     return c and (c.maxWeight - InvCore.TotalWeight(c.items)) or 0
 end
 
+-- FH: a whole-layout write is vetoed like any other mutation: every item must sit in a valid slot of the
+-- section (equipped / backpack) that accepts its size class, within that section's and the player's weight.
+-- A refused layout leaves the inventory untouched. -> true | false, reason
 local function SetInventory(src, items)
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-    Player.Functions.SetPlayerData('items', items or {})
+    local c = InvCore.GetContainer(tonumber(src))
+    if not c then return false, 'fh_unknown_container' end
+    items = InvCore.Normalize(items)
+    local ok, why = InvCore.FhCheckLayout(c, items)
+    if not ok then
+        InvCore.Log('SetInventory refused', ('%s: %s (caller %s)'):format(tostring(src), tostring(why),
+            tostring(GetInvokingResource() or GetCurrentResourceName())))
+        InvCore.Refresh(src)
+        return false, why
+    end
+    c.player.Functions.SetPlayerData('items', items)
     InvCore.Refresh(src)
+    return true
 end
 
 -- FH: item keys SetItemData may not touch (they change where an item fits or how much there is)

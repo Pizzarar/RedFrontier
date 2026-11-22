@@ -12,6 +12,12 @@ provide 'rsg-inventory'
 shared_scripts {
     'shared/fh_provide.lua', -- FH: must load before any exports() call
     '@rsg-core/shared/locale.lua',
+    -- FH: fh_core's pure-Lua rule modules, loaded into this resource's state (FhConfig, FhItems,
+    -- FhContainers, FhRules). Must come before shared/config.lua, which reads FhConfig.
+    '@fh_core/config.lua',
+    '@fh_core/shared/items.lua',
+    '@fh_core/shared/containers.lua',
+    '@fh_core/shared/rules.lua',
     'shared/config.lua',
 }
 
@@ -40,6 +46,7 @@ files {
 dependencies {
     'rsg-core',
     'oxmysql',
+    'fh_core',
 }
 
 lua54 'yes'

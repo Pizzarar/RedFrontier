@@ -35,6 +35,10 @@ local function SharedItem(name)
     return name and RSGCore.Shared.Items[tostring(name):lower()]
 end
 
+-- FH: items fh_core registers at runtime reach this state only through rsg-core's shared items (fh_core pushes
+-- them with SetItems, size_class/value_base/illicit included). Point FhItems.resolve at them.
+if FhItems then FhItems.sharedLookup = SharedItem end
+
 local function DeepClone(t)
     if type(t) ~= 'table' then return t end
     local out = {}
@@ -1518,6 +1522,8 @@ InvCore = {
     FhMeta = FhMeta, FhCallerAllowed = FhCallerAllowed, InReach = InReach, ToVec3 = ToVec3,
     RemoveFrom = RemoveFrom, CountIn = CountIn, ClientInv = ClientInv, CheckWeapon = CheckWeapon,
     SavePlayer = SavePlayer, SaveStash = SaveStash, CleanupDropIfEmpty = CleanupDropIfEmpty,
+    FhViews = FhViews, FhCheckLayout = FhCheckLayout, MoveBetween = MoveBetween, AddToRaw = AddToRaw,
+    Normalize = Normalize,
 }
 
 --------------------------------------------------------------------------------
