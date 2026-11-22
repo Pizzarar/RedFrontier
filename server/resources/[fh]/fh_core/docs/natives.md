@@ -59,6 +59,19 @@ checked the hash yet. fh_inventory is a fork of rsg-inventory, so most client na
 | `SetEntityCollision` | not looked up | `fh_inventory/client/main.lua` 206 | client |
 | `DoesAnimDictExist` | not looked up | `fh_inventory/client/main.lua` 58 | client |
 
+
+### fh_homestead (B6a) - all **unverified in-game**, no Cfx key yet
+
+| Native | Hash | Where used | Side |
+|---|---|---|---|
+| `IsPlayerAceAllowed` | not looked up | `fh_homestead/server/main.lua` (unclaim admin check) | server |
+| `GetPlayerPed`, `GetEntityCoords` | see above | `fh_homestead/server/main.lua` (claim distance) | server |
+| `CreateObject` (isNetwork=false) | not looked up | `fh_homestead/client/main.lua` (local chest prop) | client |
+| `DeleteObject`, `DoesEntityExist` | not looked up | `fh_homestead/client/main.lua` | client |
+| `SetEntityHeading`, `PlaceObjectOnGroundProperly`, `FreezeEntityPosition` | not looked up | `fh_homestead/client/main.lua` | client |
+| `RequestModel`, `HasModelLoaded`, `IsModelInCdimage`, `SetModelAsNoLongerNeeded`, `joaat` | not looked up | `fh_homestead/client/main.lua` | client |
+| `IsControlJustReleased` + control `0xCEFD9220` (INPUT_CONTEXT, E) | not looked up | `fh_homestead/client/main.lua` | client |
+
 ## Spikes
 
 Natives from each `server/resources/[spikes]/spk_*/README.md` `## Natives` section. All are **candidate, unproven**:
