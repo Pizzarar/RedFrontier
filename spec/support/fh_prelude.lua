@@ -8,10 +8,14 @@ package.path = root .. '?.lua;' .. root .. 'shared/?.lua;' .. package.path
 
 local P = {}
 
-local function dump(v)
+local function dump(v, seen)
     if type(v) ~= 'table' then return tostring(v) end
+    seen = seen or {}
+    if seen[v] then return '<cycle>' end
+    seen[v] = true
     local parts = {}
-    for k, x in pairs(v) do parts[#parts + 1] = tostring(k) .. '=' .. dump(x) end
+    for k, x in pairs(v) do parts[#parts + 1] = tostring(k) .. '=' .. dump(x, seen) end
+    seen[v] = nil
     table.sort(parts)
     return '{' .. table.concat(parts, ',') .. '}'
 end
@@ -25,11 +29,13 @@ local function deepEqual(a, b)
 end
 
 function P.eq(expected, actual, msg)
-    assert(expected == actual, (msg or 'eq') .. ': expected ' .. dump(expected) .. ', got ' .. dump(actual))
+    if expected ~= actual then error((msg or 'eq') .. ': expected ' .. dump(expected) .. ', got ' .. dump(actual), 2) end
 end
 
 function P.same(expected, actual, msg)
-    assert(deepEqual(expected, actual), (msg or 'same') .. ': expected ' .. dump(expected) .. ', got ' .. dump(actual))
+    if not deepEqual(expected, actual) then
+        error((msg or 'same') .. ': expected ' .. dump(expected) .. ', got ' .. dump(actual), 2)
+    end
 end
 
 if describe and it then

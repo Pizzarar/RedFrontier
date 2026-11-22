@@ -13,6 +13,5 @@ tools/.tmp/
 *.zip
 *.7z
 
-# boot-check temp cfg, portable test toolchain
+# boot-check temp cfg
 server/.boot-check.cfg
-tools/.tools/

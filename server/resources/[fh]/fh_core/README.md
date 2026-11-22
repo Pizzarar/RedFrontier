@@ -164,7 +164,9 @@ See `docs/natives.md`.
 
 ## Tests
 
-`spec/items_spec.lua`, `spec/containers_spec.lua`, `spec/rules_spec.lua` (repo root). Run `tools/test.ps1`
-(busted). Each spec also runs standalone with plain Lua 5.4 (`lua spec/rules_spec.lua`) through
-`spec/support/fh_prelude.lua`. The server API is not covered by specs; it was smoke-tested against stubbed
+`spec/*_spec.lua` (repo root). Run `tools/test.ps1`, which calls `tools/run-specs.py`: embedded Lua 5.4
+through Python `lupa` 2.x (`pip install lupa`), one fresh Lua state per spec, exit code 0 when green.
+`python tools/run-specs.py --syntax <dir>` compile-checks every `.lua` under a folder. The specs stay
+runner-agnostic through `spec/support/fh_prelude.lua`: they also run under busted (`.busted`) or plain
+`lua spec/rules_spec.lua`. The server API is not covered by specs; it was smoke-tested against stubbed
 natives and fh_inventory exports only.
