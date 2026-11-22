@@ -26,7 +26,7 @@ lib.addCommand('fh_give', {
     help = 'Give an item via the container API: fh_give <id> <item> [count]',
     restricted = 'group.admin',
 }, function(src, args, raw)
-    local p, err = FhAdminArgs.parseGive(split(raw), function(n) return FhItems.definition(n) ~= nil end)
+    local p, err = FhAdminArgs.parseGive(split(raw), function(n) return FhItems.resolve(n) ~= nil end)
     if not p then return reply(src, 'fh_give: ' .. err) end
     local ped = targetPed(p.target)
     if not ped then return reply(src, 'fh_give: fh_no_player') end
@@ -36,9 +36,11 @@ lib.addCommand('fh_give', {
     local ok, moved, leftovers = exports.fh_core:transferAll({ type = 'drop_bag', id = bag },
         { type = 'backpack', id = p.target }, p.target)
     if not ok then return reply(src, ('fh_give: %s (items left in drop %s)'):format(tostring(moved), bag)) end
-    local left = leftovers and #leftovers or 0
-    reply(src, ('fh_give: gave %dx %s to %d%s'):format(p.count, p.item, p.target,
-        left > 0 and (', ' .. left .. ' stack(s) did not fit and remain in drop ' .. bag) or ''))
+    local movedN, leftN = 0, 0
+    for _, m in ipairs(type(moved) == 'table' and moved or {}) do movedN = movedN + (tonumber(m.amount) or 0) end
+    for _, l in ipairs(type(leftovers) == 'table' and leftovers or {}) do leftN = leftN + (tonumber(l.amount) or 0) end
+    reply(src, ('fh_give: gave %dx %s to %d (of %d requested)%s'):format(movedN, p.item, p.target, p.count,
+        leftN > 0 and (', %d did not fit and remain in drop %s'):format(leftN, bag) or ''))
 end)
 
 lib.addCommand('fh_heat', {

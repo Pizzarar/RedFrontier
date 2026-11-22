@@ -21,6 +21,13 @@ local function core()
     return RSGCore
 end
 
+-- Base RSG items (bread, ...) live only in RSGCore.Shared.Items: let FhItems.resolve see them in this Lua state too.
+FhItems.sharedLookup = function(name)
+    local c = core()
+    local item = c and c.Shared.Items[name]
+    return type(item) == 'table' and item or nil
+end
+
 AddEventHandler('RSGCore:Server:UpdateObject', function()
     if GetResourceState('rsg-core') == 'started' then RSGCore = exports['rsg-core']:GetCoreObject() end
 end)
@@ -223,7 +230,10 @@ end
 local function createDropBag(coords, items, opts)
     if not FhContainers.validCoords(coords) then return nil, 'fh_no_coords' end
     local id, reason = inv('FhCreateDropBag', coords, items or {}, opts or {})
-    if type(id) ~= 'string' then return nil, reason or 'fh_refused' end
+    if type(id) ~= 'string' then
+        -- FhCreateDropBag returns nil, leftovers (a table) when every item was refused: that is not a reason code.
+        return nil, type(reason) == 'string' and reason or 'fh_refused'
+    end
     return id
 end
 

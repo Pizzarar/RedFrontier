@@ -172,7 +172,7 @@ do not build on any of these. Source: `alloc8or` = RDR3 native DB, `cfx` = docs.
 | `GET_ENTITY_HEADING` | `0xC230DD956E2F5507` | alloc8or | **candidate, unproven** |
 | `DOES_ENTITY_EXIST` | `0xD42BD6EB2E0F1677` | alloc8or | **candidate, unproven** |
 | `PLAYER_PED_ID` | `0x096275889B8E0EE0` | alloc8or | **candidate, unproven** |
-| `GET_HASH_KEY (client Lua global GetHashKey, joaat of `a_c_deer_01`)` | `0xFD340785ADF8CFB7` | alloc8or | **candidate, unproven** |
+| `GET_HASH_KEY` (client Lua global GetHashKey, joaat of `a_c_deer_01`) | `0xFD340785ADF8CFB7` | alloc8or | **candidate, unproven** |
 
 ### spk_wear
 

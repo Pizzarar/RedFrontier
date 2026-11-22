@@ -51,4 +51,17 @@ case('parseDump: carried types need a numeric id, others a string id', function(
     assert(code({ 'chest' }) == 'fh_bad_ref')
     assert(code({}) == 'fh_unknown_container')
 end)
+case('fh_give registry check resolves base RSG items through FhItems.sharedLookup', function()
+    local items = require('items')
+    local rsgShared = { bread = { name = 'bread', label = 'Bread', weight = 100 } }
+    local prev = items.sharedLookup
+    items.sharedLookup = function(n) return rsgShared[n] end -- what fh_core/server/inventory.lua wires to RSGCore.Shared.Items
+    local hasItem = function(n) return items.resolve(n) ~= nil end
+    assert(A.parseGive({ '3', 'bread' }, hasItem).item == 'bread')
+    local _, e = A.parseGive({ '3', 'nothing' }, hasItem)
+    assert(e == 'fh_unknown_item')
+    items.sharedLookup = prev
+    local _, e2 = A.parseGive({ '3', 'bread' }, hasItem)
+    assert(e2 == 'fh_unknown_item', 'without the lookup only fh definitions resolve')
+end)
 T.finish()
