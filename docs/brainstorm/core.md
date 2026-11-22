@@ -34,3 +34,4 @@
 - Spec runner fix PASS (18cd2be, merged to main cdbd1a9): all 8 specs on fh_prelude runner, 157 tests green. Next: keyed boot (Cfx key), then B4c after S1, B5.
 - B5 PASS (ef41125 on core-b5; Gemini re-review PASS; merged to main b0eacf6): admin cmds fh_give/fh_heat(stub)/fh_tp/fh_dump, natives.md (spike natives candidate, unproven), rep() pcall. 163 specs green. Spawn cmds moved to B4c.
 - B6a PASS-WITH-NITS (bff072e on core-b6a; Gemini re-review; merged main 65f750f): fh_homestead plot claim + owner chest, migration 0003. 171 specs green. Not runtime-tested. HOLD further core dispatch until Aub's live boot.
+- B-dev PASS (ab96962 on core-bdev; Gemini re-review PASS; merged main 6307f28): OWNER-STEPS DevPC/Main PC split (one start path, firewall 30120, Tailscale connect), FH.safe client-error return to server/logs/client-errors.log gated by fh_dev; fh_inventory exception documented. 179 specs. Core HELD until live boot.
