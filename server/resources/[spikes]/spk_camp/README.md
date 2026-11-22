@@ -33,7 +33,7 @@ NETWORK_GET_ENTITY_OWNER — 0x526FEE31 — https://docs.fivem.net/natives/?_0x5
 SET_ENTITY_ORPHAN_MODE — 0x489E9162 — https://docs.fivem.net/natives/?_0x489E9162 [cfx]
 CREATE_PED — 0x0389EF71 — https://docs.fivem.net/natives/?_0x0389EF71 [cfx] — NOTE: fxserver source wraps server CreatePed/CreateObjectNoOffset in #ifndef STATE_RDR3, so likely NOT available on RedM; probe tests it and falls back to client spawn
 CREATE_OBJECT_NO_OFFSET — 0x58040420 — https://docs.fivem.net/natives/?_0x58040420 [cfx] — NOTE: fxserver source wraps server CreatePed/CreateObjectNoOffset in #ifndef STATE_RDR3, so likely NOT available on RedM; probe tests it and falls back to client spawn
-CREATE_VEHICLE (server Lua global CreateVehicle = CREATE_VEHICLE_SERVER_SETTER) — 0x6AE51D4B — https://docs.fivem.net/natives/?_0x6AE51D4B [cfx] — NOTE: inside #ifndef STATE_RDR3 in fxserver ServerSetters.cpp, so FAILED is expected; probe vehicle (cart01) is deleted immediately
+CREATE_VEHICLE — 0xDD75460A — https://docs.fivem.net/natives/?_0xDD75460A [cfx] (server Lua global CreateVehicle, 7 args: modelHash,x,y,z,heading,isNetwork,netMissionEntity; NOT CREATE_VEHICLE_SERVER_SETTER 0x6AE51D4B, which takes a `type` string) — NOTE: server vehicle creation is likely unavailable on RedM, so FAILED is expected; probe vehicle (cart01) is deleted immediately
 DELETE_ENTITY — 0xFAA3D236 — https://docs.fivem.net/natives/?_0xFAA3D236 [cfx] (server-side use)
 DOES_ENTITY_EXIST — 0x3AC90869 — https://docs.fivem.net/natives/?_0x3AC90869 [cfx]
 GET_ENTITY_HEALTH — 0x8E3222B7 — https://docs.fivem.net/natives/?_0x8E3222B7 [cfx] (server-side use)

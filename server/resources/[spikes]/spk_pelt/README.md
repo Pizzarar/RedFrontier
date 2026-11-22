@@ -22,7 +22,7 @@ GET_ENTITY_FORWARD_VECTOR — 0x2412D9C05BB09B97 — https://alloc8or.re/rdr3/na
 GET_ENTITY_HEADING — 0xC230DD956E2F5507 — https://alloc8or.re/rdr3/nativedb/?n=0xC230DD956E2F5507
 DOES_ENTITY_EXIST — 0xD42BD6EB2E0F1677 — https://alloc8or.re/rdr3/nativedb/?n=0xD42BD6EB2E0F1677
 PLAYER_PED_ID — 0x096275889B8E0EE0 — https://alloc8or.re/rdr3/nativedb/?n=0x096275889B8E0EE0
-GetHashKey (joaat of `a_c_deer_01`) — [cfx] — https://docs.fivem.net/natives/?_0xD24D37CC275948CC
+GET_HASH_KEY (client Lua global GetHashKey, joaat of `a_c_deer_01`) — 0xFD340785ADF8CFB7 — https://alloc8or.re/rdr3/nativedb/?n=0xFD340785ADF8CFB7
 
 Notes: DB doc for _GET_PED_QUALITY says "Ped Quality used to calculate Skinning Quality" (enum LOW/MEDIUM/HIGH); _GET_PED_DAMAGE_CLEANLINESS enum POOR/GOOD/PERFECT. Both are read on death and after skin. The skinned pelt quality itself is an inventory item (no inventory calls in spikes), so it is not read. The probe also tracks the last damage bone while alive (the game may clear it on death). If quality never differs, NO-GO: roll quality from last bone ourselves. Bone ids are printed raw (no bone-name native verified). Unverified guess: `a_c_deer_01` is the model name.
 

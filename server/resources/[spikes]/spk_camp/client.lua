@@ -71,7 +71,7 @@ local function arm(ped)
     SetRelationshipBetweenGroups(5, GROUP, joaat('PLAYER')) -- 5 = hate
     SetRelationshipBetweenGroups(5, joaat('PLAYER'), GROUP)
     local w = joaat(Config.weapon)
-    GiveWeaponToPed(ped, w, 100, true, true, 0, false, 0.5, 1.0, 0, false, 0.0, false)
+    GiveWeaponToPed(ped, w, 100, true, false, 0, false, 0.5, 1.0, 0, false, 0.0, false)
     SetCurrentPedWeapon(ped, w, true, 0, false, false)
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetPedAccuracy(ped, 30)
