@@ -103,6 +103,35 @@ describe('fh_core shared/items', function()
             eq('bulky', e.size_class); eq(40, e.value_base)
         end)
     end)
+    describe('resolve: rsg-side fallback for runtime-registered items', function()
+        it('reads size_class/value_base/illicit from the passed rsg item when fh has no entry', function()
+            local def = Items.resolve('crate_rt', { name = 'crate_rt', label = 'Crate', weight = 9000, unique = true,
+                size_class = 'cargo', value_base = 75, illicit = true })
+            same({ name = 'crate_rt', label = 'Crate', weight = 9000, size_class = 'cargo', stackable = false,
+                value_base = 75, illicit = true, fast_travel = false }, def)
+        end)
+        it('reads them through sharedLookup when only a name (or a bare inventory item) is given', function()
+            local shared = { crate_rt = { name = 'crate_rt', label = 'Crate', weight = 9000, unique = false,
+                size_class = 'bulky', value_base = 5 } }
+            Items.sharedLookup = function(n) return shared[n] end
+            local ok, err = pcall(function()
+                eq('bulky', Items.resolve('crate_rt').size_class, 'by name')
+                eq(5, Items.resolve('crate_rt').value_base, 'value by name')
+                -- an inventory item copies label/weight/unique but not the fh fields
+                eq('bulky', Items.resolve('crate_rt', { name = 'crate_rt', weight = 9000, amount = 1 }).size_class)
+                eq('fh_unknown_item', select(2, Items.resolve('nope_rt')))
+            end)
+            Items.sharedLookup = nil
+            assert(ok, err)
+        end)
+        it('fh config still wins over the rsg fields, and junk rsg fields are refused or ignored', function()
+            eq('cargo', Items.resolve('gold_bar', { name = 'gold_bar', size_class = 'pocket' }).size_class)
+            eq('bulky', Items.resolve('saddle', { name = 'saddle', size_class = 'cargo' }).size_class)
+            eq('fh_bad_size_class', select(2, Items.resolve('odd_rt', { name = 'odd_rt', size_class = 'huge' })))
+            local def = Items.resolve('odd_rt', { name = 'odd_rt', illicit = 'yes', value_base = 'x' })
+            eq(false, def.illicit); eq(0, def.value_base); eq('pocket', def.size_class)
+        end)
+    end)
 end)
 
 T.finish()

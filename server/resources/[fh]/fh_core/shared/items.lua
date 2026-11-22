@@ -75,7 +75,23 @@ function M.all()
     return out
 end
 
+---Optional host hook: function(name) -> rsg shared item or nil. fh_inventory sets it to read
+---RSGCore.Shared.Items, so items fh_core registered at runtime (pushed to rsg-core via toRsg, carrying
+---size_class/value_base/illicit) resolve correctly in a Lua state whose own registry is empty.
+M.sharedLookup = nil
+
+-- A §4.1 static field from the rsg side: the passed item first, then the shared lookup. Junk types read as nil.
+local function rsgField(sharedItem, lookup, key)
+    local v = sharedItem and sharedItem[key]
+    if v == nil and lookup then v = lookup[key] end
+    if key == 'value_base' then return tonumber(v) end
+    if key == 'illicit' then return type(v) == 'boolean' and v or nil end
+    return v
+end
+
 ---Resolve the effective definition of an item.
+---Field order: ItemOverrides, then the full fh definition (runtime registry / FhConfig.Items), then the rsg
+---item's own fh fields (sharedItem, then M.sharedLookup(name)), then defaults.
 ---@param name string item name
 ---@param sharedItem table|nil rsg item (RSGCore.Shared.Items entry or a runtime inventory item): weight, label, unique
 ---@return table|nil def, string|nil err
@@ -84,22 +100,28 @@ function M.resolve(name, sharedItem)
     local c = cfg()
     local full = M.definition(name)
     local over = (c.ItemOverrides or {})[name]
-    if not full and not sharedItem then return nil, 'fh_unknown_item' end
+    local lookup = M.sharedLookup and M.sharedLookup(name) or nil
+    if type(lookup) ~= 'table' then lookup = nil end
+    if not full and not sharedItem and not lookup then return nil, 'fh_unknown_item' end
 
-    local base = full or sharedItem
+    local base = full or sharedItem or lookup
     local src = over or {}
     local stackable = src.stackable
     if stackable == nil and full then stackable = full.stackable end
-    if stackable == nil then stackable = not (sharedItem and sharedItem.unique) end
+    if stackable == nil then
+        local unique = rsgField(sharedItem, lookup, 'unique')
+        stackable = not unique
+    end
 
     local def = {
         name = name,
         label = base.label or name,
         weight = tonumber(base.weight) or 0,
-        size_class = pick(src.size_class, full and full.size_class, c.DefaultSizeClass or 'pocket'),
+        size_class = pick(src.size_class, full and full.size_class,
+            pick(rsgField(sharedItem, lookup, 'size_class'), c.DefaultSizeClass, 'pocket')),
         stackable = stackable and true or false,
-        value_base = pick(src.value_base, full and full.value_base, 0),
-        illicit = pick(src.illicit, full and full.illicit, false),
+        value_base = pick(src.value_base, full and full.value_base, pick(rsgField(sharedItem, lookup, 'value_base'), 0)),
+        illicit = pick(src.illicit, full and full.illicit, pick(rsgField(sharedItem, lookup, 'illicit'), false)),
     }
     if not M.SIZE_CLASSES[def.size_class] then return nil, 'fh_bad_size_class' end
     def.fast_travel = M.FAST_TRAVEL[def.size_class]
