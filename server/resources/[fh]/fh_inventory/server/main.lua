@@ -282,7 +282,9 @@ local function WeaponDefaults(s, info)
     return info
 end
 
-local function AddTo(c, name, amount, info, slot)
+-- FH: rsg's AddTo with a slot range [first, last] (default the whole container). No fh_core veto here:
+-- callers are AddTo (after the veto picked the range) and ConvertCoins (same value, exempt).
+local function AddToRaw(c, name, amount, info, slot, first, last)
     local s = SharedItem(name)
     amount = math.tointeger(tonumber(amount)) or 1
     if not s or amount < 1 then return false, 'invalid_item' end
@@ -293,11 +295,13 @@ local function AddTo(c, name, amount, info, slot)
         info.quality = 100 -- decaying items start fresh
     end
     slot = math.tointeger(tonumber(slot))
+    first, last = first or 1, math.min(last or c.slots, c.slots) -- FH
+    if slot and (slot < first or slot > last) then slot = nil end -- FH: a slot outside the range is ignored
 
     if s.unique then
         local free = {}
-        if slot and slot >= 1 and slot <= c.slots and not c.items[slot] then free[1] = slot end
-        for i = 1, c.slots do
+        if slot and not c.items[slot] then free[1] = slot end
+        for i = first, last do -- FH: range
             if #free >= amount then break end
             if not c.items[i] and i ~= free[1] then free[#free + 1] = i end
         end
@@ -310,22 +314,133 @@ local function AddTo(c, name, amount, info, slot)
 
     local probe = { name = s.name, info = info }
     local target
-    if slot and slot >= 1 and slot <= c.slots then
+    if slot then
         local cur = c.items[slot]
         if not cur or CanStack(cur, probe) then target = slot end
     end
     if not target then
         for _, sl in ipairs(SlotsByItem(c.items, s.name)) do
-            if CanStack(c.items[sl], probe) then target = sl break end
+            if sl >= first and sl <= last and CanStack(c.items[sl], probe) then target = sl break end -- FH: range
         end
     end
-    target = target or FirstEmpty(c.items, c.slots)
+    if not target then -- FH: first empty slot inside the range
+        for i = first, last do
+            if not c.items[i] then target = i break end
+        end
+    end
     if not target then return false, 'no_space' end
 
     if c.items[target] then
         c.items[target].amount = c.items[target].amount + amount
     else
         c.items[target] = BuildItem(s.name, amount, info, target)
+    end
+    return true
+end
+
+--------------------------------------------------------------------------------
+-- FH: fh_core rules. FhRules / FhContainers come from @fh_core/shared (fxmanifest).
+--------------------------------------------------------------------------------
+-- The fh_core views of a container: a player is two sections (equipped = the hotbar, backpack = the rest);
+-- a stash or drop is one view of its fhType ('stash' for a non-fh stash, which FhRules refuses: fail closed).
+-- Shops have no rules (buying goes through AddItem on the player, which is vetoed). Returns nil for shops.
+local function FhViews(c)
+    if c.type == 'shop' then return nil end
+    if c.type == 'player' then
+        local eq, bp = FhRules.playerViews(c.items, c.maxWeight, c.slots)
+        eq.id, bp.id = c.id, c.id
+        return { eq, bp }
+    end
+    return { { id = c.id, type = c.fhType or c.type, items = c.items, slots = c.slots, maxWeight = c.maxWeight,
+        coords = c.coords } }
+end
+
+local function FhRange(view)
+    if view.slotRange then return view.slotRange[1], view.slotRange[2] end
+    return 1, view.slots
+end
+
+local function FhViewOfSlot(views, slot)
+    for _, v in ipairs(views) do
+        local first, last = FhRange(v)
+        if slot >= first and slot <= last then return v end
+    end
+end
+
+-- the item as FhRules sees it (runtime fields + the info that decides stacking)
+local function FhProbe(s, amount, info)
+    return { name = s.name, weight = s.weight or 0, unique = s.unique, amount = amount, info = info or {} }
+end
+
+-- Which section of c may take `amount` of probe? -> first, last | nil, reason.
+-- Order: the section holding `slot`, then a section with a stack to merge into, then the others in slot order.
+local function FhPickRange(c, probe, amount, slot)
+    local views = FhViews(c)
+    if not views then return 1, c.slots end
+    local tries = {}
+    local home = slot and FhViewOfSlot(views, slot)
+    if home then
+        tries[#tries + 1] = { v = home, opts = { slot = slot } }
+        tries[#tries + 1] = { v = home }
+    end
+    for _, v in ipairs(views) do
+        if v ~= home then
+            for _, it in pairs(v.items) do
+                if FhRules.canStack(it, probe) then tries[#tries + 1] = { v = v } break end
+            end
+        end
+    end
+    for _, v in ipairs(views) do
+        if v ~= home then tries[#tries + 1] = { v = v } end
+    end
+    local reason
+    for _, t in ipairs(tries) do
+        local ok, why = FhRules.canFit(t.v, probe, amount, t.opts)
+        if ok then return FhRange(t.v) end
+        reason = reason or why
+    end
+    return nil, reason or 'fh_no_slot'
+end
+
+-- Every add into a container goes through here: the fh_core veto picks the section, AddToRaw fills it.
+local function AddTo(c, name, amount, info, slot)
+    local s = SharedItem(name)
+    amount = math.tointeger(tonumber(amount)) or 1
+    if not s or amount < 1 then return false, 'invalid_item' end
+    info = type(info) == 'table' and info or {}
+    if info.quality == nil and DecayRule(s) then
+        info = DeepClone(info)
+        info.quality = 100 -- same as AddToRaw, so the veto sees the stack the item will join
+    end
+    slot = math.tointeger(tonumber(slot))
+    local first, last = FhPickRange(c, FhProbe(s, amount, info), amount, slot)
+    if not first then return false, last end
+    return AddToRaw(c, name, amount, info, slot, first, last)
+end
+
+-- FH: veto for a drag from from[fromSlot] to to[toSlot] (same container too: equipped <-> backpack, swaps)
+local function FhCheckMove(from, to, fromSlot, toSlot, amount)
+    local fv = FhViews(from)
+    local tv = (to == from) and fv or FhViews(to)
+    if not fv or not tv then return true end -- shops: Shops.Buy / Shops.Sell
+    local fromView, toView = FhViewOfSlot(fv, fromSlot), FhViewOfSlot(tv, toSlot)
+    if not fromView or not toView then return false, 'fh_bad_slot' end
+    local plan, why = FhRules.planMove(fromView, toView, fromSlot, toSlot, amount)
+    return plan ~= nil, why
+end
+
+-- FH: is a whole player layout (SetInventory) allowed? -> ok, reason
+local function FhCheckLayout(c, items)
+    local layout = { id = c.id, type = c.type, items = items, slots = c.slots, maxWeight = c.maxWeight }
+    for slot, it in pairs(items) do
+        if slot < 1 or slot > c.slots or not SharedItem(it.name) then return false, 'fh_bad_slot' end
+    end
+    if TotalWeight(items) > c.maxWeight then return false, 'fh_too_heavy' end
+    for _, v in ipairs(FhViews(layout) or {}) do
+        for slot, it in pairs(v.items) do
+            local ok, why = FhRules.canFit(v, it, it.amount, { slot = slot, replacing = it })
+            if not ok then return false, why end
+        end
     end
     return true
 end
@@ -374,8 +489,9 @@ function ConvertCoins(c)
         local dollars = cents // 100
         if dollars > 0 and SharedItem(pair.dollar) then
             RemoveFrom(c, pair.cent, dollars * 100)
-            if not AddTo(c, pair.dollar, dollars) then
-                AddTo(c, pair.cent, dollars * 100) -- no room for the dollars: put the cents back
+            -- FH: AddToRaw, not AddTo: the exchange keeps the same value, so it is exempt from the veto
+            if not AddToRaw(c, pair.dollar, dollars) then
+                AddToRaw(c, pair.cent, dollars * 100) -- no room for the dollars: put the cents back
             end
         end
     end
@@ -472,6 +588,9 @@ function API.CanCarry(target, name, amount)
         end
         if not canMerge then return false, 'no_space' end
     end
+    -- FH: same veto AddItem will apply, so shops and other scripts agree with the real add
+    local first, why = FhPickRange(c, FhProbe(s, amount, DecayRule(s) and { quality = 100 } or {}), amount)
+    if not first then return false, why end
     return true
 end
 
@@ -758,17 +877,29 @@ local function EnforceCapacity(src)
     local dropId, dropped
     for _, slot in ipairs(over) do
         local it = c.items[slot]
-        local free = FirstEmpty(c.items, c.slots)
+        -- FH: only into a free slot of a section that passes the fh_core veto (was: any free slot)
+        c.items[slot] = nil -- out of the views while we look for a place
+        local free
+        for _, v in ipairs(FhViews(c)) do
+            local first, last = FhRange(v)
+            for i = first, last do
+                if not c.items[i] then
+                    if FhRules.canFit(v, it, it.amount, { slot = i }) then free = i end
+                    break -- every free slot of a section is the same to the veto
+                end
+            end
+            if free then break end
+        end
         if free then
-            c.items[slot] = nil
             it.slot = free
             c.items[free] = it
         else
             if not dropId then dropId = API.CreateDrop(GetEntityCoords(GetPlayerPed(src)), {}) end
             if AddTo(Inventories[dropId], it.name, it.amount, DeepClone(it.info)) then
-                c.items[slot] = nil
                 CheckWeapon(src, it)
                 dropped = true
+            else
+                c.items[slot] = it -- FH: nowhere to put it: leave it where it was, as rsg did
             end
         end
     end
@@ -817,23 +948,23 @@ local function Dist(src, coords)
     return #(GetEntityCoords(GetPlayerPed(src)) - coords)
 end
 
--- FH: how close a player must be to use a container. Stashes use fh_core's
--- FhConfig.Access (InteractDistance, per-type override); drops and shops keep rsg's ranges.
-local function ReachFor(inv)
-    if inv.type == 'drop' then return Config.Drop.OpenDistance + 3.0 end
-    if inv.type == 'shop' then return Config.ShopDistance end
-    local access = FhConfig and FhConfig.Access or {}
-    local per = access.PerType or access.TypeDistance or {}
-    return tonumber(inv.fhType and per[inv.fhType]) or tonumber(access.InteractDistance) or Config.FhFallbackReach
-end
-
--- FH: a stash, drop or shop with no coords is refused, and so is anything out of reach
+-- FH: a stash, drop or shop with no coords is refused, and so is anything out of reach -> ok, reason.
+-- fh stashes use fh_core's reach (FhContainers.canReach: Access.InteractDistance, per-type override);
+-- drops and shops keep rsg's ranges.
 local function InReach(src, inv)
     local coords = inv.coords or inv.shopCoords
-    if not coords then return false end
+    if not coords then return false, 'fh_no_coords' end
     local ped = GetPlayerPed(src)
-    if ped == 0 then return false end
-    return #(GetEntityCoords(ped) - coords) <= ReachFor(inv)
+    if ped == 0 then return false, 'fh_no_player_coords' end
+    local pc = GetEntityCoords(ped)
+    if inv.type == 'stash' and inv.fhType and FhContainers.isType(inv.fhType) then
+        return FhContainers.canReach(inv.fhType, coords, pc)
+    end
+    local reach = (inv.type == 'drop' and Config.Drop.OpenDistance + 3.0)
+        or (inv.type == 'shop' and Config.ShopDistance)
+        or (FhConfig and FhConfig.Access and FhConfig.Access.InteractDistance) or Config.FhFallbackReach
+    if #(pc - coords) > reach then return false, 'fh_out_of_reach' end
+    return true
 end
 
 local function CanAccess(src, id)
@@ -870,9 +1001,12 @@ local function OpenFor(src, otherId)
     elseif otherId then
         local oc = GetContainer(otherId)
         if not oc then return false end
-        if type(otherId) == 'string' and not InReach(src, oc) then -- FH: coords + reach before opening
-            Notify(src, 'fh_too_far')
-            return false
+        if type(otherId) == 'string' then -- FH: coords + reach before opening
+            local ok, why = InReach(src, oc)
+            if not ok then
+                Notify(src, why)
+                return false
+            end
         end
         other = ClientInv(oc)
     end
@@ -945,6 +1079,102 @@ end)
 --------------------------------------------------------------------------------
 -- Move / split / swap / merge
 --------------------------------------------------------------------------------
+-- FH: the move itself, shared by the client drag (server:move) and fh_core (FhMove). The caller has
+-- already checked access and resolved 'newdrop'. actor = the player doing it (nil for fh_core) -> ok, reason
+local function MoveBetween(actor, from, fromId, toId, fromSlot, toSlot, rawAmount)
+    if not from or not from.items[fromSlot] then Refresh(actor) return false, 'fh_no_item' end
+    local same = fromId == toId
+    local to = same and from or GetContainer(toId)
+    if not to or toSlot < 1 or toSlot > to.slots or (same and fromSlot == toSlot) then Refresh(actor) return false, 'fh_bad_slot' end
+
+    local item = from.items[fromSlot]
+    local amount = rawAmount == nil and item.amount or math.tointeger(tonumber(rawAmount))
+    if not amount or amount < 1 or amount > item.amount then -- a bad quantity is refused, never widened to the whole stack
+        if toId ~= fromId and type(toId) == 'string' then CleanupDropIfEmpty(toId) end
+        Refresh(actor)
+        return false, 'fh_bad_amount'
+    end
+
+    -- FH: fh_core veto (FhRules.planMove), before anything changes. Covers moves between containers and
+    -- inside one player between the equipped and backpack sections (same == true), swaps included.
+    local okMove, vetoWhy = FhCheckMove(from, to, fromSlot, toSlot, amount)
+    if not okMove then
+        Notify(actor, vetoWhy)
+        if toId ~= fromId and type(toId) == 'string' then CleanupDropIfEmpty(toId) end
+        Refresh(actor)
+        return false, vetoWhy
+    end
+
+    local dest = to.items[toSlot]
+    local swapped = false
+    local moveWeight = (item.weight or 0) * amount
+    local function reject()
+        Notify(actor, 'too_heavy')
+        if type(toId) == 'string' then CleanupDropIfEmpty(toId) end
+        Refresh(actor)
+        return false, 'too_heavy'
+    end
+
+    if not dest then
+        if not same and TotalWeight(to.items) + moveWeight > to.maxWeight then return reject() end
+        if amount == item.amount then
+            from.items[fromSlot] = nil
+            item.slot = toSlot
+            to.items[toSlot] = item
+        else
+            item.amount = item.amount - amount
+            to.items[toSlot] = BuildItem(item.name, amount, DeepClone(item.info), toSlot)
+        end
+    elseif CanStack(dest, item) then
+        if not same and TotalWeight(to.items) + moveWeight > to.maxWeight then return reject() end
+        dest.amount = dest.amount + amount
+        item.amount = item.amount - amount
+        if item.amount <= 0 then from.items[fromSlot] = nil end
+    else
+        if amount ~= item.amount then Refresh(actor) return false, 'fh_slot_taken' end -- only whole stacks swap
+        if not same then
+            local destWeight = (dest.weight or 0) * dest.amount
+            if TotalWeight(to.items) - destWeight + moveWeight > to.maxWeight
+            or TotalWeight(from.items) - moveWeight + destWeight > from.maxWeight then
+                return reject()
+            end
+        end
+        from.items[fromSlot], to.items[toSlot] = dest, item
+        dest.slot, item.slot = fromSlot, toSlot
+        swapped = true
+    end
+
+    Commit(from)
+    if not same then
+        Commit(to)
+        -- stash/player <-> player: write both rows right now so a crash can't leave the
+        -- item saved in both places (dupe) or in neither (loss). Drops are memory-only.
+        if from.type ~= 'drop' and to.type ~= 'drop' then
+            if from.type == 'stash' then SaveStash(fromId) end
+            if to.type == 'stash' then SaveStash(toId) end
+            if from.type == 'player' then SavePlayer(fromId) end
+            if to.type == 'player' then SavePlayer(toId) end
+        end
+        if from.type == 'player' and from.items[fromSlot] ~= item then CheckWeapon(fromId, item) end
+        if to.type == 'player' and dest and from.items[fromSlot] == dest then CheckWeapon(toId, dest) end
+        Log('Move', ('%s moved %sx %s from %s to %s'):format(actor and GetPlayerName(actor) or (GetInvokingResource() or 'fh_core'), amount, item.name, tostring(fromId), tostring(toId)))
+        if actor then -- FH: fh_core moves have no player to log against
+            if from.type == 'stash' then LogStash(actor, fromId, 'take', item.name, amount) end
+            if to.type == 'stash' then LogStash(actor, toId, 'put', item.name, amount) end
+            if swapped then -- the item that was in the destination slot travels the other way
+                if to.type == 'stash' then LogStash(actor, toId, 'take', dest.name, dest.amount) end
+                if from.type == 'stash' then LogStash(actor, fromId, 'put', dest.name, dest.amount) end
+            end
+        end
+    end
+
+    if actor then Refresh(actor) end
+    if fromId ~= actor then Refresh(fromId) end
+    if toId ~= actor and toId ~= fromId then Refresh(toId) end
+    if type(fromId) == 'string' then CleanupDropIfEmpty(fromId) end
+    return true
+end
+
 RegisterNetEvent('rsg-inventory:server:move', function(data)
     local src = source
     if type(data) ~= 'table' then return end
@@ -984,81 +1214,7 @@ RegisterNetEvent('rsg-inventory:server:move', function(data)
         OpenInv[src] = toId
     end
 
-    local same = fromId == toId
-    local to = same and from or GetContainer(toId)
-    if not to or toSlot < 1 or toSlot > to.slots or (same and fromSlot == toSlot) then return Refresh(src) end
-
-    local item = from.items[fromSlot]
-    local amount = data.amount == nil and item.amount or math.tointeger(tonumber(data.amount))
-    if not amount or amount < 1 or amount > item.amount then -- a bad quantity is refused, never widened to the whole stack
-        if toId ~= fromId and type(toId) == 'string' then CleanupDropIfEmpty(toId) end
-        return Refresh(src)
-    end
-
-    local dest = to.items[toSlot]
-    local swapped = false
-    local moveWeight = (item.weight or 0) * amount
-    local function reject()
-        Notify(src, 'too_heavy')
-        if type(toId) == 'string' then CleanupDropIfEmpty(toId) end
-        Refresh(src)
-    end
-
-    if not dest then
-        if not same and TotalWeight(to.items) + moveWeight > to.maxWeight then return reject() end
-        if amount == item.amount then
-            from.items[fromSlot] = nil
-            item.slot = toSlot
-            to.items[toSlot] = item
-        else
-            item.amount = item.amount - amount
-            to.items[toSlot] = BuildItem(item.name, amount, DeepClone(item.info), toSlot)
-        end
-    elseif CanStack(dest, item) then
-        if not same and TotalWeight(to.items) + moveWeight > to.maxWeight then return reject() end
-        dest.amount = dest.amount + amount
-        item.amount = item.amount - amount
-        if item.amount <= 0 then from.items[fromSlot] = nil end
-    else
-        if amount ~= item.amount then return Refresh(src) end -- only whole stacks swap
-        if not same then
-            local destWeight = (dest.weight or 0) * dest.amount
-            if TotalWeight(to.items) - destWeight + moveWeight > to.maxWeight
-            or TotalWeight(from.items) - moveWeight + destWeight > from.maxWeight then
-                return reject()
-            end
-        end
-        from.items[fromSlot], to.items[toSlot] = dest, item
-        dest.slot, item.slot = fromSlot, toSlot
-        swapped = true
-    end
-
-    Commit(from)
-    if not same then
-        Commit(to)
-        -- stash/player <-> player: write both rows right now so a crash can't leave the
-        -- item saved in both places (dupe) or in neither (loss). Drops are memory-only.
-        if from.type ~= 'drop' and to.type ~= 'drop' then
-            if from.type == 'stash' then SaveStash(fromId) end
-            if to.type == 'stash' then SaveStash(toId) end
-            if from.type == 'player' then SavePlayer(fromId) end
-            if to.type == 'player' then SavePlayer(toId) end
-        end
-        if from.type == 'player' and from.items[fromSlot] ~= item then CheckWeapon(fromId, item) end
-        if to.type == 'player' and dest and from.items[fromSlot] == dest then CheckWeapon(toId, dest) end
-        Log('Move', ('%s moved %sx %s from %s to %s'):format(GetPlayerName(src), amount, item.name, tostring(fromId), tostring(toId)))
-        if from.type == 'stash' then LogStash(src, fromId, 'take', item.name, amount) end
-        if to.type == 'stash' then LogStash(src, toId, 'put', item.name, amount) end
-        if swapped then -- the item that was in the destination slot travels the other way
-            if to.type == 'stash' then LogStash(src, toId, 'take', dest.name, dest.amount) end
-            if from.type == 'stash' then LogStash(src, fromId, 'put', dest.name, dest.amount) end
-        end
-    end
-
-    Refresh(src)
-    if fromId ~= src then Refresh(fromId) end
-    if toId ~= src and toId ~= fromId then Refresh(toId) end
-    if type(fromId) == 'string' then CleanupDropIfEmpty(fromId) end
+    MoveBetween(src, from, fromId, toId, fromSlot, toSlot, data.amount) -- FH: body moved into MoveBetween
 end)
 
 --------------------------------------------------------------------------------
