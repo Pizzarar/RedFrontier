@@ -1,0 +1,14 @@
+# secrets / local runtime
+server/secrets.cfg
+server/artifacts/
+server/db/
+server/cache/
+server/logs/
+txData/
+*.log
+
+# setup-script download/temp dirs
+tools/.tmp/
+.tmp/
+*.zip
+*.7z
