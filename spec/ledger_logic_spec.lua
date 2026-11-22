@@ -1,5 +1,8 @@
 -- Run from repo root: `lua spec/ledger_logic_spec.lua` (or via busted).
-local case = dofile('./spec/_harness.lua').case
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+package.path = here .. '../server/resources/[fh]/fh_economy/shared/?.lua;' .. package.path
+local case = T.it
 local logic = require('ledger_logic')
 local regions = require('regions')
 
@@ -67,3 +70,5 @@ case('applyRep clamps to bounds', function()
     assert(logic.applyRep(8, 5, -10, 10) == 10)
     assert(logic.applyRep(-8, -5, -10, 10) == -10)
 end)
+
+T.finish()

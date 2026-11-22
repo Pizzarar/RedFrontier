@@ -1,5 +1,7 @@
 -- Run from repo root: `lua spec/regions_spec.lua` (or via busted).
-local case = dofile('./spec/_harness.lua').case
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+local case = T.it
 local regions = require('regions')
 
 local t1 = regions.getTerritory('heartlands_t1_camp')
@@ -29,3 +31,5 @@ case('territoryAt is nil outside the radius and for bad input', function()
     assert(regions.territoryAt(nil, 5) == nil)
     assert(regions.territoryAt('1', '2') == nil)
 end)
+
+T.finish()

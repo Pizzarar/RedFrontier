@@ -1,5 +1,8 @@
 -- Run from repo root: `lua spec/buff_logic_spec.lua` (or via busted).
-local case = dofile('./spec/_harness.lua').case
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+package.path = here .. '../server/resources/[fh]/fh_buffs/shared/?.lua;' .. package.path
+local case = T.it
 local logic = require('buff_logic')
 
 local caps = { well_fed = 1.25, rested = 1.2 }
@@ -66,3 +69,5 @@ case('invalid input is refused without touching state', function()
     end
     assert(next(st) == nil)
 end)
+
+T.finish()
