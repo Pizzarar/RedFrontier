@@ -13,6 +13,10 @@ local function spawn(p)
     while not HasModelLoaded(model) and GetGameTimer() - t < 5000 do Wait(50) end
     if not HasModelLoaded(model) then return end
     local obj = CreateObject(model, p.coords.x, p.coords.y, p.coords.z, false, false, false) -- isNetwork = false
+    if not obj or obj == 0 then
+        SetModelAsNoLongerNeeded(model)
+        return
+    end
     SetEntityHeading(obj, p.heading or 0.0)
     PlaceObjectOnGroundProperly(obj)
     FreezeEntityPosition(obj, true)
@@ -40,7 +44,7 @@ CreateThread(function()
             onEnter = function() lib.showTextUI('[E] Homestead chest') end,
             onExit = function() lib.hideTextUI() end,
             nearby = function()
-                if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:openChest', p.id) end
+                if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:open_chest', p.id) end
             end,
         })
     end

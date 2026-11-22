@@ -70,6 +70,7 @@ checked the hash yet. fh_inventory is a fork of rsg-inventory, so most client na
 | `DeleteObject`, `DoesEntityExist` | not looked up | `fh_homestead/client/main.lua` | client |
 | `SetEntityHeading`, `PlaceObjectOnGroundProperly`, `FreezeEntityPosition` | not looked up | `fh_homestead/client/main.lua` | client |
 | `RequestModel`, `HasModelLoaded`, `IsModelInCdimage`, `SetModelAsNoLongerNeeded`, `joaat` | not looked up | `fh_homestead/client/main.lua` | client |
+| `GetGameTimer` | not looked up | `fh_homestead/client/main.lua` (model-load timeout) | client |
 | `IsControlJustReleased` + control `0xCEFD9220` (INPUT_CONTEXT, E) | not looked up | `fh_homestead/client/main.lua` | client |
 
 ## Spikes

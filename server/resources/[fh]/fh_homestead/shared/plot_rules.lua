@@ -5,7 +5,9 @@ local function finite(n) return type(n) == 'number' and n == n and n > -math.hug
 
 ---@return boolean ok
 function M.validCoords(c)
-    return type(c) == 'table' and finite(c.x) and finite(c.y) and finite(c.z)
+    -- CfxLua vector3 is not type 'table': read the fields under pcall (as fh_core containers.lua does)
+    local ok, x, y, z = pcall(function() return c.x, c.y, c.z end)
+    return ok and finite(x) and finite(y) and finite(z)
 end
 
 ---@return number|nil dist

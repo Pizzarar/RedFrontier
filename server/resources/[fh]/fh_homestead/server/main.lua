@@ -66,14 +66,18 @@ local function claim(src)
     if not ok then return false, why end
     -- reserve in memory first so a second claim in the same tick is refused; DB unique keys are the backstop
     claims.byPlot[plot.id], claims.byOwner[citizenid] = citizenid, plot.id
-    local inserted = pcall(MySQL.insert.await, 'INSERT INTO fh_plots (plot_id, citizenid) VALUES (?, ?)', { plot.id, citizenid })
-    if inserted then
-        inserted = pcall(MySQL.insert.await, 'INSERT INTO fh_plot_chests (plot_id, chest_id, stash_id) VALUES (?, 1, ?)',
-            { plot.id, rules.chestStashId(plot.id, 1) })
+    local plotRow = pcall(MySQL.insert.await, 'INSERT INTO fh_plots (plot_id, citizenid) VALUES (?, ?)', { plot.id, citizenid })
+    if not plotRow then
+        -- our insert did not happen (e.g. a unique-key conflict with someone else's row): delete nothing
+        claims.byPlot[plot.id], claims.byOwner[citizenid] = nil, nil
+        return false, 'fh_claim_failed'
     end
-    local reg = inserted and registerChest(plot)
-    if not inserted or not reg then
-        pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ?', { plot.id })
+    local done = pcall(MySQL.insert.await, 'INSERT INTO fh_plot_chests (plot_id, chest_id, stash_id) VALUES (?, 1, ?)',
+        { plot.id, rules.chestStashId(plot.id, 1) })
+    done = done and registerChest(plot)
+    if not done then
+        -- roll back only the row this call inserted
+        pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plot.id, citizenid })
         claims.byPlot[plot.id], claims.byOwner[citizenid] = nil, nil
         return false, 'fh_claim_failed'
     end
@@ -86,15 +90,19 @@ end
 ---@return boolean ok, string|nil reason
 local function unclaim(src, plotId)
     if not ready then return false, 'fh_not_ready' end
-    local isAdmin = src == 0 or IsPlayerAceAllowed(src, 'group.admin')
+    local isAdmin = src == 0 or IsPlayerAceAllowed(src, 'command.fh_unclaim')
     local citizenid = src ~= 0 and citizenidOf(src) or nil
     if not plotId then plotId = citizenid and claims.byOwner[citizenid] end
     if not plotId then return false, 'fh_no_plot' end
     local ok, why = rules.canUnclaim(plotId, citizenid, isAdmin, claims)
     if not ok then return false, why end
     local owner = claims.byPlot[plotId]
-    local deleted = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ?', { plotId })
-    if not deleted then return false, 'fh_unclaim_failed' end
+    local deleted, affected = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plotId, owner })
+    -- a concurrent unclaim that already deleted the row affects 0 rows: only one caller emits the event
+    if not deleted or (tonumber(affected) or 0) == 0 then
+        if deleted and claims.byPlot[plotId] == owner then claims.byPlot[plotId], claims.byOwner[owner] = nil, nil end
+        return false, 'fh_unclaim_failed'
+    end
     claims.byPlot[plotId], claims.byOwner[owner] = nil, nil
     TriggerEvent('fh:homestead:unclaimed', { src = src, citizenid = owner, plot_id = plotId })
     return true, plotId
@@ -111,8 +119,9 @@ end
 
 -- Client prompt -> request. The server revalidates ownership and reach (fh_core.open re-checks distance from the
 -- server-side ped position; fh_inventory checks again).
-RegisterNetEvent('fh:homestead:openChest', function(plotId)
+RegisterNetEvent('fh:homestead:open_chest', function(plotId)
     local src = source
+    if not ready then return end
     local plot = type(plotId) == 'string' and cfg.plots[plotId]
     if not plot then return end
     local ok, why = rules.canOpenChest(plot.id, citizenidOf(src), claims)

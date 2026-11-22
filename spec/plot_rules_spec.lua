@@ -57,4 +57,19 @@ case('chestStashId format', function()
     assert(R.chestStashId('heartlands_01') == 'fh:chest:heartlands_01:1')
     assert(R.chestStashId('a', 2) == 'fh:chest:a:2')
 end)
+case('validCoords/inRadius/plotAt accept vector3-like values that are not plain tables', function()
+    -- CfxLua vector3 is not type 'table'. Stub: a proxy whose x/y/z are only reachable through __index (no raw fields).
+    local function vec(x, y, z)
+        local data = { x = x, y = y, z = z }
+        return setmetatable({}, { __index = data })
+    end
+    assert(R.validCoords(vec(1, 2, 3)))
+    assert(not R.validCoords(vec(1, 2, 0 / 0)))
+    assert(not R.validCoords(42) and not R.validCoords('str') and not R.validCoords(nil))
+    local vplot = { id = 'v', center = vec(0, 0, 0), radius = 10.0 }
+    assert(R.inRadius(vplot, vec(3, 4, 0)))
+    assert(not R.inRadius(vplot, vec(30, 4, 0)))
+    assert(R.plotAt({ v = vplot }, vec(1, 1, 1)) == vplot)
+    assert(R.canClaim(vplot, vec(1, 1, 1), 'ABC', empty))
+end)
 T.finish()
