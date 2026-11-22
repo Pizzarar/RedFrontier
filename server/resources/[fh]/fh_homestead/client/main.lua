@@ -36,16 +36,16 @@ FH.thread(function()
     for _, p in ipairs(list) do
         lib.points.new({
             coords = p.coords, distance = 40.0,
-            onEnter = function() spawn(p) end,
-            onExit = function() despawn(p.id) end,
+            onEnter = FH.wrap(function() spawn(p) end),
+            onExit = FH.wrap(function() despawn(p.id) end),
         })
         lib.points.new({
             coords = p.coords, distance = 2.0,
-            onEnter = function() lib.showTextUI('[E] Homestead chest') end,
-            onExit = function() lib.hideTextUI() end,
-            nearby = function()
+            onEnter = FH.wrap(function() lib.showTextUI('[E] Homestead chest') end),
+            onExit = FH.wrap(function() lib.hideTextUI() end),
+            nearby = FH.wrap(function()
                 if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:open_chest', p.id) end
-            end,
+            end),
         })
     end
 end)

@@ -23,7 +23,7 @@ Two machines. **DevPC** has the repo, FXServer, MariaDB, `server/server.cfg` and
 
 8. To stop: Ctrl+C in the server window on the DevPC, then `tools/stop-server.ps1`.
 9. Report anything odd to Core, and include the last lines of `server/logs/fxserver.log` (DevPC). If the RSG client log is needed, send the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` from the Main PC (path to be confirmed).
-10. With `fh_dev` on (see `server.cfg`), client script errors are also appended to `server/logs/client-errors.log` on the DevPC. To check the pipe, run `fh_clienterr` in game (admin): expect a line in that file.
+10. With `fh_dev` on (see `server.cfg`), client script errors are also appended to `server/logs/client-errors.log` on the DevPC. To check the pipe, run `fh_clienterr` in game (admin): expect a line in that file. Exception: `fh_inventory` (an rsg-inventory fork) is not wrapped, so its client errors only show in the RedM client log from the Main PC, like RSG resources.
 
 ## B5 admin commands (needs your account in `group.admin`; none of this is runtime-tested yet)
 

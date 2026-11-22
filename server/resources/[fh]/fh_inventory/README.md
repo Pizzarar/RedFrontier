@@ -226,3 +226,7 @@ Full reference: **[DOCS.md](DOCS.md)**.
 
 ## Support
 If you like this script: https://buymeacoffee.com/rexshack
+
+## Client error reporting
+
+The fh_core dev client-error return (`FH.safe` and friends, `fh:dev:clientError`) is deliberately **not** applied to this resource: the fork's diff from upstream rsg-inventory stays minimal (docs/decisions/inventory.md). Its client errors appear only in the RedM client log.
