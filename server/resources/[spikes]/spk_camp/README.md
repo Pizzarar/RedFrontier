@@ -1,4 +1,4 @@
-TEST: `ensure spk_camp`, stand on a road, run `/spk_camp` (watch F8/console + notify: it says whether server-side CreatePed worked), ride 300m away and back, `/spk_camp status`; then disconnect + rejoin and `/spk_camp status` again (same netIds, no dupes, owner changed); shoot one outlaw and `/spk_camp status` (shows DEAD); `/spk_camp clear` to reset.
+TEST: `ensure spk_camp`, stand on a road, run `/spk_camp` (read BOTH path lines in F8/console + notify: `server-side CreatePed ...` and `server CreateVehicle(cart01): OK|FAILED`), ride 300m away and back, `/spk_camp status`; then disconnect + rejoin and `/spk_camp status` again (same netIds, no dupes, owner changed); shoot one outlaw and `/spk_camp status` (shows DEAD); `/spk_camp clear` to reset.
 
 ## Natives
 
@@ -33,6 +33,7 @@ NETWORK_GET_ENTITY_OWNER — 0x526FEE31 — https://docs.fivem.net/natives/?_0x5
 SET_ENTITY_ORPHAN_MODE — 0x489E9162 — https://docs.fivem.net/natives/?_0x489E9162 [cfx]
 CREATE_PED — 0x0389EF71 — https://docs.fivem.net/natives/?_0x0389EF71 [cfx] — NOTE: fxserver source wraps server CreatePed/CreateObjectNoOffset in #ifndef STATE_RDR3, so likely NOT available on RedM; probe tests it and falls back to client spawn
 CREATE_OBJECT_NO_OFFSET — 0x58040420 — https://docs.fivem.net/natives/?_0x58040420 [cfx] — NOTE: fxserver source wraps server CreatePed/CreateObjectNoOffset in #ifndef STATE_RDR3, so likely NOT available on RedM; probe tests it and falls back to client spawn
+CREATE_VEHICLE (server Lua global CreateVehicle = CREATE_VEHICLE_SERVER_SETTER) — 0x6AE51D4B — https://docs.fivem.net/natives/?_0x6AE51D4B [cfx] — NOTE: inside #ifndef STATE_RDR3 in fxserver ServerSetters.cpp, so FAILED is expected; probe vehicle (cart01) is deleted immediately
 DELETE_ENTITY — 0xFAA3D236 — https://docs.fivem.net/natives/?_0xFAA3D236 [cfx] (server-side use)
 DOES_ENTITY_EXIST — 0x3AC90869 — https://docs.fivem.net/natives/?_0x3AC90869 [cfx]
 GET_ENTITY_HEALTH — 0x8E3222B7 — https://docs.fivem.net/natives/?_0x8E3222B7 [cfx] (server-side use)

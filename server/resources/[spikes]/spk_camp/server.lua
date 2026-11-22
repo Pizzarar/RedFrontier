@@ -38,6 +38,19 @@ local function tryServerSpawn(center)
     return nil, ok and 'CreatePed returned 0' or tostring(ped)
 end
 
+-- Probe server-side CreateVehicle (wagon). Expected FAILED on RedM (CREATE_VEHICLE_SERVER_SETTER is inside
+-- #ifndef STATE_RDR3 in ServerSetters.cpp). Probe vehicle is deleted at once and never joins camp state.
+local function probeVehicle(src, center)
+    local model = 'cart01' -- verified in femga/rdr3_discoveries vehicles/vehicles_list.lua (0xCEDED274)
+    local ok, veh = pcall(CreateVehicle, joaat(model), center.x, center.y, center.z, 0.0, true, false)
+    if ok and veh and veh ~= 0 and DoesEntityExist(veh) then
+        local netId = NetworkGetNetworkIdFromEntity(veh)
+        DeleteEntity(veh)
+        return say(src, ('server CreateVehicle(%s): OK netId=%s'):format(model, tostring(netId)))
+    end
+    say(src, ('server CreateVehicle(%s): FAILED: %s'):format(model, ok and 'CreateVehicle returned 0' or tostring(veh)))
+end
+
 local function adopt(netId, kind, model)
     local e = entOf(netId)
     if not e then return false end
@@ -62,6 +75,7 @@ local function spawn(src)
     local center = vector3(pos.x - math.sin(rad) * Config.distance, pos.y + math.cos(rad) * Config.distance, pos.z)
 
     local probe, why = tryServerSpawn(center)
+    probeVehicle(src, center)
     if probe then
         say(src, 'server-side CreatePed WORKS on this build; spawning camp from server.')
         adopt(NetworkGetNetworkIdFromEntity(probe), 'ped', Config.pedModel)
