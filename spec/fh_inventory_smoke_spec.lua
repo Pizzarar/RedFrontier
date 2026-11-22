@@ -20,22 +20,50 @@ Core.Functions.AddPlayerMethod = function() end
 local exportsT = setmetatable({}, { __index = function(_, res) return setmetatable({}, { __index = function(_, fn)
   return function() if fn == 'GetCoreObject' then return Core end end end }) end,
   __call = function(_, name, fn) EXPORTED[name] = fn end })
+-- vector3 with the two operations the server scripts use: a - b and #v
+local Vec = {}
+Vec.__index = Vec
+local function vec(x, y, z) return setmetatable({ x = x, y = y, z = z }, Vec) end
+Vec.__sub = function(a, b) return vec(a.x - b.x, a.y - b.y, a.z - b.z) end
+Vec.__len = function(a) return math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z) end
+local pedCoords = {} -- src -> vector3 (a connected player's ped is its src)
 local env = setmetatable({
   exports = exportsT, GetCurrentResourceName = function() return 'fh_inventory' end,
   GetInvokingResource = function() return invoking end, locale = function(k) return k end,
   json = { decode = function() return {} end, encode = function() return '[]' end },
-  vector3 = function(x, y, z) return { x = x, y = y, z = z } end,
+  vector3 = vec,
+  GetPlayerPed = function(src) return players[src] and src or 0 end,
+  GetEntityCoords = function(ped) return pedCoords[ped] or vec(0, 0, 0) end,
+  GetPlayers = function() local out = {} for src in pairs(players) do out[#out + 1] = tostring(src) end return out end,
   GetGameTimer = function() return 0 end, GetPlayerName = function() return 'p' end,
   TriggerClientEvent = function() end, TriggerEvent = function() end,
   RegisterNetEvent = function() end, AddEventHandler = function() end, CreateThread = function() end,
   GetResourceState = function() return 'started' end,
 }, { __index = function(_, k) local v = _G[k]; if v ~= nil then return v end return stub() end })
 env._G = env
-local function run(p) local fh = assert(io.open(p, 'rb')); local src = fh:read('a'):gsub('`[%w_]+`', '0'); fh:close()
-  local f = assert(load(src, '@' .. p, 't', env)); f() end
+local function run(p, e) local fh = assert(io.open(p, 'rb')); local src = fh:read('a'):gsub('`[%w_]+`', '0'); fh:close()
+  local f = assert(load(src, '@' .. p, 't', e or env)); f() end
 for _, p in ipairs({ R..'fh_core/config.lua', R..'fh_core/shared/items.lua', R..'fh_core/shared/containers.lua',
   R..'fh_core/shared/rules.lua', R..'fh_inventory/shared/config.lua', R..'fh_inventory/server/main.lua',
   R..'fh_inventory/server/shops.lua', R..'fh_inventory/server/compat.lua', R..'fh_inventory/server/fh_api.lua' }) do run(p) end
+-- fh_core's server API in its own env: its exports land in CORE, and exports.fh_inventory:FhX(...) calls fh_api's
+-- export as fh_core would (GetInvokingResource() == 'fh_core'). Tables pass by reference here, where FXServer
+-- msgpacks them, so table identity across the call is never something to rely on (it isn't in either world).
+CORE, EVENTS = {}, {}
+local coreExports = setmetatable({}, {
+  __index = function(_, res)
+    if res ~= 'fh_inventory' then return exportsT[res] end
+    return setmetatable({}, { __index = function(_, fn) return function(_, ...)
+      local prev = invoking; invoking = 'fh_core'
+      local r = table.pack(pcall(EXPORTED[fn], ...)); invoking = prev
+      if not r[1] then error(r[2], 0) end
+      return table.unpack(r, 2, r.n) end end })
+  end,
+  __call = function(_, name, fn) CORE[name] = fn end })
+local coreEnv = setmetatable({ exports = coreExports,
+  TriggerEvent = function(name, payload) EVENTS[#EVENTS + 1] = { name = name, payload = payload } end },
+  { __index = env })
+run(R..'fh_core/server/inventory.lua', coreEnv)
 local I = env.InvCore
 local function mkPlayer(src, items)
   local P = { PlayerData = { source = src, items = items, slots = 25, weight = 35000, citizenid = 'C'..src, charinfo = {} },
@@ -90,6 +118,108 @@ check('SetInventory equipped over 8kg refused (' .. tostring(whyA) .. ')', okA =
 okA = SI(1, { [1] = it('bread', 2, 1), [8] = it('bread', 5, 8) })
 check('SetInventory valid layout ok', okA == true and P.PlayerData.items[8].amount == 5)
 check('SetItemData amount refused', not EXPORTED.SetItemData(1, 'bread', 'amount', 50))
+end)
+
+-- Cases below run their body inside T.it, so a throw counts as a failure instead of aborting the spec.
+local function case(name, fn) T.it(name, function()
+  local ok, msg = fn(); assert(ok, name .. (msg ~= nil and (': ' .. tostring(msg)) or '')) end) end
+local function drops() local n = 0 for _, c in pairs(I.Inventories) do if c.type == 'drop' then n = n + 1 end end return n end
+
+T.describe('API.CreateDrop validates coords and vetoes items (H1)', function()
+  local n0 = drops()
+  case('nil coords refused, no drop created', function() return I.API.CreateDrop(nil, {}) == nil and drops() == n0 end)
+  case('coords without z refused', function() return I.API.CreateDrop({ x = 1, y = 2 }, {}) == nil and drops() == n0 end)
+  case('cargo item refused (drop_bag takes no cargo)', function()
+    local id, why = I.API.CreateDrop(vec(1, 2, 3), { [1] = it('crate', 1, 1) })
+    return id == nil and drops() == n0, why end)
+  case('over the drop weight cap refused', function()
+    local id, why = I.API.CreateDrop(vec(1, 2, 3), { [1] = it('bread', env.Config.Drop.MaxWeight // 100 + 1, 1) })
+    return id == nil and why == 'fh_too_heavy' and drops() == n0, why end)
+  case('caller-supplied weight 0 does not dodge the cap', function()
+    local forged = it('bread', env.Config.Drop.MaxWeight // 100 + 1, 1); forged.weight = 0
+    local id, why = I.API.CreateDrop(vec(1, 2, 3), { [1] = forged })
+    return id == nil and drops() == n0, why end)
+  case('bad slot refused', function() return I.API.CreateDrop(vec(1, 2, 3), { [99] = it('bread', 1, 99) }) == nil end)
+  case('valid drop ok: drop_bag with the items, {x,y,z} coords', function()
+    local id = I.API.CreateDrop({ x = 1, y = 2, z = 3 }, { [1] = it('bread', 2, 1) })
+    local d = id and I.Inventories[id]
+    return d and d.fhType == 'drop_bag' and d.items[1].amount == 2 and d.items[1].weight == 100 and d.coords.z == 3
+  end)
+  case('fh_core createDropBag: cargo-only bag refused, nothing left behind', function()
+    return CORE.createDropBag({ x = 1, y = 2, z = 3 }, { { name = 'crate', amount = 1 } }) == nil and drops() == n0 + 1 end)
+end)
+
+T.describe('fh_core move: one player equipped <-> backpack (H2)', function()
+  -- 3 kg equipped + 30 kg backpack of a 35 kg cap: neither section's maxWeight has room for the move unless the
+  -- grams leaving the sibling section are credited
+  local P2 = mkPlayer(2, { [1] = it('bread', 30, 1), [6] = it('bread', 300, 6) })
+  local eq, bp = { type = 'equipped', id = 2 }, { type = 'backpack', id = 2 }
+  case('equipped -> backpack ok', function()
+    local ok, why = CORE.move(eq, bp, 1, 7)
+    return ok == true and P2.PlayerData.items[1] == nil and P2.PlayerData.items[7].amount == 30, why end)
+  case('backpack -> equipped ok', function()
+    local ok, why = CORE.move(bp, eq, 7, 1)
+    return ok == true and P2.PlayerData.items[7] == nil and P2.PlayerData.items[1].amount == 30, why end)
+  case('moved event emitted', function() return EVENTS[#EVENTS].name == 'fh:inventory:moved' end)
+  case('over the equipped 8 kg cap still refused', function()
+    local ok, why = CORE.move(bp, eq, 6, 2, 60)
+    return ok == false and why == 'fh_too_heavy' and P2.PlayerData.items[6].amount == 300, why end)
+  case('bulky backpack -> equipped still refused', function()
+    P2.PlayerData.items[8] = it('saddle', 1, 8)
+    local ok, why = CORE.move(bp, eq, 8, 2)
+    return ok == false and why == 'fh_size_class' and P2.PlayerData.items[8].name == 'saddle', why end)
+  case('refused event emitted', function() return EVENTS[#EVENTS].name == 'fh:inventory:refused' end)
+  P2.PlayerData.items[8] = nil
+  case('another player is not a sibling: their backpack -> my equipped is a plain move', function()
+    mkPlayer(3, { [6] = it('bread', 1, 6) })
+    local ok, why = CORE.move({ type = 'backpack', id = 3 }, eq, 6, 2)
+    return ok == true and players[3].PlayerData.items[6] == nil, why end)
+end)
+
+T.describe('SetInventory slot keys (M3)', function()
+  local P4 = mkPlayer(4, { [1] = it('bread', 1, 1) })
+  local before = P4.PlayerData.items
+  local SI = EXPORTED.SetInventory
+  case('fractional slot refused (cargo would hide there)', function()
+    local ok, why = SI(4, { [1.5] = it('crate', 1, 1.5) })
+    return ok == false and why == 'fh_bad_slot' and P4.PlayerData.items == before, why end)
+  case('slot 0 refused', function() return SI(4, { [0] = it('bread', 1, 0) }) == false and P4.PlayerData.items == before end)
+  case('slot past the end refused', function() return SI(4, { [26] = it('bread', 1, 26) }) == false end)
+  case('integer slots still ok', function() return SI(4, { [2] = it('bread', 3, 2) }) == true end)
+end)
+
+T.describe('Fh.Open / Fh.SetCoords on drop bags (L4) and OpenFor reach', function()
+  mkPlayer(5, {}); pedCoords[5] = vec(100, 100, 10)
+  local id = CORE.createDropBag({ x = 101, y = 100, z = 10 }, { { name = 'bread', amount = 1 } })
+  local ref = { type = 'drop_bag', id = id }
+  case('drop bag created', function() return type(id) == 'string' end)
+  case('fh_core open drop bag in reach', function()
+    local ok, why = CORE.open(5, ref) return ok == true and I.OpenInv[5] == id, why end)
+  case('setContainerCoords moves a drop bag', function()
+    local ok, why = CORE.setContainerCoords(ref, { x = 200, y = 200, z = 10 })
+    return ok == true and I.Inventories[id].coords.x == 200, why end)
+  case('moved drop bag is out of reach', function()
+    local ok, why = CORE.open(5, ref) return ok == false and why == 'fh_out_of_reach', why end)
+  case('drop bag coords cannot be cleared', function()
+    invoking = 'fh_core'; local ok = I.Fh.SetCoords(ref, nil); invoking = nil
+    return ok == false and I.Inventories[id].coords.x == 200 end)
+  case('drop bag under the wrong type refused', function() return CORE.open(5, { type = 'chest', id = id }) == false end)
+  -- chest reach: fh_core's check, then OpenFor's own InReach
+  CORE.registerContainer({ type = 'chest', id = 'fh:chest:5' }, { coords = { x = 100, y = 102, z = 10 } })
+  local chest = { type = 'chest', id = 'fh:chest:5' }
+  case('chest in reach opens', function()
+    local ok, why = CORE.open(5, chest) return ok == true and I.OpenInv[5] == 'fh:chest:5', why end)
+  case('chest out of reach refused by fh_core', function()
+    pedCoords[5] = vec(100, 110, 10)
+    local ok, why = CORE.open(5, chest) return ok == false and why == 'fh_out_of_reach', why end)
+  case('OpenFor itself refuses out of reach', function() return I.OpenFor(5, 'fh:chest:5') == false end)
+  case('OpenFor refuses a chest with no coords', function()
+    pedCoords[5] = vec(100, 102, 10)
+    invoking = 'fh_core'; I.Fh.SetCoords(chest, nil); invoking = nil
+    return I.OpenFor(5, 'fh:chest:5') == false end)
+  case('registerContainer without coords refused', function()
+    local ok, why = CORE.registerContainer({ type = 'chest', id = 'fh:chest:6' }, {})
+    return ok == false and why == 'fh_no_coords', why end)
 end)
 
 T.finish()
