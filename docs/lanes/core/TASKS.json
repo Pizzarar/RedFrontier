@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-22T08:58:18.135Z",
+  "updatedAt": "2026-11-22T20:51:50.100Z",
   "units": [
     {
       "id": "B5",
@@ -39,7 +39,9 @@
       "goal": "events.md:30 fh:homestead:open_chest payload doc says { plotId } but client/main.lua:47 sends bare string p.id; align (prefer { plot_id = p.id } per events.md:10). Fold into next fh_homestead block",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done",
+      "branch": "core-b6anit",
+      "commit": "30d4468"
     }
   ]
 }
