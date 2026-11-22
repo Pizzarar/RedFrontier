@@ -64,27 +64,43 @@ function Fh.RegisterContainer(ref, opts)
     return inv ~= nil, inv == nil and 'fh_bad_ref' or nil
 end
 
---- FhSetCoords(ref, coords|nil): moves a container (wagons). nil = nobody can open it until it has coords again.
+-- ref -> id, kind ('stash' | 'drop') | nil: a registered fh stash (FhMeta) or a live drop bag, whose fh type
+-- must equal ref.type. Drop bags (FhCreateDropBag / any ground pile) have no FhMeta: they are Inventories entries.
+local function WorldTarget(ref)
+    local id = WorldId(ref)
+    if not id then return nil end
+    local meta = InvCore.FhMeta[id]
+    if meta then
+        if meta.fhType ~= ref.type then return nil end
+        return id, 'stash'
+    end
+    local inv = InvCore.Inventories[id]
+    if inv and inv.type == 'drop' and inv.fhType == ref.type then return id, 'drop' end
+    return nil
+end
+
+--- FhSetCoords(ref, coords|nil): moves a container (wagons, drop bags). nil = nobody can open a stash until it
+--- has coords again; a drop bag always keeps a position, so nil / bad coords are refused for it.
 function Fh.SetCoords(ref, coords)
     if not FromCore() then return false, 'not_fh_core' end
-    local id = WorldId(ref)
-    local meta = id and InvCore.FhMeta[id]
-    if not meta or meta.fhType ~= ref.type then return false, 'fh_unknown_container' end
+    local id, kind = WorldTarget(ref)
+    if not id then return false, 'fh_unknown_container' end
+    if kind == 'drop' then return InvCore.MoveDrop(id, coords) end
+    local meta = InvCore.FhMeta[id]
     meta.coords = InvCore.ToVec3(coords)
     local inv = InvCore.Inventories[id]
     if inv then inv.coords = meta.coords end
     return true
 end
 
---- FhOpen(src, ref): opens a registered world container for a player (coords + reach are checked by OpenFor).
---- Carried refs (another player's inventory) are refused: searching players is not an fh_core API yet.
+--- FhOpen(src, ref): opens a registered world container or a drop bag for a player (coords + reach are checked
+--- by OpenFor). Carried refs (another player's inventory) are refused: searching players is not an fh_core API yet.
 function Fh.Open(src, ref)
     if not FromCore() then return false, 'not_fh_core' end
     src = tonumber(src)
-    local id = WorldId(ref)
-    local meta = id and InvCore.FhMeta[id]
-    if not src or not meta or meta.fhType ~= ref.type then return false, 'fh_unknown_container' end
-    if not InvCore.API.RegisterStash(id) then return false, 'fh_unknown_container' end
+    local id, kind = WorldTarget(ref)
+    if not src or not id then return false, 'fh_unknown_container' end
+    if kind == 'stash' and not InvCore.API.RegisterStash(id) then return false, 'fh_unknown_container' end
     return InvCore.OpenFor(src, id)
 end
 

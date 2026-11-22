@@ -842,6 +842,25 @@ local function RemoveDrop(id)
     end
 end
 
+-- FH: moves a drop (fh_core setContainerCoords on a drop bag). A drop always has a position: nil / bad coords are
+-- refused. Clients that know the drop forget the old spot, then everyone in range is sent the new one.
+-- -> true | false, reason
+local function MoveDrop(id, coords)
+    local inv = Inventories[id]
+    if not inv or inv.type ~= 'drop' then return false, 'fh_unknown_container' end
+    coords = ToVec3(coords)
+    if not coords then return false, 'fh_no_coords' end
+    inv.coords, inv.dirty = coords, true
+    for src, seen in pairs(DropSeen) do
+        if seen[id] then
+            seen[id] = nil
+            TriggerClientEvent('rsg-inventory:client:removeDrop', src, id)
+        end
+    end
+    AnnounceDrop(id)
+    return true
+end
+
 local function CleanupDropIfEmpty(id)
     local inv = Inventories[id]
     if inv and inv.type == 'drop' and not next(inv.items) then RemoveDrop(id) end
@@ -1545,7 +1564,7 @@ InvCore = {
     RemoveFrom = RemoveFrom, CountIn = CountIn, ClientInv = ClientInv, CheckWeapon = CheckWeapon,
     SavePlayer = SavePlayer, SaveStash = SaveStash, CleanupDropIfEmpty = CleanupDropIfEmpty,
     FhViews = FhViews, FhCheckLayout = FhCheckLayout, MoveBetween = MoveBetween, AddToRaw = AddToRaw,
-    Normalize = Normalize,
+    Normalize = Normalize, MoveDrop = MoveDrop,
 }
 
 --------------------------------------------------------------------------------
