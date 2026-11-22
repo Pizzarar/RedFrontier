@@ -16,9 +16,10 @@ server_scripts {
 }
 
 client_scripts {
+    '@fh_core/client/safe.lua',
     'client/main.lua', -- stub: no effects yet
 }
 
-dependencies { 'rsg-core' }
+dependencies { 'rsg-core', 'fh_core' }
 
 server_exports { 'apply', 'get' }

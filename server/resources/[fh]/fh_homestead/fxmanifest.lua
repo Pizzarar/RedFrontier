@@ -18,6 +18,7 @@ server_scripts {
 }
 
 client_scripts {
+    '@fh_core/client/safe.lua',
     'client/main.lua',
 }
 

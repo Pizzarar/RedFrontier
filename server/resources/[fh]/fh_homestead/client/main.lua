@@ -31,7 +31,7 @@ local function despawn(id)
     end
 end
 
-CreateThread(function()
+FH.thread(function()
     local list = lib.callback.await('fh:homestead:plots', false) or {}
     for _, p in ipairs(list) do
         lib.points.new({
@@ -50,7 +50,7 @@ CreateThread(function()
     end
 end)
 
-AddEventHandler('onResourceStop', function(res)
+FH.on('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     for id in pairs(props) do despawn(id) end
     lib.hideTextUI()
