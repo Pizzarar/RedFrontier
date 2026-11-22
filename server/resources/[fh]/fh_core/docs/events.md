@@ -29,6 +29,12 @@ The emitting lane owns the name and documents it in its README.
 | `fh:homestead:claimed` | fh_homestead | `{ src, citizenid, plot_id, region_id }` |
 | `fh:homestead:open_chest` | fh_homestead (client -> server request) | `{ plot_id }` (string); server revalidates owner + reach, `src` from `source` |
 | `fh:homestead:unclaimed` | fh_homestead | `{ src, citizenid, plot_id }` (citizenid = former owner; src 0 = console) |
+| `fh:spawn:create` | fh_core (server -> chosen client) | `{ requestId, kind, model, modelHash, coords = {x,y,z}, heading, token }`; client creates a networked entity |
+| `fh:spawn:created` | fh_core (client -> server) | `{ requestId, token, netId }`; netId must be a positive integer; adopted only if `source` is the chosen spawner, `token` is current, the entity exists, is network-owned by `source`, is held by no other request, is not a player ped, model matches, within `AdoptMaxDistance` |
+| `fh:spawn:failed` | fh_core (client -> server) | `{ requestId, token, reason }` (reason truncated to 64); counts only from the current spawner + token; retries |
+| `fh:spawn:delete` | fh_core (server -> client) | `{ requestId, token, netId? }`; client deletes only the entity it made for that token, and only if it has that netId when one is given (duplicate/stale/rejected/despawned). Never names the adopted netId |
+| `fh:spawn:release` | fh_core (server -> client) | `{ requestId, token, netId }`; adopted: the client stops tracking it (server owns its lifetime) |
+| `fh:spawn:client_ready` | fh_core (client -> server) | `{}`; this client can take spawn requests (only ready clients are picked) |
 | `fh:dev:clientError` | fh_core (client -> server, dev only) | `{ resource, msg, traceback }` (strings; server truncates, drops unless convar `fh_dev` is 1, rate-limits 10/min per `source`, logs to `server/logs/client-errors.log`) |
 
 Payloads for events not emitted by B4b are a contract proposal; the emitting lane may extend them additively.

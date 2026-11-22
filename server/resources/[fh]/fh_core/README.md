@@ -15,6 +15,9 @@ Start order in `server.cfg`: `rsg-core`, then `fh_core`, then `fh_inventory`.
 | `shared/rules.lua` | `FhRules` | The veto: `canFit`, `getWeight`, `playerViews`, `planMove`, `planTransferAll` |
 | `shared/util.lua` | `FhUtil` | Small helpers |
 | `server/inventory.lua` | - | The exports below |
+| `shared/spawn_rules.lua` | `FhSpawnRules` | Spawn-request state machine, spawner pick, adopt validation (pure) |
+| `server/spawn.lua` | `FhSpawn` | Spawn-request exports and net events (natives) |
+| `client/spawn.lua` | - | Creates the networked entity a spawn request asks for |
 
 The shared modules are pure Lua (no natives). Under FXServer they set their global; under busted they `return`
 the module. They look each other up at call time, so load order inside `shared/*.lua` does not matter.
@@ -157,6 +160,51 @@ move); it may be nil for container-to-container moves. Moves the player makes by
 are checked inside fh_inventory and do not go through these events.
 
 Consumed: `onResourceStart` (fh_core, rsg-core, fh_inventory), `RSGCore:Server:UpdateObject`.
+
+## Spawn contract
+
+Server CREATE_PED / CREATE_OBJECT_NO_OFFSET / CREATE_AUTOMOBILE / CREATE_VEHICLE_SERVER_SETTER are compiled out on
+RDR3. So **the server owns the decision and the state, a chosen client creates the networked entity, and the server
+adopts it by netId.** Every `[fh]` spawn (admin commands, camps, drop bags) goes through this.
+
+```lua
+local id, err = exports.fh_core:requestSpawn({
+    kind = 'ped',            -- 'ped' | 'object' | 'horse' (no vehicles/wagons until M4)
+    model = 'g_m_m_unibanditos_01', -- name or hash
+    coords = vector4(x, y, z, h),   -- vec3/vec4 or { x, y, z }; heading = spec.heading or coords.w or 0
+    owner = { kind = 'camp', id = 'camp_1' }, tag = 'camp_1:outlaw:1',
+}, {
+    near = coords,           -- where to look for a spawner (default spec.coords)
+    timeoutMs = 10000, retries = 3,
+    onReady = function(netId, requestId) end,   -- may fire again with a new netId after a re-request
+    onFailed = function(reason, requestId) end, -- retries used up; the request is gone
+})
+exports.fh_core:despawn(id)      -- true | false, reason
+exports.fh_core:getSpawn(id)     -- { state, netId, tag, owner, kind, attempts } | nil
+```
+
+- **Spawner pick:** nearest ready player within `FhConfig.Spawn.Range` of `near`; players not yet tried this cycle
+  first; else (if `FallbackAnyPlayer`) the nearest ready player anywhere; else park as `pending_no_client` and retry
+  every tick (a player joins or comes in range).
+- **States:** `pending -> dispatched -> verifying -> adopted`; `dispatched` times out after `timeoutMs` and retries
+  with the next candidate; after `retries` extra attempts -> `failed` (`onFailed`). Spawner drop mid-dispatch ->
+  retry. `despawned` and `failed` are terminal.
+- **Adopt:** `fh:spawn:created` counts only from the chosen spawner with the current per-attempt token while
+  `dispatched`, with a positive-integer netId. The server then waits up to `AdoptWaitMs` for the netId and checks
+  the entity exists, is network-owned by the spawner, is held by no other request, is not a player ped, its model
+  hash matches and it is within `AdoptMaxDistance` of the requested coords. A mismatch asks the spawner to delete
+  it and retries. `verifying` has its own deadline (`AdoptWaitMs` + 2 s), so it can't wedge.
+- **Exactly-once:** one live entity per requestId. A second `created` (duplicate), one from an earlier attempt
+  (stale), or one for a despawned/failed request is answered with `fh:spawn:delete` naming that extra netId; the
+  client deletes only an entity it made for that token with that netId, so neither a forged message nor a
+  duplicate can delete the adopted entity or anything else. When an attempt is retired mid-verify (spawner drop,
+  verify timeout, despawn), the server deletes its reported entity itself if it saw it owned by that spawner, the
+  model matches and no other request holds it (OneSync may have migrated it; otherwise there would be two).
+- **Owner drop** depends on `fh_spike_gated`: see `docs/spike-gated.md`. Gated (default): despawn and re-request.
+- **Cleanup:** requests are despawned when the resource that made them stops, and all of them when fh_core stops.
+- **Admin:** `fh_spawn_horse [model]`, `fh_spawn_ped [model]` (2 m in front of you), `fh_despawn <requestId>`;
+  `group.admin`.
+- Pure part specced in `spec/spawn_rules_spec.lua`; the natives side is **not runtime-tested** (no Cfx key yet).
 
 ## Natives
 

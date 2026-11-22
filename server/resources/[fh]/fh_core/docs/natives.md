@@ -73,6 +73,40 @@ checked the hash yet. fh_inventory is a fork of rsg-inventory, so most client na
 | `GetGameTimer` | not looked up | `fh_homestead/client/main.lua` (model-load timeout) | client |
 | `IsControlJustReleased` + control `0xCEFD9220` (INPUT_CONTEXT, E) | not looked up | `fh_homestead/client/main.lua` | client |
 
+### fh_core spawn-request contract (B4c) - all **unverified in-game**, no Cfx key yet
+
+Server CREATE_PED / CREATE_OBJECT_NO_OFFSET / CREATE_AUTOMOBILE / CREATE_VEHICLE_SERVER_SETTER are compiled out on RDR3,
+so fh_core never creates entities server-side: a client creates, the server adopts by netId (README "Spawn contract").
+Hashes are copied from the Spikes section below (same native); `not looked up` = nobody has checked it yet.
+
+| Native | Hash | Where used | Side |
+|---|---|---|---|
+| `GetPlayerPed`, `GetEntityCoords` | see above | `fh_core/server/spawn.lua` (spawner pick), `fh_core/server/admin.lua` (fh_spawn_*) | server |
+| `GetEntityHeading` | cfx `0x972CC383` | `fh_core/server/admin.lua` (fh_spawn_*) | server |
+| `NetworkGetEntityFromNetworkId` | cfx `0x5B912C3F` | `fh_core/server/spawn.lua` (adopt) | server |
+| `DoesEntityExist` | cfx `0x3AC90869` | `fh_core/server/spawn.lua` (adopt, entity-gone tick, delete) | server |
+| `GetEntityModel` | not looked up (server) | `fh_core/server/spawn.lua` (adopt model check; compared as unsigned 32-bit) | server |
+| `NetworkGetEntityOwner` | cfx `0x526FEE31` | `fh_core/server/spawn.lua` (adopt: must be owned by the spawner; owner drop; in-flight cleanup) | server |
+| `IsPedAPlayer` | not looked up (server) | `fh_core/server/spawn.lua` (adopt: refuse player peds; pcall) | server |
+| `DeleteEntity` | cfx `0xFAA3D236` | `fh_core/server/spawn.lua` (despawn, gated owner drop, resource stop) | server |
+| `SetEntityOrphanMode` | cfx `0x489E9162` | `fh_core/server/spawn.lua` (adopt, only when `fh_spike_gated` is false) | server |
+| `GetConvar`, `GetGameTimer`, `GetPlayers`, `GetInvokingResource` | Cfx runtime | `fh_core/server/spawn.lua` | server |
+| `IsModelInCdimage` | `0xD6F3B6D7716CFF8E` | `fh_core/client/spawn.lua` | client |
+| `RequestModel`, `HasModelLoaded`, `SetModelAsNoLongerNeeded` | see above | `fh_core/client/spawn.lua` | client |
+| `CreatePed` (isNetwork=true) | `0xD49F9B0955C367DE` | `fh_core/client/spawn.lua` (ped, horse) | client |
+| `_SET_RANDOM_OUTFIT_VARIATION` | `0x283978A15512B2FE` | `fh_core/client/spawn.lua` (else peds can be invisible) | client |
+| `CreateObject` (isNetwork=true) | `0x509D5878EB39E842` | `fh_core/client/spawn.lua` (object) | client |
+| `SetEntityHeading` | not looked up | `fh_core/client/spawn.lua` (object) | client |
+| `NetworkGetEntityIsNetworked` | not looked up | `fh_core/client/spawn.lua` | client |
+| `NetworkGetNetworkIdFromEntity` | `0xA11700682F3AD45C` | `fh_core/client/spawn.lua` | client |
+| `NetworkDoesNetworkIdExist` | `0x38CE16C96BD11344` | `fh_core/client/spawn.lua` | client |
+| `SetEntityAsMissionEntity` | `0xDC19C288082E586E` | `fh_core/client/spawn.lua` (before delete) | client |
+| `DeleteEntity` | `0x4CD38C78BD19A497` | `fh_core/client/spawn.lua` (fh:spawn:delete, resource stop) | client |
+| `DoesEntityExist` | client `0xD42BD6EB2E0F1677` | `fh_core/client/spawn.lua` | client |
+| `GetGameTimer` | not looked up | `fh_core/client/spawn.lua` (model / netId timeouts) | client |
+
+Models `a_c_horse_morgan_bay` (fh_spawn_horse default) and `g_m_m_unibanditos_01` (fh_spawn_ped default) are guesses.
+
 ## Spikes
 
 Natives from each `server/resources/[spikes]/spk_*/README.md` `## Natives` section. All are **candidate, unproven**:

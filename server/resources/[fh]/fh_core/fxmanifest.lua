@@ -18,4 +18,5 @@ server_scripts {
 
 client_scripts {
     'client/safe.lua',
+    'client/spawn.lua',
 }

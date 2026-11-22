@@ -1,7 +1,7 @@
 -- fh_core admin commands (ox_lib lib.addCommand, restricted to group.admin). Arg parsing lives in shared/admin_args.lua.
--- Natives used: GetPlayerPed, GetEntityCoords, SetEntityCoords (see docs/natives.md). Not runtime-tested yet (no Cfx key).
--- TODO(B4c): spawn wagon/horse commands go through the spawn-request contract; server CreatePed/CreateVehicle are
--- compiled out on RDR3.
+-- Natives used: GetPlayerPed, GetEntityCoords, SetEntityCoords, GetEntityHeading (see docs/natives.md). Not runtime-tested yet (no Cfx key).
+-- Spawn commands go through the spawn-request contract (server/spawn.lua): server CreatePed/CreateVehicle are compiled
+-- out on RDR3. Wagons stay out of scope until M4.
 
 local function reply(src, msg)
     if src == 0 then print('[fh_core] ' .. msg) else TriggerClientEvent('chat:addMessage', src, { args = { 'fh', msg } }) end
@@ -84,4 +84,52 @@ lib.addCommand('fh_dump', {
     local stacks = 0
     for _ in pairs(items) do stacks = stacks + 1 end
     reply(src, ('fh_dump: %d stack(s), full JSON in server console'):format(stacks))
+end)
+
+-- fh_spawn_horse / fh_spawn_ped [model]: 2 m in front of the caller, through FhSpawn.requestSpawn (server/spawn.lua).
+local function spawnCommand(kind)
+    return function(src, args, raw)
+        local name = 'fh_spawn_' .. kind
+        if src == 0 then return reply(src, name .. ': in-game only') end
+        local p, err = FhAdminArgs.parseSpawn(split(raw), kind)
+        if not p then return reply(src, name .. ': ' .. err) end
+        local ped = targetPed(src)
+        if not ped then return reply(src, name .. ': fh_no_player') end
+        local here = FhSpawnRules.readCoords(GetEntityCoords(ped))
+        local heading = GetEntityHeading(ped)
+        local id, why = FhSpawn.requestSpawn({
+            kind = kind, model = p.model, coords = FhSpawnRules.offsetForward(here, heading, 2.0), heading = heading,
+            owner = { kind = 'admin', id = src }, tag = 'admin:' .. kind,
+        }, {
+            onReady = function(netId, requestId)
+                reply(src, ('%s: request %d ready, netId %d (fh_despawn %d)'):format(name, requestId, netId, requestId))
+            end,
+            onFailed = function(reason, requestId)
+                reply(src, ('%s: request %d failed: %s'):format(name, requestId, tostring(reason)))
+            end,
+        })
+        if not id then return reply(src, name .. ': ' .. tostring(why)) end
+        reply(src, ('%s: request %d sent (%s)'):format(name, id, p.model))
+    end
+end
+
+lib.addCommand('fh_spawn_horse', {
+    help = 'Spawn a horse in front of you via the spawn-request contract: fh_spawn_horse [model]',
+    restricted = 'group.admin',
+}, spawnCommand('horse'))
+
+lib.addCommand('fh_spawn_ped', {
+    help = 'Spawn a ped in front of you via the spawn-request contract: fh_spawn_ped [model]',
+    restricted = 'group.admin',
+}, spawnCommand('ped'))
+
+lib.addCommand('fh_despawn', {
+    help = 'Despawn a spawn request: fh_despawn <requestId>',
+    restricted = 'group.admin',
+}, function(src, args, raw)
+    local p, err = FhAdminArgs.parseDespawn(split(raw))
+    if not p then return reply(src, 'fh_despawn: ' .. err) end
+    local ok, why = FhSpawn.despawn(p.requestId)
+    if not ok then return reply(src, 'fh_despawn: ' .. tostring(why)) end
+    reply(src, ('fh_despawn: request %d despawned'):format(p.requestId))
 end)

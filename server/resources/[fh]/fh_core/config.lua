@@ -43,6 +43,18 @@ M.Items = {}
 -- size_class, value_base, illicit (and stackable to force a value). Anything unlisted gets the defaults.
 M.ItemOverrides = {}
 
+-- Spawn-request contract (shared/spawn_rules.lua, server/spawn.lua). Unset keys fall back to FhSpawnRules.DEFAULTS.
+-- The conservative/S1-proven switch is the convar fh_spike_gated (server.cfg), not a config key.
+M.Spawn = {
+    Range = 300.0,            -- metres: nearest ready player within this of the spawn point creates the entity
+    FallbackAnyPlayer = true, -- nobody in range: nearest ready player anywhere; false = park until someone comes in range
+    TimeoutMs = 10000,        -- a dispatched request with no answer retries with the next candidate after this
+    Retries = 3,              -- extra attempts after the first, then onFailed
+    AdoptMaxDistance = 25.0,  -- the created entity must be this close to the requested coords
+    AdoptWaitMs = 3000,       -- how long the server waits for a reported netId to show up server-side
+    TickMs = 1000,            -- timeout / parked / entity-gone check interval
+}
+
 if GetCurrentResourceName then
     FhConfig = M
 else
