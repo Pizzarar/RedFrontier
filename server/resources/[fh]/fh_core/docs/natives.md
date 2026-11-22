@@ -86,7 +86,8 @@ Hashes are copied from the Spikes section below (same native); `not looked up` =
 | `NetworkGetEntityFromNetworkId` | cfx `0x5B912C3F` | `fh_core/server/spawn.lua` (adopt) | server |
 | `DoesEntityExist` | cfx `0x3AC90869` | `fh_core/server/spawn.lua` (adopt, entity-gone tick, delete) | server |
 | `GetEntityModel` | not looked up (server) | `fh_core/server/spawn.lua` (adopt model check; compared as unsigned 32-bit) | server |
-| `NetworkGetEntityOwner` | cfx `0x526FEE31` | `fh_core/server/spawn.lua` (owner drop) | server |
+| `NetworkGetEntityOwner` | cfx `0x526FEE31` | `fh_core/server/spawn.lua` (adopt: must be owned by the spawner; owner drop; in-flight cleanup) | server |
+| `IsPedAPlayer` | not looked up (server) | `fh_core/server/spawn.lua` (adopt: refuse player peds; pcall) | server |
 | `DeleteEntity` | cfx `0xFAA3D236` | `fh_core/server/spawn.lua` (despawn, gated owner drop, resource stop) | server |
 | `SetEntityOrphanMode` | cfx `0x489E9162` | `fh_core/server/spawn.lua` (adopt, only when `fh_spike_gated` is false) | server |
 | `GetConvar`, `GetGameTimer`, `GetPlayers`, `GetInvokingResource` | Cfx runtime | `fh_core/server/spawn.lua` | server |

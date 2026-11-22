@@ -73,11 +73,12 @@ end
 function M.modelHash(model)
     if type(model) == 'string' then
         local n = tonumber(model)
-        if n and n == math.floor(n) then return math.floor(n) & 0xFFFFFFFF end
-        return M.joaat(model)
+        if n == nil then return M.joaat(model) end
+        model = n
     end
-    if math.type(model) == 'integer' then return model & 0xFFFFFFFF end
-    if finite(model) and model == math.floor(model) then return math.floor(model) & 0xFFFFFFFF end
+    -- only exact integers in int32/uint32 range: 'inf', '1e100', 1.5 have no hash (and would crash `&`)
+    local i = math.type(model) == 'integer' and model or (finite(model) and math.tointeger(model)) or nil
+    if i and i >= -0x80000000 and i <= 0xFFFFFFFF then return i & 0xFFFFFFFF end
 end
 
 ---Convar string -> boolean. Unknown/empty values give the default.
@@ -186,23 +187,45 @@ end
 ---pending -> pending_no_client (wait for a player to join or come in range; does not use an attempt).
 function M.park(req) return M.transition(req, 'pending_no_client') end
 
-local function retire(req)
-    if req.token then req.staleTokens[req.token] = req.spawner end
-    req.token, req.spawner, req.deadline, req.netId = nil, nil, nil, nil
+---A positive integer netId, or nil. Rejects nan/inf/floats/strings ('1e100' etc.) before any native sees them.
+function M.validNetId(n)
+    local i = math.type(n) == 'integer' and n or (finite(n) and math.tointeger(n)) or nil
+    if i and i > 0 and i <= 0x7FFFFFFF then return i end
 end
 
----dispatched | verifying -> pending (attempts left) or failed. Returns 'retry' | 'failed' (or nil, err).
+---Request id of the OTHER live request (verifying/adopted) holding netId, or nil. requests: { [id] = req }.
+function M.findClaim(requests, netId, exceptId)
+    if netId == nil then return nil end
+    for id, r in pairs(requests) do
+        if id ~= exceptId and r.netId == netId and (r.state == 'verifying' or r.state == 'adopted') then return id end
+    end
+end
+
+-- Ends the current attempt. Returns the in-flight entity the server may have to clean up (only while verifying, i.e.
+-- a netId was reported but not adopted): { netId, token, spawner, seenOwned } or nil.
+local function retire(req)
+    local inflight
+    if req.state == 'verifying' and req.netId ~= nil then
+        inflight = { netId = req.netId, token = req.token, spawner = req.spawner, seenOwned = req.seenOwned == true }
+    end
+    if req.token then req.staleTokens[req.token] = req.spawner end
+    req.token, req.spawner, req.deadline, req.netId, req.seenOwned = nil, nil, nil, nil, nil
+    return inflight
+end
+
+---dispatched | verifying -> pending (attempts left) or failed.
+---Returns 'retry' | 'failed', inflight (see retire); or nil, err.
 function M.retry(req, reason)
     if req.state ~= 'dispatched' and req.state ~= 'verifying' then return nil, 'fh_spawn_bad_transition' end
-    retire(req)
+    local inflight = retire(req)
     req.lastReason = reason
     if req.attempts >= req.maxAttempts then
         M.transition(req, 'failed')
         req.failReason = reason or 'fh_spawn_failed'
-        return 'failed'
+        return 'failed', inflight
     end
     M.transition(req, 'pending')
-    return 'retry'
+    return 'retry', inflight
 end
 
 ---adopted -> pending as a fresh cycle (attempts and tried reset): the entity is gone or was despawned on purpose.
@@ -215,15 +238,17 @@ function M.rerequest(req, reason)
     return 'rerequest'
 end
 
----Tick: has this dispatch timed out? Returns 'retry' | 'failed' | nil.
+---Tick: has this dispatch (or verification) timed out? Returns 'retry' | 'failed', inflight; or nil.
 function M.checkTimeout(req, now)
-    if req.state == 'dispatched' and req.deadline and now >= req.deadline then
-        return M.retry(req, 'fh_spawn_timeout')
+    if (req.state == 'dispatched' or req.state == 'verifying') and req.deadline and now >= req.deadline then
+        return M.retry(req, req.state == 'verifying' and 'fh_spawn_verify_timeout' or 'fh_spawn_timeout')
     end
 end
 
 ---A player dropped. gated = fh_spike_gated. owner = current network owner of the adopted entity (may be nil).
----Returns 'retry' | 'failed' (mid-dispatch), 'despawn_rerequest' (adopted, gated), 'keep' (adopted, ungated) or nil.
+---Returns 'retry' | 'failed', inflight (mid-dispatch / mid-verify), 'despawn_rerequest' (adopted, gated),
+---'keep' (adopted, ungated) or nil. inflight = the reported-but-unadopted entity the server must clean up, since the
+---dropped client can no longer delete it and OneSync may migrate it to someone else (two live entities otherwise).
 function M.onPlayerDropped(req, src, gated, owner)
     req.tried[src] = nil
     if req.state == 'dispatched' or req.state == 'verifying' then
@@ -240,30 +265,54 @@ function M.onPlayerDropped(req, src, gated, owner)
     end
 end
 
----A `fh:spawn:created` arrived. Returns a verdict:
+---May the server delete the in-flight entity of a retired attempt? Only if it really is ours: the server saw it owned
+---by that attempt's spawner (seenOwned, or owner at drop time), the model matches, and no other live request holds it.
+---info = { exists, model, owner, claimedBy }.
+function M.canCleanup(req, inflight, info)
+    if not inflight or not info or not info.exists then return false end
+    if not (inflight.seenOwned or (info.owner ~= nil and info.owner == inflight.spawner)) then return false end
+    if M.modelHash(info.model) ~= req.spec.modelHash then return false end
+    return info.claimedBy == nil
+end
+
+---A `fh:spawn:created` arrived. Returns verdict, deleteNetId. deleteNetId is the netId the sender should delete (it
+---deletes only an entity it made for that token AND that netId), never the netId this request is verifying/adopted.
 ---  'verify'       current token from the current spawner while dispatched: now `verifying`, go check the entity
----  'duplicate'    current token again (already verifying/adopted): delete the extra entity unless it is the same netId
----  'same'         repeat of the adopted netId: nothing to do
+---  'duplicate'    current token again with another netId: delete that extra entity only
+---  'same'         repeat of the verifying/adopted netId: nothing to do
 ---  'stale'        token of an earlier attempt from its own spawner: delete that entity, state unchanged
----  'wrong_source' / 'wrong_token' / 'unknown': rejected, state unchanged (the client only deletes what it made)
-function M.onCreated(req, src, token, netId)
-    if not req or not M.isLive(req) then return 'unknown' end
+---  'bad_netid'    netId is not a positive integer: ignored (the dispatch timeout retries)
+---  'wrong_source' / 'wrong_token' / 'unknown': rejected, state unchanged
+---now/verifyMs (optional): deadline for the verification, enforced by checkTimeout.
+function M.onCreated(req, src, token, netId, now, verifyMs)
+    netId = M.validNetId(netId)
+    if not req or not M.isLive(req) then return 'unknown', netId end
     if token ~= nil and token == req.token then
         if src ~= req.spawner then return 'wrong_source' end
+        if not netId then return 'bad_netid' end
         if req.state == 'dispatched' then
             M.transition(req, 'verifying')
-            req.netId = netId
+            req.netId, req.seenOwned = netId, false
+            if now and verifyMs then req.deadline = now + verifyMs end
             return 'verify'
         end
-        if req.netId ~= nil and req.netId == netId then return 'same' end
-        return 'duplicate'
+        if req.netId == netId then return 'same' end
+        return 'duplicate', netId
     end
     if token ~= nil and req.staleTokens[token] ~= nil then
         if req.staleTokens[token] ~= src then return 'wrong_source' end
-        return 'stale'
+        if netId ~= nil and netId == req.netId then return 'same' end -- never delete the live entity
+        return 'stale', netId
     end
     if src ~= req.spawner then return 'wrong_source' end
     return 'wrong_token'
+end
+
+---The server observed the verifying entity's network owner. Remembers whether it was the spawner (for canCleanup).
+function M.noteOwner(req, token, owner)
+    if req and req.state == 'verifying' and req.token == token and owner ~= nil and owner == req.spawner then
+        req.seenOwned = true
+    end
 end
 
 ---A `fh:spawn:failed` arrived. Only the current spawner with the current token counts.
@@ -274,9 +323,15 @@ function M.onClientFailed(req, src, token, reason)
     return M.retry(req, 'fh_spawn_client:' .. tostring(reason or 'unknown'))
 end
 
----Adopt validation on server-read facts. info = { exists, model (hash, may be signed), coords }.
+---Adopt validation on server-read facts.
+---info = { exists, model (hash, may be signed), coords, owner (network owner), claimedBy (other request id), isPlayer }.
+---The entity must be one the spawner itself owns, no other request holds, and not a player ped: a malicious spawner
+---cannot hand in someone else's horse or another request's entity (which the server would later DeleteEntity).
 function M.checkEntity(req, info, maxDist)
     if not info or not info.exists then return false, 'fh_spawn_no_entity' end
+    if info.claimedBy ~= nil then return false, 'fh_spawn_already_claimed' end
+    if info.isPlayer then return false, 'fh_spawn_player_entity' end
+    if info.owner == nil or info.owner ~= req.spawner then return false, 'fh_spawn_not_owner' end
     if M.modelHash(info.model) ~= req.spec.modelHash then return false, 'fh_spawn_model_mismatch' end
     local c = M.readCoords(info.coords)
     if not c or M.dist(c, req.spec.coords) > (maxDist or M.DEFAULTS.AdoptMaxDistance) then
@@ -286,7 +341,7 @@ function M.checkEntity(req, info, maxDist)
 end
 
 ---verifying -> adopted (ok) or retry/failed. token guards against a verify that finished after a retry/despawn.
----Returns 'adopted' | 'retry' | 'failed' | nil, 'fh_spawn_stale_verify'.
+---Returns 'adopted' | 'retry' | 'failed' (+ inflight on retry/failed) | nil, 'fh_spawn_stale_verify'.
 function M.finishVerify(req, token, ok, reason, entity)
     if not req or req.state ~= 'verifying' or req.token ~= token then return nil, 'fh_spawn_stale_verify' end
     if ok then
@@ -297,12 +352,15 @@ function M.finishVerify(req, token, ok, reason, entity)
     return M.retry(req, reason)
 end
 
----Any live state -> despawned. Returns { netId, entity, token, spawner }: the entity to delete (adopted/verifying) and
----the token in flight (its spawner deletes whatever it makes for it), or nil, err.
+---Any live state -> despawned. Returns { netId, entity, token, spawner, inflight }: the adopted entity to delete,
+---the token in flight (its spawner deletes whatever it makes for it), and the unadopted in-flight entity (verifying;
+---delete only if canCleanup); or nil, err.
 function M.despawn(req)
     if not req or not M.isLive(req) then return nil, 'fh_spawn_not_live' end
-    local out = { netId = req.netId, entity = req.entity, token = req.token, spawner = req.spawner }
-    retire(req)
+    local adopted = req.state == 'adopted'
+    local out = { netId = adopted and req.netId or nil, entity = adopted and req.entity or nil, token = req.token,
+        spawner = req.spawner }
+    out.inflight = retire(req)
     req.entity = nil
     M.transition(req, 'despawned')
     return out

@@ -19,7 +19,7 @@ local function newReq(retries, specOver)
 end
 
 local function info(req, over)
-    local i = { exists = true, model = req.spec.modelHash, coords = { x = 10, y = 20, z = 30 } }
+    local i = { exists = true, model = req.spec.modelHash, coords = { x = 10, y = 20, z = 30 }, owner = req.spawner }
     for k, v in pairs(over or {}) do i[k] = v end
     return i
 end
@@ -205,6 +205,7 @@ end)
 
 case('checkEntity: no entity, model mismatch (signed hash ok), out of range', function()
     local req = newReq()
+    assert(R.dispatch(req, 3, 'a', 0))
     T.eq(true, (R.checkEntity(req, info(req), 25)))
     local signed = req.spec.modelHash >= 0x80000000 and req.spec.modelHash - 0x100000000 or req.spec.modelHash
     T.eq(true, (R.checkEntity(req, info(req, { model = signed }), 25)), 'GetEntityModel signed form')
@@ -273,6 +274,96 @@ case('offsetForward: heading 0 is +y, 90 is -x', function()
     assert(math.abs(p.x) < 1e-9 and math.abs(p.y - 2) < 1e-9 and p.z == 1)
     local q = R.offsetForward({ x = 0, y = 0, z = 1 }, 90, 2)
     assert(math.abs(q.x + 2) < 1e-9 and math.abs(q.y) < 1e-9)
+end)
+
+-- Review rn-5638a710a250 (Gemini) on 33a65cd. Each HIGH case below fails on 33a65cd.
+
+case('HIGH-1 duplicate created: delete targets only the extra netId, never the live one', function()
+    local req = newReq()
+    assert(R.dispatch(req, 3, 'a', 0))
+    T.eq('verify', (R.onCreated(req, 3, 'a', 55)))
+    T.same({ 'duplicate', 56 }, { R.onCreated(req, 3, 'a', 56) }, 'while verifying')
+    T.eq('adopted', (R.finishVerify(req, 'a', true, nil, 155)))
+    T.same({ 'duplicate', 57 }, { R.onCreated(req, 3, 'a', 57) }, 'after adoption')
+    T.same({ 'same' }, { R.onCreated(req, 3, 'a', 55) }, 'live netId: no delete')
+    local r2 = newReq(1)
+    adoptVia(r2, 3, 'a', 55)
+    R.rerequest(r2, 'x')
+    adoptVia(r2, 4, 'b', 66)
+    T.same({ 'stale', 55 }, { R.onCreated(r2, 3, 'a', 55) }, 'stale: delete the old entity')
+    T.same({ 'same' }, { R.onCreated(r2, 3, 'a', 66) }, 'stale token naming the live netId: no delete')
+end)
+
+case('HIGH-2 checkEntity: refuses an entity the spawner does not own, another request holds, or a player ped', function()
+    local req = newReq()
+    assert(R.dispatch(req, 3, 'a', 0))
+    T.eq('fh_spawn_not_owner', select(2, R.checkEntity(req, info(req, { owner = 9 }), 25)), "someone else's horse")
+    T.eq('fh_spawn_not_owner', select(2, R.checkEntity(req, info(req, { owner = false }), 25)), 'owner unknown')
+    T.eq('fh_spawn_already_claimed', select(2, R.checkEntity(req, info(req, { claimedBy = 2 }), 25)))
+    T.eq('fh_spawn_player_entity', select(2, R.checkEntity(req, info(req, { isPlayer = true }), 25)))
+    local other = newReq()
+    adoptVia(other, 4, 'b', 55)
+    local all = { [7] = req, [8] = other }
+    T.eq(8, R.findClaim(all, 55, 7), 'netId 55 belongs to request 8')
+    T.eq(nil, R.findClaim(all, 55, 8), 'own request is not a claim')
+    T.eq(nil, R.findClaim(all, 99, 7))
+    R.despawn(other)
+    T.eq(nil, R.findClaim(all, 55, 7), 'despawned requests hold nothing')
+end)
+
+case('HIGH-3 spawner drop / verify timeout while verifying: in-flight netId handed back for cleanup', function()
+    local req = newReq(2)
+    assert(R.dispatch(req, 3, 'a', 0))
+    T.eq('verify', (R.onCreated(req, 3, 'a', 55)))
+    R.noteOwner(req, 'a', 3)
+    local outcome, inflight = R.onPlayerDropped(req, 3, true)
+    T.eq('retry', outcome)
+    T.same({ netId = 55, token = 'a', spawner = 3, seenOwned = true }, inflight)
+    local function ent(over)
+        local i = { exists = true, model = req.spec.modelHash }
+        for k, v in pairs(over or {}) do i[k] = v end
+        return i
+    end
+    T.eq(true, R.canCleanup(req, inflight, ent()), 'ours: delete it, else OneSync may migrate it (2 live)')
+    T.eq(false, R.canCleanup(req, inflight, ent({ claimedBy = 9 })), 'another request holds it')
+    T.eq(false, R.canCleanup(req, inflight, ent({ model = 1 })), 'not our model')
+    T.eq(false, R.canCleanup(req, inflight, ent({ exists = false })))
+    local unseen = { netId = 55, spawner = 3, seenOwned = false }
+    T.eq(false, R.canCleanup(req, unseen, ent({ owner = 8 })), 'never seen owned by the spawner: not ours to delete')
+    T.eq(true, R.canCleanup(req, unseen, ent({ owner = 3 })), 'still owned by the dropped spawner')
+    assert(R.dispatch(req, 4, 'b', 0))
+    T.eq('verify', (R.onCreated(req, 4, 'b', 66, 100, 500)))
+    T.eq(nil, (R.checkTimeout(req, 599)))
+    local o2, inf2 = R.checkTimeout(req, 600)
+    T.eq('retry', o2); T.eq(66, inf2.netId); T.eq('fh_spawn_verify_timeout', req.lastReason)
+    T.eq(nil, select(2, R.onPlayerDropped(newReq(), 3, true)), 'nothing in flight: nothing to clean')
+end)
+
+case('HIGH-3 despawn while verifying returns the in-flight entity, not an adopted one', function()
+    local req = newReq()
+    assert(R.dispatch(req, 3, 'a', 0))
+    R.onCreated(req, 3, 'a', 55)
+    local d = assert(R.despawn(req))
+    T.eq(nil, d.netId); T.eq(55, d.inflight.netId)
+end)
+
+case('MED-4 modelHash: no crash on huge/inf/fractional numbers; out-of-range hashes refused', function()
+    T.eq(nil, R.modelHash('1e100')); T.eq(nil, R.modelHash(1e100)); T.eq(nil, R.modelHash(math.huge))
+    T.eq(nil, R.modelHash(0 / 0)); T.eq(nil, R.modelHash('1.5')); T.eq(nil, R.modelHash(0x100000000))
+    T.eq(R.joaat('inf'), R.modelHash('inf'), "Lua's tonumber rejects 'inf': it is a (silly) model name")
+    T.eq(0xFFFFFFFF, R.modelHash(-1))
+    T.eq('fh_spawn_bad_model', select(2, R.validateSpec(spec({ model = '1e100' }))))
+end)
+
+case('MED-5 netId must be a positive integer; verifying cannot wedge', function()
+    T.eq(5, R.validNetId(5)); T.eq(5, R.validNetId(5.0))
+    for _, bad in ipairs({ 0, -1, 1.5, 0 / 0, math.huge, '5', 1e100 }) do T.eq(nil, R.validNetId(bad), tostring(bad)) end
+    local req = newReq()
+    assert(R.dispatch(req, 3, 'a', 0))
+    T.eq('bad_netid', (R.onCreated(req, 3, 'a', 0 / 0)))
+    T.eq('bad_netid', (R.onCreated(req, 3, 'a', math.huge)))
+    T.eq('dispatched', req.state, 'ignored; the dispatch timeout still applies')
+    T.eq('retry', (R.checkTimeout(req, 1000)))
 end)
 
 T.finish()

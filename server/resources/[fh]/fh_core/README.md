@@ -190,11 +190,16 @@ exports.fh_core:getSpawn(id)     -- { state, netId, tag, owner, kind, attempts }
   with the next candidate; after `retries` extra attempts -> `failed` (`onFailed`). Spawner drop mid-dispatch ->
   retry. `despawned` and `failed` are terminal.
 - **Adopt:** `fh:spawn:created` counts only from the chosen spawner with the current per-attempt token while
-  `dispatched`. The server then waits up to `AdoptWaitMs` for the netId, checks the entity exists, its model hash
-  matches and it is within `AdoptMaxDistance` of the requested coords. A mismatch deletes it and retries.
+  `dispatched`, with a positive-integer netId. The server then waits up to `AdoptWaitMs` for the netId and checks
+  the entity exists, is network-owned by the spawner, is held by no other request, is not a player ped, its model
+  hash matches and it is within `AdoptMaxDistance` of the requested coords. A mismatch asks the spawner to delete
+  it and retries. `verifying` has its own deadline (`AdoptWaitMs` + 2 s), so it can't wedge.
 - **Exactly-once:** one live entity per requestId. A second `created` (duplicate), one from an earlier attempt
-  (stale), or one for a despawned/failed request is answered with `fh:spawn:delete`; the client deletes only an
-  entity it made for that token, so a forged message can't delete anything else.
+  (stale), or one for a despawned/failed request is answered with `fh:spawn:delete` naming that extra netId; the
+  client deletes only an entity it made for that token with that netId, so neither a forged message nor a
+  duplicate can delete the adopted entity or anything else. When an attempt is retired mid-verify (spawner drop,
+  verify timeout, despawn), the server deletes its reported entity itself if it saw it owned by that spawner, the
+  model matches and no other request holds it (OneSync may have migrated it; otherwise there would be two).
 - **Owner drop** depends on `fh_spike_gated`: see `docs/spike-gated.md`. Gated (default): despawn and re-request.
 - **Cleanup:** requests are despawned when the resource that made them stops, and all of them when fh_core stops.
 - **Admin:** `fh_spawn_horse [model]`, `fh_spawn_ped [model]` (2 m in front of you), `fh_despawn <requestId>`;
