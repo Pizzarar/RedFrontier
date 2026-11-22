@@ -10,6 +10,7 @@ the default orphan mode until they are re-requested.
 |---|---|---|---|---|
 | 1 | Spawner or current network owner of an adopted entity drops (`playerDropped`) | Server `DeleteEntity`s it and re-requests it (fresh retry budget) from another ready client, or parks it as `pending_no_client` until a player joins / comes in range. `onReady` fires again with the new netId. | Keep the entity and its record; rely on OneSync ownership migration plus orphan mode (row 2). | `[spikes]/spk_camp` RESULT: "camp persists across owner leave" (S1) |
 | 2 | Orphan mode at adoption | Not set (OneSync default). | `SetEntityOrphanMode(entity, 2)` (KeepEntity), pcall-wrapped. | same as row 1 |
+| 3 | Camp ped whose spawner drops (fh_zones) | Same as row 1: the live ped is deleted and re-requested, so it comes back at full health at its spawn point and the new spawner re-runs the hostile-AI setup (`fh:spawn:adopted`). The camp keeps the same requestId and tolerates the new netId. A ped the server already saw dead is never revived (a re-adopted corpse is despawned). | Ungated: the ped keeps its entity; OneSync migrates it, but the relationship group / weapon set by the first client is client-local and may be lost until S1 shows what survives. | same as row 1 |
 
 Code: `fh_core/server/spawn.lua` (`gated()`, `playerDropped` handler, `verify`), decision in
 `fh_core/shared/spawn_rules.lua` `onPlayerDropped` (specced in `spec/spawn_rules_spec.lua`).

@@ -112,6 +112,8 @@ A container ref is `{ type = <container type>, id = <id> }`: `id` is the player 
 | `setContainerCoords(ref, coords)` | `ok, reason` |
 | `open(src, ref)` | `ok, reason` (reach checked from the server-side ped position) |
 | `createDropBag(coords, items, { owner?, label? })` | `id` or `nil, reason` |
+| `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds to a registered world container (rules veto applies) |
+| `clearContainer(ref)` | `true` or `false, reason`; empties a registered world container (only fh_core may wipe one in fh_inventory) |
 | `registerItems({ [name] = def })` | `ok, err, badName` (validates every entry before applying any) |
 
 - `registerContainer` refuses `equipped`/`backpack` (`fh_not_registrable`) and any world container without
@@ -200,6 +202,8 @@ exports.fh_core:getSpawn(id)     -- { state, netId, tag, owner, kind, attempts }
   duplicate can delete the adopted entity or anything else. When an attempt is retired mid-verify (spawner drop,
   verify timeout, despawn), the server deletes its reported entity itself if it saw it owned by that spawner, the
   model matches and no other request holds it (OneSync may have migrated it; otherwise there would be two).
+- **Post-adopt hook:** after `fh:spawn:release` the spawning client fires the local event `fh:spawn:adopted`
+  `{ requestId, tag, owner, kind, netId, entity }` so a resource can set the entity up (AI, weapon). `tag`/`owner` are sent in `fh:spawn:create`.
 - **Owner drop** depends on `fh_spike_gated`: see `docs/spike-gated.md`. Gated (default): despawn and re-request.
 - **Cleanup:** requests are despawned when the resource that made them stops, and all of them when fh_core stops.
 - **Admin:** `fh_spawn_horse [model]`, `fh_spawn_ped [model]` (2 m in front of you), `fh_despawn <requestId>`;
