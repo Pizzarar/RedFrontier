@@ -1,0 +1,7 @@
+return {
+  _all = {
+    lpath = './server/resources/[fh]/fh_core/?.lua;./server/resources/[fh]/fh_core/shared/?.lua',
+    ROOT = { 'spec' },
+    pattern = '_spec',
+  },
+}
