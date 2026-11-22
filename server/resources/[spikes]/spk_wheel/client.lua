@@ -12,6 +12,15 @@ local N_GET_VEHICLE_PED_IS_IN  = 0x9A9112A0FE9A4713 -- GET_VEHICLE_PED_IS_IN(ped
 local N_PLAYER_PED_ID          = 0x096275889B8E0EE0 -- PLAYER_PED_ID()
 local N_DOES_ENTITY_EXIST      = 0xD42BD6EB2E0F1677 -- DOES_ENTITY_EXIST(entity)
 
+local N_CREATE_VEHICLE         = 0xAF35D0D2583051B0 -- CREATE_VEHICLE(modelHash, x, y, z, heading, isNetwork, bScriptHostVeh, bDontAutoCreateDraftAnimals, p8)
+local N_SET_PED_INTO_VEHICLE   = 0xF75B0D629E1C063D -- SET_PED_INTO_VEHICLE(ped, vehicle, seatIndex)
+local N_REQUEST_MODEL          = 0xFA28FE3A6246FC30 -- REQUEST_MODEL(model, p1)
+local N_HAS_MODEL_LOADED       = 0x1283B8B89DD5D1B6 -- HAS_MODEL_LOADED(model)
+local N_IS_MODEL_IN_CDIMAGE    = 0xD6F3B6D7716CFF8E -- IS_MODEL_IN_CDIMAGE(model)
+local N_SET_MODEL_NO_LONGER    = 0x4AD96EF928BD4F9A -- SET_MODEL_AS_NO_LONGER_NEEDED(model)
+local N_GET_OFFSET             = 0x1899F328B0E12848 -- GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(entity, x, y, z) -> vector3
+local N_GET_ENTITY_HEADING     = 0xC230DD956E2F5507 -- GET_ENTITY_HEADING(entity)
+
 local function bool(v) return v == true or (type(v) == 'number' and v ~= 0) end
 local function say(msg)
     print('[spk_wheel] ' .. msg)
@@ -26,9 +35,30 @@ local function wheelState(veh)
     return table.concat(t, ' ')
 end
 
+-- /spk_wheel wagon: spawn a networked cart01 ~5m to the player's right and seat the player as driver.
+local function spawnWagon()
+    local model = joaat('cart01') -- name verified in femga/rdr3_discoveries vehicles_list.lua (0xCEDED274)
+    local ped = Citizen.InvokeNative(N_PLAYER_PED_ID, Citizen.ResultAsInteger())
+    if not bool(Citizen.InvokeNative(N_IS_MODEL_IN_CDIMAGE, model)) then return say('cart01 not in CD image') end
+    Citizen.InvokeNative(N_REQUEST_MODEL, model, false)
+    local t = GetGameTimer() + 5000
+    while not bool(Citizen.InvokeNative(N_HAS_MODEL_LOADED, model)) do
+        if GetGameTimer() > t then return say('cart01 model load timed out') end
+        Wait(50)
+    end
+    local pos = Citizen.InvokeNative(N_GET_OFFSET, ped, 5.0, 0.0, 0.0, Citizen.ResultAsVector())
+    local h = Citizen.InvokeNative(N_GET_ENTITY_HEADING, ped, Citizen.ResultAsFloat())
+    local veh = Citizen.InvokeNative(N_CREATE_VEHICLE, model, pos.x, pos.y, pos.z, h, true, false, false, false, Citizen.ResultAsInteger())
+    Citizen.InvokeNative(N_SET_MODEL_NO_LONGER, model)
+    if veh == 0 or not bool(Citizen.InvokeNative(N_DOES_ENTITY_EXIST, veh)) then return say('CreateVehicle(cart01) returned no entity') end
+    Citizen.InvokeNative(N_SET_PED_INTO_VEHICLE, ped, veh, -1) -- seat -1 = driver
+    say(('spawned cart01 (entity %d), you are in the driver seat. Now run /spk_wheel or /spk_chase.'):format(veh))
+end
+
 local broken = nil -- vehicle we broke, so "fix" can undo the speed change
 
 RegisterNetEvent('spk_wheel:run', function(arg)
+    if arg == 'wagon' then return spawnWagon() end
     local ped = Citizen.InvokeNative(N_PLAYER_PED_ID, Citizen.ResultAsInteger())
     local veh = Citizen.InvokeNative(N_GET_VEHICLE_PED_IS_IN, ped, false, Citizen.ResultAsInteger())
     if not bool(Citizen.InvokeNative(N_DOES_ENTITY_EXIST, veh)) or veh == 0 then

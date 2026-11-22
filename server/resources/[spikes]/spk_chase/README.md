@@ -1,4 +1,4 @@
-TEST: `ensure spk_chase`, get in a wagon on a road, run `/spk_chase`, drive 60s (some off-road); watch notify/F8 for per-5s lines `R1 distm mounted/UNMOUNTED goto|combat` plus STALL/BUNCH flags; `/spk_chase clear` afterwards.
+TEST: `ensure spk_chase`, get in a wagon on a road (no wagon? `/spk_wheel wagon` with spk_wheel ensured), run `/spk_chase`, drive 60s (some off-road); watch notify/F8 for per-5s lines `R1 distm mounted/UNMOUNTED goto|combat` plus STALL/BUNCH flags; `/spk_chase clear` afterwards.
 
 ## Natives
 
