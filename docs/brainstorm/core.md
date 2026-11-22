@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: Core Lead · boot to M1
-- Workers: 0
+- Lead: ★ Cor2
+- Workers: 1
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -25,6 +25,8 @@
 - Push to GitHub: owner OK needed.
 
 ## In flight
-- Plan docs/brainstorm/plans/core-01-boot-to-m1.md (B1 boot → B2 boot-check+busted → B3 inventory → B4 §4 → B5 admin+natives → B6+ M1). Lead rn-0e1a7e68e8de. B1 built on core/b1-boot (..ee8eef5), unmerged pending Aub's key + first join. B3 done (fork). B4b PASS c427eee; B4a1 fh_core dfd93ac (77 specs green); B4a2 fork in progress (Core11), then Gemini review of B4a. Blocker: owner Cfx key.
+- Plan docs/brainstorm/plans/core-01-boot-to-m1.md (B1 boot → B2 boot-check+busted → B3 inventory → B4 §4 → B5 admin+natives → B6+ M1). Lead Cor2 rn-428940b6f1c5. Local main cdbd1a9 (B1-B4b + spikes + specfix), 157 specs/0 fail, unpushed. B5 after VS restart 616dede2. Live boot + B4c wait on Aub key / S1.
 - B3 PASS (f9a6e63 on core-b3; Gemini review PASS): fork-and-patch rsg-inventory into [fh]/fh_inventory.
 - B4b PASS (c427eee on core-b4b; Gemini re-review PASS): fh_economy ledger, fh_buffs, regions, events.md. Specs unexecuted (no Lua runner yet).
+- B4a PASS (7d32208 on core-b4a2; Gemini re-review PASS): fh_core container API + fh_inventory fork. Lead Cor2 rn-428940b6f1c5. Local main cdbd1a9 (B1-B4b + spikes + specfix), 157 specs/0 fail, unpushed. B5 after VS restart 616dede2. Live boot + B4c wait on Aub key / S1.
+- Spec runner fix PASS (18cd2be, merged to main cdbd1a9): all 8 specs on fh_prelude runner, 157 tests green. Next: keyed boot (Cfx key), then B4c after S1, B5.

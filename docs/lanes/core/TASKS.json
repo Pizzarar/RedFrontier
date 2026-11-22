@@ -1,0 +1,27 @@
+{
+  "laneId": "core",
+  "updatedAt": "2026-11-22T07:54:32.978Z",
+  "units": [
+    {
+      "id": "B5",
+      "goal": "admin cmds + natives.md; spike natives under '## Spikes' as 'candidate, unproven' (from spk_*/README.md ## Natives) until @spk sends proven list; fold rep() pcall Low; delete unused spec/_harness.lua",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "B4c",
+      "goal": "spawn-request contract: client creates, server adopts netId. Wait for S1 verdict incl. server CreateVehicle 0xDD75460A",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked"
+    },
+    {
+      "id": "B1-live",
+      "goal": "keyed boot on Aub's Cfx key; on success ping Spikes Lead rn-78eb403f6a63 to release cards",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked"
+    }
+  ]
+}

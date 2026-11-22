@@ -33,6 +33,8 @@
 
 - Build+review block PASS (2026-11-22): spikes/probes tip 4d11954, 22 files all under [spikes]/ (Buddy verified). Handed to Core lead; merges to main after Aub's keyed join. Remaining: in-game RESULTs.
 
+- Spikes merged to local main (382de5e; main now 32527fe, 4d11954 is ancestor, verified). Not pushed. Primary checkout on main; cards at server/resources/[spikes]/TEST-CARDS.md.
+
 ## Open
 - Does Aub have a 2nd RedM account? (adds true 2-client S1 check)
 
