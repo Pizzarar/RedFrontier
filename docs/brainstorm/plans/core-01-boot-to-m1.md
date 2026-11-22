@@ -60,3 +60,22 @@ Lead: Core lead (Lead - Claude), spawned by Buddy.
 | Block | Touches | Clashes with |
 |---|---|---|
 | B-dev | OWNER-STEPS.md, fh_core client/server dev helpers, .gitignore, [fh] client handlers | B6a client code (wraps it) |
+
+## Amendment 2026-11-22: autonomy (Overlord, relaying Aub: "do everything as autonomously as possible, go go go")
+- The live-boot hold is lifted for everything except in-game RESULT steps. Still no push.
+- **One flag:** convar `fh_spike_gated` (default `true`). While it's true, any behaviour that depends on S1/S2 results takes the conservative path: if the spawner client drops, the server despawns the camp and re-requests it from another client or on next proximity. We don't rely on ownership migration or orphan mode. Aub flips it to false after the probes. Each behaviour behind the flag is listed in `fh_core/docs/spike-gated.md`.
+- **Order:**
+  1. **B4c spawn-request contract** (fh_core): request → pick spawner (nearest player in range) → client creates networked entity → server adopts netId and records it → dupe guard → timeout/retry. Specs cover the server state machine.
+  2. **B6b and B6c run in parallel** once B4c merges:
+     - **B6b T1 camp** (fh_zones): one region from the §4.4 registry, one camp definition, server camp state (idle/active/cleared/respawn timer), spawn through B4c, loot table rolled server-side (worn rifle with condition, small safe as `cargo`) into a camp loot stash.
+     - **B6c soft death** (fh_death): on death, keep `equipped`, move backpack and saddlebag into a `drop_bag` container, bag prop spawned through B4c, owner recovers by interacting, despawn timer per config.
+  3. **B6d stash home:** glue plus the end-to-end M1 test card. A `cargo` safe can't go in a backpack; it goes into the chest from B6a.
+- **Natives:** every native goes into natives.md marked `unverified in-game`.
+- **OWNER-TESTS.md:** each block appends its test card to this single ordered checklist, so Aub's first session runs it top to bottom (boot → B4 moves → B6a → B6b → B6c → B6d) and reports one RESULT line per step.
+- Out of scope still: wagons (M4), chases (M5), wheel break.
+| Block | Touches | Clashes with |
+|---|---|---|
+| B4c | fh_core spawn module, docs/spike-gated.md | @spk S1 (results only) |
+| B6b | [fh]/fh_zones, fh_core region config | B6c via OWNER-TESTS.md append only |
+| B6c | [fh]/fh_death, fh_inventory drop_bag hookup | B6b via OWNER-TESTS.md append only |
+| B6d | fh_homestead glue, OWNER-TESTS.md | B6b/B6c |

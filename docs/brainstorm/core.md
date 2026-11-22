@@ -12,26 +12,23 @@
 
 ## Decided
 - 2026-11-22 Owner steer: boot first (join today), then M0, then M1 slice inside @core. Playable increment + owner test card per block.
-- Server-data in repo at `server/`; secrets.cfg/artifacts/db/cache gitignored; portable MariaDB; no txAdmin.
+- Server-data in repo at `server/`; secrets.cfg/artifacts/db/cache gitignored; portable MariaDB; plain FXServer default (txAdmin optional).
 - @spk path agreed: `server/resources/[spikes]/spk_*`, never ensured by default, ox_lib only.
-- rsg-inventory: wrap if a server-side move veto exists, else fork-and-patch (B3 decides with file:line evidence).
 - Spawn contract: RedM compiles out server CreatePed/CreateObject (ServerSetters.cpp:4-517 #ifndef STATE_RDR3). Server decides + owns state, client creates, server adopts netId. B4 adds fh_core spawn-request contract; S1 confirms.
 - B3 (f9a6e63): rsg-inventory has no server veto (move main.lua:880 commits at 968) → FORK-AND-PATCH into [fh]/fh_inventory; size_class/value_base/illicit on shared items, condition/quality in info; world stashes must set coords.
 - B2 test runner: tools/run-specs.py on preinstalled Python lupa 2.8 (Lua 5.4), plain-assert runner; nothing installed. busted optional later (specs runner-agnostic).
 - Machine split: DevPC hosts server (FXServer, MariaDB, key); Main PC plays via Tailscale 100.83.196.251:30120. txAdmin optional. B-dev: OWNER-STEPS rewrite + firewall step + FH.safe client-error forwarding to server/logs/client-errors.log.
+- 2026-11-22 autonomy (Aub 'go go go' via Overlord): hold lifted; only in-game RESULT steps wait on Aub. S1/S2-dependent behaviour behind convar fh_spike_gated (default true, conservative; listed in fh_core/docs/spike-gated.md). Test cards accumulate in OWNER-TESTS.md for one top-to-bottom session.
+- M1 order: B4c spawn contract → (B6b T1 camp fh_zones ∥ B6c soft death fh_death) → B6d stash home + end-to-end card. Wagons/chases out of scope.
 - No GitHub push without owner OK (Pizzarar/RedFrontier not pre-approved).
 
 ## Open
+- Aub: Cfx key + first join (OWNER-STEPS.md), then run OWNER-TESTS.md; flip fh_spike_gated after S1/S2.
 - RSG + fh_inventory (fork, unwrapped) client errors still need Aub to send CitizenFX log from Main.
 - Second client for camp-ownership spike (default: drop/rejoin).
 - Push to GitHub: owner OK needed.
 
 ## In flight
-- Plan docs/brainstorm/plans/core-01-boot-to-m1.md (B1 boot → B2 boot-check+busted → B3 inventory → B4 §4 → B5 admin+natives → B6+ M1). Lead Cor2 rn-428940b6f1c5. Main 6307f28 (B1-B6a + B-dev), 179 specs, unpushed. HELD: no dispatch until Aub's live boot passes (key). Then B6a in-game test, B4c (after S1), B6b-d. Live boot + B4c wait on Aub key / S1.
-- B3 PASS (f9a6e63 on core-b3; Gemini review PASS): fork-and-patch rsg-inventory into [fh]/fh_inventory.
-- B4b PASS (c427eee on core-b4b; Gemini re-review PASS): fh_economy ledger, fh_buffs, regions, events.md. Specs unexecuted (no Lua runner yet).
-- B4a PASS (7d32208 on core-b4a2; Gemini re-review PASS): fh_core container API + fh_inventory fork. Lead Cor2 rn-428940b6f1c5. Main 6307f28 (B1-B6a + B-dev), 179 specs, unpushed. HELD: no dispatch until Aub's live boot passes (key). Then B6a in-game test, B4c (after S1), B6b-d. Live boot + B4c wait on Aub key / S1.
-- Spec runner fix PASS (18cd2be, merged to main cdbd1a9): all 8 specs on fh_prelude runner, 157 tests green. Next: keyed boot (Cfx key), then B4c after S1, B5.
-- B5 PASS (ef41125 on core-b5; Gemini re-review PASS; merged to main b0eacf6): admin cmds fh_give/fh_heat(stub)/fh_tp/fh_dump, natives.md (spike natives candidate, unproven), rep() pcall. 163 specs green. Spawn cmds moved to B4c.
-- B6a PASS-WITH-NITS (bff072e on core-b6a; Gemini re-review; merged main 65f750f): fh_homestead plot claim + owner chest, migration 0003. 171 specs green. Not runtime-tested. HOLD further core dispatch until Aub's live boot.
-- B-dev PASS (ab96962 on core-bdev; Gemini re-review PASS; merged main 6307f28): OWNER-STEPS DevPC/Main PC split (one start path, firewall 30120, Tailscale connect), FH.safe client-error return to server/logs/client-errors.log gated by fh_dev; fh_inventory exception documented. 179 specs. Core HELD until live boot.
+- Plan: docs/brainstorm/plans/core-01-boot-to-m1.md (+ amendments: machine split, autonomy). Lead Cor2 rn-428940b6f1c5.
+- Main 6307f28 = B1 boot, B2 boot-check+run-specs, B3 inventory fork, B4a container API+fh_inventory, B4b ledger/buffs/regions/events, B5 admin cmds+natives.md, B6a plot+chest, B-dev split+FH.safe. 179 specs green, Gemini PASS each. Nothing runtime-tested (no key yet). Unpushed.
+- Now: B4c spawn contract → B6b ∥ B6c → B6d.
