@@ -61,7 +61,7 @@ end
 ---Item id a trophy id was made from ('trophy_deer#2' -> 'trophy_deer').
 function M.itemOf(trophyId)
     if type(trophyId) ~= 'string' then return nil end
-    return trophyId:match('^(.-)#%d+$') or trophyId
+    return trophyId:match('^(.+)#%d+$') or trophyId
 end
 
 ---Smallest free '<item>#<n>' id for a new placement.

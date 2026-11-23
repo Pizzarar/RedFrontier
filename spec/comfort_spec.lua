@@ -89,6 +89,7 @@ case('place ok: points from lookup, id <item>#1, item removed', function()
     local _, _, id2 = C.place(ctx({ trophies = { ['trophy_deer#1'] = 4 } }))
     assert(id2 == 'trophy_deer#2')
     assert(C.itemOf('trophy_deer#2') == 'trophy_deer' and C.itemOf('x') == 'x')
+    assert(C.itemOf('#1') == '#1' and C.itemOf('a#b#3') == 'a#b') -- never an empty item id
 end)
 case('place refused: not owner / no plot owner / no character', function()
     assert(not refused({ citizenid = 'B' }, 'fh_not_owner'))
@@ -156,15 +157,17 @@ local PLOT = 'heartlands_01'
 local function server()
     local S = { plots = { [PLOT] = 'A' }, rows = { [PLOT] = {} }, owners = { A = PLOT }, tiers = { [PLOT] = { trophy_wall = 1 } },
         chest = { trophy_deer = 3 }, points = { trophy_deer = 4 }, hold = {}, events = {}, handlers = {}, X = {}, logs = {},
+        ready = true,
         order = {}, calls = { addItem = 0, removeItem = 0 } }
     local function await(tag) S.order[#S.order + 1] = tag if S.hold[tag] then S.hold[tag] = nil coroutine.yield(tag) end end
     local players = { [1] = { PlayerData = { citizenid = 'A' } }, [2] = { PlayerData = { citizenid = 'B' } } }
     local MySQL = {
         query = { await = function(sql, p)
-            await('query')
             assert(sql:find('^SELECT trophy_id'), sql)
+            -- the SELECT reads now; the result arrives after the (possibly held) await, as in oxmysql
             local out = {}
             for id, pts in pairs(S.rows[p[1]] or {}) do out[#out + 1] = { trophy_id = id, points = pts } end
+            await('query')
             return out
         end },
         scalar = { await = function(_, p) return S.plots[p[1]] end },
@@ -177,12 +180,19 @@ local function server()
                 S.rows[plotId] = S.rows[plotId] or {}
                 if S.rows[plotId][id] then error('Duplicate entry') end
                 S.rows[plotId][id] = pts
+                await('inserted') -- committed; the caller resumes later
                 return 1
             elseif sql:find('^DELETE t FROM fh_plot_trophies t JOIN fh_plots p') then
                 await('delete')
                 local plotId, id, cid = p[1], p[2], p[3]
                 if S.plots[plotId] ~= cid or not (S.rows[plotId] or {})[id] then return 0 end
                 S.rows[plotId][id] = nil
+                return 1
+            elseif sql:find('^DELETE FROM fh_plot_trophies WHERE plot_id = %? AND trophy_id = %? AND points = %?') then
+                await('undo')
+                local r = S.rows[p[1]] or {}
+                if r[p[2]] ~= p[3] then return 0 end
+                r[p[2]] = nil
                 return 1
             elseif sql:find('^DELETE t FROM fh_plot_trophies t LEFT JOIN fh_plots p') then
                 await('cleanup')
@@ -219,8 +229,15 @@ local function server()
     local env = setmetatable({
         FhHomesteadConfig = cfg, FhComfort = C, FhPlotRules = dofile(dir .. 'shared/plot_rules.lua'),
         FhHomesteadSlots = {
+            isReady = function() return S.ready end,
             plotOf = function(cid) return S.owners[cid] end,
-            getTiers = function(plotId) if S.tiersThrow then error('tiers boom') end return S.tiers[plotId] end,
+            getTiers = function(plotId)
+                if S.tiersThrow then error('tiers boom') end
+                if not S.ready then return {}, 'fh_not_ready' end
+                local out = {}
+                for k, v in pairs(S.tiers[plotId] or {}) do out[k] = v end
+                return out
+            end,
         },
         MySQL = MySQL, exports = exportsT, GetResourceState = function() return 'started' end,
         AddEventHandler = function(name, fn) S.handlers[name] = fn end,
@@ -317,9 +334,10 @@ case('server: trophy load suspended across unclaim does not cache the old rows',
     S.hold.query = true
     local finish = S.start(function() return S.X.getComfort('A') end)
     S.unclaim(PLOT)
-    finish()
+    finish() -- the SELECT result it receives still has trophy_deer#1 (read before the cascade)
     S.claim(PLOT, 'A')
-    assert(S.X.getComfort('A') == 5) -- reloaded from the (cascaded) table, not the stale read
+    assert(S.X.getComfort('A') == 5) -- reloaded from the (cascaded) table, not the stale read (that would be 9)
+    assert(select(2, S.X.unplaceTrophy(1, 'trophy_deer#1')) == 'fh_no_trophy')
 end)
 
 -- CRITICAL 2: unplace deletes first, needs exactly one affected row, and a double-fire refunds once
@@ -437,5 +455,77 @@ case('server: refund failure reasons are distinct', function()
     S.addRefuses = 'fh_chest_full'
     assert(select(2, S.X.unplaceTrophy(1, 'trophy_deer#1')) == 'fh_chest_full')
     assert(S.rows[PLOT]['trophy_deer#1'] == 4) -- still on the wall after all three
+end)
+
+-- Round 2 (rn-df940ea043f8) M1: nothing moves and nothing is cached before H3's slot/claim load is ready
+case('server: not ready: every trophy change is refused fh_not_ready, nothing taken or written', function()
+    local S = server()
+    S.rows[PLOT]['t#1'] = 2
+    S.ready = false
+    S.order = {}
+    assert(select(2, S.X.placeTrophy(1, 'trophy_deer')) == 'fh_not_ready')
+    assert(select(2, S.X.unplaceTrophy(1, 't#1')) == 'fh_not_ready')
+    assert(select(2, S.X.addTrophy('A', 'x#1', 3)) == 'fh_not_ready')
+    assert(select(2, S.X.removeTrophy('A', 't#1')) == 'fh_not_ready')
+    assert(S.calls.removeItem == 0 and S.calls.addItem == 0 and S.chest.trophy_deer == 3)
+    assert(S.rows[PLOT]['t#1'] == 2 and S.rows[PLOT]['x#1'] == nil)
+    assert(#S.order == 0, 'no DB/export call while not ready')
+end)
+case('server: not ready: getComfort caches nothing and emits nothing; first read after ready counts from 0', function()
+    local S = server()
+    S.rows[PLOT]['t#1'] = 2
+    S.ready = false
+    assert(S.X.getComfort('A') == 0)
+    S.handlers['fh:homestead:slot_changed'](PLOT) -- even a slot event can't poison it
+    assert(S.count('fh:homestead:comfort_changed') == 0)
+    S.ready = true
+    assert(S.X.getComfort('A') == 7) -- wall 5 + trophy 2, not a stale cached 0
+    local cc = S.last('fh:homestead:comfort_changed')
+    assert(cc[1] == 'A' and cc[2] == 7 and cc[3] == 0)
+end)
+case('server: not ready (getTiers fh_not_ready) inside the lock is reported, not fh_no_trophy_wall', function()
+    local S = server()
+    S.hold.query = true
+    local finish = S.start(function() return S.X.placeTrophy(1, 'trophy_deer') end)
+    S.ready = false -- e.g. a slots reload began while the trophy rows were loading
+    local ok, why = finish()
+    assert(ok == false and why == 'fh_not_ready', tostring(why))
+    assert(S.calls.removeItem == 0 and S.chest.trophy_deer == 3)
+end)
+
+-- M2: ownership re-checked AFTER the insert await
+case('server: unclaim + re-claim mid-INSERT: row taken back, item refunded, no trophy_placed', function()
+    local S = server()
+    assert(S.X.getComfort('A') == 5)
+    S.hold.insert = true
+    local finish = S.start(function() return S.X.placeTrophy(1, 'trophy_deer') end)
+    S.unclaim(PLOT)
+    S.tiers[PLOT] = {} -- the new claim has no trophy wall
+    S.claim(PLOT, 'A')
+    local ok, why = finish() -- INSERT ... SELECT now matches the new claim (affected 1)
+    assert(ok == false and why == 'fh_no_plot', tostring(why))
+    assert(nrows(S.rows[PLOT]) == 0, 'stale row must be undone')
+    assert(S.chest.trophy_deer == 3, 'item back in the chest')
+    assert(S.count('fh:homestead:trophy_placed') == 0)
+    assert(S.X.getComfort('A') == 0)
+    -- addTrophy has the same guard
+    S.hold.insert = true
+    local finish2 = S.start(function() return S.X.addTrophy('A', 'x#1', 3) end)
+    S.unclaim(PLOT)
+    S.claim(PLOT, 'A')
+    local ok2, why2 = finish2()
+    assert(ok2 == false and why2 == 'fh_no_plot' and nrows(S.rows[PLOT]) == 0, tostring(why2))
+end)
+case('server: unclaim right after the INSERT commits: no trophy_placed, no free refund', function()
+    local S = server()
+    S.hold.inserted = true
+    local finish = S.start(function() return S.X.placeTrophy(1, 'trophy_deer') end)
+    assert(S.rows[PLOT]['trophy_deer#1'] == 4) -- committed
+    S.unclaim(PLOT) -- cascade destroys it with the plot
+    local ok, why = finish()
+    assert(ok == false and why == 'fh_no_plot', tostring(why))
+    assert(S.calls.addItem == 0 and S.chest.trophy_deer == 2, 'trophy went with the plot; no refund')
+    assert(S.count('fh:homestead:trophy_placed') == 0)
+    assert(S.X.getComfort('A') == 0)
 end)
 T.finish()
