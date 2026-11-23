@@ -10,21 +10,26 @@ local MESSAGES = {
     charge_unavailable = 'The fence is not taking payment right now.',
     out_of_range = 'Step closer to the fence.',
     no_room = 'You have no room to carry that.',
+    fence_busy = 'The fence is still handling your last deal.',
+    fence_pending = 'The fence is holding goods from an earlier deal. Ask an admin.',
+    not_enough_items = "You don't have that to sell.",
 }
 local function why(code) return MESSAGES[code] or ('Refused: ' .. tostring(code)) end
 
 local function notify(msg) lib.notify({ description = msg, type = 'inform' }) end
 
 local function qtyPrompt(title)
-    local r = lib.inputDialog(title, { { type = 'number', label = 'Amount', default = 1, min = 1, max = 20 } })
+    local r = lib.inputDialog(title, { { type = 'number', label = 'Amount', default = 1, min = 1, max = FhFenceConfig.maxQty } })
     return r and tonumber(r[1]) or nil
 end
 
 local function buy(e)
     local qty = e.lead and 1 or qtyPrompt(('Buy %s'):format(e.item))
     if not qty then return end
-    local ok, code = lib.callback.await('fh:fence:buy', false, e.item, qty)
-    notify(ok and 'Bought.' or why(code))
+    local ok, a, b = lib.callback.await('fh:fence:buy', false, e.item, qty)
+    if not ok then return notify(why(a)) end
+    if b and b > 0 then return notify(('Bought %d. No room for the rest: $%d refunded.'):format(a, b)) end
+    notify('Bought.')
 end
 
 local function sell(s)
@@ -35,8 +40,8 @@ local function sell(s)
 end
 
 local function openMenu()
-    local m, why = lib.callback.await('fh:fence:menu', false)
-    if not m then return notify('The fence is not here: ' .. tostring(why)) end
+    local m, err = lib.callback.await('fh:fence:menu', false)
+    if not m then return notify(why(err)) end
     local opts = {}
     for _, e in ipairs(m.stock) do
         opts[#opts + 1] = { title = ('%s - $%d'):format(e.item, e.price), description = e.category,

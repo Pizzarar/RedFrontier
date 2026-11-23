@@ -1,11 +1,11 @@
 -- fh_fence server: the roving fence follows a deterministic schedule (FhFenceLogic.schedule). The server owns all
 -- decisions; the client only shows a menu. Money: buy = FhFenceCharge (compat_charge.lua), sell = exports.fh_economy:pay.
--- Items move through fh_core's container API: a per-player `fence_stash` stages what is bought / sold.
+-- Items move through fh_core's container API: a per-player `fence_stash` stages what is bought / sold (server/trade.lua).
 -- Natives: GetPlayerPed, GetEntityCoords, GetConvar (fh_core/docs/natives.md). NOT runtime-tested (no Cfx key yet).
 local cfg = FhFenceConfig
 local logic = FhFenceLogic
 
-local current = nil -- { id, reqId }
+local current = nil -- { id = stopId, reqId, tried = spawn requested at this stop }
 
 local function log(fmt, ...) print(('[fh_fence] ' .. fmt):format(...)) end
 
@@ -29,8 +29,9 @@ end)
 
 -- ---------------------------------------------------------------- NPC at the current stop
 
--- Reuses fh_core's convar (fh_core/docs/spike-gated.md). Spawn only while it is enabled, per the P2 brief.
-local function spawnEnabled() return logic.parseFlag(GetConvar('fh_spike_gated', 'true'), true) end
+-- Reuses fh_core's convar (fh_core/docs/spike-gated.md): `true` (default) = conservative, so the unverified NPC is
+-- NOT spawned; the owner sets `fh_spike_gated false` once the spawn spike passes. Read every tick: a live flip applies.
+local function spawnEnabled() return logic.spawnEnabled(GetConvar('fh_spike_gated', 'true')) end
 
 local function despawn()
     if current and current.reqId then pcall(function() exports.fh_core:despawn(current.reqId) end) end
@@ -38,7 +39,6 @@ local function despawn()
 end
 
 local function spawn(stop)
-    if not spawnEnabled() then return end
     local c = stop.coords
     local reqId, why = exports.fh_core:requestSpawn({
         kind = cfg.npc.kind, model = cfg.npc.model, coords = vector3(c.x, c.y, c.z), heading = c.h or 0.0,
@@ -51,11 +51,18 @@ end
 local function tick()
     local s = schedule()
     if not s then return end
-    if current and current.id == s.stop then return end
-    despawn()
-    current = { id = s.stop }
-    current.reqId = spawn(cfg.stops[s.stop])
-    log('fence now at %s', s.stop)
+    if not current or current.id ~= s.stop then
+        despawn()
+        current = { id = s.stop }
+        log('fence now at %s', s.stop)
+    end
+    if not spawnEnabled() then
+        despawn()
+        current.tried = false
+    elseif not current.reqId and not current.tried then
+        current.tried = true -- one request per stop (a refusal is logged, not retried every tick)
+        current.reqId = spawn(cfg.stops[s.stop])
+    end
 end
 
 CreateThread(function()
@@ -79,9 +86,10 @@ exports('getSchedule', function() return schedule() end)
 
 -- ---------------------------------------------------------------- shared helpers
 
+---No yield (trade.lua takes the lock right after it). nil when rsg-core is down or the player is not loaded.
 local function citizenOf(src)
-    local P = exports['rsg-core']:GetPlayer(src)
-    return P and P.PlayerData and P.PlayerData.citizenid or nil
+    local ok, P = pcall(function() return exports['rsg-core']:GetPlayer(src) end)
+    return ok and P and P.PlayerData and P.PlayerData.citizenid or nil
 end
 
 local function unlocked(src, id)
@@ -105,17 +113,44 @@ local function stopFor(src)
     return stop, s.stop
 end
 
-local function stashRef(citizenid) return { type = 'fence_stash', id = citizenid .. ':fence' } end
-
 local function ensureStash(ref, stop)
     local c = stop.coords
     return exports.fh_core:registerContainer(ref, { coords = vector3(c.x, c.y, c.z), label = stop.label })
 end
 
-local function refund(src, amount, region)
-    local ok, err = exports.fh_economy:pay(src, amount, 'fence_refund', region)
-    if not ok then log('REFUND FAILED src=%s amount=%s: %s', tostring(src), tostring(amount), tostring(err)) end
+---Calls an export; a throw (resource stopped) becomes false/nil + 'fh_unavailable' so trade.lua's rollback runs.
+local function safe(fn)
+    return function(...)
+        local r = table.pack(pcall(fn, ...))
+        if not r[1] then
+            log('export call failed: %s', tostring(r[2]))
+            return false, 'fh_unavailable'
+        end
+        return table.unpack(r, 2, r.n)
+    end
 end
+
+local core = function(name) return safe(function(...) return exports.fh_core[name](exports.fh_core, ...) end) end
+
+local trader = FhFenceTrade.new(cfg, logic, {
+    citizenOf = citizenOf,
+    stopFor = stopFor,
+    visibleStock = visibleStock,
+    ensureStash = safe(ensureStash),
+    snapshot = core('snapshot'),
+    view = core('view'),
+    canFit = core('canFit'),
+    addItem = core('addItem'),
+    clear = core('clearContainer'),
+    transferAll = core('transferAll'),
+    move = core('move'),
+    charge = FhFenceCharge.charge, -- pcall-wrapped itself; refusals -> false, err
+    pay = safe(function(...) return exports.fh_economy:pay(...) end),
+    log = function(msg) print('[fh_fence] ' .. msg) end,
+    now = os.time,
+})
+
+AddEventHandler('playerDropped', function() trader.dropped(source) end)
 
 -- ---------------------------------------------------------------- callbacks
 
@@ -135,83 +170,7 @@ lib.callback.register('fh:fence:menu', function(src)
     return { label = stop.label, stock = visibleStock(src, id), sells = sells }
 end)
 
-lib.callback.register('fh:fence:buy', function(src, item, qty)
-    local stop, id = stopFor(src)
-    if not stop then return false, id end
-    local quote, why = logic.quoteBuy(visibleStock(src, id), item, qty, cfg.maxQty)
-    if not quote then return false, why end
-    local cid = citizenOf(src)
-    if not cid then return false, 'no_player' end
-    local backpack, stash = { type = 'backpack', id = src }, stashRef(cid)
-
-    local fits, fitWhy = exports.fh_core:canFit(backpack, item, qty)
-    if not fits then return false, fitWhy or 'no_room' end
-    local ok, err = ensureStash(stash, stop)
-    if not ok then return false, err end
-    ok, err = exports.fh_core:addItem(stash, item, qty, logic.leadInfo(quote.entry)) -- stage first: no money lost on failure
-    if not ok then return false, err end
-
-    ok, err = FhFenceCharge.charge(src, quote.total, 'fence_buy:' .. item, stop.region_id)
-    if not ok then
-        exports.fh_core:clearContainer(stash)
-        return false, err
-    end
-    local moved, movedWhy = exports.fh_core:transferAll(stash, backpack, src)
-    local left = exports.fh_core:snapshot(stash)
-    if not moved or (left and next(left) ~= nil) then
-        exports.fh_core:clearContainer(stash)
-        refund(src, quote.total, stop.region_id)
-        return false, type(movedWhy) == 'string' and movedWhy or 'transfer_failed'
-    end
-    return true
-end)
-
-lib.callback.register('fh:fence:sell', function(src, item, qty)
-    local stop, id = stopFor(src)
-    if not stop then return false, id end
-    local pending, why = logic.quoteSell(cfg, item, qty)
-    if not pending then return false, why end
-    local cid = citizenOf(src)
-    if not cid then return false, 'no_player' end
-    local backpack, stash = { type = 'backpack', id = src }, stashRef(cid)
-    local ok, err = ensureStash(stash, stop)
-    if not ok then return false, err end
-
-    local items = exports.fh_core:snapshot(backpack)
-    local v = exports.fh_core:view(stash)
-    if not items or not v then return false, 'fh_unavailable' end
-    local free = {}
-    for slot = 1, v.slots do if not v.items[slot] then free[#free + 1] = slot end end
-
-    local need, sold, slots = qty, 0, {}
-    for slot in pairs(items) do slots[#slots + 1] = slot end
-    table.sort(slots)
-    for _, slot in ipairs(slots) do
-        local it = items[slot]
-        if need > 0 and it.name == item and free[1] then
-            local take = math.min(need, it.amount or 1)
-            local mok = exports.fh_core:move(backpack, stash, slot, table.remove(free, 1), take, src)
-            if mok then need, sold = need - take, sold + take end
-        end
-    end
-    if sold == 0 then
-        exports.fh_core:clearContainer(stash)
-        return false, 'not_enough_items'
-    end
-    local total = cfg.buys[item] * sold
-    local paid, payWhy = exports.fh_economy:pay(src, total, 'fence_sell:' .. item, stop.region_id)
-    local out = logic.sellOutcome(paid, payWhy, function()
-        -- Goods sit in the stash (metadata intact): put them back. fh_core addItem only targets world containers.
-        exports.fh_core:transferAll(stash, backpack, src)
-        local left = exports.fh_core:snapshot(stash)
-        if left and next(left) == nil then return true end
-        return false, 'restore_incomplete'
-    end, { citizenid = cid, item = item, qty = sold })
-    if out.log then print('[fh_fence] ' .. out.log) end
-    if out.action ~= 'complete' then
-        if out.action == 'refunded' then exports.fh_core:clearContainer(stash) end
-        return false, out.reason
-    end
-    exports.fh_core:clearContainer(stash)
-    return true, sold, total
-end)
+-- Both run under a per-citizenid lock with all rollback rules in server/trade.lua.
+-- buy -> true, delivered, refunded | false, code.  sell -> true, sold, total | false, code.
+lib.callback.register('fh:fence:buy', function(src, item, qty) return trader.buy(src, item, qty) end)
+lib.callback.register('fh:fence:sell', function(src, item, qty) return trader.sell(src, item, qty) end)

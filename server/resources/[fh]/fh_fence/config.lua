@@ -5,6 +5,8 @@ FhFenceConfig = {
     rotation = { 'heartlands_road', 'heartlands_camp' },  -- stop ids, visited in this order, then repeat
     range = 6.0,                                          -- metres: player must be this close to the current stop
     maxQty = 20,                                          -- per buy/sell request
+    fenceId = 'roving',                                   -- fence_stash id: fh:fence:<citizenid>:<fenceId>
+    lockStaleSeconds = 120,                               -- a trade lock this old is reclaimable (hung await)
     npc = { kind = 'ped', model = 'u_m_m_valtownfolk_01' }, -- placeholder model, verify in game
 
     stops = {

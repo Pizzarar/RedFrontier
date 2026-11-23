@@ -11,6 +11,9 @@ function M.parseFlag(s, default)
     return default
 end
 
+---fh_spike_gated convar value -> may the fence NPC spawn? true/unset/garbage = gated (conservative) = no spawn.
+function M.spawnEnabled(spikeGated) return not M.parseFlag(spikeGated, true) end
+
 ---Deterministic schedule. now = unix seconds. Returns { index, stop, nextStop, remaining, startedAt } or nil, reason.
 function M.schedule(cfg, now)
     if type(cfg) ~= 'table' or type(cfg.rotation) ~= 'table' or #cfg.rotation == 0 then return nil, 'bad_rotation' end
@@ -56,15 +59,13 @@ function M.quoteBuy(visible, item, qty, maxQty)
     return nil, 'not_in_stock'
 end
 
----Validates a sell. Returns total or nil, reason. maxPay: fh_economy per-payout cap.
-function M.quoteSell(cfg, item, qty, maxPay)
+---Validates a sell. Returns total or nil, reason. The payout cap is fh_economy's (pay refuses amount_too_large).
+function M.quoteSell(cfg, item, qty)
     if type(item) ~= 'string' then return nil, 'bad_item' end
     if not isInt(qty) or qty < 1 or qty > (cfg.maxQty or 20) then return nil, 'bad_qty' end
     local price = cfg.buys and cfg.buys[item]
     if type(price) ~= 'number' then return nil, 'not_bought' end
-    local total = price * qty
-    if maxPay and total > maxPay then return nil, 'over_max_pay' end
-    return total
+    return price * qty
 end
 
 ---Lead item info: target coords + hint text. entry.lead = { coords = {x,y,z}, hint }.
