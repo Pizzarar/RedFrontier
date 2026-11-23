@@ -4,13 +4,23 @@
 -- is "no wagon": the skin is refused and the carcass stays claimable.
 local M = {}
 
--- coords may be a { x, y, z } table or a vector3 (userdata); both must have numeric x, y, z.
-function M.hasXyz(c)
-    local t = type(c)
-    if t ~= 'table' and t ~= 'userdata' then return false end
-    local ok, x, y, z = pcall(function() return c.x, c.y, c.z end)
-    return ok and type(x) == 'number' and type(y) == 'number' and type(z) == 'number'
+-- The one position reader (sell.lua reuses it). Under CfxLua 5.4 / LuaGLM type(vector3(..)) is 'vector3' (also
+-- 'vector2'/'vector4'), not 'table'/'userdata', so there is NO type gate: any value is probed through a pcall (a
+-- number/nil/boolean throws or yields nothing) and accepted only when x, y, z (or [1], [2], [3] for a plain array)
+-- are finite numbers. A string indexes to nil and is rejected.
+local function num(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
+
+---@return number|nil x, number|nil y, number|nil z
+function M.xyz(v)
+    if v == nil then return nil end
+    local ok, x, y, z, a, b, c = pcall(function() return v.x, v.y, v.z, v[1], v[2], v[3] end)
+    if not ok then return nil end
+    if num(x) and num(y) and num(z) then return x, y, z end
+    if x == nil and y == nil and z == nil and num(a) and num(b) and num(c) then return a, b, c end
+    return nil
 end
+
+function M.hasXyz(c) return (M.xyz(c)) ~= nil end
 
 ---@param nearest function  (src, coords, range) -> table|nil ; the caller wraps the export call, this pcalls it
 ---@param src number

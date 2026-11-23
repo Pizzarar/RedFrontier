@@ -8,6 +8,7 @@ local base = here .. '../server/resources/[fh]/fh_hunting/'
 local cfg = dofile(base .. 'config.lua')
 local A = dofile(base .. 'shared/animals.lua')
 local P = dofile(base .. 'shared/price.lua')
+FhHuntingWagon = dofile(base .. 'shared/wagon.lua') -- the shared xyz reader sell.lua uses
 local S = dofile(base .. 'shared/sell.lua')
 
 local SRC, CID = 7, 'CID123'
@@ -261,6 +262,32 @@ describe('hunting sell: vector3 coordinates (natives return vectors, not plain t
     it('S.distance reads both shapes', function()
         eq(5, S.distance({ x = 0, y = 0, z = 0 }, vec(3, 4, 0)))
         eq(nil, S.distance(5, { x = 0, y = 0, z = 0 }))
+    end)
+end)
+
+describe('hunting sell: values whose type() is vector3 (CfxLua 5.4 / LuaGLM)', function()
+    -- Fake `type` returning 'vector3' for the marker, restored even on error.
+    local function withVectorType(marker, fn)
+        local real = type
+        _G.type = function(v) if v == marker then return 'vector3' end return real(v) end
+        local ok, err = pcall(fn)
+        _G.type = real
+        if not ok then error(err, 0) end
+    end
+    it('xyz and distance read it, and a sale at the trapper goes through', function()
+        local c = cfg.Trapper.coords
+        local marker = vec(c.x, c.y, c.z)
+        withVectorType(marker, function()
+            eq(c.x, (S.xyz(marker)))
+            eq(0, S.distance(marker, c))
+            local W = world({ player = marker })
+            eq(true, (W.sell()))
+        end)
+    end)
+    it('plain arrays and bad values', function()
+        eq(3, select(3, S.xyz({ 1, 2, 3 })))
+        eq(nil, S.xyz({ 1, 2 })); eq(nil, S.xyz('abc')); eq(nil, S.xyz(7)); eq(nil, S.xyz(true))
+        eq(nil, S.xyz({ x = 1, y = 2, z = 0 / 0 }))
     end)
 end)
 

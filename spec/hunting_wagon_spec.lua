@@ -57,6 +57,25 @@ describe('hunting wagon adapter: vector3 coords', function()
     end)
 end)
 
+describe('hunting wagon adapter: type() is vector3 (CfxLua 5.4 / LuaGLM)', function()
+    it('a value typed vector3 is accepted and passed through', function()
+        local v = setmetatable({}, { __index = { x = 1, y = 2, z = 3 } })
+        local real = type
+        _G.type = function(x) if x == v then return 'vector3' end return real(x) end
+        local ok, err = pcall(function()
+            local w = W.find(function() return { type = 'wagon', id = 'fh:wagon:4' } end, 7, v, 8)
+            eq('fh:wagon:4', w.ref.id)
+            eq(true, w.coords == v)
+            eq(true, W.hasXyz(v))
+        end)
+        _G.type = real
+        if not ok then error(err, 0) end
+    end)
+    it('plain arrays are readable, strings and numbers are not', function()
+        eq(true, W.hasXyz({ 1, 2, 3 })); eq(false, W.hasXyz('abc')); eq(false, W.hasXyz(7)); eq(false, W.hasXyz(nil))
+    end)
+end)
+
 describe('hunting wagon adapter inside the skin flow', function()
     local SRC, CID = 7, 'CID123'
     local function skinner(nearest)

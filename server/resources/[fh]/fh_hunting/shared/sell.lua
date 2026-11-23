@@ -3,15 +3,9 @@
 -- back if the payout fails, so a pelt is paid at most once. One sale per player at a time.
 local M = {}
 
--- Position as x, y, z: a plain { x, y, z } table or a vector3 (userdata/table with .x .y .z; FiveM/RedM natives
--- return vector3, which is NOT type 'table' in the userdata build). nil when unreadable.
-local function xyz(v)
-    local t = type(v)
-    if t ~= 'table' and t ~= 'userdata' then return nil end
-    local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
-    if not ok or type(x) ~= 'number' or type(y) ~= 'number' or type(z) ~= 'number' then return nil end
-    return x, y, z
-end
+-- The shared position reader lives in shared/wagon.lua (loaded before this file; specs set FhHuntingWagon first).
+-- It accepts vector3 values whose type() is 'vector3' (CfxLua 5.4) as well as { x, y, z } tables.
+local xyz = assert(FhHuntingWagon and FhHuntingWagon.xyz, 'fh_hunting: load shared/wagon.lua before shared/sell.lua')
 M.xyz = xyz
 
 local function distance(a, b)
