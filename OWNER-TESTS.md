@@ -238,6 +238,40 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
     RESULT:
 14. `restart fh_ui` while a screen is open.
     Expected: the screen disappears, the mouse is released, movement works.
+
+## Homestead (H1-H4): slots, stations, comfort
+
+Resource: `fh_homestead`. The build commands (slot tiers, trophy place/unplace) do not exist yet: H2 adds them, and trophies also need Hunting plus core B7. So only steps 1, 2, 9 and 10 can be run today; the rest are marked "after H2" and stay `SKIP` until then. Start from a character with no plot.
+
+1. Stand inside the plot circle at (-300, 790, 118) and run `/fh_claim`.
+   Expected: `fh_claim: claimed plot heartlands_01`. Run it again: it refuses (you already own a plot).
+   RESULT:
+2. Press E at the chest (-296, 790, 118) and put 1 bread in.
+   Expected: the plot chest opens and takes it.
+   RESULT:
+3. Set slot tiers (build the workbench, campfire, tanning rack, trophy wall, cabin). After H2: there is no console or admin command for this in H1-H4.
+   Expected (after H2): each build is saved; the server console shows no errors.
+   RESULT:
+4. Stations seen from crafting (after H2, needs @crafting). Stand within 3 m of a built workbench.
+   Expected: crafting accepts the workbench for you (`isNearStation`), but not for another player or on a plot you do not own. Walk away: refused.
+   RESULT:
+5. Comfort value (after H2). With the cabin tier 1 (10) and the workbench (3) built.
+   Expected: `getComfort` reads 13. Add the trophy wall (5): 18. A fresh character with no plot reads 0.
+   RESULT:
+6. Place a trophy (after H2, needs Hunting and core B7). Put one trophy item in the plot chest and place it on the wall.
+   Expected: the item leaves the chest (count 1 to 0) and comfort rises by its points. With no trophy wall built: refused `fh_no_trophy_wall`, item stays in the chest.
+   RESULT:
+7. Unplace that trophy (after H2).
+   Expected: the item is back in the chest exactly once (count 1, never 2) and comfort drops back. Doing it a second time is refused (`fh_no_trophy`), no extra item.
+   RESULT:
+8. Unclaim clears comfort (after H2, with slots and a trophy in place). Run `/fh_unclaim`.
+   Expected: `fh_unclaim: released plot heartlands_01`; comfort reads 0. Claim again: slots and trophies are gone (a fresh plot).
+   RESULT:
+9. Claim and unclaim a plot with no builds.
+   Expected: `/fh_unclaim` replies `fh_unclaim: released plot heartlands_01`, no red errors in the server console. (Known gap: bread left in the chest stays there and the next owner of the plot gets it.)
+   RESULT:
+10. Server restart: claim a plot, stop the server, start it, rejoin, press E at the chest.
+    Expected: you still own the plot (`/fh_claim` there refuses) and the chest still holds its items. After H2, repeat with built slots and a placed trophy: the same tiers, comfort value and trophy are back.
     RESULT:
 
 ## Q5: quests (fh_quests)
