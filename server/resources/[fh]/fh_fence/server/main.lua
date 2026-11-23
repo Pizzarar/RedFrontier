@@ -200,10 +200,17 @@ lib.callback.register('fh:fence:sell', function(src, item, qty)
     end
     local total = cfg.buys[item] * sold
     local paid, payWhy = exports.fh_economy:pay(src, total, 'fence_sell:' .. item, stop.region_id)
-    if not paid then
-        exports.fh_core:transferAll(stash, backpack, src) -- give the goods back
-        exports.fh_core:clearContainer(stash)
-        return false, payWhy or 'pay_failed'
+    local out = logic.sellOutcome(paid, payWhy, function()
+        -- Goods sit in the stash (metadata intact): put them back. fh_core addItem only targets world containers.
+        exports.fh_core:transferAll(stash, backpack, src)
+        local left = exports.fh_core:snapshot(stash)
+        if left and next(left) == nil then return true end
+        return false, 'restore_incomplete'
+    end, { citizenid = cid, item = item, qty = sold })
+    if out.log then print('[fh_fence] ' .. out.log) end
+    if out.action ~= 'complete' then
+        if out.action == 'refunded' then exports.fh_core:clearContainer(stash) end
+        return false, out.reason
     end
     exports.fh_core:clearContainer(stash)
     return true, sold, total

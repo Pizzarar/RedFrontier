@@ -99,4 +99,27 @@ case('inRange and parseFlag', function()
     assert(logic.parseFlag('true', false) and not logic.parseFlag('0', true) and logic.parseFlag('x', true))
 end)
 
+case('sellOutcome: pay ok completes without restoring', function()
+    local called = false
+    local o = logic.sellOutcome(true, nil, function() called = true; return true end)
+    T.eq('complete', o.action); assert(not called)
+end)
+case('sellOutcome: pay fails -> item given back and logged', function()
+    for _, why in ipairs({ 'addmoney_refused', 'ledger_failed', 'no_player' }) do
+        local called = false
+        local o = logic.sellOutcome(false, why, function() called = true; return true end,
+            { citizenid = 'C1', item = 'fh_part_gunsmith', qty = 2 })
+        T.eq('refunded', o.action); T.eq(why, o.reason); assert(called)
+        assert(o.log:find(why, 1, true))
+    end
+    T.eq('pay_failed', logic.sellOutcome(false, nil, function() return true end).reason)
+end)
+case('sellOutcome: pay AND restore fail -> WARNING with citizenid/item/qty', function()
+    local o = logic.sellOutcome(false, 'ledger_failed', function() return false, 'fh_refused' end,
+        { citizenid = 'C1', item = 'fh_part_gunsmith', qty = 2 })
+    T.eq('warning', o.action)
+    assert(o.log:find('WARNING', 1, true) and o.log:find('C1', 1, true)
+        and o.log:find('fh_part_gunsmith', 1, true) and o.log:find('qty=2', 1, true) and o.log:find('fh_refused', 1, true))
+end)
+
 T.finish()

@@ -84,5 +84,22 @@ function M.inRange(pos, stop, range)
     return dx * dx + dy * dy + dz * dz <= range * range
 end
 
+---Sell rollback decision, after the goods were taken and pay was attempted.
+---payOk/payErr: result of fh_economy:pay. restore: function() -> ok, err, called only when pay failed.
+---Returns { action = 'complete'|'refunded'|'warning', reason, log }. 'warning' = goods lost, needs owner attention.
+function M.sellOutcome(payOk, payErr, restore, who)
+    if payOk then return { action = 'complete' } end
+    local reason = tostring(payErr or 'pay_failed')
+    local ok, err = restore()
+    if ok then
+        return { action = 'refunded', reason = reason,
+            log = ('sell: pay failed (%s), item given back'):format(reason) }
+    end
+    who = who or {}
+    return { action = 'warning', reason = reason,
+        log = ('WARNING sell: pay failed (%s) AND item restore failed (%s): citizenid=%s item=%s qty=%s'):format(
+            reason, tostring(err or 'restore_failed'), tostring(who.citizenid), tostring(who.item), tostring(who.qty)) }
+end
+
 if _G.GetCurrentResourceName then _G.FhFenceLogic = M end
 return M
