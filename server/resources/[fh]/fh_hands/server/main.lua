@@ -1,4 +1,4 @@
--- fh_hands: hire/fire hands, wage ticks, task registry. State is persisted per citizenid in fh_hands (migration 0005);
+-- fh_hands: hire/fire hands, wage ticks, task registry. State is persisted per citizenid in fh_hands (migration 0009_hands);
 -- timers run server-side from the stored last_tick, so offline time is caught up (capped) the next time the owner is online.
 -- Every load / tick / hire / fire for a citizenid runs under that citizenid's lock (FhHandsLogic.withLock), and each
 -- wage tick is claimed in the DB before it is charged (FhHandsLogic.runOwner), so ticks never double-charge.
@@ -192,7 +192,7 @@ CreateThread(function()
       `status` varchar(16) NOT NULL DEFAULT 'working',
       PRIMARY KEY (`citizenid`, `hand_kind`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci]])
-    if not okDDL then log(('CREATE TABLE failed (relying on migration 0005): %s'):format(tostring(err))) end
+    if not okDDL then log(('CREATE TABLE failed (relying on migration 0009): %s'):format(tostring(err))) end
     ready = true
     registerFeed() -- fh_core item registry: we own 'feed'
     -- Resource (re)start: load everyone already online.
