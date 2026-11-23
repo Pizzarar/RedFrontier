@@ -10,6 +10,7 @@ shared_scripts {
     '@ox_lib/init.lua',
     'config.lua',
     'shared/plot_rules.lua',
+    'shared/build_rules.lua',
 }
 
 server_scripts {
