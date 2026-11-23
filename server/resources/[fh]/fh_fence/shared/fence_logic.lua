@@ -1,0 +1,88 @@
+-- Fence rules: schedule math, tier-gated stock, buy/sell validation. Pure Lua, no FiveM globals; unit-tested.
+local M = {}
+
+local function isInt(n) return type(n) == 'number' and n == n and n == math.floor(n) end
+
+---Convar string -> boolean (same accepted values as fh_core's parseFlag).
+function M.parseFlag(s, default)
+    s = tostring(s or ''):lower()
+    if s == 'true' or s == '1' or s == 'yes' or s == 'on' then return true end
+    if s == 'false' or s == '0' or s == 'no' or s == 'off' then return false end
+    return default
+end
+
+---Deterministic schedule. now = unix seconds. Returns { index, stop, nextStop, remaining, startedAt } or nil, reason.
+function M.schedule(cfg, now)
+    if type(cfg) ~= 'table' or type(cfg.rotation) ~= 'table' or #cfg.rotation == 0 then return nil, 'bad_rotation' end
+    if type(cfg.dwellMinutes) ~= 'number' or cfg.dwellMinutes <= 0 then return nil, 'bad_dwell' end
+    if type(now) ~= 'number' or now ~= now or now < 0 then return nil, 'bad_time' end
+    for _, id in ipairs(cfg.rotation) do
+        if type(cfg.stops) ~= 'table' or not cfg.stops[id] then return nil, 'unknown_stop' end
+    end
+    local dwell = cfg.dwellMinutes * 60
+    local slot = math.floor(now / dwell)
+    local n = #cfg.rotation
+    local i = slot % n + 1
+    local started = slot * dwell
+    return { index = i, stop = cfg.rotation[i], nextStop = cfg.rotation[i % n + 1],
+        remaining = started + dwell - now, startedAt = started }
+end
+
+---Stock entries visible to a player: common always, rare / leads only when unlocked. Each result has category set.
+function M.filterStock(stopStock, canRare, canLeads)
+    local out = {}
+    if type(stopStock) ~= 'table' then return out end
+    local function add(cat, list)
+        for _, e in ipairs(list or {}) do
+            out[#out + 1] = { item = e.item, price = e.price, category = cat, lead = e.lead }
+        end
+    end
+    add('common', stopStock.common)
+    if canRare then add('rare', stopStock.rare) end
+    if canLeads then add('leads', stopStock.leads) end
+    return out
+end
+
+---Validates a buy against the visible stock. Returns { total, entry, qty } or nil, reason.
+function M.quoteBuy(visible, item, qty, maxQty)
+    if type(item) ~= 'string' then return nil, 'bad_item' end
+    if not isInt(qty) or qty < 1 or qty > (maxQty or 20) then return nil, 'bad_qty' end
+    for _, e in ipairs(visible or {}) do
+        if e.item == item then
+            if e.lead and qty ~= 1 then return nil, 'bad_qty' end -- each lead is a unique item
+            return { total = e.price * qty, entry = e, qty = qty }
+        end
+    end
+    return nil, 'not_in_stock'
+end
+
+---Validates a sell. Returns total or nil, reason. maxPay: fh_economy per-payout cap.
+function M.quoteSell(cfg, item, qty, maxPay)
+    if type(item) ~= 'string' then return nil, 'bad_item' end
+    if not isInt(qty) or qty < 1 or qty > (cfg.maxQty or 20) then return nil, 'bad_qty' end
+    local price = cfg.buys and cfg.buys[item]
+    if type(price) ~= 'number' then return nil, 'not_bought' end
+    local total = price * qty
+    if maxPay and total > maxPay then return nil, 'over_max_pay' end
+    return total
+end
+
+---Lead item info: target coords + hint text. entry.lead = { coords = {x,y,z}, hint }.
+function M.leadInfo(entry)
+    local l = entry and entry.lead
+    if type(l) ~= 'table' or type(l.coords) ~= 'table' then return nil end
+    local c = l.coords
+    if type(c.x) ~= 'number' or type(c.y) ~= 'number' or type(c.z) ~= 'number' then return nil end
+    return { target = { x = c.x, y = c.y, z = c.z }, hint = tostring(l.hint or '') }
+end
+
+---Distance check against a stop. Accepts {x,y,z} tables.
+function M.inRange(pos, stop, range)
+    if type(pos) ~= 'table' or type(stop) ~= 'table' then return false end
+    if type(pos.x) ~= 'number' or type(pos.y) ~= 'number' or type(pos.z) ~= 'number' then return false end
+    local dx, dy, dz = pos.x - stop.x, pos.y - stop.y, pos.z - stop.z
+    return dx * dx + dy * dy + dz * dz <= range * range
+end
+
+if _G.GetCurrentResourceName then _G.FhFenceLogic = M end
+return M
