@@ -215,7 +215,7 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 8. Run `/fh_ui_demo heat`.
    Expected: a heat indicator with factions, levels, tiers and a lay-low note appears; the mouse is NOT captured and you
    can keep moving. Run `/fh_ui_demo close heat` to remove it.
-   No overlap (idea-648): the heat indicator sits on the left edge below the chat box (about 36% down), clear of the chat, weather forecast, minimap and the right-side buff/bag panels.
+   No overlap (idea-648): the heat indicator sits on the left edge below the chat box (about 36% down), clear of the chat, minimap and the right-side buff/bag panels. With 4+ factions the heat card scrolls instead of growing into the minimap. The /forecast panel may cover the heat card while it is open (accepted).
    RESULT:
 9. Run `/fh_ui_demo insurance`. Press Enter.
    Expected: Enter confirms (server console shows a relayed/unhandled `confirm`, no crash). After closing the dialog,
