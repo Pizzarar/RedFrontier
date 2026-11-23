@@ -182,7 +182,7 @@ AddEventHandler('onResourceStart', function(res)
 end)
 
 CreateThread(function()
-    -- Idempotent, same DDL as server/migrations/0005_hands.sql (belt and braces for a DB that skipped the migration).
+    -- Idempotent, same DDL as server/migrations/0009_hands.sql (belt and braces for a DB that skipped the migration).
     local okDDL, err = pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_hands` (
       `citizenid` varchar(50) NOT NULL,
       `hand_kind` varchar(50) NOT NULL,
