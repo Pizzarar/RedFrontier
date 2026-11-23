@@ -1,0 +1,89 @@
+-- Every item a recipe or homestead build consumes must have a registered source (idea-712, plan crafting-01-l5).
+-- Pure: loads configs only, no natives. Run: `python tools/run-specs.py spec/crafting_sources_spec.lua`.
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+local it = T.it
+local fh = here .. '../server/resources/[fh]/'
+local Recipes = dofile(fh .. 'fh_crafting/shared/recipes.lua')
+dofile(fh .. 'fh_homestead/config.lua')   -- outside CfxLua there is no vector3: config falls back to {x,y,z}
+dofile(fh .. 'fh_trade/config.lua')
+vector3 = vector3 or function(x, y, z) return { x = x, y = y, z = z } end -- fh_zones config needs it
+dofile(fh .. 'fh_zones/config.lua')
+
+-- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
+local PENDING = {
+    lumber   = 'idea-716', nails = 'idea-716', lead = 'idea-716', casings = 'idea-716', -- trade post `supplies`
+    gun_parts = 'idea-717',                                                             -- outlaw camp loot table
+}
+
+-- External sources (outside [fh]); each verified by grep. NOTE: rsg-core only DEFINES these items; no gatherer
+-- resource ships in this repo yet, so they are obtainable via /giveitem until one does (ruling idea-712 accepts this).
+local EXTERNAL = {
+    resource_gunpowder    = 'defined in rsg-core shared/items.lua:568',
+    herb_american_ginseng = 'defined in rsg-core shared/items.lua:260',
+    herb_oregano          = 'defined in rsg-core shared/items.lua:290',
+    herb_red_sage         = 'defined in rsg-core shared/items.lua:296',
+    herb_wild_mint        = 'defined in rsg-core shared/items.lua:304',
+}
+
+-- Required inputs: item -> list of consumers.
+local inputs = {}
+local function need(item, who) inputs[item] = inputs[item] or {}; table.insert(inputs[item], who) end
+for _, r in ipairs(Recipes.list) do for _, i in ipairs(r.inputs) do need(i.item, 'recipe ' .. r.id) end end
+-- Non-recipe consumer: /fh_restore takes gun_parts (fh_gunsmith shared/restore_flow.lua:95).
+need('gun_parts', '/fh_restore')
+for plotId, plot in pairs(FhHomesteadConfig.plots) do
+    for slotId, slot in pairs(plot.slots) do
+        for tier, t in pairs(slot.tiers) do
+            for item in pairs((t.cost or {}).items or {}) do need(item, ('build %s %s t%d'):format(plotId, slotId, tier)) end
+        end
+    end
+end
+
+-- Sources. Trade `supplies`: scan defensively (item->price map, or list of { item = .. } / { name = .. } / strings).
+local sources = {}
+local function addSupplies(s)
+    if type(s) ~= 'table' then return end
+    for k, v in pairs(s) do
+        if type(k) == 'string' then sources[k] = 'trade supplies'
+        elseif type(v) == 'string' then sources[v] = 'trade supplies'
+        elseif type(v) == 'table' and (v.item or v.name) then sources[v.item or v.name] = 'trade supplies' end
+    end
+end
+local function scan(t, depth, seen)
+    if type(t) ~= 'table' or depth > 5 or seen[t] then return end
+    seen[t] = true
+    for k, v in pairs(t) do
+        if k == 'supplies' then addSupplies(v) else scan(v, depth + 1, seen) end
+    end
+end
+scan(FhTradeConfig, 0, {})
+for _, camp in pairs(FhZonesConfig.camps or {}) do
+    for _, e in ipairs(((camp.loot or {}).table) or {}) do sources[e.name or e.item] = 'zone loot' end
+end
+for item in pairs(EXTERNAL) do sources[item] = sources[item] or 'external' end
+
+it('every required input has a source or is PENDING', function()
+    local bad = {}
+    for item, who in pairs(inputs) do
+        if not sources[item] and not PENDING[item] then bad[#bad + 1] = item .. ' (' .. who[1] .. ')' end
+    end
+    table.sort(bad)
+    assert(#bad == 0, 'unsourced inputs, add a source or PENDING entry: ' .. table.concat(bad, ', '))
+end)
+
+it('PENDING items still have no source (set must shrink to empty)', function()
+    for item, card in pairs(PENDING) do
+        assert(not sources[item], ('remove %s from PENDING (now sourced via %s; was %s)'):format(item, tostring(sources[item]), card))
+    end
+end)
+
+it('PENDING holds only real inputs', function()
+    for item in pairs(PENDING) do assert(inputs[item], 'PENDING has ' .. item .. ' which is not a recipe/build input') end
+end)
+
+it('EXTERNAL allowlist holds only real inputs', function()
+    for item in pairs(EXTERNAL) do assert(inputs[item], 'EXTERNAL has ' .. item .. ' which is not an input') end
+end)
+
+T.finish()

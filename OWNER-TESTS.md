@@ -537,7 +537,9 @@ Preconditions: stations come from @homestead H3 (on main): crafting uses a built
 `campfire` (apothecary) on your OWN plot, so in-game testing needs @homestead H2 `/fh_build` (not on main yet), or
 `fh_dev 1` and the dev stations. Without fh_homestead started, crafting refuses `no_homestead`. Carried item moves and
 `/fh_restore` use the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff caps (idea-612) are on
-main. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+main. Until idea-716 (trade post `supplies`) and idea-717 (outlaw camp loot) land, `lumber`, `nails`, `lead`, `casings` and
+`gun_parts` have no in-game source: get them with admin `/giveitem`; afterwards lumber, nails, lead and casings are bought at
+trade posts and gun parts drop from the outlaw camp. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle

@@ -128,6 +128,11 @@ No custom net events are emitted by this resource.
   `getStations(citizenid)` filtered to `workbench` and compares coordinates with the open container.
   `stationAt` returns the raw H3 type (`workbench`), not the crafting type.
 
+- **@roads idea-716** (not built): trade post `supplies` list sells `lumber`, `nails`, `lead`, `casings`. Until then they
+  need admin `/giveitem`. `spec/crafting_sources_spec.lua` tracks this in its `PENDING` set (target: empty).
+- **@core idea-717** (not built): `gun_parts` added to the outlaw camp loot table in `fh_zones/config.lua`. Until then
+  admin `/giveitem`; same `PENDING` tracking.
+
 Resolved: idea-612 (`fh_buffs` caps `tonic_vigor` 1.15 / `tonic_steady` 1.10 on main; `TONICS` equal the caps, and
 `fh_buffs` validate does not reject magnitude == cap); core-03 carried `addItem`/`removeItem` (refs `{ type = 'backpack'|'equipped', id = src }`; idea-615) and
 `setItemInfo(ref, slot, info, expectName)` (idea-689); B7 `removeItem`.
