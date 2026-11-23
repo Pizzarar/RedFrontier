@@ -1,13 +1,100 @@
 -- fh_homestead fixed plots (spec L138-139). Coordinates are APPROXIMATE (from fh_core regions) and must be verified
 -- in game: stand at the spot, read coords, adjust. One entry per plot; ids are stable (stored in fh_plots).
+-- H1: each plot also lists build SLOTS (cabin, fence, stations, trophy wall, chests). Costs/comfort are data only here;
+-- the build flow and the money/item debit are H2. Slot ids are stable (stored in fh_plot_slots).
+local function V(x, y, z) if vector3 then return vector3(x, y, z) end return { x = x, y = y, z = z } end
+
+-- Slot template shared by every plot. tiers[n] = what building tier n costs and gives; tier 0 = not built.
+--   cost   = { money = <dollars>, items = { <item> = <count> } }   (debit is H2)
+--   comfort= comfort points that tier adds (build_rules.totalComfort sums every built tier)
+--   unlocks= { chests = {slot ids}, safeRadiusBonus = m, stationType = id, trophyComfort = bool }
+--   requires = { [slotId] = minTier } prerequisite slots
+--   prop   = fallback (B6a) model + offset from plot center; propVerified (optional) is used when verifiedProps is true.
+local function slotTemplate()
+    return {
+        cabin = {
+            kind = 'cabin', maxTier = 2,
+            tiers = {
+                [1] = { cost = { money = 150, items = { wood = 20 } }, comfort = 10, unlocks = { chests = { 'chest_2' } } },
+                [2] = { cost = { money = 400, items = { wood = 40, nails = 20 } }, comfort = 15, unlocks = { chests = { 'chest_3' } } },
+            },
+            prop = { model = 'p_chest01x', offset = { x = -8.0, y = 0.0, z = 0.0 } }, -- TODO-verify: real cabin prop
+        },
+        fence = {
+            kind = 'fence', maxTier = 1,
+            tiers = { [1] = { cost = { money = 100, items = { wood = 15 } }, comfort = 5, unlocks = { safeRadiusBonus = 10.0 } } },
+            prop = { model = 'p_chest01x', offset = { x = 0.0, y = 12.0, z = 0.0 } }, -- TODO-verify
+        },
+        station_1 = {
+            kind = 'station', stationType = 'workbench', maxTier = 1,
+            tiers = { [1] = { cost = { money = 60, items = { wood = 10 } }, comfort = 3, unlocks = { stationType = 'workbench' } } },
+            prop = { model = 'p_chest01x', offset = { x = 6.0, y = 4.0, z = 0.0 } }, -- TODO-verify
+        },
+        station_2 = {
+            kind = 'station', stationType = 'campfire', maxTier = 1,
+            tiers = { [1] = { cost = { money = 25, items = { wood = 5 } }, comfort = 3, unlocks = { stationType = 'campfire' } } },
+            prop = { model = 'p_chest01x', offset = { x = 6.0, y = -4.0, z = 0.0 } }, -- TODO-verify
+        },
+        station_3 = {
+            kind = 'station', stationType = 'tanning_rack', maxTier = 1,
+            tiers = { [1] = { cost = { money = 80, items = { wood = 12 } }, comfort = 3, unlocks = { stationType = 'tanning_rack' } } },
+            prop = { model = 'p_chest01x', offset = { x = 10.0, y = 0.0, z = 0.0 } }, -- TODO-verify
+        },
+        trophy_wall = {
+            kind = 'trophy_wall', maxTier = 1,
+            tiers = { [1] = { cost = { money = 120, items = { wood = 10 } }, comfort = 5, unlocks = { trophyComfort = true } } },
+            prop = { model = 'p_chest01x', offset = { x = -8.0, y = 4.0, z = 0.0 } }, -- TODO-verify
+        },
+        chest_2 = {
+            kind = 'chest', maxTier = 1, requires = { cabin = 1 },
+            tiers = { [1] = { cost = { money = 40, items = { wood = 8 } }, comfort = 2, unlocks = {} } },
+            prop = { model = 'p_chest01x', offset = { x = -4.0, y = 0.0, z = 0.0 } }, -- TODO-verify
+        },
+        chest_3 = {
+            kind = 'chest', maxTier = 1, requires = { cabin = 2 },
+            tiers = { [1] = { cost = { money = 60, items = { wood = 10 } }, comfort = 2, unlocks = {} } },
+            prop = { model = 'p_chest01x', offset = { x = -4.0, y = 4.0, z = 0.0 } }, -- TODO-verify
+        },
+    }
+end
+
 FhHomesteadConfig = {
+    -- false = every slot uses its fallback prop (B6a model + offset). Flip to true only after propVerified is filled in.
+    verifiedProps = false,
+    baseSafeRadius = 25.0,
     plots = {
         heartlands_01 = {
             id = 'heartlands_01',
             region = 'heartlands',
-            center = vector3(-300.0, 790.0, 118.0),
+            center = V(-300.0, 790.0, 118.0),
             radius = 25.0,
-            chest = { coords = vector3(-296.0, 790.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            chest = { coords = V(-296.0, 790.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
+        -- Plots 2-4: TODO-verify. Placeholder coords 150 apart so plots never overlap even at max fenced radius; fh_plots.citizenid stays UNIQUE (one plot per character).
+        heartlands_02 = {
+            id = 'heartlands_02',
+            region = 'heartlands',
+            center = V(-150.0, 790.0, 118.0), -- TODO-verify
+            radius = 25.0,
+            chest = { coords = V(-146.0, 790.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
+        heartlands_03 = {
+            id = 'heartlands_03',
+            region = 'heartlands',
+            center = V(-300.0, 940.0, 118.0), -- TODO-verify
+            radius = 25.0,
+            chest = { coords = V(-296.0, 940.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
+        heartlands_04 = {
+            id = 'heartlands_04',
+            region = 'heartlands',
+            center = V(-150.0, 940.0, 118.0), -- TODO-verify
+            radius = 25.0,
+            chest = { coords = V(-146.0, 940.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
         },
     },
 }
