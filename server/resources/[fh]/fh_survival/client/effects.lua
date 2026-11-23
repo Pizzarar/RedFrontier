@@ -20,6 +20,10 @@ local function invoke(hash, ...)
     return ok
 end
 
+local function params(lvl)
+    return E.params(lvl, C.SluggishEffect, { Text = C.SluggishText, Regen = C.SluggishRegen, Clipset = C.SluggishClipset })
+end
+
 local function applyNative(p)
     local player = PlayerId()
     if p.staminaRegen ~= 1.0 or applied.stamina then
@@ -32,24 +36,22 @@ local function applyNative(p)
     end
     local ped = PlayerPedId()
     if p.clipset and p.clipset ~= applied.clipset then
+        if not (RequestClipSet and HasClipSetLoaded) then return end -- natives missing: silent fallback like invoke()
         local set = GetHashKey(p.clipset)
         if not HasClipSetLoaded(set) then
             RequestClipSet(set)
             local t = GetGameTimer() + 3000
             while not HasClipSetLoaded(set) and GetGameTimer() < t do Wait(50) end
         end
-        if HasClipSetLoaded(set) then
-            invoke(H_SET_CLIPSET, ped, set, 1.0)
+        -- The level may have dropped (or the ped changed) during the wait: only apply if still wanted.
+        if HasClipSetLoaded(set) and params(level).clipset == p.clipset then
+            invoke(H_SET_CLIPSET, PlayerPedId(), set, 1.0)
             applied.clipset = p.clipset
         end
     elseif not p.clipset and applied.clipset then
         invoke(H_RESET_CLIPSET, ped, 1.0)
         applied.clipset = nil
     end
-end
-
-local function params(lvl)
-    return E.params(lvl, C.SluggishEffect, { Text = C.SluggishText, Regen = C.SluggishRegen, Clipset = C.SluggishClipset })
 end
 
 FH.onNet('fh:survival:state', function(state)

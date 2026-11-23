@@ -641,13 +641,13 @@ Item names for S3/S4 are whatever `fh_survival/shared/items.lua` registers (chec
 11. Drink until the canteen is empty, then use it once more.
     Expected: refused with an "empty" message, no buff.
     RESULT:
-12. Stand in a river/lake (or a configured water zone) and refill the canteen.
+12. Go to a seeded water spot near the homestead or the camp (coords in the fh_survival README) and refill the canteen.
     Expected: charges back to full; refilling a full canteen is refused ("full").
     RESULT:
-13. Wash while standing in water.
+13. Wash at a seeded water spot near the homestead or the camp (coords in the fh_survival README).
     Expected: `clean` appears (about 90 min); washing again right away hits the wash cooldown. (needs @core caps (idea-613))
     RESULT:
-14. Stand next to a lit campfire.
+14. Stand at a seeded fire spot near the homestead or the camp (coords in the fh_survival README).
     Expected: `warm` appears and refreshes while you stay near. `warm` is only a bonus: ColdRegions is empty, so being without it never makes you sluggish.
     RESULT:
 

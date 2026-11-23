@@ -44,7 +44,7 @@ function E.params(lvl, mode, cfg)
     return out
 end
 
----Whether the client needs to notify: only when the level changed and rose or fell to a new non-zero/zero state.
+---Whether the client needs to notify: only when the level changed and moved to a different non-zero level (reaching 0 is silent).
 ---@return boolean
 function E.shouldNotify(prevLevel, newLevel)
     return level(prevLevel) ~= level(newLevel) and level(newLevel) > 0
