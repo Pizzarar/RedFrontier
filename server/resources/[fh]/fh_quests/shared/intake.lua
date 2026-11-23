@@ -94,6 +94,20 @@ function M.feed(defs, states, eventName, payload, now, hookFor)
     return changes, errors
 end
 
+---Is a change from feed() still valid at commit time? A synchronous listener of an earlier commit can re-enter the
+---character lock and change a later quest, so the pre-computed `after` would overwrite that newer state. Returns
+---the change itself while states[quest_id] is still change.before, otherwise the change recomputed from the current
+---state (feed on that one quest), or nil when the quest no longer reacts (or no longer exists / is not active).
+---@return table|nil change
+function M.fresh(defs, states, change, eventName, payload, now, hookFor)
+    local qid = change.quest_id
+    local cur = states[qid]
+    if cur == change.before then return change end
+    if cur == nil or defs[qid] == nil then return nil end
+    local changes = M.feed({ [qid] = defs[qid] }, { [qid] = cur }, eventName, payload, now, hookFor)
+    return changes[1]
+end
+
 M.EMIT = { started = 'fh:quests:started', step = 'fh:quests:step', completed = 'fh:quests:completed',
     failed = 'fh:quests:failed', abandoned = 'fh:quests:abandoned' }
 

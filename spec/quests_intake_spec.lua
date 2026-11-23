@@ -253,4 +253,44 @@ describe('quests intake: talk dialogue and giver offers', function()
     end)
 end)
 
+describe('quests intake: fresh (stale change guard for the commit loop)', function()
+    local function setup()
+        local a, b = job(), job()
+        b.id = 'job:camp_clear:t2'
+        local defs = { [a.id] = a, [b.id] = b }
+        local states = { [a.id] = started(a), [b.id] = started(b) }
+        local payload = { citizenid = CID }
+        local changes = I.feed(defs, states, 'fh:zones:camp_cleared', payload, T0)
+        eq(2, #changes)
+        return defs, states, changes, payload, a, b
+    end
+    it('an untouched quest keeps its pre-computed change', function()
+        local defs, states, changes, payload = setup()
+        eq(changes[2], I.fresh(defs, states, changes[2], 'fh:zones:camp_cleared', payload, T0))
+    end)
+    it('a quest a listener already completed is not committed again (no stale after, no second reward)', function()
+        local defs, states, changes, payload, _, b = setup()
+        states[b.id] = E.apply(b, states[b.id], 'complete', T0) -- the re-entrant listener finished it
+        eq(nil, I.fresh(defs, states, changes[2], 'fh:zones:camp_cleared', payload, T0))
+    end)
+    it('a quest a listener changed but left active is recomputed from the current state', function()
+        local defs, states, changes, payload, _, b = setup()
+        local def3 = { id = 'job:x', kind = 'job', title = 'x', job_type = 'camp_clear', ['repeat'] = { cooldown_min = 1 },
+            steps = { { on = 'fh:zones:camp_cleared', count = 3, text = 'x' } } }
+        defs[def3.id] = def3
+        local s3 = started(def3)
+        states[def3.id] = s3
+        local c = I.feed({ [def3.id] = def3 }, { [def3.id] = s3 }, 'fh:zones:camp_cleared', { citizenid = CID }, T0)[1]
+        states[def3.id] = E.onEvent(def3, s3, 'fh:zones:camp_cleared', { citizenid = CID }, T0) -- listener counted 1
+        local fresh = I.fresh(defs, states, c, 'fh:zones:camp_cleared', { citizenid = CID }, T0)
+        eq(2, fresh.after.progress.count) -- builds on the listener's count instead of overwriting it with 1
+        eq(states[def3.id], fresh.before)
+    end)
+    it('a quest that vanished from the cache yields nothing', function()
+        local defs, states, changes, payload, a = setup()
+        states[a.id] = nil
+        eq(nil, I.fresh(defs, states, changes[1], 'fh:zones:camp_cleared', payload, T0))
+    end)
+end)
+
 T.finish()

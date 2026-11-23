@@ -14,8 +14,8 @@ type) build against now. Every export and event lives here; anything not listed 
 | Definition shape, `where` grammar, state machine, reward-once rule, board rotation (pure `shared/`) | Q1 | **built**, specced |
 | This contract (exports, events, sync schema, table) | Q1 | **published** (signatures frozen; additive changes only) |
 | Server: migration, event intake, all 8 exports, payouts via fh_economy, `fh:quests:*` events, `fh:quests:sync` | Q2 | **built**, pure parts specced |
-| Jobs board plumbing: generic `registerJobType` registry, `getBoard`, `acceptOffer`, board sync, rotation timer | Q2 | **built** (wired; no job types registered yet, so boards are empty) |
-| Concrete job types `hunt_request`, `camp_clear`, `bounty`; ox_lib `/jobs` fallback | Q3 | coming |
+| Jobs board plumbing: generic `registerJobType` registry, `getBoard`, `acceptOffer`, board sync, rotation timer | Q2 | **built** |
+| Built-in job types `hunt_request`, `camp_clear`, `bounty`; ox_lib `/jobs` fallback menu (**workaround**) | Q3 | **built**, pure parts specced; in-game unverified |
 | 3 family questlines (data files, giver NPCs, ox_lib text dialogue fallback) | Q4 | coming |
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
 
@@ -227,6 +227,57 @@ end)
 
 fh_quests drops a job type when its owning resource stops.
 
+## Built-in job types (Q3)
+
+Registered at start through the public `registerJobType` export, the same path @roads' `freight` uses
+(`server/jobtypes.lua`; the data and every verdict are pure, in `shared/jobtypes.lua`, specced in
+`quests_jobtypes`). Each decides its verdicts in `hooks.onEvent` from the accepted-offer snapshot
+(`progress.job`). Region templates are in `FhQuestsJobTypes.DATA`; only `heartlands` has any today. All coordinates,
+models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (one rotation).
+
+| Type | Offer `on` / `where` | Advances when | Offer-only fields |
+|---|---|---|---|
+| `hunt_request` | `fh:hunting:pelt_sold`, `where = { quality = { min = N }, animal = { optional = true, eq = X } }` | a pelt of quality >= N is sold (and of animal X when the payload carries `animal`) by the job holder | `animal`, `stars` |
+| `camp_clear` | `fh:zones:camp_cleared`, `where = { camp_id = X }` | the camp is cleared and the holder is in `payload.participants` | `camp_id` |
+| `bounty` | `fh:quests:bounty_down` (a type event, local server only) | the watched wanted NPC dies; completes the job | `name`, `model`, `coords`, `heading` |
+
+- **`hunt_request`:** `animal` is optional on purpose: until Hunting H3 (Q0b) puts `animal` in the `pelt_sold`
+  payload it matches on quality only, afterwards on animal too, with no change here.
+- **`camp_clear`:** credit comes only from the `participants` list (core idea-614, Q0a, not landed): until then the
+  event carries no player and credits nobody, as specified. Not a bug.
+- **`bounty`:** `accept` asks fh_core for a ped (`exports.fh_core:requestSpawn`, `kind = 'ped'`, tag
+  `fh_quests:bounty:<region_id>:<offer key>`). The server polls the adopted netId's health
+  (`GetEntityHealth(NetworkGetEntityFromNetworkId(netId)) <= 0`, the same check fh_zones uses for camp peds) and then
+  fires the local event `fh:quests:bounty_down { citizenid = <acceptor>, offer_key, region_id }`. The verdict
+  completes only when `payload.citizenid` is the job holder and `offer_key` is the job's own offer: other players
+  (and `participants`) are never paid, and whoever lands the kill, the acceptor is credited. One live bounty per
+  offer: a second accepter gets `fh_bounty_taken`. Abandoning despawns the ped. The ped is made hostile by the
+  client (`client/jobs_menu.lua`, on `fh:spawn:adopted`, same natives as the camp peds).
+- **Not spike-gated.** Death detection is the same server-side health check `fh_zones` already ships ungated for
+  `camp_clear`, so a bounty can be no less reliable than a camp; gating it would also leave the default
+  (`fh_spike_gated true`) board without a bounty and `spike-gated.md` untouched. Still **unverified in-game**.
+- **Owner leaves (drop or character unload):** the ped is despawned and the offer freed at once (no stuck
+  `fh_bounty_taken`, no ped left to be killed by a bystander), and nobody is credited: the death event fires only while
+  the acceptor's character is still online. The **job row stays `active`** (nothing persisted changes). When that
+  character loads again, or fh_quests restarts with them online, the server **re-arms** it: a fresh ped for each
+  of their active bounty jobs (spawn setup rebuilt from the template by region + key). If the template is gone or the
+  offer is taken by someone else, the job stays open and can be abandoned.
+- **Limitations:** watchers are in memory (re-armed as above). A ped that fh_core cannot spawn leaves the job open until
+  relog or abandon.
+
+**Rotation.** Each region's board holds 3-5 offers, picked by `board.rotate` from the offers of every registered
+type (types are interleaved, so every type is on the board while templates last), re-picked every 60 minutes
+(`fh:quests:board_changed`). The pick is a pure function of (region, epoch, templates), kept in memory and
+regenerated on restart: the same epoch gives the same board and the same offer ids.
+
+**Fallback menu (WORKAROUND, replaced by the @ui jobs-board screen).** `/jobs` and an rsg-target sphere zone (plus a
+client-local notice-board prop) at the board spot open an ox_lib context menu: list the board, accept, show the active
+jobs, abandon. It runs through four server callbacks (`fh:quests:menu:board|active|accept|abandon`, `server/menu.lua`)
+that call the public exports, so it has no rules of its own, and it does not check that the player is near a
+board (the `/jobs` command works anywhere). It is a workaround for the missing screen: when @ui builds the jobs
+board against the `fh:quests:sync` schema above, delete `client/jobs_menu.lua`, `server/menu.lua` and their
+`fxmanifest.lua` lines. No NUI.
+
 ## Emitted events (server, `TriggerEvent`, one table argument)
 
 | Event | Payload |
@@ -296,8 +347,8 @@ table argument:
 - `journal`: active quests plus done/failed one-time quests (history). `status` is `active|done|failed|abandoned`.
   `giver`, `cooldown_until` may be null. Times are unix seconds.
 - `board`: null until the player's `getBoard(src, region_id)` is called. From then on **every** sync to that player
-  includes that region's current board (the last region asked for), until they drop or unload. 3-5 offers when
-  job types are registered (empty until Q3 registers some); `id` is what `acceptOffer` takes and stays valid until
+  includes that region's current board (the last region asked for), until they drop or unload. 3-5 offers (the built-in
+  job types below; fewer only if a region has fewer templates); `id` is what `acceptOffer` takes and stays valid until
   `expires_at` (unix seconds, end of the rotation epoch; boards rotate every 60 minutes). `accepted` is true when
   this player has the job of that offer active. `text` and `rewards` come from the offer (`rewards` shows
   `money`, `rep`, item `name`/`amount` only). On rotation the server emits `fh:quests:board_changed` and the next
@@ -387,16 +438,19 @@ Storage notes:
   in memory and are regenerated after a restart (same epoch -> same board).
 - `FhQuestsJobs` (`jobs.lua`): `validateType(name, hooks)`, `parseId`, `questId(job_type, key)`,
   `snapshot(job_type, offer, region_id, hasHook)`, `def(snapshot, opts)`, `normalize(v)`, `DEFAULT_COOLDOWN_MIN`.
+- `FhQuestsJobTypes` (`jobtypes.lua`): `TYPES`, `DATA`, `offers(job_type, region_id)`, `verdict(job_type, eventName, payload, state)`,
+  `bountyTag(region_id, key)`, `BOUNTY_EVENT`.
 - `FhQuestsIntake` (`intake.lua`): `accepts(name, extraEvents)`, `srcToResolve(payload)`, `targets(payload, cid)`,
   `payloadFor(payload, cid)`, `feed(defs, states, eventName, payload, now, hookFor)`, `emits(effects)`,
-  `dialogue(def, before, after)`, `offers(defs, states, npc_id, now)`.
+  `dialogue(def, before, after)`, `offers(defs, states, npc_id, now)`,
+  `fresh(defs, states, change, eventName, payload, now, hookFor)` (drops or recomputes a stale change at commit time).
 - `FhQuestsRewards` (`rewards.lua`): the exactly-once payout protocol, `run(def, state, io)` with the I/O injected.
 - `FhQuestsStore` (`store.lua`): `SELECT`, `UPSERT`, `params(state, encode)`, `fromRow(row, decode)`.
 - `FhQuestsJournal` (`journal.lua`): `entry`, `shown`, `journal(defs, states, activeOnly)`, `boardView`,
   `snapshot` (the `fh:quests:sync` payload).
 
 Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests_rewards`, `quests_store`,
-`quests_journal`, `quests_jobs`. `server/main.lua` and `server/api.lua` are thin I/O glue over these.
+`quests_journal`, `quests_jobs`, `quests_jobtypes`. `server/main.lua` and `server/api.lua` are thin I/O glue over these.
 
 ## In-game test card
 

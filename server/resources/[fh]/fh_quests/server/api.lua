@@ -14,7 +14,11 @@ local function withPlayer(src, fn)
     return Q.locked(cid, 5000, function()
         local states, err = Q.load(cid)
         if not states then return false, err end
-        return fn(cid, states)
+        local res = table.pack(fn(cid, states))
+        -- The player may have disconnected while fn held the lock (forget() leaves a busy cache alone): drop the
+        -- rows now, like onIntake does. No yield between here and the lock release, so nothing can re-add src.
+        if not Q.srcOf[cid] then Q.cache[cid] = nil end
+        return table.unpack(res, 1, res.n)
     end)
 end
 
@@ -33,7 +37,12 @@ local function onIntake(name, payload)
             local defs = Q.defsFor(states)
             local changes, errors = I.feed(defs, states, name, p, os.time(), Q.hookFor)
             for _, e in ipairs(errors) do Q.log('onEvent hook for %s threw: %s', e.quest_id, e.err) end
-            for _, c in ipairs(changes) do Q.commit(defs[c.quest_id], c.after, c.effects) end
+            for _, c in ipairs(changes) do
+                -- A synchronous fh:quests:* listener of an earlier commit may have re-entered the lock and changed
+                -- this quest: never write the stale pre-computed `after` (intake.fresh recomputes or drops it).
+                c = I.fresh(defs, states, c, name, p, os.time(), Q.hookFor)
+                if c then Q.commit(defs[c.quest_id], c.after, c.effects) end
+            end
             if #changes > 0 then Q.sync(cid) end
             if not Q.srcOf[cid] then Q.cache[cid] = nil end -- offline participant: don't keep the rows
             return true
@@ -213,7 +222,8 @@ local function talk(src, npc_id)
         local out = {}
         for _, c in ipairs(changes) do
             local def = defs[c.quest_id]
-            if Q.commit(def, c.after, c.effects) then
+            c = I.fresh(defs, states, c, E.TALK_EVENT, payload, now, Q.hookFor) -- see onIntake
+            if c and Q.commit(def, c.after, c.effects) then
                 local d = I.dialogue(def, c.before, c.after)
                 if d then out[#out + 1] = d end
             end
