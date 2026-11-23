@@ -603,7 +603,7 @@ durations in `fh_survival/config.lua` (`Durations`, e.g. 60 s each, and `LoginGr
 and put them back afterwards. `fh_give <id> <item> <n>` / `fh_buff <id> <buff> <mag> <secs>` are the admin helpers.
 Steps marked "needs @core caps (idea-613)" depend on `hydrated` and `clean` caps in `fh_buffs/config.lua`; on this branch's
 base they are NOT there yet (boot logs `unknown_buff hydrated` / `unknown_buff clean`). SKIP them until @core lands the caps.
-Item names for S3/S4 are whatever `fh_survival/shared/items.lua` registers (check that file if a name below differs).
+Items (from `fh_survival/shared/items.lua`): `fh_jerky`, `fh_biscuit`, `fh_stew` (food), `fh_canteen`, `bedroll`; give them with `fh_give <id> <item> <n>`. Commands: `/refill` and `/wash` (client commands, they need you inside a water zone). Messages arrive as `ox_lib` notifications.
 
 ### Grace, buffs, sluggish, persistence (S1/S2)
 1. Create a brand-new character and join. Do not eat, drink or sleep for the grace period (10 min by default).
@@ -632,31 +632,30 @@ Item names for S3/S4 are whatever `fh_survival/shared/items.lua` registers (chec
    RESULT:
 
 ### Food, drink, wash, warmth (S3)
-9. Eat a food item.
-   Expected: item consumed, `well_fed` appears (about 60 min).
+9. `fh_give` yourself `fh_jerky`, `fh_biscuit` and `fh_stew`, then use each from the inventory.
+   Expected: item consumed, `You feel fed.`, `well_fed` appears: jerky about 30 min, hardtack about 21 min, stew about 60 min (magnitude 1.15).
    RESULT:
-10. Drink from a full canteen (check the charge count in the item metadata/tooltip).
-    Expected: one charge used, `hydrated` appears (about 45 min). (needs @core caps (idea-613))
+10. `fh_give` yourself `fh_canteen` and use it (full = 5 charges).
+    Expected: `You drink. 4 charges left.`, `hydrated` appears (about 45 min). (needs @core caps (idea-613))
     RESULT:
 11. Drink until the canteen is empty, then use it once more.
-    Expected: refused with an "empty" message, no buff.
+    Expected: `The canteen is empty. Refill it at water.`, no buff.
     RESULT:
-12. Go to a seeded water spot near the homestead or the camp (coords in the fh_survival README) and refill the canteen.
-    Expected: charges back to full; refilling a full canteen is refused ("full").
+12. Go to a seeded water spot near the homestead or the camp (coords in the fh_survival README) and run `/refill`.
+    Expected: `You refill the canteen.`, charges back to full; `/refill` on a full canteen gives `The canteen is already full.` Away from water: `You need to stand in water to refill.`
     RESULT:
-13. Wash at a seeded water spot near the homestead or the camp (coords in the fh_survival README).
-    Expected: `clean` appears (about 90 min); washing again right away hits the wash cooldown. (needs @core caps (idea-613))
+13. Wash at a seeded water spot near the homestead or the camp (coords in the fh_survival README) and run `/wash`.
+    Expected: `You wash off the grime.`, `clean` appears (about 90 min); washing again right away says `You washed recently. Try again in N s.` (5 min cooldown). (needs @core caps (idea-613))
     RESULT:
 14. Stand at a seeded fire spot near the homestead or the camp (coords in the fh_survival README).
     Expected: `warm` appears and refreshes while you stay near. `warm` is only a bonus: ColdRegions is empty, so being without it never makes you sluggish.
     RESULT:
 
 ### Rest (S4)
-15. Use a bedroll anywhere to sleep/rest.
+15. `fh_give` yourself a `bedroll` and use it anywhere.
     Expected: `rested` appears at magnitude 1.0 (about 120 min).
     RESULT:
-16. Sleep in your claimed homestead's bed with comfort furnishings.
-    Expected: `rested` with a higher magnitude (1.0 + comfort x 0.01, capped at 1.20). If the homestead bed/comfort exports (H3/H4) are not on main yet, expect bedroll-only (1.0): note SKIP.
+16. Homestead bed with comfort: the server side exists (`restAtBed`, event `fh:survival:restBed`, magnitude 1.0 + comfort x 0.01, capped at 1.20) but no client or station UI triggers it yet. Expected for now: SKIP (note "no in-game trigger"). If the homestead bed/comfort exports (H3/H4) are also missing, the bed path would fall back to bedroll-only anyway.
     RESULT:
 
 ### Sluggish effect (S5)
