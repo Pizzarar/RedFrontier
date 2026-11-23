@@ -102,7 +102,9 @@ AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) ownerGone(src) en
 local function rearm(src)
     local cid = Q.citizenidOf(src)
     if not cid then return end
-    for _, e in ipairs(exports.fh_quests:getActive(src) or {}) do
+    local active = exports.fh_quests:getActive(src) or {}
+    if Q.srcOf[cid] ~= src or Q.citizenidOf(src) ~= cid then return end -- dropped during the yield: no leaked ped/watch
+    for _, e in ipairs(active) do
         local jt, key = Jobs.parseId(e.quest_id)
         if jt == 'bounty' and e.status == 'active' and e.region_id then
             local offer = JT.bountyOffer(e.region_id, key)

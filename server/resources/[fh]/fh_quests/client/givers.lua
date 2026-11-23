@@ -53,8 +53,9 @@ end)
 
 -- Giver peds (spawned by the server via fh_core, tag fh_quests:giver:<npc>): stand still, cannot be hurt or scared
 -- off, ignore events. Like client/bounty.lua; natives unverified in-game.
+local TAG_PREFIX = 'fh_quests:giver:'
 FH.on('fh:spawn:adopted', function(d)
-    if type(d) ~= 'table' or d.kind ~= 'ped' or type(d.tag) ~= 'string' or d.tag:sub(1, 17) ~= 'fh_quests:giver:' then return end
+    if type(d) ~= 'table' or d.kind ~= 'ped' or type(d.tag) ~= 'string' or d.tag:sub(1, #TAG_PREFIX) ~= TAG_PREFIX then return end
     local ped = d.entity
     if not ped or not DoesEntityExist(ped) then return end
     FreezeEntityPosition(ped, true)
