@@ -187,13 +187,17 @@ end
 
 ---AddMoney that tells "added" from "not added" even when it throws: rsg-core's AddMoney adds to PlayerData.money
 ---first and only then runs its client / log side effects, so a throw can come after the money moved. Nothing in here
----yields, so the balance delta is ours alone. true = the money is on the character.
+---yields, so the balance change is ours alone. true = the money is on the character.
+---The check redoes rsg-core's own float addition (`money[mt] + amount`, player.lua:357, amount unchanged by
+---prepMoney's tonumber) and compares exactly: same IEEE operation, same operands -> bit-identical result. Never
+---`after - before == amount`: with a fractional balance (127.2 + 5) - 127.2 ~= 5, which would class money that
+---moved as unpaid and pay it again.
 local function addMoneyChecked(Player, amount, reason)
     local before = cashOf(Player)
     local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
     if called then return added == true end
     local after = cashOf(Player)
-    return before ~= nil and after ~= nil and after - before == amount
+    return before ~= nil and after ~= nil and after == before + amount
 end
 
 local function enqueueCredit(citizenid, amount, reason, region_id)
