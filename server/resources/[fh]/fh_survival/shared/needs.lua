@@ -33,6 +33,7 @@ end
 
 ---Needs that are missing at `now`. food/water/rest/clean always count; warmth only when
 ---`regionId` is a key (or list value) of `coldRegions`. expires_at <= now counts as missing.
+---A non-number / NaN / infinite `now` cannot prove anything is active, so every counted need is missing.
 ---@return string[] missing need names, in N.NEEDS order
 function N.missingNeeds(snapshot, now, regionId, coldRegions)
     snapshot = type(snapshot) == 'table' and snapshot or {}
@@ -43,11 +44,12 @@ function N.missingNeeds(snapshot, now, regionId, coldRegions)
             for _, r in ipairs(coldRegions) do if r == regionId then cold = true break end end
         end
     end
+    local nowOk = isNum(now)
     local out = {}
     for _, need in ipairs(N.NEEDS) do
         if need ~= 'warmth' or cold then
             local e = snapshot[N.NEED_BUFF[need]]
-            local active = type(e) == 'table' and isNum(e.expires_at) and e.expires_at > now
+            local active = nowOk and type(e) == 'table' and isNum(e.expires_at) and e.expires_at > now
             if not active then out[#out + 1] = need end
         end
     end
@@ -71,10 +73,11 @@ function N.sluggishLevel(missingCount, levelMap)
 end
 
 ---Login grace: a character with no saved needs row is exempt for `grace` seconds after login.
+---Non-number / NaN / negative `grace` falls back to DEFAULT_GRACE.
 function N.inGrace(hasRow, loginAt, now, grace)
     if hasRow then return false end
     if not isNum(loginAt) or not isNum(now) then return false end
-    grace = isNum(grace) and grace or N.DEFAULT_GRACE
+    grace = (isNum(grace) and grace >= 0) and grace or N.DEFAULT_GRACE
     return now - loginAt < grace
 end
 
@@ -147,4 +150,6 @@ function N.restore(saved, durationCfg)
     return out
 end
 
+-- FXServer loads shared scripts as plain chunks; expose a global there, module under specs.
+if _G.GetCurrentResourceName then _G.FhSurvivalNeeds = N end
 return N

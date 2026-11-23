@@ -127,4 +127,70 @@ case('restore clamps to configured max and drops bad entries', function()
     assert(next(N.saveRemaining(nil, NOW)) == nil)
 end)
 
+case('missingNeeds/evaluate with nil or non-number now: no error, everything counted is missing', function()
+    local s = snap(ALL)
+    for _, bad in ipairs({ 'x', 0 / 0, math.huge, -math.huge, {} }) do
+        local m = N.missingNeeds(s, bad)
+        assert(#m == 4 and m[1] == 'food' and m[4] == 'clean', 'bad now ' .. tostring(bad))
+        assert(#N.missingNeeds(s, bad, 'frozen', { frozen = true }) == 5)
+    end
+    assert(#N.missingNeeds(s, nil) == 4, 'nil now')
+    assert(N.evaluate(s, nil, {}) == 3, 'nil now -> no grace proof -> capped level')
+    assert(N.evaluate(s, nil, { hasRow = false, loginAt = 1000 }) == 3, 'grace needs a numeric now')
+end)
+
+case('inGrace rejects negative / non-number grace (falls back to default)', function()
+    assert(N.inGrace(false, 1000, 1100, -5) == true, 'negative grace -> default 600')
+    assert(N.inGrace(false, 1000, 1599, -1) == true and N.inGrace(false, 1000, 1600, -1) == false)
+    assert(N.inGrace(false, 1000, 1100, 0 / 0) == true and N.inGrace(false, 1000, 1100, math.huge) == true)
+    assert(N.inGrace(false, 1000, 1000, 0) == false, 'grace 0 is valid: no window')
+    assert(N.inGrace(true, 1000, 1000, 600) == false, 'row exists -> never in grace')
+end)
+
+case('saveRemaining ignores nil/invalid now and NaN/inf snapshot fields', function()
+    local s = snap(ALL)
+    for _, bad in ipairs({ 'x', 0 / 0, math.huge, -math.huge }) do
+        assert(next(N.saveRemaining(s, bad)) == nil, 'bad now ' .. tostring(bad))
+    end
+    assert(next(N.saveRemaining(s, nil)) == nil, 'nil now')
+    local weird = {
+        well_fed = { magnitude = 1.1, expires_at = math.huge },
+        hydrated = { magnitude = 1.1, expires_at = 0 / 0 },
+        rested = { magnitude = 0 / 0, expires_at = NOW + 10 },
+        clean = { magnitude = math.huge, expires_at = NOW + 10 },
+        warm = { magnitude = 1.0, expires_at = NOW + 10 },
+    }
+    local saved = N.saveRemaining(weird, NOW)
+    assert(saved.food == nil and saved.water == nil and saved.rest == nil and saved.clean == nil)
+    assert(saved.warmth.remaining == 10)
+end)
+
+case('restore drops NaN/inf saved fields', function()
+    local saved = {
+        food = { remaining = math.huge, magnitude = 1.1 },
+        water = { remaining = 0 / 0, magnitude = 1.1 },
+        rest = { remaining = 100, magnitude = 0 / 0 },
+        clean = { remaining = 100, magnitude = math.huge },
+        warmth = { remaining = -math.huge, magnitude = 1.0 },
+    }
+    assert(#N.restore(saved) == 0)
+    assert(#N.restore({ food = 'x', water = 5 }) == 0, 'non-table entries dropped')
+end)
+
+case('backward clock skew: saved remaining beyond max is clamped on restore', function()
+    -- Server clock went backwards (or a cap was lowered): expires_at - now exceeds the configured max.
+    local s = snap({ well_fed = 99999, rested = 7300 })
+    local saved = N.saveRemaining(s, NOW)
+    assert(saved.food.remaining == 99999 and saved.rest.remaining == 7300)
+    local list = N.restore(saved)
+    assert(#list == 2)
+    local by = {}
+    for _, r in ipairs(list) do by[r.buff_id] = r end
+    assert(by.well_fed.duration == N.DEFAULT_DURATIONS.well_fed and by.rested.duration == N.DEFAULT_DURATIONS.rested)
+    list = N.restore(saved, { well_fed = 60, rested = 9000 })
+    by = {}
+    for _, r in ipairs(list) do by[r.buff_id] = r end
+    assert(by.well_fed.duration == 60 and by.rested.duration == 7300, 'clamp to cfg max, never extend past saved')
+end)
+
 T.finish()
