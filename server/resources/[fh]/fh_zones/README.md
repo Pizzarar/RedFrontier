@@ -21,5 +21,6 @@ Seed of lane L3 (spec L89, M1 L107): one T1 outlaw camp, `heartlands_t1_01`, in 
 - `client/main.lua`: hostile AI setup (relationship group hating players, weapon) in the handler of fh_core's local
   `fh:spawn:adopted` hook, death hints, stash prompt. All handlers via FH.on / FH.thread / FH.wrap.
 - Events: `fh:zones:camp_activated`, `fh:zones:camp_cleared`, `fh:zones:camp_respawned` (fh_core/docs/events.md).
+  `camp_cleared` carries `participants` = citizenids of players within `activationRadius` of the camp centre when it clears (empty table if none).
   Export: `getCamp(id)`. Gated behaviour: row 3 of fh_core/docs/spike-gated.md.
 - Not runtime-tested (no Cfx key yet): see OWNER-TESTS.md "B6b".

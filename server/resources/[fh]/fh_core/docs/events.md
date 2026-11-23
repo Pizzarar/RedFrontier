@@ -41,7 +41,7 @@ The emitting lane owns the name and documents it in its README.
 | `fh:spawn:client_ready` | fh_core (client -> server) | `{}`; this client can take spawn requests (only ready clients are picked) |
 | `fh:dev:clientError` | fh_core (client -> server, dev only) | `{ resource, msg, traceback }` (strings; server truncates, drops unless convar `fh_dev` is 1, rate-limits 10/min per `source`, logs to `server/logs/client-errors.log`) |
 | `fh:zones:camp_activated` | fh_zones | `{ camp_id, region_id }`; a player came within `activationRadius` of an idle camp, its peds are being requested |
-| `fh:zones:camp_cleared` | fh_zones | `{ camp_id, region_id, loot }`; every adopted ped is dead (server-checked); loot = array of `{ name, amount, info? }` placed in the camp stash |
+| `fh:zones:camp_cleared` | fh_zones | `{ camp_id, region_id, loot, participants }`; every adopted ped is dead (server-checked); loot = array of `{ name, amount, info? }` placed in the camp stash; participants = array of citizenids of players within `activationRadius` of the camp centre at clear (empty table if none; additive, optional for listeners) |
 | `fh:zones:camp_respawned` | fh_zones | `{ camp_id, region_id }`; `respawnMinutes` elapsed, bodies despawned, stash emptied, camp idle again |
 | `fh:zones:ped_dead` | fh_zones (client -> server) | `{ tag }`; a hint only: believed from a player within activation radius + 25 m of the camp, then the server re-reads the ped's health itself |
 | `fh:zones:open_loot` | fh_zones (client -> server request) | `{ camp_id }`; only honoured once the camp is cleared; `fh_core.open` re-checks reach server-side |

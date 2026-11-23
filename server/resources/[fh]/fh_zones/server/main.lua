@@ -127,6 +127,23 @@ local function rollIntoStash(camp)
     return placed
 end
 
+local function citizenidOf(src)
+    local c = exports['rsg-core']:GetCoreObject()
+    local p = c and c.Functions.GetPlayer(src)
+    return p and p.PlayerData.citizenid or nil
+end
+
+-- Players within activationRadius of the camp centre right now (citizenids). No damage tracking: presence only.
+local function campParticipants(camp)
+    local entries = {}
+    for _, s in ipairs(GetPlayers()) do
+        local src = tonumber(s)
+        local ped = GetPlayerPed(src)
+        if ped ~= 0 then entries[#entries + 1] = { citizenid = citizenidOf(src), pos = GetEntityCoords(ped) } end
+    end
+    return rules.participants(camp.cfg.center, camp.cfg.activationRadius, entries)
+end
+
 local function clear(camp)
     if not step(camp, 'clear') then return end
     local loot = rollIntoStash(camp)
@@ -134,7 +151,7 @@ local function clear(camp)
     -- Drop the ped requests now: a dead ped left registered would be re-requested (fh_spike_gated spawner drop / corpse
     -- cleanup) and pop in alive until the respawn timer, then be despawned by onReady.
     despawnPeds(camp)
-    TriggerEvent('fh:zones:camp_cleared', { camp_id = camp.cfg.id, region_id = camp.cfg.region, loot = loot })
+    TriggerEvent('fh:zones:camp_cleared', { camp_id = camp.cfg.id, region_id = camp.cfg.region, loot = loot, participants = campParticipants(camp) })
     step(camp, 'wait')
     camp.respawnAt = GetGameTimer() + math.floor(camp.cfg.respawnMinutes * 60000)
 end

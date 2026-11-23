@@ -47,6 +47,16 @@ function M.shouldActivate(state, camp, positions)
     return false
 end
 
+---Citizenids of the players inside the radius. entries = array of { citizenid = string|nil, pos = vec3 }; entries with no
+---citizenid or bad coords are skipped. Always returns a table (empty when nobody is in range), never nil.
+function M.participants(center, radius, entries)
+    local out = {}
+    for _, e in ipairs(entries or {}) do
+        if e.citizenid and M.inRadius(center, radius, e.pos) then out[#out + 1] = e.citizenid end
+    end
+    return out
+end
+
 ---peds = array of { dead = bool, failed = bool }. Cleared when none is still alive and at least one died
 ---(a camp whose spawns all failed is not "cleared": nobody killed anything).
 function M.allDead(peds)

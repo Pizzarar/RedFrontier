@@ -145,4 +145,14 @@ case('config: camp is in the M1 region, 3-5 peds, valid fields', function()
     assert(camp.respawnMinutes > 0 and camp.activationRadius > 0)
 end)
 
+case('participants: in range, out of range, nobody in range', function()
+    local c, r = { x = 0, y = 0, z = 0 }, 45.0
+    local near, edge, far = { x = 10, y = 0, z = 0 }, { x = 45, y = 0, z = 0 }, { x = 100, y = 0, z = 0 }
+    local got = R.participants(c, r, { { citizenid = 'A1', pos = near }, { citizenid = 'B2', pos = far }, { citizenid = 'C3', pos = edge }, { pos = near } })
+    eq(2, #got); eq('A1', got[1]); eq('C3', got[2])
+    local none = R.participants(c, r, { { citizenid = 'B2', pos = far } })
+    eq('table', type(none)); eq(0, #none)
+    eq(0, #R.participants(c, r, {})); eq(0, #R.participants(c, r, nil))
+end)
+
 T.finish()
