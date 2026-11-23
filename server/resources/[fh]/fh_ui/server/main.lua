@@ -22,7 +22,6 @@ AddEventHandler('playerDropped', function()
 end)
 
 -- Dev demo (U3): `fh_ui_demo <screen|close [screen]>` opens a fixture screen for the caller. Gated by the command ACE (same pattern as fh_homestead's fh_unclaim); console has no client.
--- . Console (src 0) has no client.
 local fx = FhUiFixtures
 local function reply(src, msg)
     if src == 0 then log('%s', msg) else TriggerClientEvent('chat:addMessage', src, { args = { 'fh_ui', msg } }) end
