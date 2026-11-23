@@ -13,13 +13,16 @@ type) build against now. Every export and event lives here; anything not listed 
 |---|---|---|
 | Definition shape, `where` grammar, state machine, reward-once rule, board rotation (pure `shared/`) | Q1 | **built**, specced |
 | This contract (exports, events, sync schema, table) | Q1 | **published** (signatures frozen; additive changes only) |
-| Server: migration, event intake, exports, payouts via fh_economy, `fh:quests:*` events, `fh:quests:sync` | Q2 | coming |
-| Jobs board: `registerJobType` registry, `hunt_request`, `camp_clear`, `bounty`, rotation timer, ox_lib `/jobs` fallback | Q3 | coming |
+| Server: migration, event intake, all 8 exports, payouts via fh_economy, `fh:quests:*` events, `fh:quests:sync` | Q2 | **built**, pure parts specced |
+| Jobs board plumbing: generic `registerJobType` registry, `getBoard`, `acceptOffer`, board sync, rotation timer | Q2 | **built** (wired; no job types registered yet, so boards are empty) |
+| Concrete job types `hunt_request`, `camp_clear`, `bounty`; ox_lib `/jobs` fallback | Q3 | coming |
 | 3 family questlines (data files, giver NPCs, ox_lib text dialogue fallback) | Q4 | coming |
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
 
-Today the resource loads only the pure modules: `server_exports` is declared in `fxmanifest.lua` but calling an
-export before Q2 lands errors. Do not `ensure` it yet (Q5 adds it).
+The server side is in (`server/main.lua`: state cache, per-character lock, persistence, payouts, sync;
+`server/api.lua`: exports and event intake). It is not `ensure`d yet (Q5 adds it). It needs the `fh_quest_state`
+migration (`server/migrations/0007_quest_state.sql`) applied by
+`tools/setup-server.ps1`. Without the table it logs once and every export returns `fh_not_ready`.
 
 ## Quest definition shape
 
@@ -91,42 +94,123 @@ advances anything.
 | `fh:homestead:claimed` | @homestead | `{ src, citizenid, plot_id, region_id }` |
 | `fh:economy:paid`, `fh:economy:rep_changed` | fh_economy | see `fh_core/docs/events.md` (reasons `quest:*` are ignored so a reward never advances a quest) |
 | `fh:death:dropped`, `fh:death:recovered`, `fh:death:expired` | fh_death | see `fh_core/docs/events.md` |
-| `fh:quests:talked` | fh_quests | `{ src, citizenid, npc_id }` (fired by the `talk` export) |
+
+Only local server events are taken: an event that arrives with a client source is dropped, so a client can never
+feed the intake. Each credited character is processed under its own lock (see "Concurrency").
+
+**`fh:quests:talked` is emitted only, not intake.** It is listed in `engine.INTAKE` so `talk` steps validate
+against it, but nothing listens to it: the `talk` export feeds the talking player's own quests directly and then
+emits `fh:quests:talked` for observers. A re-fired or foreign `fh:quests:talked` therefore never advances a quest.
 
 A registered job type may add its own event names via `hooks.events` (below); they join the intake while the
-job type is registered. New whitelist entries are additive changes to this table.
+job type is registered and stop counting when it is dropped. New whitelist entries are additive changes to this
+table.
 
 ## Server exports
 
-All take `src` (player server id) and resolve the citizenid themselves. Errors are string codes.
+All player exports take `src` (player server id) and resolve the citizenid themselves. Errors are string codes
+(full list under "Error codes"). Every player export can also return the common codes `fh_not_ready`,
+`fh_no_player`, `fh_busy`, `fh_db` and `fh_internal`.
 
-| Export | Returns | Block |
+| Export | Returns | Specific errors | Block |
+|---|---|---|---|
+| `registerQuest(def)` | `ok, err` | `fh_bad_def`, `fh_reserved_id`, any `engine.validate` code | Q2 |
+| `registerJobType(name, hooks)` | `ok, err` | `fh_bad_job_name`, `fh_bad_hooks`, `fh_bad_hook:<hook>`, `fh_bad_job_events`, `fh_bad_job_event:<name>` | Q2 |
+| `start(src, quest_id)` | `ok, err` | `fh_unknown_quest`, `fh_quest_active`, `fh_quest_done`, `fh_quest_cooldown`, `fh_quest_prereq:<id>`, `fh_reward_pending` | Q2 |
+| `abandon(src, quest_id)` | `ok, err` | `fh_not_active` | Q2 |
+| `getActive(src)` | array of journal entries (sync schema below), active only; `{}, err` on error | common codes only | Q2 |
+| `getBoard(src, region_id)` | board object (sync schema below), or `nil, err` | `fh_bad_region` | Q2 |
+| `acceptOffer(src, offer_id)` | `ok, err, quest_id` | `fh_offer_gone`, `fh_bad_offer`, `fh_offer_no_event`, `fh_bad_job_snapshot`, any `engine.validate` code, `start`'s codes, `fh_accept_failed`, `fh_accept_refused` or the job type's own refusal string | Q2 |
+| `talk(src, npc_id)` | `ok, err, dialogue` | `fh_bad_npc` | Q2 |
+
+- `start` only starts registered quests (`registerQuest`); job quests start through `acceptOffer`. If an earlier
+  completion still owes a reward, `start` / `acceptOffer` try to pay it first and refuse with `fh_reward_pending`
+  while it stays owed.
+- `talk` returns `dialogue = { { quest_id, step, lines }... }` for talk steps that advanced (or finished their
+  quest), plus `dialogue.offers = { quest_id... }`: quests whose `giver` is this npc that the player can start now
+  (sorted). After the change is saved it emits `fh:quests:talked`.
+- `acceptOffer` takes the offer `id` from `getBoard` / the sync payload. `fh_offer_gone` = the board rotated, the
+  region is unknown, or the job type is no longer registered.
+- `registerQuest` replaces an existing def with the same id (so a restarting content resource re-registers cleanly).
+  Ids starting with `job:` belong to job types (`fh_reserved_id`). Registrations live in memory: re-register on
+  fh_quests (re)start, exactly as below.
+
+### Error codes
+
+| Code | From | Meaning |
 |---|---|---|
-| `registerQuest(def)` | `ok, err` | Q2 |
-| `registerJobType(name, hooks)` | `ok, err` | Q3 |
-| `start(src, quest_id)` | `ok, err` (`fh_quest_active`, `fh_quest_done`, `fh_quest_cooldown`, `fh_quest_prereq:<id>`, `fh_reward_pending`, `fh_unknown_quest`, `fh_no_player`) | Q2 |
-| `abandon(src, quest_id)` | `ok, err` (`fh_not_active`) | Q2 |
-| `getActive(src)` | array of journal entries (sync schema below), active only | Q2 |
-| `getBoard(src, region_id)` | board object (sync schema below) | Q3 |
-| `acceptOffer(src, offer_id)` | `ok, err, quest_id` (`fh_offer_gone` once the board rotated) | Q3 |
-| `talk(src, npc_id)` | `ok, err, dialogue` where `dialogue = { { quest_id, step, lines }... }` for steps that advanced, plus `offers = { quest_id... }` this npc gives that the player can start | Q2 |
+| `fh_not_ready` | every player export | `fh_quest_state` is missing (migration not applied); quests are disabled |
+| `fh_no_player` | every player export | `src` has no loaded character |
+| `fh_busy` | every player export | this character's quest lock stayed taken for 5 s (another change in flight); retry |
+| `fh_db` | every player export | loading or saving `fh_quest_state` failed; nothing was emitted or paid |
+| `fh_internal` | every player export | a Lua error inside the locked section (logged); state is as last saved |
+| `fh_bad_def`, `fh_bad_id`, `fh_bad_kind`, `fh_bad_title`, `fh_bad_giver`, `fh_bad_region`, `fh_bad_prereq`, `fh_prereq_self`, `fh_bad_repeat`, `fh_no_steps`, `fh_too_many_steps` | `registerQuest`, `acceptOffer` | `engine.validate`: the def's own fields |
+| `fh_bad_steps` | `registerQuest`, `acceptOffer` | `steps` is not a dense 1..n list (holes or non-integer keys) |
+| `fh_bad_step@stepN`, `fh_bad_step_text@stepN`, `fh_bad_step_count@stepN`, `fh_bad_talk@stepN`, `fh_bad_talk_lines@stepN`, `fh_bad_step_event@stepN`, `fh_bad_<pred>@<field>@stepN` | `registerQuest`, `acceptOffer` | a step, its talk block, its event (not on the intake / job events) or a `where` predicate |
+| `fh_bad_rewards`, `fh_unknown_reward:<k>`, `fh_bad_money`, `fh_bad_rep_region`, `fh_bad_rep_delta`, `fh_bad_items`, `fh_bad_item`, `fh_bad_item_amount`, `fh_bad_item_info` | `registerQuest`, `acceptOffer` | the rewards block |
+| `fh_reserved_id` | `registerQuest` | ids starting with `job:` are reserved for accepted jobs |
+| `fh_bad_job_name`, `fh_bad_hooks`, `fh_bad_hook:<hook>`, `fh_bad_job_events`, `fh_bad_job_event:<name>` | `registerJobType` | name not `[a-z0-9_]+` (max 32), hooks not a table, `offers` missing or a hook not callable, `events` not a list of `fh:*` names (never `fh:quests:talked`) |
+| `fh_unknown_quest` | `start` | no registered quest with that id |
+| `fh_quest_active`, `fh_quest_done`, `fh_quest_cooldown`, `fh_quest_prereq:<id>` | `start`, `acceptOffer` | already active; one-time quest already done; repeatable still cooling down; a prereq never completed |
+| `fh_reward_pending` | `start`, `acceptOffer` | the previous completion of this quest still owes part of its reward |
+| `fh_not_active` | `abandon` | the player has no active quest with that id |
+| `fh_bad_region` | `getBoard` | unknown region id (`FhRegions`) |
+| `fh_offer_gone` | `acceptOffer` | the offer id is not on the current board (rotated, unknown region, job type gone) |
+| `fh_bad_offer` | `acceptOffer` | the job type's offer has no `key` / `title` |
+| `fh_offer_no_event` | `acceptOffer` | the offer has no `on` and its job type has no `onEvent` hook (nothing could ever advance it) |
+| `fh_bad_job_snapshot` | `acceptOffer`, load (log only) | a job snapshot without `job_type` / `key`; on load such a job row is ignored (kept in the table, logged) |
+| `fh_accept_failed` | `acceptOffer` | the job type's `accept` hook threw (logged) |
+| `fh_accept_refused` | `acceptOffer` | the `accept` hook returned falsy without a string reason (a string reason is returned as-is) |
+| `fh_bad_npc` | `talk` | `npc_id` is not a non-empty string |
 
-`registerQuest` replaces an existing def with the same id (so a restarting content resource re-registers cleanly).
-Registrations live in memory: re-register on fh_quests (re)start, exactly as below.
+Internal codes that only reach the server log: `fh_bad_row`, `fh_bad_row_citizenid`, `fh_bad_row_quest`,
+`fh_bad_row_status` (an unusable `fh_quest_state` row, skipped on load) and the reward protocol's
+`fh_no_reward`, `fh_reward_inflight`, `fh_reward_not_owed`, `fh_reward_not_inflight`, `fh_bad_outcome`.
 
 ### registerJobType(name, hooks)
 
-`name` matches `[a-z0-9_]+`. Hooks (all functions; cross-resource function refs are fine):
+`name` matches `[a-z0-9_]+` (max 32 chars). Hooks (functions; cross-resource function refs are fine). Only
+`offers` is required:
 
-- `offers(region_id) -> { offer... }`: candidate offers for that region. Each offer needs a stable `key` (same
-  template = same key) and a `title`; anything else rides along to `accept` and to the sync payload.
-- `accept(src, offer) -> ok, err`: the job type's own checks/setup (spawn cargo, etc.). Refusal aborts the accept.
-- `onEvent(name, payload, state) -> 'progress' | 'complete' | 'fail' | nil`: called for intake events while the
-  player has this job active; the verdict goes through `engine.apply`, so rewards still pay exactly once.
-- `abandon(src, state)`: clean up when the player abandons.
-- optional `events = { 'fh:roads:delivered', ... }`: extra intake events for this job type.
+- `offers(region_id) -> { offer... }`: candidate offers for that region (called once per region per rotation).
+- `accept(src, offer) -> ok, err` (optional): the job type's own checks/setup (spawn cargo, etc.), with the offer
+  table as `offers` returned it. Refusal aborts the accept; a string `err` is returned to the caller.
+- `onEvent(name, payload, state) -> 'progress' | 'complete' | 'fail' | nil` (optional): if present, it decides
+  every verdict for this type's active jobs: it is called for each intake event that credits the job's holder
+  (quest payout echoes excluded), with a copy of the state; the verdict goes through `engine.apply`, so rewards
+  still pay exactly once. Without it the engine matches the offer's `on` / `where` / `count` itself.
+- `abandon(src, state)` (optional): clean up when the player abandons (also called if the accept could not be
+  saved, to undo `accept`'s setup).
+- optional `events = { 'fh:roads:delivered', ... }`: extra intake events for this job type (`fh:*`, not
+  `fh:quests:talked`).
 
-The accepted job is stored as quest id `job:<name>:<offer key>` (one `fh_quest_state` row per player and key).
+**Offer fields** (what `offers` returns; everything not listed rides along to `accept` only and is not stored):
+
+| Field | Required | Meaning |
+|---|---|---|
+| `key` | yes | stable template key (same template = same key; one row per player and key) |
+| `title` | yes | board and journal title |
+| `on` | unless `onEvent` | the step event (intake whitelist or this type's `events`) |
+| `where` | no | step predicates (`where` grammar above) |
+| `count` | no | matching events needed (default 1) |
+| `cooldown_min` | no | minutes before the same offer can be taken again after completion (default **60**, one board rotation; `0` allowed) |
+| `text` | no | step / board text (defaults to `title`) |
+| `rewards` | no | the reward shape of quest defs (`money`, `rep`, `items`) |
+
+**Accepted jobs.** An accepted offer becomes a one-step repeatable quest with id `job:<name>:<offer key>`, kind
+`job`. Its snapshot (`job_type`, `key`, `region_id`, `title`, `text`, `on`, `where`, `count`, `rewards`,
+`cooldown_min`, `hook`) is stored in the row as `progress.job`, and the def is rebuilt and re-validated from it on
+load. So an active job and an unpaid job reward survive a restart even after the board rotated or the offer
+template changed.
+
+**Jobs pause while their type is unregistered.** Until the owning resource (re)registers the type, its active jobs
+ignore every event (no progress, no fail) and keep their row; they resume once it registers again. They can
+still be abandoned, except a job whose step event is one of the type's own `events`: its def cannot be rebuilt
+(nor shown in the journal) until the type registers again.
+
+**Hooks run inside fh_quests' per-character lock.** A hook must not call back into fh_quests exports that change
+the same player's quests (`start`, `abandon`, `acceptOffer`, `talk`): return a verdict instead. Hooks should be
+quick; a hook that throws is logged and treated as "no change" (`accept`: `fh_accept_failed`).
 
 **Soft dependency (@roads freight):** do not list fh_quests in your `dependencies`. Register only when it runs,
 and again whenever it restarts:
@@ -152,13 +236,23 @@ fh_quests drops a job type when its owning resource stops.
 | `fh:quests:completed` | `{ citizenid, quest_id, kind, step }` |
 | `fh:quests:failed` | `{ citizenid, quest_id, kind, step }` |
 | `fh:quests:abandoned` | `{ citizenid, quest_id, kind, step }` |
-| `fh:quests:board_changed` | `{ region_id }` (the region's offers rotated or one was taken) |
-| `fh:quests:talked` | `{ src, citizenid, npc_id }` (also intake) |
+| `fh:quests:board_changed` | `{ region_id }` (the region's board rotated, an offer there was accepted, or a job type registered/dropped while the board was cached) |
+| `fh:quests:talked` | `{ src, citizenid, npc_id }` (after a successful `talk`; emitted only, not intake) |
+
+Events are emitted only after the new state was saved, in effect order (`started`/`step`/`completed`/...). The
+reward payout follows the save and the events.
+
+## Concurrency
+
+All reads and writes of one character's quest state (exports, intake events, payouts on load) run under a
+per-character lock, so two events can never both see the same `active` state. An export that cannot get the lock
+within 5 s returns `fh_busy`; an intake event waits up to 30 s and is then dropped (logged).
 
 ## Client sync: `fh:quests:sync` (server -> one client), for @ui
 
-Full snapshot (no diffs in v1), sent on character load, on any change to that player's quests, and on
-`getBoard`. One table argument:
+Full snapshot (no diffs in v1), sent on character load (and for online players when fh_quests restarts), on any
+change to that player's quests (start, abandon, accept, talk, a counted intake event), and on `getBoard`. One
+table argument:
 
 ```json
 {
@@ -201,8 +295,14 @@ Full snapshot (no diffs in v1), sent on character load, on any change to that pl
 
 - `journal`: active quests plus done/failed one-time quests (history). `status` is `active|done|failed|abandoned`.
   `giver`, `cooldown_until` may be null. Times are unix seconds.
-- `board`: null unless the player is at a board (or asked via `getBoard`). 3-5 offers; `id` is what
-  `acceptOffer` takes and stays valid until `expires_at`.
+- `board`: null until the player's `getBoard(src, region_id)` is called. From then on **every** sync to that player
+  includes that region's current board (the last region asked for), until they drop or unload. 3-5 offers when
+  job types are registered (empty until Q3 registers some); `id` is what `acceptOffer` takes and stays valid until
+  `expires_at` (unix seconds, end of the rotation epoch; boards rotate every 60 minutes). `accepted` is true when
+  this player has the job of that offer active. `text` and `rewards` come from the offer (`rewards` shows
+  `money`, `rep`, item `name`/`amount` only). On rotation the server emits `fh:quests:board_changed` and the next
+  `getBoard` / sync shows the new offers.
+- Journal rows whose quest has no registered def (content resource not started) are left out until it registers.
 - Dialogue lines arrive in `talk`'s return value (the ox_lib fallback shows them until @ui's dialogue screen lands).
 
 ## Persistence (Q2 migration)
@@ -213,7 +313,7 @@ CREATE TABLE IF NOT EXISTS `fh_quest_state` (
   `quest_id` varchar(64) NOT NULL,
   `status` varchar(16) NOT NULL,          -- active | done | failed | abandoned
   `step` int(11) NOT NULL DEFAULT 1,
-  `progress` longtext NOT NULL,           -- JSON: { count, completions, reward_pending? }
+  `progress` longtext NOT NULL,           -- JSON, see below
   `cooldown_until` bigint(20) DEFAULT NULL, -- unix seconds; repeatables only
   `updated_at` bigint(20) NOT NULL,       -- unix seconds
   PRIMARY KEY (`citizenid`, `quest_id`)
@@ -223,15 +323,52 @@ CREATE TABLE IF NOT EXISTS `fh_quest_state` (
 Completed one-time quests stay as `status='done'` (that is the prereq and "already done" record). Repeatables keep
 one row; `cooldown_until` is set on each completion and `progress.completions` counts them.
 
+`progress` JSON keys (anything else is dropped on save and on load; `shared/store.lua`):
+
+| Key | Meaning |
+|---|---|
+| `count`, `completions` | events counted toward the current step; completions so far |
+| `reward_pending` | `true` while any reward part is still owed |
+| `reward_paid` | `{ [part key] = true }` parts already delivered (`money`, `rep`, `item:<i>`) |
+| `reward_inflight` | `{ key, at }` the part being paid right now (crash recovery) |
+| `job` | accepted job offer snapshot (see registerJobType "Accepted jobs") |
+
+Storage notes:
+
+- **`cooldown_until` goes through `NULLIF(?, 0)`.** The UPSERT always sends 7 non-nil positional parameters (a
+  `nil` inside a Lua array does not cross to oxmysql reliably), so "no cooldown" is sent as `0` and stored as
+  `NULL`. A real cooldown is never `0` (unix seconds).
+- On load, whole numbers that come back as floats (JSON / driver) are turned back into integers; a row with an
+  unknown `status`, or an empty `citizenid` / `quest_id`, is skipped and logged; unreadable `progress` JSON loads
+  as empty progress.
+- Every write is an UPSERT on (`citizenid`, `quest_id`); only a successful write updates the server's cache.
+
 ## Rewards (exactly once)
 
 - Money and rep only via `exports.fh_economy:pay(src, money, 'quest:<id>', region_id)` and
-  `exports.fh_economy:rep(src, rep.region_id, rep.delta, 'quest:<id>')`; items via fh_core addItem into the
-  player inventory ref. No reward without a ledger row.
+  `exports.fh_economy:rep(src, rep.region_id, rep.delta, 'quest:<id>')`; items via
+  `exports.fh_core:addItem({ type = 'backpack', id = src }, name, amount, info)`. No money/rep without a ledger row.
+- Parts are paid in order `money`, `rep`, `item:<i>`, each exactly once (`shared/rewards.lua`): mark the part
+  in flight and save, call the payer, then save it paid. A crash in between is settled on the next run from
+  `fh_ledger` (money/rep) or assumed delivered (items). A refusal (player offline, fh_economy down, refused)
+  stops the run; the rest stays owed and is retried on the next character load and before the next `start` /
+  `acceptOffer` of that quest. Payouts only happen while the player is online.
 - The engine emits the `reward` effect only on the active -> done transition. Re-fired events after completion, a
   second `complete` verdict, or a duplicate step event produce no second reward (specced).
-- Server order (Q2): persist `done` with `progress.reward_pending = true`, pay, then persist `rewardPaid`. On load,
-  `engine.pendingReward` re-offers an unpaid reward; `start` refuses while one is pending (`fh_reward_pending`).
+- Server order: persist `done` with `progress.reward_pending = true`, emit the events, then pay part by part as
+  above. `start` / `acceptOffer` refuse while a reward is still owed (`fh_reward_pending`).
+
+### Known limitations
+
+- **Item rewards are not delivered yet.** fh_core `addItem` refuses `backpack` / `equipped` refs
+  (`fh_core/server/inventory.lua:232`); fixing that is queued to @core as idea-643. Until it lands, money and rep
+  still pay exactly once, but the item part stays owed: the quest keeps `reward_pending`, the server retries on
+  each character load, and a **repeatable** quest or job with item rewards cannot be started again
+  (`fh_reward_pending`). Content should avoid item rewards on repeatables until idea-643 ships.
+- **`cooldown_min = 0` can underpay, never double-pay.** If the same repeatable is completed twice within
+  `LEDGER_SLACK_S` (5 s) and the second payout's outcome is unknown (crash, or the fh_economy export threw), the
+  ledger lookup finds the first completion's row and counts the second as paid. Any cooldown of 1 minute or more
+  avoids it; the default for jobs is 60.
 
 ## Pure modules (`shared/`, specced by `python tools/run-specs.py`, `spec/quests_*_spec.lua`)
 
@@ -248,6 +385,18 @@ one row; `cooldown_until` is set on each completion and `progress.completions` c
   `find(board, offer_id)`, `hash`, `rng`. Same (region, epoch, offers) always gives the same 3-5 offers, ids
   `<region_id>:<epoch>:<job_type>:<key>`; job types are interleaved so one type cannot fill the board. Offers live
   in memory and are regenerated after a restart (same epoch -> same board).
+- `FhQuestsJobs` (`jobs.lua`): `validateType(name, hooks)`, `parseId`, `questId(job_type, key)`,
+  `snapshot(job_type, offer, region_id, hasHook)`, `def(snapshot, opts)`, `normalize(v)`, `DEFAULT_COOLDOWN_MIN`.
+- `FhQuestsIntake` (`intake.lua`): `accepts(name, extraEvents)`, `srcToResolve(payload)`, `targets(payload, cid)`,
+  `payloadFor(payload, cid)`, `feed(defs, states, eventName, payload, now, hookFor)`, `emits(effects)`,
+  `dialogue(def, before, after)`, `offers(defs, states, npc_id, now)`.
+- `FhQuestsRewards` (`rewards.lua`): the exactly-once payout protocol, `run(def, state, io)` with the I/O injected.
+- `FhQuestsStore` (`store.lua`): `SELECT`, `UPSERT`, `params(state, encode)`, `fromRow(row, decode)`.
+- `FhQuestsJournal` (`journal.lua`): `entry`, `shown`, `journal(defs, states, activeOnly)`, `boardView`,
+  `snapshot` (the `fh:quests:sync` payload).
+
+Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests_rewards`, `quests_store`,
+`quests_journal`, `quests_jobs`. `server/main.lua` and `server/api.lua` are thin I/O glue over these.
 
 ## In-game test card
 
