@@ -23,16 +23,24 @@ M.WORKBENCH = 'workbench' -- H3 type crafting maps 'gunsmith' to (FhCraftingConf
 ---exports.fh_crafting:getStations(citizenid) (H3 shape { station_type, coords = {x,y,z} }; dev stations carry
 ---dev = true and the crafting type 'gunsmith').
 ---@return boolean ok, string|nil reason 'no_station'
+local function xyz(v)
+    if v == nil then return nil end
+    local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
+    local function fin(n) return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge end
+    if not ok or not fin(x) or not fin(y) or not fin(z) then return nil end
+    return x, y, z
+end
+
 function M.stationInReach(stations, coords, maxDist)
     maxDist = maxDist or M.STATION_REACH
-    if type(coords) ~= 'table' or type(coords.x) ~= 'number' or type(coords.y) ~= 'number' or type(coords.z) ~= 'number' then
-        return false, 'no_station'
-    end
+    local px, py, pz = xyz(coords) -- vector3 or { x, y, z }
+    if not px then return false, 'no_station' end
     for _, s in ipairs(type(stations) == 'table' and stations or {}) do
-        local c = type(s) == 'table' and s.coords
         local bench = type(s) == 'table' and (s.station_type == M.WORKBENCH or (s.dev == true and s.station_type == 'gunsmith'))
-        if bench and type(c) == 'table' and type(c.x) == 'number' and type(c.y) == 'number' and type(c.z) == 'number' then
-            local dx, dy, dz = c.x - coords.x, c.y - coords.y, c.z - coords.z
+        local cx, cy, cz
+        if bench then cx, cy, cz = xyz(s.coords) end
+        if cx then
+            local dx, dy, dz = cx - px, cy - py, cz - pz
             if dx * dx + dy * dy + dz * dz <= maxDist * maxDist then return true end
         end
     end

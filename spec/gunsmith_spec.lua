@@ -185,4 +185,31 @@ describe('gunsmith restore reach via getStations', function()
     end)
 end)
 
+describe('stationInReach with vector3-like coords', function()
+    -- stand-in for cfx vector3: not a table, fields via __index
+    local function vec(x, y, z)
+        local u = newproxy and newproxy(true)
+        if u then
+            getmetatable(u).__index = function(_, k) return ({ x = x, y = y, z = z })[k] end
+            return u
+        end
+        return setmetatable({}, { __index = { x = x, y = y, z = z } })
+    end
+    it('container coords as vector3', function()
+        local bench = { station_type = 'workbench', coords = { x = 10.0, y = 20.0, z = 5.0 } }
+        eq(true, F.stationInReach({ bench }, vec(11.0, 20.0, 5.0)))
+        eq('no_station', select(2, F.stationInReach({ bench }, vec(20.0, 20.0, 5.0))))
+    end)
+    it('station coords as vector3', function()
+        local bench = { station_type = 'workbench', coords = vec(10.0, 20.0, 5.0) }
+        eq(true, F.stationInReach({ bench }, { x = 11.0, y = 20.0, z = 5.0 }))
+        eq(true, F.stationInReach({ bench }, vec(11.0, 20.0, 5.0)))
+    end)
+    it('non-finite / missing fields refuse', function()
+        local bench = { station_type = 'workbench', coords = { x = 0, y = 0, z = 0 } }
+        eq('no_station', select(2, F.stationInReach({ bench }, vec(0/0, 0, 0))))
+        eq('no_station', select(2, F.stationInReach({ bench }, 5)))
+    end)
+end)
+
 T.finish()

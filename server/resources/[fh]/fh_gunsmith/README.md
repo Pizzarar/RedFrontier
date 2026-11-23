@@ -3,15 +3,14 @@
 `/fh_restore <slot>`: restores the worn weapon sitting in the world container the player has OPEN — a chest, wagon or
 saddlebag placed near a gunsmith station — consuming `gun_parts` (+20 condition each, fewest needed) up to the star cap
 (1/2/3 stars = 60/80/100; no stars = 1 star). Math: `FhCraftRules.restore` (fh_crafting). Order: write condition, then
-consume parts; a failed consume rolls the write back. Removal is `fh_crafting` `invTake` (B7 `removeItem`-backed); until
-that lands it refuses with `no_remove` (Workaround, replaced by C5b). Visual wear is data-only:
+consume parts; a failed consume rolls the write back. Removal is `fh_crafting` `invTake` (fh_core carried `removeItem`, core-03). Visual wear is data-only:
 `_SET_WEAPON_DEGRADATION` is unproven in fh_core/docs/natives.md. Condition shows in item info.
 
 ## Command
 
 | Command | Who | Behaviour |
 |---|---|---|
-| `/fh_restore <slot>` | player | Restore the item in that slot of the OPEN container if it has a condition. The container must accept bulky (chest / wagon / saddlebag), the player must be within reach of it, and it must sit near a gunsmith station. Success: `Restored to <n>% condition using <k> gun parts.` The server console is refused. |
+| `/fh_restore <slot>` | player | Restore the item in that slot of the OPEN container if it has a condition. The container must accept bulky (chest / wagon / saddlebag), the player must be within reach of it, and it must sit within 3.0 m of a workbench on the player's OWN plot (`getStations`). Success: `Restored to <n>% condition using <k> gun parts.` The server console is refused. |
 
 Refusals (code strings): `fh_nothing_open` (`Open a chest, wagon or saddlebag first.`), `fh_size_class` (`That
 container cannot hold a rifle.`), `fh_out_of_reach` (`You are too far from that container.`), `fh_no_coords` (`That
@@ -23,11 +22,11 @@ item condition is not available yet.`), `no_remove` (`Removing items is not avai
 
 The rifle is read from the pane the player has open (`fh_core` `openRef` + `view`, the same pattern as
 `fh_core/server/saddlebag.lua`); the slot indexes that container's slots. `gun_parts` are still consumed from the
-carried inventory (`fh_crafting` `invCount` / `invTake`); block C5b swaps that to `@core` B7.
+carried inventory (`fh_crafting` `invCount` / `invTake`, core-03 carried refs).
 
 ## Exports
 
-None. It consumes `fh_core` exports (`openRef`, `view`, `setItemInfo`), `fh_crafting` exports (`stationAt`,
+None. It consumes `fh_core` exports (`openRef`, `view`, `setItemInfo`), `fh_crafting` exports (`getStations`,
 `invCount`, `invTake`), and loads `'@fh_crafting/shared/craft_rules.lua'` (restore math), `'@fh_core/config.lua'`
 (`FhConfig`, for reach distances) and `'@fh_core/shared/containers.lua'` (the bulky + reach gates, read from
 `FhContainers.accepts` / `FhContainers.canReach`).
@@ -50,7 +49,7 @@ No `config.lua` in this resource:
 | `fh_crafting/shared/craft_rules.lua` | `PART_VALUE = 20` | Condition restored per `gun_parts`. |
 | `fh_crafting/shared/craft_rules.lua` | `STAR_CAPS = { 60, 80, 100 }` | Condition cap per star rating; missing/invalid stars = 1 star (60), ratings round and clamp to 1..3. |
 | convar (server.cfg) | `fh_spike_gated` | Default `true`; `false` makes the client log the data-only fallback instead of applying the unverified native. |
-| `fh_crafting/config.lua` | `stationMaxDist`, `devStations` | Station reach and dev stations, via the `fh_crafting` station adapter (`stationAt`). |
+| `fh_crafting/config.lua` | `stationMaxDist`, `devStations` | Station reach and dev stations, via the `fh_crafting` station adapter (`getStations`); `stationTypeMap` maps `gunsmith` to the H3 `workbench`. |
 
 The restore is not a recipe: `fh_crafting/shared/recipes.lua` has no gunsmith entry (the `gunsmith` station type is
 reserved for future recipes). Tonics belong to `fh_crafting`.
@@ -66,11 +65,11 @@ reserved for future recipes). Tonics belong to `fh_crafting`.
 
 ## Pending contracts
 
-- **@homestead H3 station API** (`isNearStation`/`getStations`/`stationAt`): not on main yet; `fh_crafting` falls back
-  to `devStations` while `fh_dev 1`. Removed by block C5.
-- **@core B7 `removeItem(ref, item, amount)`** (+ idea-615 carried refs): `invTake` refuses `no_remove` until the export
-  lands, so `gun_parts` cannot be consumed yet. C5b swaps this in.
-- **@core `setItemInfo(ref, slot, info)` (idea-689)**: not built yet. `fh_gunsmith` calls it only when the export
-  exists; otherwise it refuses `no_set_info` before any parts are taken, so restore cannot write a raised condition in
-  game until this contract lands.
+- **@homestead H2 `/fh_build`** (not on main yet): H3 stations are real, but a workbench exists only once built.
+  Restore reach is `fh_crafting` `getStations(citizenid)` filtered to `workbench` (own plot only, coordinates compared
+  with the open container's `view.coords`, vector3 or table); before the homestead slot load finishes it is `{}` and
+  restore refuses `no_station`. Use `fh_dev 1` dev stations until H2 lands.
 - **idea-612 (tonic caps in fh_buffs)**: does not affect restore; listed because the same lane's apothecary waits on it.
+
+Resolved: core-03 carried add/remove (idea-615) and `setItemInfo(ref, slot, info, expectName)` (idea-689); restore
+passes the weapon item name as `expectName`. `no_set_info` now appears only when fh_core lacks the export.
