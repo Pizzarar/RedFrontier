@@ -27,6 +27,9 @@ exports('price', function(peltItem, stars)
     return price.price(a.value, a.fixedStars or stars, a.legendary == true, cfg)
 end)
 
+-- H5: comfort of a trophy item id (number) or nil. Pure lookup in shared/trophies.lua; no events (Homestead owns placement).
+exports('getTrophyComfort', function(itemId) return FhHuntingTrophies.getComfort(itemId) end)
+
 -- ---------------------------------------------------------------- H2 skin flow
 
 local RSGCore

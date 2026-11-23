@@ -19,6 +19,7 @@ server_scripts {
     'shared/skin.lua',
     'shared/wagon.lua',
     'shared/sell.lua',
+    'shared/trophies.lua',
     'server/main.lua',
 }
 
@@ -29,4 +30,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'fh_economy', 'ox_lib', 'rsg-target' }
 
-server_exports { 'getAnimal', 'getPeltItem', 'price' }
+server_exports { 'getAnimal', 'getPeltItem', 'price', 'getTrophyComfort' }

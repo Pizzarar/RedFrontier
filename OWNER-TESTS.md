@@ -418,3 +418,7 @@ All unverified in-game. Needs `fh_economy` and the database running. Trapper coo
 7. With the wagon at the trapper, sell the bear pelt from the menu. Expected: $45 x 1.8 = $81 for a 3 star, and removed from the wagon.
 
    RESULT:
+
+### H5 trophy comfort
+
+Hunting only exposes `exports.fh_hunting:getTrophyComfort(item)` (`trophy_legendary_bear` = 25, nil otherwise); what Homestead shows when a trophy is placed (comfort gain, trophy_wall slot) is checked in the Homestead section.

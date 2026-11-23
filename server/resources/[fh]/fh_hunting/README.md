@@ -55,6 +55,7 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 - `getAnimal(model|hash, legendary)`: the animal table entry or nil.
 - `getPeltItem(model|hash, legendary)`: pelt item id or nil.
 - `price(peltItem, stars)`: payout amount or `nil, err`.
+- `getTrophyComfort(itemId)`: comfort number for a trophy item (`trophy_legendary_bear` = 25), nil for pelts, unknown ids and non-strings. Homestead places the trophy and reads this; Hunting fires no trophy events.
 
 ## Trapper (H3)
 
@@ -112,7 +113,7 @@ Emitted (server-only, for @quests and @guide; never sent to clients):
   `{ citizenid, chain_id }`, `fh:hunting:chain_complete` `{ citizenid, chain_id }`.
 
 No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_hunting:getTrophyComfort(itemId)`
-(number, or nil for a non-trophy), added in H5.
+(number, or nil for a non-trophy), see Exports.
 
 Consumes from other resources: `fh_core:registerItems`, `fh_core:saddlebagOf`, `fh_core:addItem` and the container
 rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay` and `fh_core:snapshot` (H3); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
