@@ -99,6 +99,12 @@ function M.isExpired(bag, now)
     return type(bag) == 'table' and finite(bag.expiresAt) and finite(now) and now >= bag.expiresAt or false
 end
 
+---A bag players may see (prop, prompt) and open: not mid-drop / mid-delete (busy) and not past its expiry.
+---Expired bags are only ever deleted by the sweep (review rn-eb74b5c695bb: no open window after expiry).
+function M.isLive(bag, now)
+    return type(bag) == 'table' and not bag.busy and not M.isExpired(bag, now)
+end
+
 local function dist(a, b)
     local ok, ax, ay, az, bx, by, bz = pcall(function() return a.x, a.y, a.z, b.x, b.y, b.z end)
     if not ok then return nil end
@@ -107,10 +113,13 @@ local function dist(a, b)
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
----Only the owner, within reach. fh_core.open re-checks reach from the server ped, and fh_inventory once more.
+---Only the owner, within reach, of a live bag. fh_core.open re-checks reach from the server ped, and fh_inventory
+---once more. now = os.time() (nil skips the expiry check).
 ---@return boolean ok, string|nil reason
-function M.canOpen(bag, citizenid, playerCoords, reach)
+function M.canOpen(bag, citizenid, playerCoords, reach, now)
     if type(bag) ~= 'table' then return false, 'fh_no_bag' end
+    if bag.busy then return false, 'fh_bag_busy' end
+    if now ~= nil and M.isExpired(bag, now) then return false, 'fh_bag_expired' end
     if type(citizenid) ~= 'string' or citizenid == '' then return false, 'fh_no_character' end
     if bag.owner ~= citizenid then return false, 'fh_not_owner' end
     local d = dist(bag.coords, playerCoords)

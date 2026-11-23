@@ -95,5 +95,23 @@ case('canOpen: owner only, within reach', function()
     assert(why(R.canOpen(bag, 'C1', nil, 3.5)) == 'fh_no_player_coords')
     assert(why(R.canOpen(nil, 'C1', { x = 0, y = 0, z = 0 }, 3.5)) == 'fh_no_bag')
 end)
+case('isLive: busy (mid-drop / mid-delete) and expired bags are not live', function()
+    local bag = { owner = 'C1', coords = { x = 0, y = 0, z = 0 }, expiresAt = 100 }
+    assert(R.isLive(bag, 99))
+    assert(not R.isLive(bag, 100))
+    bag.busy = true
+    assert(not R.isLive(bag, 50))
+    assert(not R.isLive(nil, 50))
+    assert(R.isLive({ coords = bag.coords }, 50)) -- no expiresAt: never expires by itself
+end)
+case('canOpen: refuses an expired bag (e.g. loaded after restart, before the first sweep) and a busy one', function()
+    local bag = { owner = 'C1', coords = { x = 0, y = 0, z = 0 }, expiresAt = 100 }
+    local at = { x = 1, y = 0, z = 0 }
+    assert(R.canOpen(bag, 'C1', at, 3.5, 99))
+    assert(why(R.canOpen(bag, 'C1', at, 3.5, 100)) == 'fh_bag_expired')
+    assert(why(R.canOpen(bag, 'C1', at, 3.5, 5000)) == 'fh_bag_expired')
+    bag.busy = true
+    assert(why(R.canOpen(bag, 'C1', at, 3.5, 50)) == 'fh_bag_busy')
+end)
 
 T.finish()

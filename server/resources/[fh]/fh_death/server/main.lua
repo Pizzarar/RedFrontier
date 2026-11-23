@@ -52,9 +52,9 @@ local function describe(items)
 end
 
 local function publicList()
-    local out = {}
+    local out, now = {}, os.time()
     for id, b in pairs(bags) do
-        out[#out + 1] = { id = id, x = b.coords.x, y = b.coords.y, z = b.coords.z }
+        if rules.isLive(b, now) then out[#out + 1] = { id = id, x = b.coords.x, y = b.coords.y, z = b.coords.z } end
     end
     return out
 end
@@ -100,12 +100,16 @@ local function registerBag(bag)
 end
 
 ---Delete the stash, then the row, then forget the bag. Any failure keeps the bag tracked (the sweep retries).
+---The bag is busy for the whole call (it yields on MySQL): the sweep, the open handler and an fh_core restart leave
+---it alone, so nothing re-registers or re-props a container that is being deleted (review rn-eb74b5c695bb).
 ---@return boolean ok, table|string itemsOrReason
 local function removeBag(bag)
+    bag.busy = true
     local ok, items = exports.fh_core:deleteContainer(refOf(bag.id))
     if not ok then
         -- fh_inventory restarted and lost the registration: register again and retry on the next sweep
         if items == 'fh_unknown_container' then registerBag(bag) end
+        bag.busy = nil
         return false, items
     end
     local rowOk = pcall(MySQL.update.await, 'DELETE FROM fh_death_drops WHERE id = ?', { bag.id })
@@ -171,13 +175,14 @@ local function dropFor(src, cid, life)
             end
         end
     end
-    bag.busy = nil
-
     if movedSteps == 0 then
-        local ok, why = removeBag(bag) -- empty bag: no prop; if this fails the sweep removes it once it can
+        -- empty bag, no prop. Still busy here: removeBag keeps it busy until it is gone, or clears busy on failure so
+        -- the sweep removes it once it can.
+        local ok, why = removeBag(bag)
         if not ok then log('%s: empty bag %s not removed yet (%s)', cid, id, tostring(why)) end
         return
     end
+    bag.busy = nil
     spawnProp(bag)
     broadcast()
     log('%s life %d: bag %s at %.1f %.1f %.1f, %d stack(s) moved, %d kept', cid, life, id, coords.x, coords.y, coords.z,
@@ -270,12 +275,14 @@ local function loadBags()
         local bag = { id = r.id, owner = r.citizenid, coords = vector3(r.x + 0.0, r.y + 0.0, r.z + 0.0),
             slots = tonumber(r.slots), maxWeight = tonumber(r.max_weight), expiresAt = tonumber(r.expires_at) }
         bags[bag.id] = bag
-        registerBag(bag)
-        spawnProp(bag)
+        registerBag(bag) -- expired ones too: fh_inventory must know the stash to delete it
+        if rules.isLive(bag, os.time()) then spawnProp(bag) end
     end
+    log('%d bag(s) loaded', #rows)
+    local okSweep, errSweep = pcall(sweep) -- expired rows go now, not after the first sweepMs
+    if not okSweep then log('sweep error: %s', tostring(errSweep)) end
     ready = true
     broadcast()
-    log('%d bag(s) loaded', #rows)
     while true do
         Wait(cfg.sweepMs)
         local ok, err = pcall(sweep)
@@ -288,10 +295,14 @@ CreateThread(loadBags)
 -- fh_core restart: its registered-container table and every spawn request are gone. Register and re-request.
 AddEventHandler('onResourceStart', function(res)
     if res ~= 'fh_core' or not ready then return end
+    local now = os.time()
     for _, bag in pairs(bags) do
         bag.spawnId = nil
-        registerBag(bag)
-        spawnProp(bag)
+        -- a busy bag is mid-drop (dropFor registers it itself) or mid-delete: leave it alone
+        if not bag.busy then
+            registerBag(bag)
+            if rules.isLive(bag, now) then spawnProp(bag) end
+        end
     end
 end)
 
@@ -306,10 +317,11 @@ RegisterNetEvent('fh:death:open', function(payload)
     if lastOpen[src] and now - lastOpen[src] < 500 then return end
     lastOpen[src] = now
     local bag = bags[payload.id]
-    if not bag or bag.busy then return end
+    if not bag then return end
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return end
-    local ok, why = rules.canOpen(bag, citizenidOf(src), GetEntityCoords(ped), cfg.reach)
+    -- refuses busy and expired bags too (an expired bag is only ever deleted by the sweep)
+    local ok, why = rules.canOpen(bag, citizenidOf(src), GetEntityCoords(ped), cfg.reach, os.time())
     if not ok then return reply(src, 'bag: ' .. why) end
     ok, why = exports.fh_core:open(src, refOf(bag.id))
     if not ok then reply(src, 'bag: ' .. tostring(why or 'fh_refused')) end

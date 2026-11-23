@@ -35,6 +35,10 @@ Tier A: this resource moves player items. NOT runtime-tested yet (no Cfx key); s
   open (`fh_in_use`, retried next sweep), so an open inventory UI can never put items into a deleted bag.
 - If fh_inventory restarted and lost the registration (`fh_unknown_container`), the bag is registered again and
   retried; it is never dropped from tracking.
+- A bag is `busy` while it is being filled or deleted (both yield on MySQL): the sweep, the open request and an
+  fh_core restart skip it, so nothing re-registers or re-props a container mid-delete.
+- An expired bag cannot be opened, gets no prop and is not listed to clients; on start, expired rows are swept
+  before the first broadcast.
 - The only intended deletion of items is expiry, and it is logged item by item.
 
 ## Persistence
