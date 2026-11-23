@@ -1,5 +1,5 @@
 -- fh_death server (spec L4 soft death, L16 soft consequences). The server owns all state.
--- On a death confirmed server side: `equipped` stays; backpack (+ saddlebag once a horse system exists) move into a
+-- On a death confirmed server side: `equipped` stays; backpack (+ saddlebag) move into a
 -- new owner-only drop bag (a registered fh stash of type drop_bag) through fh_core.transferAll. The stash is the
 -- truth; the prop (B4c requestSpawn) is only visual. Bags persist in fh_death_drops + fh_inventory's `inventories`.
 -- Natives: GetPlayerPed, GetEntityCoords, GetEntityHealth (server), GetGameTimer. NOT runtime-tested (no Cfx key).

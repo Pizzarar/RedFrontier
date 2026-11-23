@@ -95,6 +95,26 @@ range count.
   move whole or not at all.
 - Nothing in `FhRules` mutates its arguments.
 
+## Saddlebag (B6e)
+
+One `saddlebag` container per character, stash id `fh:saddle:<citizenid>` (shared/saddlebag_rules.lua `stashId`).
+Capacity and size classes come from `FhConfig.Containers.saddlebag` (20 slots / 60 000 g; pocket + bulky, cargo refused).
+It is a world container, so fh_core registers it lazily (first open, or when fh_death reads it) and moves its coords
+to the horse (open) or the player (death). Contents persist in fh_inventory by stash id, like the plot chest.
+
+- **Open:** `/saddlebag` (client/saddlebag.lua) takes the horse you ride, else the nearest horse within 4 m, and sends
+  `fh:saddlebag:open { netId }`.
+- **Access rule (server-authoritative, `FhSaddlebagRules.canAccess`):** the netId must resolve to an existing entity
+  that is a horse (`IsThisModelAHorse` on its model, **unverified in-game**) and lie within
+  `FhContainers.interactDistance('saddlebag')` (3.5 m) of the server-side player ped. Mounted = distance ~0, so the
+  same check covers "on a horse" and "next to one". Reasons: `fh_no_character`, `fh_no_horse`, `fh_not_a_horse`,
+  `fh_no_player_coords`, `fh_out_of_reach`. `fh_core.open` then re-checks reach against the horse coords.
+- **Export:** `exports.fh_core:saddlebagOf(src)` returns the stash id (registered at the player's position) for fh_death.
+- **Test horse:** the existing admin command `fh_spawn_horse [model]` (B4c spawn contract), no new command.
+- **TODO(horse milestone):** there is no horse ownership: any horse opens anyone's saddlebag, and the bag does not
+  follow a specific horse. The horse lane replaces this with `fh:saddle:<horse_id>` and an ownership check.
+- Pure rule specced in `spec/saddlebag_rules_spec.lua`; the natives side is **not runtime-tested** (no Cfx key).
+
 ## Server API
 
 A container ref is `{ type = <container type>, id = <id> }`: `id` is the player server id for `equipped` and

@@ -279,3 +279,4 @@ fh_zones camp (`fh_zones/server/main.lua`, `fh_zones/client/main.lua`), all **un
 `SetRelationshipBetweenGroups` (5 = hate, both directions vs `PLAYER`), `SetBlockingOfNonTemporaryEvents`, `SetPedCombatAttributes`
 (46 = always fight), `GiveWeaponToPed_2` (attach point `0x2CD419DC`), `SetCurrentPedWeapon`, `TaskCombatHatedTargetsAroundPed`,
 `IsEntityDead`, `IsControlJustReleased` (E = `0xCEFD9220`), `joaat`. Model `g_m_m_unibanditos_01` and the weapon names are guesses.
+fh_core saddlebag (`server/saddlebag.lua`, `client/saddlebag.lua`, B6e), all **unverified in-game**: server `NetworkGetEntityFromNetworkId`, `DoesEntityExist`, `GetEntityModel`, `IsThisModelAHorse` (RDR3 `IS_THIS_MODEL_A_HORSE`, assumed to return a boolean/0-1), `GetEntityCoords`. Client: `IsPedOnMount`, `GetMount`, `GetGamePool('CPed')`, `IsThisModelAHorse`, `NetworkGetEntityIsNetworked`, `NetworkGetNetworkIdFromEntity`.

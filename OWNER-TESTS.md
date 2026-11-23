@@ -122,14 +122,14 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 2. Fill the backpack: `fh_give <yourId> bread 3`. Equip a weapon in the hotbar (`/giveitem <yourId> weapon_revolver_cattleman 1`).
    Expected: 3 bread in the backpack, revolver in the hotbar.
    RESULT:
-3. Ride to the camp (-145, 845, 117) and kill all four outlaws.
+3. Spawn a horse with `fh_spawn_horse` (admin), mount it, ride to the camp (-145, 845, 117) and kill all four outlaws.
    Expected: `camp heartlands_t1_01 cleared, 2 loot entries`.
    RESULT:
 4. Press E at the camp stash.
    Expected: Worn Rifle (condition 20-45) and Small Safe (both bulky).
    RESULT:
-5. Try to drag the Worn Rifle and the Small Safe into your backpack.
-   Expected: both refused (bulky is not allowed in the backpack). Note what you can do with them (nothing, unless you have a saddlebag).
+5. Try to drag the Worn Rifle and the Small Safe into your backpack (refused: bulky). Then, still on or next to the horse, run `/saddlebag` and move both into the saddlebag.
+   Expected: backpack refuses both; the saddlebag accepts both.
    RESULT:
 6. Die once (fall or NPC) and respawn.
    Expected: `[fh_death] ... bag fh:dropbag:... moved`; revolver still in the hotbar; backpack empty.
@@ -137,9 +137,30 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 7. Walk to the bag, press E, take everything back.
    Expected: bread returns to the backpack; the bag empties and is swept.
    RESULT:
-8. Ride home and open the plot chest (E). Move the bread into the chest.
-   Expected: accepted. Then try the rifle/safe: record whether you were able to get them home at all.
+8. Ride the horse home. Open the plot chest (E) and move the bread in. Then run `/saddlebag` beside the horse and move the rifle/safe from the saddlebag into the chest.
+   Expected: all accepted (the chest takes bulky). If you spawned a fresh horse after dying, `/saddlebag` still shows the same bag (any horse works for now).
    RESULT:
 9. Restart persistence: put an item in the chest, stop the server, start it, rejoin, open the chest.
    Expected: the item is still there with its condition intact (check a rifle if you got one home).
+   RESULT:
+
+## B6e saddlebag
+
+1. Spawn a horse (`fh_spawn_horse`), stand beside it, run `/saddlebag`. Put 1 bread in it.
+   Expected: the saddlebag opens (20 slots); bread accepted.
+   RESULT:
+2. Try to put `test_cargo_crate` in the saddlebag (get one with `fh_give <yourId> test_cargo_crate 1`).
+   Expected: refused (cargo).
+   RESULT:
+3. Walk 10+ m from the horse and run `/saddlebag`.
+   Expected: `saddlebag: no horse in reach` (client) and nothing opens. Also stand next to a non-horse ped: same.
+   RESULT:
+4. Mount the horse and run `/saddlebag`.
+   Expected: opens with the bread still inside.
+   RESULT:
+5. Die with bread in the saddlebag and the backpack. Respawn and find the drop bag.
+   Expected: bag holds the saddlebag bread too (`[fh_death]` console line); the saddlebag is empty.
+   RESULT:
+6. Put an item in the saddlebag, restart the server, rejoin, spawn a horse, `/saddlebag`.
+   Expected: the item is still there.
    RESULT:

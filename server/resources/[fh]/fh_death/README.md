@@ -55,8 +55,9 @@ The prop is a plain B4c `kind='object'` request, so `fh_spike_gated` applies as 
 
 ## Not done yet / known limits
 
-- **Saddlebag:** no horse system yet. `FhDeathConfig.saddlebagOf(src, citizenid)` returns nil, so only the backpack
-  moves. The horse lane returns the saddlebag stash id (`fh:saddle:<horse_id>`) there.
+- **Saddlebag (B6e):** `FhDeathConfig.saddlebagOf` calls `exports.fh_core:saddlebagOf(src)`, which registers the
+  character's saddlebag (`fh:saddle:<citizenid>`) at the player's position so it moves into the drop bag with the
+  backpack. The horse lane later swaps this for the horse's bag.
 - Leaving the game before rsg-core's death report reaches the server drops nothing (combat logging is not handled).
 - The owner can put items into their own bag; they expire with it.
 - Insurance and the doctor fee (rest of L4) are later blocks; `exports.fh_death:getBags()` lists live bags for them.

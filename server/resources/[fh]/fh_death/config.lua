@@ -13,7 +13,7 @@ FhDeathConfig = {
     minDeadSeconds = 5,           -- a character counts as alive again only after this long dead + health > 0
     aliveCheckMs = 2000,          -- poll of dead characters' server-side health (new life detection)
     sweepMs = 10000,              -- emptied / expired bag sweep
-    -- Saddlebag stash id for a dying player, or nil. No horse system yet (decisions/inventory.md: fh:saddle:<horse_id>),
-    -- so nothing moves from a saddlebag until the horse lane fills this in.
-    saddlebagOf = function(src, citizenid) return nil end,
+    -- Saddlebag stash id for a dying player (B6e): fh_core registers the character's saddlebag at the player's position
+    -- so it can be read and emptied; nil when the character or ped is unknown.
+    saddlebagOf = function(src, citizenid) return exports.fh_core:saddlebagOf(src) end,
 }
