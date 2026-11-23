@@ -293,7 +293,12 @@ describe('hunting skin: legendary bear pelt + trophy', function()
         assert(ok)
         eq('pelt_legendary_bear', res.item); eq('wagon', res.container)
         eq('wagon', res.trophy.container)
-        eq(2, #W.adds); eq('wagon', W.adds[2].ref.type)
+        -- The pelt (cargo) goes straight to the wagon; the trophy (bulky) tries the saddlebag, is refused,
+        -- and falls back to the wagon: three addItem calls, the failed saddlebag attempt included.
+        eq(3, #W.adds)
+        eq('pelt_legendary_bear', W.adds[1].name); eq('wagon', W.adds[1].ref.type)
+        eq('trophy_legendary_bear', W.adds[2].name); eq('saddlebag', W.adds[2].ref.type)
+        eq('trophy_legendary_bear', W.adds[3].name); eq('wagon', W.adds[3].ref.type)
     end)
     it('a throwing trophy grant still completes the pelt without double-paying', function()
         local W = legendaryWorld({ wagon = wagonAt(2) })
