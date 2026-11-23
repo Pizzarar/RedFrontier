@@ -36,3 +36,4 @@
 - idea-648 heat HUD PASS (Gemini 6287c71; forecast overlap lead-accepted), merged main bd06000.
 - W3 quest journal PASS (Gemini delta 9a2689c), merged main 6eb752e.
 - W1 fence screen (idea-601) PASS (Gemini b960bca + ca50443, rebase on P1b verified), merged main d726418 incl. Progression OWNER-TESTS reword (agreed).
+- W4 drop ox_lib fallbacks + test card PASS (docs fixes lead-verified), merged main db06ed0 incl. Q5 OWNER-TESTS reword (agreed). PLAN ui-wiring-fence-quests COMPLETE; ui playtest-ready db06ed0.
