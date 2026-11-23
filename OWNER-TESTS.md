@@ -60,6 +60,8 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
 3. Kill all four outlaws.
    Expected: console `camp heartlands_t1_01 cleared, 2 loot entries` once the last one dies (within ~2 s); the bodies vanish at that moment. No clear while one is alive.
    RESULT:
+3b. (gun_parts, core-05 K1) Clear the outlaw camp several times (respawn between runs) and open the stash each time.
+   Expected: it sometimes (about 80%) also holds 2-3 `gun_parts` (never 1, never 4+); other times none.
 4. Walk to the camp center (within 2 m) and press E at `[E] Outlaw camp stash`.
    Expected: the stash opens with a Worn Rifle (condition between 20 and 45 shown or in item info) and a Small Safe.
    Standing 10 m away and pressing E does nothing.

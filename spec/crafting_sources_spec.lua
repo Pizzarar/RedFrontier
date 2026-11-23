@@ -13,7 +13,6 @@ dofile(fh .. 'fh_zones/config.lua')
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
 local PENDING = {
     lumber   = 'idea-716', nails = 'idea-716', lead = 'idea-716', casings = 'idea-716', -- trade post `supplies`
-    gun_parts = 'idea-717',                                                             -- outlaw camp loot table
     -- bought via the same trade post `supplies` list (idea-718 ruling); herb gathering is a parked later spike
     resource_gunpowder = 'idea-716', herb_american_ginseng = 'idea-716', herb_oregano = 'idea-716',
     herb_red_sage = 'idea-716', herb_wild_mint = 'idea-716',

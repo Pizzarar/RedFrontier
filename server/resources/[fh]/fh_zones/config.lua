@@ -26,6 +26,7 @@ FhZonesConfig = {
                 table = {
                     { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
+                    { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } }, -- item registered by fh_crafting
                 },
             },
         },

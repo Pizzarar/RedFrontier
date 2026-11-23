@@ -98,6 +98,24 @@ case('rollLoot: condition is clamped into 0-100', function()
     local got = R.rollLoot({ { name = 'r', chance = 1, condition = { 90, 150 } } }, seq(0, 150))
     eq(100, got[1].info.condition)
 end)
+case('rollLoot: amount range hits both bounds, never outside; fixed amount unchanged', function()
+    local tbl = { { name = 'g', chance = 1, amount = { 2, 3 } }, { name = 'f', chance = 1, amount = 4 } }
+    eq(2, R.rollLoot(tbl, seq(0, 2, 0))[1].amount)
+    local got = R.rollLoot(tbl, seq(0, 3, 0))
+    eq(3, got[1].amount); eq(4, got[2].amount)
+    for _ = 1, 200 do
+        local a = R.rollLoot(tbl)[1].amount
+        assert(a == 2 or a == 3, 'amount ' .. tostring(a))
+    end
+end)
+case('config loot: gun_parts entry 0.8 chance, amount 2-3, not registered by fh_zones', function()
+    local e
+    for _, x in ipairs(camp.loot.table) do if x.name == 'gun_parts' then e = x end end
+    assert(e, 'gun_parts entry'); eq(0.8, e.chance); eq(2, e.amount[1]); eq(3, e.amount[2])
+    eq(nil, cfg.items.gun_parts)
+    eq('gun_parts', R.rollLoot({ e }, seq(799999, 0))[1].name)
+    eq(0, #R.rollLoot({ e }, seq(800000, 0)))
+end)
 case('config loot: worn rifle carries a condition in range, safe is bulky', function()
     local got = R.rollLoot(camp.loot.table, math.random)
     local rifle, safe

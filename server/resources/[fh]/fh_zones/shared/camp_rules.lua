@@ -102,7 +102,7 @@ function M.respawnDue(now, respawnAt)
 end
 
 ---Roll a loot table. rng(a, b) -> integer in [a, b] (default math.random); chance is compared on a 0..1000000 scale.
----entry: { name, chance (0..1), amount?, condition = { min, max }? }. Returns array of { name, amount, info? }.
+---entry: { name, chance (0..1), amount? (integer, or { min, max } rolled inclusive), condition = { min, max }? }. Returns array of { name, amount, info? }.
 function M.rollLoot(tbl, rng)
     rng = rng or math.random
     local out = {}
@@ -111,6 +111,10 @@ function M.rollLoot(tbl, rng)
             local roll = rng(0, 999999)
             if roll < e.chance * 1000000 then
                 local item = { name = e.name, amount = math.tointeger(e.amount) or 1 }
+                if type(e.amount) == 'table' then
+                    local lo, hi = math.tointeger(e.amount[1]), math.tointeger(e.amount[2])
+                    if lo and hi and lo >= 1 and hi >= lo then item.amount = rng(lo, hi) end
+                end
                 if type(e.condition) == 'table' then
                     local lo, hi = e.condition[1], e.condition[2]
                     if type(lo) == 'number' and type(hi) == 'number' and hi >= lo then
