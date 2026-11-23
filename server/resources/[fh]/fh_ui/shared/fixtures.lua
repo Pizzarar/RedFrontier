@@ -1,4 +1,4 @@
--- Fixture data + pure helpers for the U3 screens (heat, insurance, jobs, journal, station, fence). No natives, specced
+-- Fixture data + pure helpers for the U3 screens (heat, insurance, jobs, journal, dialogue, station, fence). No natives, specced
 -- under busted (spec/ui_fixtures_spec.lua). The producing lanes do not exist yet, so `fh_ui_demo <screen>` opens these.
 local M = {}
 
@@ -40,6 +40,11 @@ M.fixtures = {
               updated_at = 1795640000, rewards = { money = 12 } },
         },
     },
+    dialogue = {
+        speaker = 'Martha Hale',
+        pages = { 'Heard you were looking for work.', 'The roof leaks and the pelts are piling up.' },
+        offer = { quest_id = 'family_hale_1', prompt = 'Will you take the job?', accept = 'I will', decline = 'Not yet' },
+    },
     station = {
         title = 'Cookfire',
         options = {
@@ -80,6 +85,10 @@ S.journal = {
     entries = { list = { quest_id = 'string', kind = 'string', title = 'string', giver = 'string?', region_id = 'string?',
         status = 'string', step = 'number?', steps_total = 'number?', step_text = 'string?', count = 'number?',
         need = 'number?', cooldown_until = 'number?', updated_at = 'number?', rewards = { obj = { money = 'number?' } } } },
+}
+S.dialogue = {
+    speaker = 'string', notice = 'string?', notice_kind = 'string?', pages = 'table',
+    offer = { obj = { quest_id = 'string', prompt = 'string', accept = 'string', decline = 'string' } },
 }
 S.station = {
     title = 'string',

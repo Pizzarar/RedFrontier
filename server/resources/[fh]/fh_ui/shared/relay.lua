@@ -12,6 +12,7 @@ M.screens = {
     insurance   = 'death',     -- tracker insurance dialog (L4 Death & Insurance)
     jobs        = 'quests',    -- jobs board: contracts, bounties, hunts (@quests lane)
     journal     = 'quests',    -- quest journal: active quests + history, abandon (@quests lane)
+    dialogue    = 'quests',    -- giver dialogue: pages + quest offer (@quests lane)
     station     = 'homestead', -- station menus (L1 stations; L5 crafting may take over later)
     fence       = 'fence',     -- fence shop (fh_fence owns it)
 }

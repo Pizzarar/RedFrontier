@@ -5,7 +5,7 @@ local case = T.it
 local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_ui/shared/fixtures.lua')
 
-local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', station = 'homestead', fence = 'fence' }
+local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence' }
 local passive = { heat = true }
 
 case('every fixture validates against its schema', function()
@@ -15,7 +15,7 @@ case('every fixture validates against its schema', function()
         local ok, errs = F.validate(screen, data)
         assert(ok, screen .. ': ' .. table.concat(errs or {}, '; '))
     end
-    T.eq(6, n)
+    T.eq(7, n)
 end)
 case('schema checker rejects bad data', function()
     local bad = { title = 'x', fee = 'free', delay_minutes = 1 }
@@ -31,7 +31,7 @@ case('every fixture screen is whitelisted with the right lane and focus', functi
     end
 end)
 case('fixture actions relay (confirm/cancel/accept/craft/buy/sell/close)', function()
-    for screen, act in pairs({ insurance = 'confirm', jobs = 'accept', journal = 'abandon', station = 'craft', fence = 'buy' }) do
+    for screen, act in pairs({ insurance = 'confirm', jobs = 'accept', journal = 'abandon', dialogue = 'start', station = 'craft', fence = 'buy' }) do
         assert(R.validate({ screen = screen, action = act, payload = { id = 'x', qty = 1 } }), screen)
     end
 end)
@@ -39,6 +39,15 @@ case('jobs fixture shows an open and an accepted offer', function()
     local seen = {}
     for _, o in ipairs(F.fixtures.jobs.offers) do seen[o.accepted and 'yes' or 'no'] = true end
     assert(seen.yes and seen.no)
+end)
+case('dialogue fixture has pages and an offer; start/close relay to quests', function()
+    local d = F.fixtures.dialogue
+    assert(#d.pages >= 2 and d.offer.quest_id)
+    T.eq('quests', R.screens.dialogue)
+    assert(not R.passive.dialogue)
+    assert(R.validate({ screen = 'dialogue', action = 'close', payload = {} }))
+    T.eq('fh:quests:ui_start', R.eventName('quests', 'start'))
+    T.same({ action = 'open', screen = 'dialogue' }, F.parseDemo({ 'dialogue' }))
 end)
 case('parseDemo', function()
     T.same({ action = 'open', screen = 'fence' }, F.parseDemo({ 'Fence' }))

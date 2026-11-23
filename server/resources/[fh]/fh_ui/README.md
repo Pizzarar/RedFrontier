@@ -34,6 +34,8 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `bags` | `death` | passive (U2) |
 | `insurance` | `death` | interactive |
 | `jobs` | `quests` | interactive |
+| `journal` | `quests` | interactive |
+| `dialogue` | `quests` | interactive |
 | `station` | `homestead` | interactive |
 | `fence` | `fence` | interactive |
 
@@ -106,6 +108,15 @@ changes the inline `notice`. Only active rows have an Abandon button (second cli
 Actions: `abandon` `{ id }` (the quest_id; relays `fh:quests:ui_abandon`, the lane answers with a notice update and a fresh sync), `close` `{}`.
 Opened by `/journal` -> `fh:quests:ui_journal_open`; the client adapter fills it from the last sync (it caches the latest snapshot). No autofocus, Enter does nothing.
 
+### dialogue (owner `quests`)
+Giver conversation; the lane builds it all, the screen only pages through it (client-side, no round trip per line).
+`open/update` data `{ speaker, pages = { "line", ... }, offer? = { quest_id, prompt, accept, decline }, notice?, notice_kind? }`.
+Shows one page at a time with **Next**; after the last page it shows the offer's accept/decline buttons, or **Goodbye** when there is no offer.
+`pages` may be empty (then the offer or Goodbye shows at once). An `update` without `pages` keeps the conversation and only changes the
+inline `notice` (`ok|error`); `offer = false` in it hides the offer. Actions: `start` `{ quest_id }` (accept button only; relays
+`fh:quests:ui_start`, the lane revalidates proximity and answers with a notice update), `close` `{}` (decline/Goodbye/Esc).
+No autofocus, Enter does nothing.
+
 ### station (owner `homestead`)
 `open/update` data `{ title, options = { { id, label, inputs = { { item, qty } }, outputs = { { item, qty } }, time_seconds, can_craft } } }`.
 Actions: `craft` `{ id }` (button disabled when `can_craft` is false; the lane rechecks), `close` `{}`.
@@ -121,6 +132,6 @@ revalidates everything. fh_fence maps its menu with `FhFenceLogic.screenData`, s
 `fh:ui:update` `{ screen = 'fence', data = { ...fresh lists, notice } }`.
 
 ### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|jobs|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
