@@ -13,10 +13,12 @@ function logic.tierForRep(cfg, region, value)
     return 1
 end
 
----Tier crossing between two rep values. An unknown old value (nil / not a number) never counts as a crossing.
+---Tier crossing between two rep values. An unknown old value (nil / not a number), a bad new value or an unknown
+---region never counts as a crossing.
 ---@return boolean changed, integer oldTier, integer newTier
 function logic.crossing(cfg, region, oldValue, newValue)
-    local newTier = logic.tierForRep(cfg, region, newValue)
+    local newTier, newWhy = logic.tierForRep(cfg, region, newValue)
+    if newWhy then return false, newTier, newTier end
     if type(oldValue) ~= 'number' or oldValue ~= oldValue then return false, newTier, newTier end
     local oldTier = logic.tierForRep(cfg, region, oldValue)
     return oldTier ~= newTier, oldTier, newTier
@@ -33,6 +35,18 @@ function logic.canUnlock(cfg, repByRegion, unlock_id)
     if why then return false, why end
     if tier < u.min_tier then return false, 'tier_too_low' end
     return true
+end
+
+---Interprets `pcall(exports.fh_economy.getRep, citizenid, region_id)`. Contract (@core B7):
+---`getRep(who, region_id) -> integer|nil, err` with err in unknown_region / no_player / ledger_failed.
+---A nil from the export is an error and is passed through as-is, never read as 0. Only a failed call (export not
+---there yet: idea-600) asks for the read-only fallback.
+---@return string kind 'value'|'error'|'fallback', number|string|nil v
+function logic.repExportResult(callOk, v, err)
+    if not callOk then return 'fallback' end
+    if v == nil then return 'error', type(err) == 'string' and err or 'read_failed' end
+    if type(v) ~= 'number' or v ~= v or v == math.huge or v == -math.huge then return 'error', 'bad_value' end
+    return 'value', v
 end
 
 if _G.GetCurrentResourceName then _G.FhProgressionLogic = logic end

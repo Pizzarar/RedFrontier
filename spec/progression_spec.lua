@@ -76,4 +76,33 @@ case('crossing: up, down, same tier, unknown old', function()
     T.eq(false, c)
 end)
 
+case('crossing: bad new value / unknown region never crosses (no spurious drop)', function()
+    for _, bad in ipairs({ nil, 0/0, 'x', true }) do
+        local c, o, n = logic.crossing(cfg, 'heartlands', cfg.tiers.heartlands.t2 + 50, bad)
+        T.eq(false, c); T.eq(1, o); T.eq(1, n)
+    end
+    T.eq(false, (logic.crossing(cfg, 'nowhere', 999, 0)))
+end)
+
+case('repExportResult follows getRep(who, region_id) -> integer|nil, err', function()
+    local kind, v = logic.repExportResult(true, 120)
+    T.eq('value', kind); T.eq(120, v)
+    kind, v = logic.repExportResult(true, 0)
+    T.eq('value', kind); T.eq(0, v)
+    -- nil + err is an error passed through, never 0 and never the fallback
+    for _, err in ipairs({ 'unknown_region', 'no_player', 'ledger_failed' }) do
+        kind, v = logic.repExportResult(true, nil, err)
+        T.eq('error', kind); T.eq(err, v)
+    end
+    kind, v = logic.repExportResult(true, nil)
+    T.eq('error', kind); T.eq('read_failed', v)
+    for _, bad in ipairs({ 0/0, math.huge, -math.huge, '5', {} }) do
+        kind, v = logic.repExportResult(true, bad)
+        T.eq('error', kind); T.eq('bad_value', v)
+    end
+    -- the call itself failed (no getRep export yet): only then the read-only fallback
+    kind, v = logic.repExportResult(false, 'No such export getRep in resource fh_economy')
+    T.eq('fallback', kind); T.eq(nil, v)
+end)
+
 T.finish()
