@@ -192,4 +192,24 @@ case('fastTravelVerdict fails closed when a container could not be read', functi
     assert(not ok and r == 'fh_cargo_unknown')
 end)
 
+case('nearestWagon: owner only, in range, nearest of several, dead ignored, range capped', function()
+    local function w(id, owner, x) return { id = id, owner = owner, coords = x and { x = x, y = 0, z = 0 } or nil } end
+    local list = { w('far', 'C1', 20), w('near', 'C1', 4), w('theirs', 'C2', 1), w('dead', 'C1', nil) }
+    local best, d = R.nearestWagon('C1', me, 10, list)
+    assert(best.id == 'near' and d == 4, 'nearest own wagon; the closer foreign one is skipped')
+    assert(R.nearestWagon('C1', me, 30, list).id == 'near')
+    assert(select(2, R.nearestWagon('C1', me, 3, list)) == 'fh_no_wagon', 'out of range')
+    assert(R.nearestWagon('C1', me, 100, { w('far', 'C1', 20) }), 'within the 25 m cap')
+    assert(select(2, R.nearestWagon('C1', me, 100, { w('far', 'C1', 40) })) == 'fh_no_wagon', 'range capped at 25')
+    assert(select(2, R.nearestWagon('C2', me, 10, { w('a', 'C1', 1) })) == 'fh_no_wagon', 'owner only')
+    assert(select(2, R.nearestWagon('C1', me, 10, { w('dead', 'C1', nil) })) == 'fh_no_wagon', 'dead ignored')
+    assert(select(2, R.nearestWagon('C1', me, 0, list)) == 'fh_bad_range')
+    assert(select(2, R.nearestWagon('C1', me, -1, list)) == 'fh_bad_range')
+    assert(select(2, R.nearestWagon('C1', me, 'x', list)) == 'fh_bad_range')
+    assert(select(2, R.nearestWagon('C1', me, 0 / 0, list)) == 'fh_bad_range')
+    assert(select(2, R.nearestWagon('C1', nil, 10, list)) == 'fh_no_player_coords')
+    assert(select(2, R.nearestWagon(nil, me, 10, list)) == 'fh_no_character')
+    assert(select(2, R.nearestWagon('C1', me, 10, nil)) == 'fh_no_wagon', 'junk list does not throw')
+end)
+
 T.finish()

@@ -15,6 +15,7 @@ M.SPEED_LOAD_PENALTY = 0.4 -- a wagon at max weight goes at (1 - 0.4) of its cap
 M.DEFAULT_REACH = 5.0
 M.DEFAULT_OPEN_REACH = 3.5
 M.DEFAULT_FAST_TRAVEL_REACH = 30.0
+M.MAX_NEAREST_RANGE = 25.0
 
 local ALIASES = { cart = 't1', wagon = 't2', freight = 't3', ['1'] = 't1', ['2'] = 't2', ['3'] = 't3' }
 
@@ -193,6 +194,28 @@ function M.planTransfer(p)
     local toSlot = pickSlot(dst, item)
     if not toSlot then return nil, 'fh_no_slot' end
     return { fromRef = src.ref, toRef = dst.ref, fromSlot = slot, toSlot = toSlot, amount = amount, name = item.name }
+end
+
+---Nearest wagon `citizenid` may load into (v1: owner only, canUseWagon rule), within `range` of `coords`.
+---wagons = array of { id, owner, coords } for LIVE wagons only (an entry without usable coords is ignored).
+---range is capped at MAX_NEAREST_RANGE. Returns wagon, distance or nil, '<code>'. Never throws.
+function M.nearestWagon(citizenid, coords, range, wagons)
+    range = tonumber(range)
+    if not range or range ~= range or range <= 0 then return nil, 'fh_bad_range' end
+    if range > M.MAX_NEAREST_RANGE then range = M.MAX_NEAREST_RANGE end
+    if not citizenid then return nil, 'fh_no_character' end
+    if not xyz(coords) then return nil, 'fh_no_player_coords' end
+    local cx, cy, cz = xyz(coords)
+    local best, bestD
+    for _, w in ipairs(type(wagons) == 'table' and wagons or {}) do
+        if type(w) == 'table' and M.canUseWagon(w, citizenid, coords, range) then
+            local x, y, z = xyz(w.coords)
+            local d = math.sqrt((x - cx) ^ 2 + (y - cy) ^ 2 + (z - cz) ^ 2)
+            if not bestD or d < bestD then best, bestD = w, d end
+        end
+    end
+    if not best then return nil, 'fh_no_wagon' end
+    return best, bestD
 end
 
 ---Fast-travel veto (spec 2 + 4.1: cargo never fast-travels).

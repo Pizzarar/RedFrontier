@@ -207,7 +207,32 @@ local function canFastTravel(src)
     return ok, reason
 end
 
+---Nearest live wagon `src` may load into within `range` m of `coords` (nil = src's ped). Returns a fh_core
+---container ref ({ type = 'wagon', id = stash }) or nil. Never throws (hunting calls this).
+local function nearestWagon(src, coords, range)
+    local ok, res = pcall(function()
+        src = tonumber(src)
+        if not src then return nil end
+        local citizenid = citizenidOf(src)
+        if not citizenid then return nil end
+        if coords == nil then
+            local ped = GetPlayerPed(src)
+            if ped == 0 then return nil end
+            coords = GetEntityCoords(ped)
+        end
+        local list = {}
+        for _, e in ipairs(ownWagons(citizenid)) do
+            list[#list + 1] = { id = e.w.id, owner = e.w.owner, coords = e.coords, w = e.w }
+        end
+        local best = rules.nearestWagon(citizenid, coords, range, list)
+        return best and ref(best.w) or nil
+    end)
+    if ok then return res end
+    return nil
+end
+
 exports('canFastTravel', canFastTravel)
+exports('nearestWagon', nearestWagon)
 exports('spawnWagon', spawnWagon)
 exports('getWagon', function(wagonId)
     local w = wagons[wagonId]
