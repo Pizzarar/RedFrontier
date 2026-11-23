@@ -82,6 +82,7 @@ function M.notice(kind, qty, ok, a, b)
     if not ok then return M.why(a) end
     if kind == 'sell' then return ('Sold %d for $%d.'):format(tonumber(a) or 0, tonumber(b) or 0) end
     a = tonumber(a) or 0
+    qty = tonumber(qty)
     if qty and a < qty then
         if (tonumber(b) or 0) > 0 then
             return ('Bought %d of %d. No room for the rest: $%d refunded.'):format(a, qty, b)

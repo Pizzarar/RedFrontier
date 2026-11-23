@@ -3,12 +3,15 @@
 // notice (string) is a lane message (trade result or refusal) shown inline; an update without stock/sell keeps the lists.
 // Actions: buy { id, qty }, sell { id, qty }, close {}. The owning lane revalidates price and stock.
 FH_UI.register('fence', {
-  open: function (el, data) { this.update(el, data); },
+  open: function (el, data) { this.last = null; this.update(el, data); },
   update: function (el, data) {
     const D = FH_DOM; data = data || {};
-    if (!Array.isArray(data.stock) && !Array.isArray(data.sell)) { // notice-only update (e.g. walked out of range)
+    if (data.stock === undefined && data.sell === undefined) { // notice-only update (e.g. walked out of range)
       if (this.last) data = Object.assign({}, this.last, { notice: data.notice });
-    } else { this.last = data; }
+    } else { // Lua empty tables arrive as {}: coerce so stale rows never survive
+      data = Object.assign({}, data, { stock: D.asList(data.stock), sell: D.asList(data.sell) });
+      this.last = data;
+    }
     D.clear(el);
     const p = D.h('div', 'panel wide');
     p.appendChild(D.h('h1', 'title', data.title || 'Fence'));
@@ -31,6 +34,7 @@ FH_UI.register('fence', {
           FH_UI.action('fence', action, { id: String(r.id), qty: D.clampQty(q, r.qty) });
         });
         b.disabled = !(r.qty >= 1);
+        q.disabled = b.disabled;
         row.appendChild(b);
         body.appendChild(row);
       });
@@ -41,5 +45,5 @@ FH_UI.register('fence', {
     p.appendChild(D.btn('Close', function () { FH_UI.close('fence'); }));
     el.appendChild(p);
   },
-  close: function (el) { FH_DOM.clear(el); },
+  close: function (el) { this.last = null; FH_DOM.clear(el); },
 });
