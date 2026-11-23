@@ -64,3 +64,21 @@ Syntax clean. Every export and event is in the README. Review PASS, then rebase,
 
 ## Credits
 Original design; no plugin parity. The theme-park questline structure is a general genre convention, so no attribution is needed.
+
+## Resume after forge thaw (2026-11-23, C2 cutover done 15:11:45Z)
+Rules from the Overlord: no push, one lane merges at a time, never write the owner's name.
+1. Merge Q1 `origin/quests-q1` 4a0e7ff to local main. Review is already PASS (Gemini rn-5e9c4fb96b1a, 4 minor). Fold the minor "sparse steps list passes validate" into Q2. Done-check: specs green on main, merge hash logged.
+2. Announce the README path to @guide, @ui, @roads (one `vs send` each).
+3. Rebase `origin/quests-q2` 9b79f2e (WIP) onto main. Main is at migration 0005, so renumber the provisional 0008 against main at merge time. Overlord rule: during the pre-merge rebase, set the migration number to main's highest +1 and check this before every merge-slot request. The merge slot keeps it serialized. Git identity: owner set the forge global identity 2026-11-23; commit normally (the VibeSquad-Worker -c rule is retired). Restarts batch into ~13:00Z/~21:00Z windows. Then finish Q2: specs for rewards/store/journal/intake, the server/ glue, fxmanifest exports. Then review, then merge.
+4. Q3 → Q4 → Q5 as tabled above.
+
+**Pre-merge procedure per block (Overlord ruling 2026-11-23; re-author step retired same day):**
+1. Rebase onto main (plain `git rebase main`). The re-author `--exec` step is RETIRED (Overlord, 2026-11-23: owner set the forge global identity). Commits already re-authored stay as they are.
+2. Q2 only: rename the migration to main's highest +1. The range-diff will then show `!` on the migration commit, for the filename only. State that explicitly in the merge-slot request.
+3. Run `python3 tools/run-specs.py` and get it green.
+4. Gate: `git range-diff <reviewed-base>..<reviewed-hash> main..HEAD` shows only `=` (or header-only drift). Author-only changes need no re-review.
+5. The merge-slot request (`vs send rn-01cad4e19b2b "merge-slot quests <branch>"`) carries the range-diff line and the old->new hash map.
+6. Merge, log the hash, and do NOT push.
+   Reviewed pairs (base..hash): Q1 main@8b6b1a7..d277f55; Q2 d277f55..3473813; Q3 3473813..f802188; Q4 f802188..c9455b5; Q5 c9455b5..0adc9aa.
+   The stacked branches carry their base blocks: after merging block N, rebase block N+1 onto main.
+Q0a: spec (players in the camp radius at clear) was sent to @core Buddy on thaw. Q0b: lands with Hunting H3. Both are optional-field predicates in match.lua, so nothing blocks.
