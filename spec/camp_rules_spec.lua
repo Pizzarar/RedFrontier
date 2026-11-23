@@ -108,6 +108,11 @@ case('rollLoot: amount range hits both bounds, never outside; fixed amount uncha
         assert(a == 2 or a == 3, 'amount ' .. tostring(a))
     end
 end)
+case('rollLoot: malformed amount ranges fall back to 1', function()
+    for _, a in ipairs({ { 3, 2 }, { 0, 2 }, {} }) do
+        eq(1, R.rollLoot({ { name = 'g', chance = 1, amount = a } }, seq(0, 2))[1].amount)
+    end
+end)
 case('config loot: gun_parts entry 0.8 chance, amount 2-3, not registered by fh_zones', function()
     local e
     for _, x in ipairs(camp.loot.table) do if x.name == 'gun_parts' then e = x end end

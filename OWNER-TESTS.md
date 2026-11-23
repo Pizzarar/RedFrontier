@@ -58,10 +58,11 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    and they attack you (hostile). If they stand around, note it.
    RESULT:
 3. Kill all four outlaws.
-   Expected: console `camp heartlands_t1_01 cleared, 2 loot entries` once the last one dies (within ~2 s); the bodies vanish at that moment. No clear while one is alive.
+   Expected: console `camp heartlands_t1_01 cleared, 2 loot entries` (3 when gun_parts drops, about 80%) once the last one dies (within ~2 s); the bodies vanish at that moment. No clear while one is alive.
    RESULT:
 3b. (gun_parts, core-05 K1) Clear the outlaw camp several times (respawn between runs) and open the stash each time.
    Expected: it sometimes (about 80%) also holds 2-3 `gun_parts` (never 1, never 4+); other times none.
+   RESULT:
 4. Walk to the camp center (within 2 m) and press E at `[E] Outlaw camp stash`.
    Expected: the stash opens with a Worn Rifle (condition between 20 and 45 shown or in item info) and a Small Safe.
    Standing 10 m away and pressing E does nothing.
@@ -138,7 +139,7 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    Expected: 3 bread in the backpack, revolver in the hotbar.
    RESULT:
 3. Spawn a horse with `fh_spawn_horse` (admin), mount it, ride to the camp (-145, 845, 117) and kill all four outlaws.
-   Expected: `camp heartlands_t1_01 cleared, 2 loot entries`.
+   Expected: `camp heartlands_t1_01 cleared, 2 or 3 loot entries` (3 when gun_parts drops).
    RESULT:
 4. Press E at the camp stash.
    Expected: Worn Rifle (condition 20-45) and Small Safe (both bulky).
