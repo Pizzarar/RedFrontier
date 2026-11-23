@@ -497,8 +497,10 @@ case('buy: partial delivery and clear fails -> no refund (no free items), owed a
     T.same({ false, 'delivery_incomplete', n = 2 }, table.pack(W.T.buy(1, GUN, 3)))
     T.eq(1, count(W.C1.bag, GUN)); T.eq(2, count(W.stash(), GUN)); T.eq(1000 - 3 * PRICE, W.C1.money)
     T.eq(0, #W.refunds); assert(logged(W, 'refund owed'))
-    W.fail.clear = nil
+    -- next trade: give the backpack room again so it reaches the stash check (canFit runs first)
+    W.hooks.charge, W.fail.clear, W.C1.room = nil, nil, 10
     T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1)))
+    T.eq(2, count(W.stash(), GUN)); T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - 3 * PRICE, W.C1.money)
 end)
 
 case('buy: refund pay fails -> logged as owed, reported refund 0', function()
