@@ -141,6 +141,14 @@ function M.gatedPlan(gated, what)
     return { run = true }
 end
 
+---Chase mount order, once per rider/horse pair. Call from BOTH onReady callbacks: returns true exactly once, when
+---pair.rider and pair.horse are both set and the group is still live (rider-first and horse-first both work).
+function M.claimMount(pair, live)
+    if not live or pair.sent or not pair.rider or not pair.horse then return false end
+    pair.sent = true
+    return true
+end
+
 ---Ambush decision (ungated only). cfg = FhHeatConfig.ambush; returns ok, reason.
 ---s = { gated, level, thresholds, hour, now, lastAt, liveKey }
 function M.ambushDecision(cfg, s)

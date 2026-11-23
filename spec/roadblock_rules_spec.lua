@@ -107,4 +107,19 @@ case('chaseDecision: gated first, needs a mounted player', function()
     s.level = 'hunted'; s.lastAt = 4999; ok, why = R.chaseDecision(chase, s); assert(not ok and why == 'cooldown')
 end)
 
+case('claimMount: rider-first and horse-first each mount exactly once; dead group never', function()
+    local function run(order, live)
+        local pair, fired = {}, 0
+        for _, who in ipairs(order) do
+            pair[who] = 1
+            if R.claimMount(pair, live) then fired = fired + 1 end
+        end
+        pair.rider = 2 -- a re-adopt with a new netId must not mount again
+        if R.claimMount(pair, live) then fired = fired + 1 end
+        return fired
+    end
+    T.eq(1, run({ 'rider', 'horse' }, true)); T.eq(1, run({ 'horse', 'rider' }, true))
+    T.eq(0, run({ 'rider', 'horse' }, false)); T.eq(0, run({ 'rider' }, true))
+end)
+
 T.finish()

@@ -123,7 +123,11 @@ end
 local function tryAmbush(src, cid, faction, level, quiet)
     local ac = cfg.ambush
     local mapKey = mk('ambush', cid, faction)
-    local ok, why, msg = rules.ambushDecision(ac, { gated = gated(), level = level, thresholds = cfg.thresholds,
+    if gated() then -- no gameHour() / natives while gated
+        if not quiet then log('%s', rules.gatedPlan(true, 'night ambush').log) end
+        return
+    end
+    local ok, why, msg = rules.ambushDecision(ac, { gated = false, level = level, thresholds = cfg.thresholds,
         hour = gameHour(), now = nowS(), lastAt = lastAt[mapKey], liveKey = byKey[mapKey] ~= nil })
     if not ok then
         if why == 'gated' and not quiet then log('%s', msg) end
@@ -149,8 +153,12 @@ end
 local function tryChase(src, cid, faction, level, quiet)
     local cc = cfg.chase
     local mapKey = mk('chase', cid, faction)
+    if gated() then -- no playerMounted() native calls while gated
+        if not quiet then log('%s', rules.gatedPlan(true, 'mounted chase').log) end
+        return
+    end
     local x, y, z, ped = playerPos(src)
-    local ok, why, msg = rules.chaseDecision(cc, { gated = gated(), level = level, thresholds = cfg.thresholds,
+    local ok, why, msg = rules.chaseDecision(cc, { gated = false, level = level, thresholds = cfg.thresholds,
         mounted = x and playerMounted(ped), now = nowS(), lastAt = lastAt[mapKey], liveKey = byKey[mapKey] ~= nil })
     if not ok then
         if why == 'gated' and not quiet then log('%s', msg) end
@@ -160,21 +168,22 @@ local function tryChase(src, cid, faction, level, quiet)
     if not fcfg then return end
     local rad = math.rad(GetEntityHeading(ped))
     local bx, by = x + math.sin(rad) * cc.behind, y - math.cos(rad) * cc.behind -- behind = against the facing vector
-    local plan = rules.pedPlan(fcfg, { coords = { x = bx, y = by, z = z }, heading = GetEntityHeading(ped) }, 3.0)
+    local plan = rules.pedPlan(fcfg, { coords = { x = bx, y = by, z = z }, heading = (GetEntityHeading(ped) + 180.0) % 360.0 }, 3.0) -- pedPlan adds 180: net = facing the player
     local g = newGroup('chase', src, cid, faction, cc.despawnMinutes, { mounts = {} })
     for _, p in ipairs(plan) do
-        local pair = { }
+        local pair = {}
         g.mounts[p.index] = pair
+        -- both callbacks call this; rules.claimMount fires it once, only when both netIds are known and g is live
+        local function maybeMount()
+            if rules.claimMount(pair, groups[g.id] ~= nil) then
+                -- the target's client mounts + attacks (client/main.lua); the spawner's client set up the AI
+                TriggerClientEvent('fh:heat:chase', g.src, { rider = pair.rider, horse = pair.horse, faction = faction })
+            end
+        end
         requestOne(g, { kind = 'horse', model = cc.horseModel, x = p.x, y = p.y, z = p.z, heading = p.heading,
-            index = p.index, role = 'mount' }, function(netId) pair.horse = netId end)
+            index = p.index, role = 'mount' }, function(netId) pair.horse = netId maybeMount() end)
         requestOne(g, { kind = 'ped', model = p.model, x = p.x, y = p.y + 1.0, z = p.z, heading = p.heading,
-            weapon = p.weapon, index = p.index, role = 'rider' }, function(netId)
-                pair.rider = netId
-                if pair.horse and groups[g.id] then
-                    -- the target's client mounts + attacks (client/main.lua); the spawner's client set up the AI
-                    TriggerClientEvent('fh_heat:chase', g.src, { rider = pair.rider, horse = pair.horse, faction = faction })
-                end
-            end)
+            weapon = p.weapon, index = p.index, role = 'rider' }, function(netId) pair.rider = netId maybeMount() end)
     end
     log('chase %s: %s riders behind %s (%d)', g.id, faction, tostring(cid), #plan)
     emit('fh:heat:chase_started', { src = src, citizenid = cid, faction = faction, group_id = g.id, level = level,
@@ -204,6 +213,9 @@ CreateThread(function()
         Wait(every)
         heatRules.safeTick(function()
             local now = nowS()
+            local maxCd = math.max((cfg.roadblock or {}).cooldownSeconds or 0, (cfg.ambush or {}).cooldownSeconds or 0,
+                (cfg.chase or {}).cooldownSeconds or 0)
+            for k, t in pairs(lastAt) do if now - t > maxCd then lastAt[k] = nil end end -- cooldown over: drop (live groups keep expiry, not lastAt)
             local online = {}
             for _, s in ipairs(GetPlayers()) do online[tonumber(s)] = true end
             local snapshot = {}

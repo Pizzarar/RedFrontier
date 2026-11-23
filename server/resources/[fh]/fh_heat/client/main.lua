@@ -38,10 +38,13 @@ FH.on('fh:spawn:adopted', function(d)
 end)
 
 -- Chase: the targeted player's client seats the rider on its horse (both are adopted networked entities).
-RegisterNetEvent('fh_heat:chase', function(d)
+FH.onNet('fh:heat:chase', function(d)
     if type(d) ~= 'table' then return end
-    local rider = NetworkGetEntityFromNetworkId(d.rider or 0)
-    local horse = NetworkGetEntityFromNetworkId(d.horse or 0)
-    if rider == 0 or horse == 0 or not DoesEntityExist(rider) or not DoesEntityExist(horse) then return end
-    TaskMountAnimal(rider, horse, 10000, -1, 2.0, 1, 0, 0)
+    local function netId(v) return type(v) == 'number' and v == v and v > 0 and v % 1 == 0 and v or nil end
+    local rid, hid = netId(d.rider), netId(d.horse)
+    if not rid or not hid then return end
+    local ok, rider, horse = pcall(function() return NetworkGetEntityFromNetworkId(rid), NetworkGetEntityFromNetworkId(hid) end)
+    if not ok or not rider or not horse or rider == 0 or horse == 0 or not DoesEntityExist(rider)
+        or not DoesEntityExist(horse) then return end
+    pcall(TaskMountAnimal, rider, horse, 10000, -1, 2.0, 1, 0, 0)
 end)

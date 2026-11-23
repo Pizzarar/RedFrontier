@@ -92,7 +92,7 @@ on every use). Gated: no-op, one log line per threshold event (`night ambush ski
 Rows 5-6 in `fh_core/docs/spike-gated.md`; flipped by S2 `spk_chase` RESULT.
 - Ambush: at `ambush.minLevel` (`hunted`) during `nightFrom`..`nightTo` game hours, peds ring the player at `radius`.
 - Chase: at `chase.minLevel` while the player is mounted/in a vehicle (server natives unverified), rider peds + horses
-  spawn `behind` metres back; the target's client seats each rider (`fh_heat:chase`, `TaskMountAnimal`).
+  spawn `behind` metres back; the target's client seats each rider (`fh:heat:chase`, `TaskMountAnimal`).
   No wagon pursuit: `requestSpawn` has no wagon kind until M4.
 Ungated, a sweep every `tickSeconds` also evaluates players already above the level.
 
