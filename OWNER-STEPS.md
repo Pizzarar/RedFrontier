@@ -36,12 +36,12 @@ Open RedM, press F8, type `connect 100.83.196.251:30120`. Then follow `OWNER-TES
 
 ## 7. Materials you'll need `fh_give` / `/giveitem` for
 
-Nothing in the world supplies these yet (trade-post stock and camp loot are still pending, see `spec/crafting_sources_spec.lua` PENDING), so hand them out yourself: `fh_give <yourId> <item> <n>` (admin) or `/giveitem <yourId> <item> <n>`.
+Trade-post stock is still pending (see `spec/crafting_sources_spec.lua` PENDING; outlaw camps now drop `gun_parts`), so hand these out yourself: `fh_give <yourId> <item> <n>` (admin) or `/giveitem <yourId> <item> <n>`.
 
 | Item name | Used for | Source status (PENDING owner) |
 |---|---|---|
-| `lumber` | homestead builds (5 to 40 per slot tier) | PENDING (idea-716, trade post). Item definition is being added by @homestead (not yet there), see note |
-| `nails` | homestead build tier 2 (20) | PENDING (idea-716). Item definition is being added by @homestead (not yet there), see note |
+| `lumber` | homestead builds (5 to 40 per slot tier) | PENDING (idea-716, trade post); defined in fh_homestead |
+| `nails` | homestead build tier 2 (20) | PENDING (idea-716, trade post); defined in fh_homestead |
 | `lead` | ammo recipes (2 each) | PENDING (idea-716); defined in fh_crafting |
 | `casings` | ammo recipes (2 each) | PENDING (idea-716); defined in fh_crafting |
 | `resource_gunpowder` | ammo recipes (1 to 2) | PENDING (idea-716); defined in rsg-core |
@@ -49,9 +49,9 @@ Nothing in the world supplies these yet (trade-post stock and camp loot are stil
 | `herb_wild_mint` | tonic recipe (1) | PENDING; rsg-core item |
 | `herb_oregano` | tonic recipe (2) | PENDING; rsg-core item |
 | `herb_red_sage` | tonic recipe (1) | PENDING; rsg-core item |
-| `gun_parts` | `/fh_restore` (fh_gunsmith) | PENDING (idea-717, camp loot); defined in fh_crafting |
+| `gun_parts` | `/fh_restore` (fh_gunsmith) | outlaw camp loot (core-05); defined in fh_crafting |
 
-Note: if `fh_give <yourId> lumber 40` replies `fh_unknown_item`, the item is not registered yet (@homestead is adding `lumber`/`nails`); wait for that merge or tell Core. Counts per build are in `fh_homestead/config.lua`; per recipe in `fh_crafting/shared/recipes.lua`. Other test items: `bread`, `hammer`, `wagon_wheel`, `test_cargo_crate`, `weapon_revolver_cattleman` (the OWNER-TESTS steps name them).
+Note: if `fh_give` replies `fh_unknown_item` for `lumber`/`nails`, restart `fh_homestead` after `fh_core` and tell Core. Counts per build are in `fh_homestead/config.lua`; per recipe in `fh_crafting/shared/recipes.lua`. Other test items: `bread`, `hammer`, `wagon_wheel`, `test_cargo_crate`, `weapon_revolver_cattleman` (the OWNER-TESTS steps name them).
 
 ## If something breaks
 
