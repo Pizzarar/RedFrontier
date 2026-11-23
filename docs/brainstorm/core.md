@@ -51,3 +51,4 @@
 - core-03 COMPLETE main 9beb4c0 (614/615/616/643/687/689 archived). core-04 handed to Cor2 rn-d9e827279687.
 - 11-23 core-04: B1+U2 (fh_buffs caps + remaining) and T1 (run-specs load errors, venv re-exec) merged main e991426 stack (Gemini PASS; venv 65/1292/0). U1 low fix + E2 FAIL fix (float compare) in flight.
 - 11-23 core-04 U1 (fh:death:bags per player, mine/remaining, idea-609) merged main (c3b0fa3 + b5c7e70; Gemini PASS, venv 70/1358/0). E2 tierA re-review of fix 74cbbc1 pending.
+- 11-23 core-04 COMPLETE: E2 offline-safe fh_economy.credit (fh_pending_credit, mig 0015, claim on load) + B7-nit merged main (1713bde, b3e4acf fix, 313ec96 renumber; Gemini tierA PASS after 1 fix; venv 71/1382/0). Core playtest-ready.
