@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-22T23:52:12.818Z",
+  "updatedAt": "2026-11-23T00:27:34.574Z",
   "units": [
     {
       "id": "B5",
@@ -50,16 +50,35 @@
       "goal": "fh_zones T1 outlaw camp via B4c, loot stash (worn rifle + cargo safe)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
-      "branch": "core-b6b"
+      "status": "done",
+      "branch": "core-b6b",
+      "commit": "a8356e7"
     },
     {
       "id": "B6c",
       "goal": "fh_death soft death: keep equipped, backpack+saddlebag -> drop_bag via B4c prop, owner recover, expiry",
       "files": [],
       "doneCheck": "",
+      "status": "done",
+      "branch": "core-b6c",
+      "commit": "bb56aa2"
+    },
+    {
+      "id": "B6d",
+      "goal": "fh_homestead stash glue + cargo carry path + M1 end-to-end OWNER-TESTS card",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-b6d",
+      "commit": "3a6e4d5"
+    },
+    {
+      "id": "B6e",
+      "goal": "minimal per-char saddlebag (near-horse server check), fh_death saddlebagOf, test horse cmd, fix M1 e2e steps 5/8",
+      "files": [],
+      "doneCheck": "",
       "status": "running",
-      "branch": "core-b6c"
+      "branch": "core-b6e"
     }
   ]
 }
