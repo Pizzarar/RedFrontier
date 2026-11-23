@@ -476,6 +476,7 @@ case('server: not ready: getComfort caches nothing and emits nothing; first read
     S.rows[PLOT]['t#1'] = 2
     S.ready = false
     assert(S.X.getComfort('A') == 0)
+    assert(#S.order == 0, 'not-ready getComfort must not load anything (guard in refresh)')
     S.handlers['fh:homestead:slot_changed'](PLOT) -- even a slot event can't poison it
     assert(S.count('fh:homestead:comfort_changed') == 0)
     S.ready = true
