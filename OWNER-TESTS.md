@@ -436,17 +436,17 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    Expected: 3-5 offers again with a different set of titles (some may repeat); active jobs are untouched. A restart inside the
    same hour gives the same board. If you cannot wait out the boundary, `RESULT: SKIP` with the offers you saw.
    RESULT:
-9. Giver reach and ped behaviour. Use Whitlock (his line is still unstarted) at about -315, 780, 118. Press E and let the intro
-   lines run to "Will you take the job?", then move 6+ m away and confirm "I will".
-   Expected: a `fh_too_far` notify (no `Quest started.`) and the line does not start: back within 5 m, E shows the intro and the
-   start offer again. (The target prompt itself only reaches ~2.5 m, so this is the only by-hand path; if the open dialog pins
-   your movement, mark `SKIP` with that note.) Then shoot the giver from close range, fire a shot beside him, sprint into him and
+9. Giver reach and ped behaviour. Use Whitlock (his line is still unstarted) at about -315, 780, 118. Press E and click Next through the
+   intro lines on the dialogue screen until it shows "Will you take the job?", then move 6+ m away and click "I will".
+   Expected: an error notice on the dialogue screen ("You are too far away.", no `Quest started.`) and the line does not start:
+   back within 5 m, E opens the dialogue with the intro and the start offer again. (The target prompt itself only reaches ~2.5 m,
+   so this is the only by-hand path; if the open dialogue pins your movement, mark `SKIP` with that note.) Then shoot the giver from close range, fire a shot beside him, sprint into him and
    wait a few seconds: he stays in place, does not flee or fight, takes no damage and cannot be killed.
    RESULT:
 10. Givers, Hale. Find Ruth Hale (`u_f_m_tumgeneralstoreowner_01`) at about -296, 788, 118 and press E ("Talk to Ruth Hale").
-    Expected: two intro lines, then "Will you take the job?" -> "I will" -> `Quest started.`; pressing E again says "Nothing more
-    to say right now." until the steps are done. Claim a plot (`fh_claim`, about -300, 790, 118), earn $15+ in one payment (a
-    sale, or console `fh_pay <yourId> 20`), then talk to her again: two closing lines and the reward. Cash +$40, +5 rep, ledger
+    Expected: the dialogue screen opens with two intro lines (Next pages through), then "Will you take the job?" -> "I will" ->
+    a `Quest started.` notice and the offer disappears; pressing E again shows "Nothing more to say right now." until the steps are done. Claim a plot (`fh_claim`, about -300, 790, 118), earn $15+ in one payment (a
+    sale, or console `fh_pay <yourId> 20`), then talk to her again: two closing lines on the dialogue screen and the reward. Cash +$40, +5 rep, ledger
     reason `quest:family_hale` exactly once; talking again pays nothing.
     RESULT:
 11. Givers, Marrow. Sheriff Dell Marrow (`u_m_m_valsheriff_01`) at about -280, 805, 118. Same talk flow; the line starts on

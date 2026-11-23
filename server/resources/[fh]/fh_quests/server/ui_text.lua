@@ -20,11 +20,17 @@ M.TEXT = {
 }
 M.TEXT.fh_not_active = 'You are not on that quest.'
 M.TEXT.fh_unknown_quest = 'That quest is unknown.'
+M.TEXT.fh_bad_npc = 'There is nobody here to talk to.'
+M.TEXT.fh_too_far = 'You are too far away.'
 M.DEFAULT = 'Could not take that job.'
 M.ACCEPTED = 'Job accepted.'
 M.ABANDON_DEFAULT = 'Could not abandon that.'
 M.JOURNAL_OPEN_DEFAULT = 'Could not open your journal.'
 M.ABANDONED = 'Quest abandoned.'
+M.STARTED = 'Quest started.'
+M.START_DEFAULT = 'Could not start that job.'
+M.TALK_DEFAULT = 'Not now.'
+M.NOTHING = 'Nothing more to say right now.'
 
 ---accept result -> { notice, notice_kind }
 function M.acceptNotice(ok, err)
@@ -41,6 +47,17 @@ end
 function M.abandonNotice(ok, err)
     if ok == true then return { notice = M.ABANDONED, notice_kind = 'ok' } end
     return { notice = M.TEXT[err] or M.ABANDON_DEFAULT, notice_kind = 'error' }
+end
+
+---start result -> { notice, notice_kind, offer = false } (the offer is dropped either way)
+function M.startNotice(ok, err)
+    if ok == true then return { notice = M.STARTED, notice_kind = 'ok', offer = false } end
+    return { notice = M.TEXT[err] or M.START_DEFAULT, notice_kind = 'error', offer = false }
+end
+
+---talk refusal -> dialogue screen data with an error notice and no pages
+function M.talkRefused(giver, err)
+    return { speaker = giver.label, pages = {}, notice = M.TEXT[err] or M.TALK_DEFAULT, notice_kind = 'error' }
 end
 
 if GetCurrentResourceName then

@@ -488,7 +488,7 @@ to start it (`start`). No NUI. Coordinates, headings and ped models are guesses:
 
 ### Giver proximity (server-checked)
 
-The two net callbacks (`fh:quests:giver:talk`, `fh:quests:giver:start`) compare the player's server-side ped position
+The two net handlers (`fh:quests:ui_talk`, `fh:quests:ui_start`) compare the player's server-side ped position
 with the giver's fixed point (`FhQuestsGivers.within`, radius `REACH` = 5 m) and refuse with **`fh_too_far`** beyond
 it, so a modified client cannot start a line or advance a talk step from across the map. The check lives in the net
 handlers, not in the `talk` export: the exports are server-only (no client can call them) and also serve callers

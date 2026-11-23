@@ -19,6 +19,7 @@ shared_scripts {
     'shared/rewards.lua',
     'shared/store.lua',
     'shared/givers.lua', -- family giver npcs (Q4)
+    'shared/dialogue.lua', -- giver dialogue screen data builder (pure)
 }
 
 -- Thin server glue: state cache/lock, persistence, payouts, sync (main.lua); exports + event intake (api.lua).
@@ -29,8 +30,8 @@ server_scripts {
     'server/api.lua',
     'server/jobtypes.lua', -- built-in job types, registered through the public registerJobType
     'server/ui_text.lua',  -- pure error code -> notice text for the fh_ui jobs screen
-    'server/ui.lua',       -- fh_ui glue (jobs open + ui_accept; journal open + ui_abandon)
-    'server/families.lua', -- Q4: register the family questlines, spawn givers, WORKAROUND dialogue callbacks
+    'server/ui.lua',       -- fh_ui glue (jobs open + ui_accept; journal open + ui_abandon; giver dialogue ui_talk + ui_start)
+    'server/families.lua', -- Q4: register the family questlines, spawn givers
 }
 
 client_scripts {
@@ -39,7 +40,7 @@ client_scripts {
     'client/bounty.lua',     -- permanent: bounty NPC hostile-AI setup
     'client/board.lua',      -- /jobs + board prop/zone (rsg-target) -> fh:quests:ui_open
     'client/journal.lua',    -- /journal opens the fh_ui journal screen
-    'client/givers.lua', -- WORKAROUND: ox_lib giver dialogue (replaced by the @ui journal/dialogue screen)
+    'client/givers.lua',     -- giver ped setup + rsg-target zones -> fh:quests:ui_talk
 }
 
 dependencies { 'fh_core', 'fh_economy', 'oxmysql', 'ox_lib', 'rsg-core' }
