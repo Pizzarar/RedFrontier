@@ -17,6 +17,7 @@ files {
 
 shared_scripts {
     'shared/relay.lua',
+    'shared/hud.lua',
 }
 
 server_scripts {
@@ -24,8 +25,10 @@ server_scripts {
 }
 
 client_scripts {
+    '@ox_lib/init.lua',
     '@fh_core/client/safe.lua',
     'client/main.lua',
+    'client/hud.lua',
 }
 
-dependencies { 'fh_core' }
+dependencies { 'fh_core', 'ox_lib' }

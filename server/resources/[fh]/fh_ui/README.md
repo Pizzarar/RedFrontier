@@ -13,7 +13,7 @@ authority**: it renders what a lane sends and relays validated player actions ba
 Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = {...} })`.
 
 ## Focus rules
-- Passive HUD widgets (`FhUiRelay.passive`: `buffs`, `heat`) never take focus. Every other screen is interactive and
+- Passive HUD widgets (`FhUiRelay.passive`: `buffs`, `heat`, `bags`) never take focus. Every other screen is interactive and
   takes `SetNuiFocus(true, true)`.
 - Esc or the `close` NUI callback closes interactive screens and releases focus. Esc (every interactive screen it
   closes) and a named close both relay action `close` to the owning lane (`fh:<lane>:ui_close`, payload `{}`).
@@ -31,6 +31,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `placeholder` | `ui` | interactive (U1 smoke) |
 | `buffs` | `buffs` | passive |
 | `heat` | `heat` | passive |
+| `bags` | `death` | passive (U2) |
 | `insurance` | `death` | interactive |
 | `contracts` | `trade` | interactive |
 | `station` | `homestead` | interactive |
@@ -61,3 +62,22 @@ Later blocks append one subsection per screen: `data` shape for open/update, act
 
 ### placeholder
 `open/update` data `{ text? }`. Actions: `ping` `{ t }` -> `fh:ui:ui_ping` `{ src, screen, action, payload }`; `close` `{}`.
+
+### buffs (passive HUD, U2)
+Fed by fh_ui's own client listener on `fh:buffs:sync` (no lane code calls `fh:ui:open` for it). `open/update` data
+`{ rows = { { id, label, magnitude?, remaining? } } }`, `remaining` = whole seconds at push time (counted down in the
+NUI, re-pushed every 5 s and on each sync); empty `rows` hides the widget. No actions. Never takes focus.
+
+### bags (passive HUD, owning lane `death`, U2)
+Fed by `fh:death:bags` plus the `fh:death:bags` callback fetch at start. `open/update` data
+`{ rows = { { id, remaining?, dir?, dist? } } }`: own bags only (entries with `mine == true`), `dir` = compass word
+(N..NW or `here`), `dist` metres. No actions.
+
+#### Contract requests (U2, routed by the lead; no lane was edited)
+- **fh_death**: `fh:death:bags` entries are `{ id, x, y, z }` for every bag to every client. Needs, per player
+  (send to each owner, not `-1`, or compute per-src): `mine = true` on the receiver's own bags and
+  `remaining = <seconds until despawn>` (`expiresAt - os.time()` on the server, same field in the callback reply).
+  Until then the bags widget shows nothing (ownership is never guessed client-side).
+- **fh_buffs**: `fh:buffs:sync` entries carry `expires_at` on the server's `GetGameTimer()/1000` clock, which the
+  client cannot compare to its own. Add `remaining = expires_at - now()` to each snapshot entry. Until then the
+  buffs widget lists active buffs with `--` instead of a time.

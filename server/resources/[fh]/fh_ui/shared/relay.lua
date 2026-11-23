@@ -8,6 +8,7 @@ M.screens = {
     placeholder = 'ui',        -- U1 router smoke screen; owner is fh_ui itself (nothing listens)
     buffs       = 'buffs',     -- buff HUD (passive)
     heat        = 'heat',      -- heat indicator (passive)
+    bags        = 'death',     -- own drop-bag countdown (passive, U2)
     insurance   = 'death',     -- tracker insurance dialog (L4 Death & Insurance)
     contracts   = 'trade',     -- contract board (L6 Cargo/Trade)
     station     = 'homestead', -- station menus (L1 stations; L5 crafting may take over later)
@@ -15,7 +16,7 @@ M.screens = {
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
-M.passive = { buffs = true, heat = true }
+M.passive = { buffs = true, heat = true, bags = true }
 
 M.limits = {
     actionPattern = '^[a-z_]+$', -- Lua has no {n,m}; length 1..maxAction is checked separately
