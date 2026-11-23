@@ -36,6 +36,10 @@ server-side zone check against `WaterZones` by default; `WaterCheck = 'native'` 
 Warmth: every `HeatCheckSeconds` a player within `HeatRadius` of a `Campfires` entry (or a `setHeatSource` source) gets `warm` 1.0 for the full `warm` duration.
 Warm is only a bonus: `ColdRegions` stays `{}`.
 
+## Rest and comfort (S4)
+Server: `restBedroll(src)` (rested 1.0), `restAtBed(src)` (needs a homestead `bed` station nearby; magnitude 1.0 + comfort x `ComfortK`, capped at `RestedCap`). Both return `ok, magnitude|err`. Net event `fh:survival:restBed` (client asks; server re-checks proximity). Bedroll item `bedroll` (usable, registered through `fh_core:registerItems` with the S3 items).
+Homestead exports `isNearStation(src,'bed')` (H3) and `getComfort(citizenid)` (H4) are called through a pcall adapter (`server/homestead_adapter.lua`); missing = bedroll only, comfort 0 (S4b drops the fallback).
+
 ## Events
 - Emits (server -> client) `fh:survival:state`, payload `{ level = 0..3, missing = { 'food', 'water', 'rest', 'clean', 'warmth' } }`
   (`missing` = need names, in that fixed order, `warmth` only when in a cold region). Sent on the first tick after load and
@@ -66,7 +70,7 @@ Lifecycle rules (Tier A):
 
 ## Config keys (`config.lua`, `FhSurvivalConfig`)
 `TickSeconds` (15), `LoginGraceSeconds` (600), `Durations`, `ColdRegions` (`{ region_id = true }`, empty: no cold region exists yet),
-`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`, used from S5). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). Sections reserved for S4/S5.
+`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`, used from S5). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). S4 keys: `BedrollItem` (`'bedroll'`), `ComfortK` (0.01), `RestedCap` (1.20). Section reserved for S5.
 Seeded defaults (approximate, owner-verifiable, all 2D): `WaterZones` (-250,760,r40) and (-140,790,r40) on the Dakota River near the
 heartlands homestead (-300,790,118) / outlaw camp (-145,845,117); `Campfires` (-300,790,r8) homestead and (-145,845,r8) camp.
 Native mode never runs unless `WaterCheck = 'native'`: the client does not call `IsEntityInWater` in zones mode.

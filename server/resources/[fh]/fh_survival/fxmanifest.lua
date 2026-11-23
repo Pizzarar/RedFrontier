@@ -11,12 +11,15 @@ shared_scripts {
     'config.lua',
     'shared/needs.lua',
     'shared/items.lua',
+    'shared/rest.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua',
     'server/actions.lua',
+    'server/homestead_adapter.lua',
+    'server/rest.lua',
 }
 
 client_scripts {
