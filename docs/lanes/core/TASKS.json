@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T21:48:44.330Z",
+  "updatedAt": "2026-11-23T21:52:42.316Z",
   "units": [
     {
       "id": "B5",
@@ -145,7 +145,7 @@
       "goal": "renumber B7 migration 0005_fh_ledger_charge -> 0006 (dup with H1)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-mig",
       "commit": "2e953d8"
     },
@@ -164,7 +164,8 @@
       "files": [],
       "doneCheck": "",
       "status": "running",
-      "branch": "core-c3ab"
+      "branch": "core-c3ab",
+      "commit": "57161cd"
     }
   ]
 }

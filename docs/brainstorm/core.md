@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: Core lead · B7 fix + merge
-- Workers: 2
+- Workers: 1
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
