@@ -394,4 +394,33 @@ case('B7 wagon: gated owner drop -> despawn_rerequest (fresh cycle at the spawn 
     T.eq('adopted', u.state)
 end)
 
+case('C3c requestOfNetId: hit, miss, non-number, stale after re-adopt, after despawn', function()
+    local req, other = newReq(), newReq()
+    adoptVia(req, 3, 'a', 55)
+    adoptVia(other, 4, 'b', 66)
+    local all = { [7] = req, [8] = other }
+    T.eq(7, R.requestOfNetId(all, 55), 'hit')
+    T.eq(8, R.requestOfNetId(all, 66))
+    T.eq(nil, R.requestOfNetId(all, 99), 'miss')
+    for _, bad in ipairs({ 'x', '55', 0, -1, 55.5, 1e100, 0/0, true }) do T.eq(nil, R.requestOfNetId(all, bad)) end
+    T.eq(nil, R.requestOfNetId(all, nil))
+    local v = newReq()
+    assert(R.dispatch(v, 3, 'c', 0)); R.onCreated(v, 3, 'c', 77)
+    T.eq(nil, R.requestOfNetId({ [9] = v }, 77), 'verifying (not adopted) does not map')
+    -- owner drop (gated) -> re-request clears the old netId; re-adopt under a new netId
+    T.eq('despawn_rerequest', R.onPlayerDropped(req, 3, true))
+    T.eq(nil, R.requestOfNetId(all, 55), 'stale netId after re-request')
+    assert(R.dispatch(req, 5, 'd', 0))
+    T.eq('verify', (R.onCreated(req, 5, 'd', 56)))
+    T.eq(nil, R.requestOfNetId(all, 56), 'not adopted yet')
+    local ok = R.finishVerify(req, 'd', true, nil, 1234)
+    T.eq('adopted', ok)
+    T.eq(7, R.requestOfNetId(all, 56), 'new netId maps')
+    T.eq(nil, R.requestOfNetId(all, 55), 'old netId still stale after re-adopt')
+    R.despawn(other)
+    T.eq(nil, R.requestOfNetId(all, 66), 'despawned request (still in table) holds nothing')
+    all[8] = nil
+    T.eq(nil, R.requestOfNetId(all, 66), 'removed request holds nothing')
+end)
+
 T.finish()

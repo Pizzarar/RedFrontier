@@ -208,6 +208,17 @@ function M.findClaim(requests, netId, exceptId)
     end
 end
 
+---Request id whose ADOPTED entity has netId, or nil (non-number/unknown/not adopted). Derived from live request state,
+---not a separate index: retire() clears req.netId on re-request and despawn removes the request, so no stale netId
+---can map to a live or re-used request.
+function M.requestOfNetId(requests, netId)
+    local n = M.validNetId(netId)
+    if not n then return nil end
+    for id, r in pairs(requests) do
+        if r.state == 'adopted' and r.netId == n then return id end
+    end
+end
+
 -- Ends the current attempt. Returns the in-flight entity the server may have to clean up (only while verifying, i.e.
 -- a netId was reported but not adopted): { netId, token, spawner, seenOwned } or nil.
 local function retire(req)

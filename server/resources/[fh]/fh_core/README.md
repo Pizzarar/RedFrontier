@@ -239,11 +239,17 @@ local id, err = exports.fh_core:requestSpawn({
 })
 exports.fh_core:despawn(id)      -- true | false, reason
 exports.fh_core:getSpawn(id)     -- { state, netId, tag, owner, kind, attempts } | nil
+exports.fh_core:requestOfNetId(netId) -- requestId | nil
 ```
 
 - **Wagons (B7):** `kind = 'wagon'` is created client-side with `CreateVehicle` (networked,
   `bDontAutoCreateDraftAnimals = false`: the game adds the draft horses; they are not separate requests). Adopt skips
   the player-ped check for wagons and objects (`FhSpawnRules.isPedKind`). Gated owner drop: `docs/spike-gated.md` row 5.
+- **`requestOfNetId(netId)`:** maps an *adopted* entity's current netId to its requestId, so a consumer that
+  deletes the entity on purpose (e.g. a skinned carcass) can `despawn(requestOfNetId(netId))` and stop the tick
+  re-requesting it. Non-number, unknown, stale (replaced by a re-adopt with a new netId) and despawned netIds
+  return `nil`; the lookup reads live request state, so a netId never maps to a re-used request. There is no
+  release-on-death option.
 - **Spawner pick:** nearest ready player within `FhConfig.Spawn.Range` of `near`; players not yet tried this cycle
   first; else (if `FallbackAnyPlayer`) the nearest ready player anywhere; else park as `pending_no_client` and retry
   every tick (a player joins or comes in range).

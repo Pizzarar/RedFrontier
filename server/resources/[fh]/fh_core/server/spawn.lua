@@ -278,10 +278,17 @@ local function getSpawn(requestId)
         owner = req.spec.owner, kind = req.spec.kind, attempts = req.attempts }
 end
 
+---exports.fh_core:requestOfNetId(netId) -> requestId | nil. Only an adopted entity's current netId maps; so
+---despawn(requestOfNetId(netId)) ends that entity's lifecycle (no re-request after it is deleted).
+local function requestOfNetId(netId)
+    return R.requestOfNetId(requests, netId)
+end
+
 exports('requestSpawn', requestSpawn)
 exports('despawn', despawn)
 exports('getSpawn', getSpawn)
-FhSpawn = { requestSpawn = requestSpawn, despawn = despawn, getSpawn = getSpawn } -- same-resource callers (admin.lua)
+exports('requestOfNetId', requestOfNetId)
+FhSpawn = { requestSpawn = requestSpawn, despawn = despawn, getSpawn = getSpawn, requestOfNetId = requestOfNetId } -- same-resource callers (admin.lua)
 
 AddEventHandler('onResourceStop', function(res)
     for _, id in ipairs(requestIds()) do
