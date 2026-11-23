@@ -46,7 +46,8 @@ local function mkDeps(o)
     d.open = function()
         if o.nothingOpen then return nil, nil, 'fh_nothing_open' end
         local ref = { type = o.type or 'chest', id = o.id or 'fh:chest:test:1' }
-        local coords = o.noCoords and nil or (o.coords or { x = 0, y = 0, z = 0 })
+        local coords = o.coords or { x = 0, y = 0, z = 0 }
+        if o.noCoords then coords = nil end
         local view = { coords = coords, slots = o.slots or 20, items = {} }
         view.items[o.slot or 1] = d.item
         return ref, view
