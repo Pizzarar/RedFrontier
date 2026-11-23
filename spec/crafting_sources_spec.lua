@@ -14,17 +14,14 @@ dofile(fh .. 'fh_zones/config.lua')
 local PENDING = {
     lumber   = 'idea-716', nails = 'idea-716', lead = 'idea-716', casings = 'idea-716', -- trade post `supplies`
     gun_parts = 'idea-717',                                                             -- outlaw camp loot table
+    -- idea-718: source ruling pending (defined in rsg-core shared/items.lua, but nothing in-game yields them yet)
+    resource_gunpowder = 'idea-718', herb_american_ginseng = 'idea-718', herb_oregano = 'idea-718',
+    herb_red_sage = 'idea-718', herb_wild_mint = 'idea-718',
 }
 
--- External sources (outside [fh]); each verified by grep. NOTE: rsg-core only DEFINES these items; no gatherer
--- resource ships in this repo yet, so they are obtainable via /giveitem until one does (ruling idea-712 accepts this).
-local EXTERNAL = {
-    resource_gunpowder    = 'defined in rsg-core shared/items.lua:568',
-    herb_american_ginseng = 'defined in rsg-core shared/items.lua:260',
-    herb_oregano          = 'defined in rsg-core shared/items.lua:290',
-    herb_red_sage         = 'defined in rsg-core shared/items.lua:296',
-    herb_wild_mint        = 'defined in rsg-core shared/items.lua:304',
-}
+-- External sources (outside [fh]). An entry needs a CONFIRMED in-game way to obtain the item (a gatherer, shop or
+-- drop you can point at); an item definition alone is not a source. Empty today.
+local EXTERNAL = {}
 
 -- Required inputs: item -> list of consumers.
 local inputs = {}

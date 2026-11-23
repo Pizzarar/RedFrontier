@@ -539,7 +539,8 @@ Preconditions: stations come from @homestead H3 (on main): crafting uses a built
 `/fh_restore` use the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff caps (idea-612) are on
 main. Until idea-716 (trade post `supplies`) and idea-717 (outlaw camp loot) land, `lumber`, `nails`, `lead`, `casings` and
 `gun_parts` have no in-game source: get them with admin `/giveitem`; afterwards lumber, nails, lead and casings are bought at
-trade posts and gun parts drop from the outlaw camp. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+trade posts and gun parts drop from the outlaw camp. `resource_gunpowder` and the `herb_*` items (ginseng, oregano,
+red sage, wild mint) also have no in-game source yet (idea-718, ruling pending): use `/giveitem`. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle
