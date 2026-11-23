@@ -1,13 +1,15 @@
 {
   "laneId": "homestead",
-  "updatedAt": "2026-11-23T03:45:24.989Z",
+  "updatedAt": "2026-11-23T22:09:03.643Z",
   "units": [
     {
       "id": "H2",
-      "goal": "build flow+props; held until core B7 (H0) on main. API: fh_economy.charge(src,amt,reason,region) fails fh_insufficient_funds, never below 0; fh_core.removeItem all-or-nothing; build materials registered via exports.fh_core:registerItems from fh_homestead only",
+      "goal": "clean commits ebe56a6/d87d369/8b15695 (Hom9); full venv suite 28/542/0; Gemini review Hom10 rn-59cb34a9a37b",
       "files": [],
       "doneCheck": "",
-      "status": "blocked"
+      "status": "running",
+      "branch": "homestead-h2",
+      "commit": "8b15695"
     },
     {
       "id": "H1",
@@ -19,21 +21,30 @@
     },
     {
       "id": "H3",
-      "goal": "parked forge freeze; review FAIL 0/2/2 rn-250ee6892de0",
+      "goal": "review PASS 0/0/2 4ec4e19 (rn-ba47c2b305af, vs verdict exit 0); merge waits on lupa specs + merge slot",
       "files": [],
       "doneCheck": "",
-      "status": "blocked",
+      "status": "done",
       "branch": "homestead-h3",
-      "commit": "c3d0dd2"
+      "commit": "2a7d98a"
     },
     {
       "id": "H4",
-      "goal": "parked forge freeze; review FAIL 2/2/1 rn-66d146354004",
+      "goal": "review PASS 0/0/1 61e9f2b (rn-8345854559e6, verdict exit 0); stacked on H3; merge after H3, waits lupa + slot; renumber 0006 at merge",
       "files": [],
       "doneCheck": "",
-      "status": "blocked",
+      "status": "done",
       "branch": "homestead-h4",
-      "commit": "52eef2f"
+      "commit": "f22ea9d"
+    },
+    {
+      "id": "H5",
+      "goal": "",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "homestead-h5",
+      "commit": "f4272e6"
     }
   ]
 }

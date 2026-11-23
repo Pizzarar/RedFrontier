@@ -45,6 +45,7 @@ Workaround allowed only if H0 is slow: H1/H3/H4 do not need it. H2 waits for H0;
 
 ## Order + done-check
 H0 sent at handoff → H1 → (H3 ∥ H4) → H2 once H0 on main → H5. Each block: review PASS, rebased on main, `python tools/run-specs.py` all green, merge, log hash.
+Migration numbers (Overlord rule): set at merge time, during the pre-merge rebase, to main's highest + 1. homestead-h4 and survival-s2 both claim 0006; whichever merges second renumbers.
 Lane done when all blocks are merged and `vs log decision "homestead playtest-ready <hash>"` is posted.
 
 ## Lead
