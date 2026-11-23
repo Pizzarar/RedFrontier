@@ -99,3 +99,5 @@ case('water zones and heat sources', function()
     assert(I.nearHeat({ x = 15, y = 10 }, { { x = 10, y = 10, radius = 6 } }) == true, 'per-source radius')
     assert(I.nearHeat({ x = 10, y = 10 }, nil) == false)
 end)
+
+T.finish()
