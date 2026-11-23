@@ -6,6 +6,7 @@ local rules = FhPlotRules
 
 local claims = { byPlot = {}, byOwner = {} }
 local ready = false
+FhHomesteadClaims = claims -- read by server/slots.lua (plotOf, owner lookup)
 
 local function core() return exports['rsg-core']:GetCoreObject() end
 
