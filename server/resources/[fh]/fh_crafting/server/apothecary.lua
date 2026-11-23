@@ -1,0 +1,2 @@
+-- Apothecary (C4): usable-item handlers for tonic_vigor / tonic_steady (fh_buffs.apply, consume only on success).
+-- Stub in C1: intentionally empty.
