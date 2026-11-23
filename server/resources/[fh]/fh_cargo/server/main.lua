@@ -207,6 +207,182 @@ exports('getWagon', function(wagonId)
     return { id = w.id, owner = w.owner, tier = w.tier, netId = w.netId, coords = wagonCoords(w) }
 end)
 
+-- ---------------------------------------------------------------- R2: wheel break + repair
+-- Server tick evaluates the break roll from server-known state only: wagon entity velocity (server native), tier,
+-- carried weight. The only client input is a bool off-road hint from the wagon owner (rules.sanitizeSpeed clamps
+-- any speed we read). Natives used: GetEntityVelocity (server, OneSync). NOT runtime-tested.
+local function holdRefs(src) return { { type = 'equipped', id = src }, { type = 'backpack', id = src } } end
+local repairs = {} -- [src] = repair state
+
+local function gated() return GetConvar('fh_spike_gated', 'true') ~= 'false' end
+
+local function registerWheelItems()
+    -- TODO(B7 @core): registerItems / removeItem ship with fh_core B7; fail gracefully when missing.
+    local ok, res, err, bad = pcall(function() return exports.fh_core:registerItems(rules.ITEMS) end)
+    if not ok or res == false then
+        print(('^3[fh_cargo] could not register hammer/wagon_wheel (fh_core registerItems: %s %s)^7')
+            :format(tostring(ok and err or res), tostring(bad)))
+    end
+end
+
+local function wagonWeight(w)
+    local sum = 0
+    for _, it in pairs(exports.fh_core:snapshot(ref(w)) or {}) do
+        sum = sum + (tonumber(it.weight) or 0) * (tonumber(it.amount) or 0)
+    end
+    return sum
+end
+
+local function limitFor(w) return rules.effectiveSpeedLimit(w.tier, wagonWeight(w), w.broken) end
+
+---Tell the owner's client the wagon state: it applies the speed cap and (ungated only) the native wheel break.
+local function pushState(w, src, native)
+    if not src or not w.netId then return end
+    TriggerClientEvent('fh:cargo:wheel_state', src, {
+        netId = w.netId, broken = w.broken == true, speedLimit = limitFor(w), native = native == true,
+    })
+end
+
+local function ownerSrc(w)
+    for _, id in ipairs(GetPlayers()) do
+        local s = tonumber(id)
+        if citizenidOf(s) == w.owner then return s end
+    end
+end
+
+local function breakWheel(w)
+    w.broken = true
+    local src = ownerSrc(w)
+    local native = rules.nativeBreakAllowed(gated())
+    pushState(w, src, native)
+    TriggerEvent('fh:cargo:wheel_broken', { src = src, citizenid = w.owner, wagon = w.id, tier = w.tier, native = native })
+end
+
+local function repairWheel(w, src)
+    w.broken = false
+    pushState(w, src, false)
+    TriggerEvent('fh:cargo:wheel_repaired', { src = src, citizenid = w.owner, wagon = w.id, tier = w.tier })
+end
+
+-- Owner client's off-road hint: a bool, accepted only from the wagon owner.
+RegisterNetEvent('fh:cargo:offroad_hint', function(offRoad)
+    local cid = citizenidOf(source)
+    if not cid or type(offRoad) ~= 'boolean' then return end
+    for _, w in pairs(wagons) do
+        if w.owner == cid then w.offRoad = offRoad end
+    end
+end)
+
+CreateThread(function()
+    while true do
+        Wait(1000)
+        for _, w in pairs(wagons) do
+            if w.netId and not w.broken then
+                local ent = NetworkGetEntityFromNetworkId(w.netId)
+                if ent and ent ~= 0 and DoesEntityExist(ent) then
+                    local v = GetEntityVelocity(ent)
+                    local speed = rules.sanitizeSpeed(math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z), w.tier)
+                    if speed and rules.rollWheelBreak({
+                        tier = w.tier, speed = speed, offRoad = w.offRoad == true,
+                        loadFraction = rules.loadFraction(w.tier, wagonWeight(w)),
+                    }, math.random) then
+                        breakWheel(w)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+---Consume one wagon_wheel, all-or-nothing. TODO(B7 @core): fh_core removeItem(ref, item, amt) -> true | false, reason.
+local function consumeWheel(src)
+    local refs, snaps = holdRefs(src), {}
+    for i, r in ipairs(refs) do snaps[i] = exports.fh_core:snapshot(r) end
+    local holder = rules.findHolder(refs, snaps, 'wagon_wheel', 1)
+    if not holder then return false, 'fh_not_enough' end
+    local ok, res, why = pcall(function() return exports.fh_core:removeItem(holder, 'wagon_wheel', 1) end)
+    if not ok then return false, 'fh_core_no_removeitem' end -- export missing: B7 not merged
+    if res ~= true then return false, why or 'fh_not_enough' end
+    return true
+end
+
+local function startRepair(src)
+    if repairs[src] then return nil, 'fh_repair_busy' end
+    local citizenid = citizenidOf(src)
+    if not citizenid then return nil, 'fh_no_character' end
+    local ped = GetPlayerPed(src)
+    if ped == 0 then return nil, 'fh_no_player' end
+    local pos = GetEntityCoords(ped)
+    local own = nearestOwn(citizenid, pos)
+    if not own then return nil, 'fh_no_wagon' end
+    local refs, snaps = holdRefs(src), {}
+    for i, r in ipairs(refs) do snaps[i] = exports.fh_core:snapshot(r) end
+    local ok, why = rules.planRepair({
+        citizenid = citizenid, playerCoords = pos, reach = cfg.Reach,
+        wagon = { id = own.w.id, owner = own.w.owner, tier = own.w.tier, coords = own.coords, broken = own.w.broken },
+        hasHammer = rules.findHolder(refs, snaps, 'hammer', 1) ~= nil,
+        hasWheel = rules.findHolder(refs, snaps, 'wagon_wheel', 1) ~= nil,
+    })
+    if not ok then return nil, why end
+    local w = own.w
+    local st = { startedAt = GetGameTimer(), duration = rules.WHEEL.repairMs, startCoords = pos }
+    repairs[src] = st
+    CreateThread(function()
+        while true do
+            Wait(250)
+            local p = GetPlayerPed(src)
+            local c = p ~= 0 and GetEntityCoords(p) or nil
+            local state, reason = 'cancel', 'fh_no_player'
+            if c then state, reason = rules.repairStep(st, GetGameTimer(), c, wagonCoords(w), cfg.Reach) end
+            if state == 'continue' and not w.broken then state, reason = 'cancel', 'fh_wheel_ok' end
+            if state == 'done' then
+                repairs[src] = nil
+                local used, uwhy = consumeWheel(src) -- re-checked now: nothing repairs unless the wheel was consumed
+                if not used then return reply(src, 'fh_repair: ' .. tostring(uwhy)) end
+                repairWheel(w, src)
+                return reply(src, 'fh_repair: wheel repaired')
+            elseif state == 'cancel' then
+                repairs[src] = nil
+                return reply(src, 'fh_repair: cancelled (' .. tostring(reason) .. ')')
+            end
+        end
+    end)
+    return true
+end
+
+AddEventHandler('playerDropped', function() repairs[source] = nil end)
+
+lib.addCommand('fh_repair', {
+    help = 'Repair a broken wheel on your own wagon: needs a hammer and a wagon_wheel; stay close until done',
+}, function(src)
+    local ok, why = startRepair(src)
+    if not ok then return reply(src, 'fh_repair: ' .. tostring(why)) end
+    reply(src, 'fh_repair: working on the wheel, stay by the wagon')
+end)
+
+lib.addCommand('fh_wheelbreak', {
+    help = 'Dev: break the wheel of your nearest own wagon',
+    restricted = 'group.admin',
+}, function(src)
+    local cid = citizenidOf(src)
+    local ped = GetPlayerPed(src)
+    if not cid or ped == 0 then return reply(src, 'fh_wheelbreak: fh_no_player') end
+    local own = nearestOwn(cid, GetEntityCoords(ped))
+    if not own then return reply(src, 'fh_wheelbreak: fh_no_wagon') end
+    if own.w.broken then return reply(src, 'fh_wheelbreak: already broken') end
+    breakWheel(own.w)
+end)
+
+exports('isWheelBroken', function(wagonId) local w = wagons[wagonId]; return w ~= nil and w.broken == true end)
+exports('getSpeedLimit', function(wagonId)
+    local w = wagons[wagonId]
+    return w and limitFor(w) or nil
+end)
+
+AddEventHandler('onResourceStart', function(res)
+    if res == GetCurrentResourceName() or res == 'fh_core' then registerWheelItems() end
+end)
+
 -- If fh_core restarts, its registered-container table is gone: register ours again.
 AddEventHandler('onResourceStart', function(res)
     if res ~= 'fh_core' then return end
