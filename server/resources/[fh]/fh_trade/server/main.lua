@@ -168,7 +168,7 @@ local function reason(code)
     local m = {
         fh_not_enough = 'You do not have that many.', unknown_item = 'The post does not buy that.',
         invalid_amount = ('Amount must be a whole number from 1 to %d.'):format(cfg.maxSellPerTx),
-        worthless = 'That is not worth anything at the moment.', busy = 'One sale at a time.',
+        worthless = 'That is not worth anything at the moment.', busy = 'One trade at a time.',
         pay_failed = 'The trade post could not pay you; an admin has been told (logged).',
         fh_removeitem_missing = 'Trading is not available yet.', not_ready = 'Trading is starting up.',
         -- buy side
@@ -177,7 +177,7 @@ local function reason(code)
         grant_failed_refunded = 'It could not go into your backpack (full or too heavy?); your money was refunded.',
         refund_failed = 'It could not go into your backpack and the refund failed; an admin has been told (logged).',
     }
-    return m[code] or ('Sale refused (' .. tostring(code) .. ').')
+    return m[code] or ('Trade refused (' .. tostring(code) .. ').')
 end
 
 local function doSell(src, item, amount)
