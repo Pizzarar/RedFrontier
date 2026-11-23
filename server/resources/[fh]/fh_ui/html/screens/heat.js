@@ -1,4 +1,11 @@
 // heat (passive HUD): data { factions: [{id,label,level 0-100,tier}], lay_low: {active, seconds_left?} }. Future event fh:heat:changed.
+const HEAT_MAX_ROWS = 3; // fits the 26vh card; the HUD cannot scroll (pointer-events none)
+// Pure: stable sort by level descending, split into shown rows and hidden count.
+function heatTopRows(factions, max) {
+  const rows = FH_DOM.asList(factions).map(function (f, i) { return { f: f, i: i, l: Number(f && f.level) || 0 }; });
+  rows.sort(function (a, b) { return (b.l - a.l) || (a.i - b.i); });
+  return { shown: rows.slice(0, max).map(function (r) { return r.f; }), hidden: Math.max(0, rows.length - max) };
+}
 FH_UI.register('heat', {
   open: function (el, data) { this.update(el, data); },
   update: function (el, data) {
@@ -7,7 +14,8 @@ FH_UI.register('heat', {
     const box = D.h('div', 'hud hud-heat');
     box.appendChild(D.h('h2', 'title small', 'Heat'));
     const body = D.h('div', 'body');
-    FH_DOM.asList(data && data.factions).forEach(function (f) {
+    const top = heatTopRows(data && data.factions, HEAT_MAX_ROWS);
+    top.shown.forEach(function (f) {
       const lvl = Math.max(0, Math.min(100, Number(f.level) || 0));
       const row = D.h('div', 'row');
       row.appendChild(D.h('span', 'grow', f.label || f.id));
@@ -16,6 +24,7 @@ FH_UI.register('heat', {
       fill.style.width = lvl + '%'; bar.appendChild(fill); row.appendChild(bar);
       body.appendChild(row);
     });
+    if (top.hidden > 0) body.appendChild(D.h('div', 'note muted', '+' + top.hidden + ' more'));
     const ll = data && data.lay_low;
     if (ll && ll.active) {
       const s = Number(ll.seconds_left);
