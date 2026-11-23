@@ -512,6 +512,14 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
 
 
 
+### H7 skinned animals leave the spawn lifecycle (fh_hunting)
+
+1. Adopt a hunting animal through fh_core (e.g. the legendary bear after buying the rumour), kill and skin it. Expected: the pelt is granted as usual, and the server log shows no further `requestSpawn` retries for that animal (fh_core no longer tracks the request).
+2. Skin an ordinary wild deer. Expected: unchanged behaviour, no warning in the log.
+3. Restart `fh_core` after skinning. Expected: the skinned animal is not re-spawned.
+
+   RESULT:
+
 ## Crafting (fh_crafting, fh_gunsmith)
 
 Preconditions: stations come from @homestead H3 (without fh_homestead started, crafting refuses `no_homestead` unless you

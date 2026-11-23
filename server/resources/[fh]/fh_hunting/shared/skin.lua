@@ -162,6 +162,7 @@ end
 ---    addItem(ref, name, n, info) -> ok, err
 ---    accepts(type, sizeClass)  -> boolean               (FhContainers.accepts)
 ---    finishCarcass(entity, netId)                       (mark skinned / delete; after a grant only)
+---    releaseSpawn(netId)                                (optional; after a grant: end the fh_core spawn lifecycle)
 ---    emit(name, payload)                                (server-only TriggerEvent)
 ---    rng()                     -> [0,1)
 ---  } }
@@ -280,6 +281,7 @@ function M.new(opts)
         -- Granted (even if something after the addItem threw): the carcass never pays again.
         claims:markSkinned(key, token)
         pcall(deps.finishCarcass, car.entity, key)
+        if deps.releaseSpawn then pcall(deps.releaseSpawn, req.netId) end -- H7: end the fh_core lifecycle, never fatal
         if type(res) ~= 'table' then return true, { item = animal.pelt } end
         pcall(deps.emit, M.EVENT_SKINNED, {
             src = src, citizenid = cid, item_id = animal.pelt, animal = animal.key, quality = res.stars,
@@ -289,6 +291,22 @@ function M.new(opts)
     end
 
     return S
+end
+
+---H7: end the fh_core spawn lifecycle of a skinned carcass so an adopted animal is not re-requested. Wild animals and
+---unadopted entities map to no request (nil) and are left alone. Never throws; failures only warn.
+---@param netId number
+---@param core { requestOfNetId: fun(netId:number):string|number|nil, despawn: fun(id:string|number) }
+---@param warn? fun(msg:string)
+---@return boolean despawned
+function M.releaseSpawn(netId, core, warn)
+    warn = warn or function() end
+    local ok, id = pcall(core.requestOfNetId, netId)
+    if not ok then warn('requestOfNetId failed: ' .. tostring(id)); return false end
+    if not id then return false end
+    local dok, derr = pcall(core.despawn, id)
+    if not dok then warn('despawn failed: ' .. tostring(derr)); return false end
+    return true
 end
 
 if GetCurrentResourceName then

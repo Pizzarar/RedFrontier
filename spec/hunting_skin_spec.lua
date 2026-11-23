@@ -316,4 +316,51 @@ describe('hunting skin: legendary bear pelt + trophy', function()
     end)
 end)
 
+describe('hunting skin: H7 ends the fh_core spawn lifecycle', function()
+    -- Fake fh_core wired the way server/main.lua does it, through S.releaseSpawn.
+    local function withCore(w, core)
+        local W = world(w)
+        W.core = { despawned = {} }
+        W.warns = {}
+        W.deps.releaseSpawn = function(netId)
+            S.releaseSpawn(netId, {
+                requestOfNetId = core.requestOfNetId,
+                despawn = function(id) W.core.despawned[#W.core.despawned + 1] = id; if core.despawnThrows then error('boom') end end,
+            }, function(m) W.warns[#W.warns + 1] = m end)
+        end
+        W.skinner = S.new({ cfg = cfg, animals = A, quality = Q, claims = W.claims, deps = W.deps })
+        return W
+    end
+    it('an adopted netId is despawned once with its request id', function()
+        local W = withCore(nil, { requestOfNetId = function(n) if n == 101 then return 'req-9' end end })
+        assert(W.skin())
+        same({ 'req-9' }, W.core.despawned)
+    end)
+    it('a wild animal (nil request) is not despawned', function()
+        local W = withCore(nil, { requestOfNetId = function() return nil end })
+        assert(W.skin())
+        eq(0, #W.core.despawned); eq(0, #W.warns)
+    end)
+    it('requestOfNetId throwing does not fail the skin and warns', function()
+        local W = withCore(nil, { requestOfNetId = function() error('boom') end })
+        local ok = W.skin()
+        assert(ok); eq(0, #W.core.despawned); eq(1, #W.warns); eq(1, #W.adds)
+        eq('skinned', W.claims:state(101, 5001))
+    end)
+    it('despawn throwing does not fail the skin and warns', function()
+        local W = withCore(nil, { requestOfNetId = function() return 'req-9' end, despawnThrows = true })
+        local ok = W.skin()
+        assert(ok); eq(1, #W.core.despawned); eq(1, #W.warns)
+        eq('skinned', W.claims:state(101, 5001))
+    end)
+    it('a failed skin does not despawn', function()
+        local W = withCore({ refuse = { saddlebag = 'no_space' } }, { requestOfNetId = function() return 'req-9' end })
+        local ok = W.skin()
+        assert(not ok); eq(0, #W.core.despawned)
+    end)
+    it('releaseSpawn tolerates a missing warn callback', function()
+        eq(false, S.releaseSpawn(1, { requestOfNetId = function() error('x') end, despawn = function() end }))
+    end)
+end)
+
 T.finish()

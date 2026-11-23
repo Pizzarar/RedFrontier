@@ -98,6 +98,12 @@ local skinner = FhHuntingSkin.new({
     deps = {
         citizenid = citizenidOf, playerCoords = playerCoords, readCarcass = readCarcass, saddlebagOf = saddlebagOf,
         findCargoWagon = findCargoWagon, addItem = addItem, finishCarcass = finishCarcass,
+        releaseSpawn = function(netId) -- H7: skinned adopted animals are not re-requested by fh_core
+            FhHuntingSkin.releaseSpawn(netId, {
+                requestOfNetId = function(n) return exports.fh_core:requestOfNetId(n) end,
+                despawn = function(id) return exports.fh_core:despawn(id) end,
+            }, function(m) print(('^3[fh_hunting] spawn release: %s^7'):format(m)) end)
+        end,
         accepts = function(t, sc) return (FhContainers.accepts(t, sc)) end,
         emit = function(name, payload) TriggerEvent(name, payload) end, -- server-only, never to clients
         rng = math.random,

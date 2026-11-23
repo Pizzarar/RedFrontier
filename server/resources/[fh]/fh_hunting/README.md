@@ -154,7 +154,7 @@ No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_h
 (number, or nil for a non-trophy), see Exports.
 
 Consumes from other resources: `fh_core:registerItems`, `fh_core:saddlebagOf`, `fh_core:addItem` and the container
-rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay`, `fh_core:snapshot` and `fh_core:removeItem` (H3), `fh_economy:charge` (H4 rumour); `fh_core:requestSpawn` / `fh_core:despawn` (H4); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
+rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay`, `fh_core:snapshot` and `fh_core:removeItem` (H3), `fh_economy:charge` (H4 rumour); `fh_core:requestSpawn` / `fh_core:despawn` (H4), `fh_core:requestOfNetId` + `fh_core:despawn` (H7, after a successful skin); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
 
 ## Known gaps
 
