@@ -5,6 +5,14 @@ local INPUT_CONTEXT = 0xCEFD9220 -- E (unverified)
 local point = nil
 local stopId = nil
 
+local MESSAGES = {
+    fh_insufficient_funds = "You can't afford that.",
+    charge_unavailable = 'The fence is not taking payment right now.',
+    out_of_range = 'Step closer to the fence.',
+    no_room = 'You have no room to carry that.',
+}
+local function why(code) return MESSAGES[code] or ('Refused: ' .. tostring(code)) end
+
 local function notify(msg) lib.notify({ description = msg, type = 'inform' }) end
 
 local function qtyPrompt(title)
@@ -15,15 +23,15 @@ end
 local function buy(e)
     local qty = e.lead and 1 or qtyPrompt(('Buy %s'):format(e.item))
     if not qty then return end
-    local ok, why = lib.callback.await('fh:fence:buy', false, e.item, qty)
-    notify(ok and 'Bought.' or ('Refused: ' .. tostring(why)))
+    local ok, code = lib.callback.await('fh:fence:buy', false, e.item, qty)
+    notify(ok and 'Bought.' or why(code))
 end
 
 local function sell(s)
     local qty = qtyPrompt(('Sell %s'):format(s.item))
     if not qty then return end
     local ok, a, b = lib.callback.await('fh:fence:sell', false, s.item, qty)
-    notify(ok and ('Sold %d for $%d.'):format(a, b) or ('Refused: ' .. tostring(a)))
+    notify(ok and ('Sold %d for $%d.'):format(a, b) or why(a))
 end
 
 local function openMenu()
