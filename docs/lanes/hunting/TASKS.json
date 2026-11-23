@@ -1,0 +1,17 @@
+{
+  "laneId": "hunting",
+  "updatedAt": "2026-11-23T20:33:34.177Z",
+  "units": [
+    {
+      "id": "hunting-xyz-probe",
+      "goal": "H3 low (rn-4555647a287b): wagon.lua:16 M.xyz probe .x/.y/.z in own pcall before [1..3] so strict-metatable userdata isn't rejected",
+      "files": [
+        "server/resources/[fh]/fh_hunting/shared/wagon.lua"
+      ],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "hunting-h4",
+      "commit": "a9e095e"
+    }
+  ]
+}
