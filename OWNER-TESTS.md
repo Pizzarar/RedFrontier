@@ -52,7 +52,7 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    Standing 10 m away and pressing E does nothing.
    RESULT:
 5. Move the Small Safe into your backpack.
-   Expected: refused (cargo only fits wagon/chest). The Worn Rifle is also refused by the backpack (bulky). The Worn Rifle goes into a saddlebag; the Small Safe is refused there too.
+   Expected: refused (it is `bulky`: spec 4.1 allows saddlebag, wagon and chest only, not the backpack). The Worn Rifle (bulky) is refused by the backpack too. Both may go into a saddlebag or a chest.
    RESULT:
 6. Wait `respawnMinutes` (10 min; lower it in config for the test). Stay away from the camp.
    Expected: console `camp heartlands_t1_01 respawned (idle)`, stash empty. Ride back within 40 m: the outlaws are there again.
@@ -98,4 +98,48 @@ applied by `tools/setup-server.ps1`). You need two characters: a second client, 
 9. Restart survival: put 1 bread in the backpack, die, respawn, then `restart fh_death` (or restart the server).
    Expected: console `[fh_death] 1 bag(s) loaded`; the prop comes back at the same spot and the owner can still open
    it and take the bread out.
+   RESULT:
+
+## B6d: M1 stash home + end-to-end card (fh_homestead, fh_zones, fh_death)
+
+Changes in this block: the Small Safe is now `bulky` (was `cargo`); big safes and bullion stay `cargo` for M4 wagons.
+A test-only cargo item `test_cargo_crate` exists so the cargo rule can still be proven. Not runtime-tested (no Cfx key).
+KNOWN GAP: the backpack refuses `bulky`, and there is no horse/saddlebag stash yet (`fh_death` `saddlebagOf` returns nil),
+so in game you cannot carry the rifle or safe home yourself. Steps 8-9 below tell us what actually happens; report it.
+
+1. Cargo refusal. As admin run `fh_give <yourId> test_cargo_crate 1`.
+   Expected: the reply is a refusal (`fh_refused` or `fh_size_class`); no crate in your backpack. Cargo is refused by the
+   backpack AND the saddlebag (the saddlebag half is covered by `spec/camp_rules_spec.lua` only: no horse yet).
+   RESULT:
+
+## M1 end-to-end
+
+One pass, one character, starting with an empty hotbar/backpack. Console lines start with `[fh_homestead]`, `[fh_zones]`, `[fh_death]`.
+
+1. Stand on the plot (about -300, 790, 118) and run `fh_claim`; a chest prop appears; press E at it.
+   Expected: `claimed plot heartlands_01`, chest opens.
+   RESULT:
+2. Fill the backpack: `fh_give <yourId> bread 3`. Equip a weapon in the hotbar (`/giveitem <yourId> weapon_revolver_cattleman 1`).
+   Expected: 3 bread in the backpack, revolver in the hotbar.
+   RESULT:
+3. Ride to the camp (-145, 845, 117) and kill all four outlaws.
+   Expected: `camp heartlands_t1_01 cleared, 2 loot entries`.
+   RESULT:
+4. Press E at the camp stash.
+   Expected: Worn Rifle (condition 20-45) and Small Safe (both bulky).
+   RESULT:
+5. Try to drag the Worn Rifle and the Small Safe into your backpack.
+   Expected: both refused (bulky is not allowed in the backpack). Note what you can do with them (nothing, unless you have a saddlebag).
+   RESULT:
+6. Die once (fall or NPC) and respawn.
+   Expected: `[fh_death] ... bag fh:dropbag:... moved`; revolver still in the hotbar; backpack empty.
+   RESULT:
+7. Walk to the bag, press E, take everything back.
+   Expected: bread returns to the backpack; the bag empties and is swept.
+   RESULT:
+8. Ride home and open the plot chest (E). Move the bread into the chest.
+   Expected: accepted. Then try the rifle/safe: record whether you were able to get them home at all.
+   RESULT:
+9. Restart persistence: put an item in the chest, stop the server, start it, rejoin, open the chest.
+   Expected: the item is still there with its condition intact (check a rifle if you got one home).
    RESULT:

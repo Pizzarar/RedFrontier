@@ -3,7 +3,7 @@
 Seed of lane L3 (spec L89, M1 L107): one T1 outlaw camp, `heartlands_t1_01`, in the M1 region (heartlands).
 
 - `config.lua`: camp center, activation radius, 4 outlaw peds (model/coords/heading/weapon), respawn minutes, loot table,
-  and the two new items (`worn_rifle` bulky, `small_safe` cargo). **All coordinates/models/weapons are guesses: TODO-verify-in-game.**
+  and the two new items (`worn_rifle` bulky, `small_safe` bulky: M1 has no wagon, big safes/bullion stay `cargo` for M4). **All coordinates/models/weapons are guesses: TODO-verify-in-game.**
 - `shared/camp_rules.lua`: pure rules (state transitions, activation check, all-dead roll-up, loot roll with injectable RNG,
   report-distance check); specced in `spec/camp_rules_spec.lua`.
 - `server/main.lua`: state machine `idle -> active -> cleared -> respawn_wait -> idle`.
@@ -13,7 +13,7 @@ Seed of lane L3 (spec L89, M1 L107): one T1 outlaw camp, `heartlands_t1_01`, in 
   - Cleared when every ped is dead and at least one died. Death = server-side `GetEntityHealth <= 0` of the adopted entity,
     polled each tick; a client `fh:zones:ped_dead` report only triggers an early check (and is accepted only from a nearby player).
   - On clear: loot is rolled (`rollLoot`, `info.condition` on the rifle) into an fh_core `chest` container
-    `fh:camp:<id>` (accepts cargo; the safe cannot go into a backpack/equipped/saddlebag). Open = `fh:zones:open_loot`
+    `fh:camp:<id>` (accepts cargo; the bulky safe and rifle cannot go into a backpack/equipped, only saddlebag/chest). Open = `fh:zones:open_loot`
     -> `exports.fh_core:open` (server reach check), only after the camp is cleared.
   - On clear the ped requests are despawned (no corpse re-request pop-in). If every ped fails to spawn the camp aborts to idle
     with an `AbortCooldownMs` cooldown instead of wedging.

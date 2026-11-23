@@ -37,7 +37,11 @@ M.Access = {
 -- M.Items = {
 --     gold_bar = { label = 'Gold Bar', weight = 12000, size_class = 'cargo', stackable = true, value_base = 500, illicit = true },
 -- }
-M.Items = {}
+M.Items = {
+    -- TEST-ONLY (B6d): a cargo item so the owner card can prove cargo is refused by backpack and saddlebag. Remove at M4
+    -- when real cargo (bullion, big safes) exists.
+    test_cargo_crate = { label = 'Test Cargo Crate', weight = 20000, size_class = 'cargo', stackable = false, value_base = 0 },
+}
 
 -- Static fh fields layered over existing rsg-core items (keyed by rsg item name). Only fh keys are read:
 -- size_class, value_base, illicit (and stackable to force a value). Anything unlisted gets the defaults.
