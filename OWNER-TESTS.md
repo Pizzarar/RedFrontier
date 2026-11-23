@@ -201,9 +201,8 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
    Expected: a chat line `fh_ui_demo: ...` (usage or `not allowed`); nothing opens, no focus taken.
    RESULT:
 5. Buff HUD: get a buff (consume a buff item, or whatever fh_buffs gives you). Watch the widget for ~15 s.
-   Expected: it lists the active buff with its remaining time counting down. Until fh_buffs sends `remaining` on
-   `fh:buffs:sync` (core ideas 609/610 pending), the row shows `--` instead of a time: that is the expected degradation,
-   note which you saw. With no buffs the widget is hidden.
+   Expected: it lists the active buff with its remaining time counting down live every second (core idea-610: the buff sync
+   carries `remaining`; a `--` instead of a time is now a FAIL). With no buffs the widget is hidden.
    RESULT:
 6. Drop-bag countdown: die and respawn (see B6c), then watch the bag widget for 20 s.
    Expected: your own bag shows a time that counts DOWN every second and does NOT jump back up every 5 s. Until
@@ -215,7 +214,7 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 8. Run `/fh_ui_demo heat`.
    Expected: a heat indicator with factions, levels, tiers and a lay-low note appears; the mouse is NOT captured and you
    can keep moving. Run `/fh_ui_demo close heat` to remove it.
-   No overlap (idea-648): the heat indicator sits on the left edge below the chat box (about 36% down), clear of the chat, minimap and the right-side buff/bag panels. With 4+ factions the heat card scrolls instead of growing into the minimap. The /forecast panel may cover the heat card while it is open (accepted).
+   No overlap (idea-648): the heat indicator sits on the left edge below the chat box (about 36% down), clear of the chat, minimap and the right-side buff/bag panels. The card is capped in height and rows beyond the cap are clipped (it does not scroll, because the HUD ignores the mouse, and it never grows into the minimap); that only matters with 4+ factions, today there are 2. The /forecast panel may cover the heat card while it is open (accepted).
    RESULT:
 9. Run `/fh_ui_demo insurance`. Press Enter.
    Expected: Enter confirms (server console shows a relayed/unhandled `confirm`, no crash). After closing the dialog,
@@ -245,6 +244,24 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
     RESULT:
 14. `restart fh_ui` while a screen is open.
     Expected: the screen disappears, the mouse is released, movement works.
+
+15. Live jobs board (needs `ensure fh_quests`): run `/jobs`, then walk to the board spot (about -297, 795, 118) and use the target zone.
+    Expected: both open the fh_ui Jobs Board (no ox_lib menu), the mouse works, no autofocus, Enter does nothing. Click Accept on an
+    offer: the row flips to `Accepted` (no Accept button) and an inline notice confirms; the other offers stay. Accept the same
+    offer again or one that already left the board: an inline refusal notice shows and the list refreshes. When the board rotates
+    while the screen is open (or `expired` is sent), the panel shows only `The board is being restocked.` with no old rows. Esc closes.
+    RESULT:
+16. Journal: run `/journal` with two or more active jobs (accept some from step 15), one of which you started earlier.
+    Expected: the journal screen opens with active entries first, then history. Click Abandon on an entry: the button changes to a
+    confirm state and nothing is abandoned yet; click it again: the job is abandoned and leaves the active list. Click away or
+    wait without a second click: it reverts and the job stays active.
+    RESULT:
+17. Journal while the character is not loaded (e.g. `/journal` at the character-select screen, or right after login before spawn).
+    Expected: the journal opens empty with an error notice, no Lua error in F8.
+    RESULT:
+18. Switch characters (log out to character select, load another), then `/journal`.
+    Expected: only the new character's jobs show; the previous character's entries and notices are gone.
+    RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 

@@ -32,9 +32,9 @@ html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times
 /* U3 screens (heat, insurance, jobs, station, fence). Accent stays on .title only. */
 .panel.wide { min-width: 520px; }
 .title.small { font-size: 14px; padding: 4px 10px; }
-/* Left column below rsg-chat's default box (bottom edge 34.5vh); clear of the forecast (top 6vh), buffs/bags (right) and the bottom-left minimap. */
+/* Left column below rsg-chat's default box (bottom edge 34.5vh); clear of the weather forecast (another resource, top 6vh; this HUD does not draw it), buffs/bags (right) and the bottom-left minimap. */
 .hud-heat { top: 36vh; left: 16px; right: auto; width: 240px; background: var(--paper);
-  max-height: 26vh; overflow-y: auto; } /* 36+26=62vh bottom, above the ~64vh expanded minimap; 4+ factions scroll */
+  max-height: 26vh; overflow-y: auto; } /* 36+26=62vh bottom, above the ~64vh expanded minimap; 4+ factions: rows past the cap are clipped (.hud is pointer-events none, so no scrolling) */
 .hud-heat .body { padding: 8px 10px; font-size: 14px; }
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0; }
 .row.card { padding: 8px; border: 1px solid var(--edge); }

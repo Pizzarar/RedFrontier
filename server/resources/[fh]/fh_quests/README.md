@@ -253,7 +253,7 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
   completes only when `payload.citizenid` is the job holder and `offer_key` is the job's own offer: other players
   (and `participants`) are never paid, and whoever lands the kill, the acceptor is credited. One live bounty per
   offer: a second accepter gets `fh_bounty_taken`. Abandoning despawns the ped. The ped is made hostile by the
-  client (`client/jobs_menu.lua`, on `fh:spawn:adopted`, same natives as the camp peds).
+  client (`client/bounty.lua`, on `fh:spawn:adopted`, same natives as the camp peds).
 - **Not spike-gated.** Death detection is the same server-side health check `fh_zones` already ships ungated for
   `camp_clear`, so a bounty can be no less reliable than a camp; gating it would also leave the default
   (`fh_spike_gated true`) board without a bounty and `spike-gated.md` untouched. Still **unverified in-game**.
@@ -271,13 +271,9 @@ type (types are interleaved, so every type is on the board while templates last)
 (`fh:quests:board_changed`). The pick is a pure function of (region, epoch, templates), kept in memory and
 regenerated on restart: the same epoch gives the same board and the same offer ids.
 
-**Fallback menu (WORKAROUND, replaced by the @ui jobs-board screen).** `/jobs` and an rsg-target sphere zone (plus a
-client-local notice-board prop) at the board spot open an ox_lib context menu: list the board, accept, show the active
-jobs, abandon. It runs through four server callbacks (`fh:quests:menu:board|active|accept|abandon`, `server/menu.lua`)
-that call the public exports, so it has no rules of its own, and it does not check that the player is near a
-board (the `/jobs` command works anywhere). It is a workaround for the missing screen: when @ui builds the jobs
-board against the `fh:quests:sync` schema above, delete `client/jobs_menu.lua`, `server/menu.lua` and their
-`fxmanifest.lua` lines. No NUI.
+**Entry points.** `/jobs` and an rsg-target sphere zone (plus a client-local notice-board prop) at the board spot
+(`client/board.lua`) fire `fh:quests:ui_open`, which opens the fh_ui jobs screen (`server/ui.lua`). The `/jobs`
+command works anywhere (no proximity check). The old ox_lib fallback menu and its lib callbacks are gone.
 
 ## Emitted events (server, `TriggerEvent`, one table argument)
 

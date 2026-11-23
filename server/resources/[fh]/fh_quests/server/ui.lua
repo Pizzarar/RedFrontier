@@ -24,9 +24,10 @@ AddEventHandler('fh:quests:ui_accept', function(ev)
     local ok, err = false, 'fh_offer_gone'
     if type(p) == 'table' and type(p.id) == 'string' and #p.id <= 128 then
         ok, err = exports.fh_quests:acceptOffer(src, p.id)
+        -- acceptOffer already syncs on success; refresh the board only on refusal so the offer list is current
+        local region = not ok and p.id:match('^([^:]+):') or nil
+        if region and regions[region] then exports.fh_quests:getBoard(src, region) end
     end
-    local region = p and type(p.id) == 'string' and p.id:match('^([^:]+):') or nil
-    if region and regions[region] then exports.fh_quests:getBoard(src, region) end -- refresh via sync (also on refusal)
     TriggerClientEvent('fh:ui:update', src, { screen = 'jobs', data = T.acceptNotice(ok, err) })
 end)
 

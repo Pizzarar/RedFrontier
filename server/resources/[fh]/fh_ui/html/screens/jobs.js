@@ -15,7 +15,7 @@ FH_UI.register('jobs', {
     p.appendChild(D.h('h1', 'title', 'Jobs Board' + (data.region_id ? ' - ' + data.region_id : '')));
     if (data.notice) p.appendChild(D.h('p', 'note ' + (data.notice_kind === 'ok' ? 'ok' : 'err'), data.notice));
     const body = D.h('div', 'body');
-    const rows = D.asList(data.offers);
+    const rows = data.expired ? [] : D.asList(data.offers);
     if (data.expired) body.appendChild(D.h('p', 'note', 'The board is being restocked.'));
     else if (!rows.length) body.appendChild(D.h('p', 'note', 'No jobs posted.'));
     rows.forEach(function (o) {
