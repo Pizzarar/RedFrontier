@@ -28,19 +28,25 @@ exports('restAtBed', function(src) return rest(src, 'bed') end)
 RegisterNetEvent('fh:survival:restBed', function() rest(source, 'bed') end)
 
 -- ---- bedroll item (guarded: fh_core registerItems may be missing/older) ----
-local function registerBedroll()
-    local def = { [cfg.BedrollItem] = { label = 'Bedroll', weight = 2500, size_class = 'bulky', stackable = false, value_base = 12 } }
-    local ok, res, err = pcall(function() return exports.fh_core:registerItems(def) end)
-    if not ok or res == false then print(('[fh_survival] bedroll item registration skipped: %s'):format(tostring(ok and err or res))) end
+local function registerUsable()
     pcall(function()
         exports['rsg-core']:CreateUseableItem(cfg.BedrollItem, function(source) rest(source, 'bedroll') end)
     end)
+end
+
+local function registerBedroll()
+    local def = { [cfg.BedrollItem] = { label = 'Bedroll', weight = 2500, size_class = 'bulky', stackable = false, value_base = 12, useable = true } }
+    local ok, res, err = pcall(function() return exports.fh_core:registerItems(def) end)
+    if not ok or res == false then print(('[fh_survival] bedroll item registration skipped: %s'):format(tostring(ok and err or res))) end
+    registerUsable()
 end
 
 CreateThread(function()
     while GetResourceState('fh_core') ~= 'started' do Wait(500) end
     registerBedroll()
 end)
+-- fh_core restart drops its item registry; rsg-core restart drops UsableItems callbacks.
 AddEventHandler('onResourceStart', function(res)
-    if res == 'fh_core' then CreateThread(registerBedroll) end
+    if res == 'fh_core' then CreateThread(registerBedroll)
+    elseif res == 'rsg-core' then CreateThread(registerUsable) end
 end)

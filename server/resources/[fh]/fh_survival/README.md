@@ -49,7 +49,8 @@ Homestead exports `isNearStation(src,'bed')` (H3) and `getComfort(citizenid)` (H
 - Consumes: `RSGCore:Server:PlayerLoaded` (restore), `RSGCore:Server:OnPlayerUnload` and `playerDropped` (save),
   `onResourceStart` (boot check, pick up online players), `onResourceStop` and `txAdmin:events:serverShuttingDown`
   (save everyone, non-yielding), `fh:buffs:applied` (refresh the cached snapshot used on drop).
-- Reads (not events): `exports.fh_buffs:get(src)`; writes: `exports.fh_buffs:apply(src, id, magnitude, duration)` on restore (S2) and for food/canteen/wash/campfire (S3: `well_fed`, `hydrated`, `clean`, `warm`).
+- Reads (not events): `exports.fh_buffs:get(src)`; writes: `exports.fh_buffs:apply(src, id, magnitude, duration)` on restore (S2) and for food/canteen/wash/campfire (S3: `well_fed`, `hydrated`, `clean`, `warm`) and on rest (S4: `rested`).
+- Consumes (client -> server, net) `fh:survival:restBed` (no payload; server re-checks bed proximity). Also `onResourceStart` of `fh_core` (re-register bedroll item) and `rsg-core` (re-register its usable callback).
 - Buffs show in the U2 HUD via `fh:buffs:sync` already.
 
 ## Persistence
@@ -80,7 +81,7 @@ The player's region is `FhRegions.territoryAt(x, y).region` from the server-side
 `fh_survival_needs(citizenid PK, needs JSON text, updated_at unix s)` from `server/migrations/0012_survival_needs.sql`.
 
 ## Tests
-`python tools/run-specs.py spec/survival_needs_spec.lua spec/survival_items_spec.lua` (pure logic). Syntax: `python tools/run-specs.py --syntax "server/resources/[fh]/fh_survival"`.
+`python tools/run-specs.py spec/survival_needs_spec.lua spec/survival_items_spec.lua spec/survival_rest_spec.lua` (pure logic). Syntax: `python tools/run-specs.py --syntax "server/resources/[fh]/fh_survival"`.
 
 ## In-game checklist (S2)
 1. Boot console: `[fh_survival] unknown_buff hydrated` / `clean` appear until @core adds caps; nothing else errors.
