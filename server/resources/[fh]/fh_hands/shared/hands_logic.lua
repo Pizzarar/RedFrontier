@@ -108,7 +108,8 @@ end
 --   1. claim: CAS last_tick from -> target in the DB (the row, not memory, says the tick is taken)
 --   2. charge, right after a synchronous online() check (charge reads the citizenid on src before its first yield)
 --   3. retry/gone: nothing was debited, CAS the tick back (target -> from) so it is charged later, no strike
---      skip (charge outcome unknown): keep the claim, no strike, no task, stop this owner's run
+--      skip (charge outcome unknown): keep the claim, no strike, no task, stop this hand's ticks for this run
+--      (returns 'ok': the owner's other hands still run)
 --   4. paid/unpaid: step the state machine, persist unpaid/status (CAS on last_tick = target), run the task
 -- Returns 'ok' or 'gone' (owner no longer loaded: the caller stops this owner).
 local function runHand(e, kind, h, def, cfg, now, io)

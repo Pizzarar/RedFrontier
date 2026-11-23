@@ -332,10 +332,13 @@ function M.new(cfg, logic, deps)
             local rok, rerr = deps.removeItem(stash, item, sold)
             if rok then
                 pin(stash)
-            else
+            elseif owned(tok) then -- removeItem yields: only a trade that still owns the stash may flag it
                 sweep[stash.id] = true
                 log('WARNING sell: removing %dx %s from %s failed (%s), retried on the next trade', sold, item,
                     stash.id, tostring(rerr))
+            else
+                log('WARNING sell paid, removal failed (%s) and reclaimed: citizenid=%s item=%s qty=%d sold goods left in %s',
+                    tostring(rerr), tostring(cid), item, sold, stash.id)
             end
         else
             log('WARNING sell paid then reclaimed: citizenid=%s item=%s qty=%d sold goods left in %s', tostring(cid),
@@ -413,6 +416,10 @@ function M.new(cfg, logic, deps)
             for i = #moved, 1, -1 do
                 local st = moved[i]
                 if type(st) == 'table' and st.toSlot and st.fromSlot then
+                    if not owned(tok) then -- each move yields: a reclaimed settle stops putting back
+                        return reclaimed(tok, 'settle', ('rollback cut short, goods split between %s and the backpack')
+                            :format(stash.id))
+                    end
                     deps.move(backpack, stash, st.toSlot, st.fromSlot, st.amount, src)
                 end
             end

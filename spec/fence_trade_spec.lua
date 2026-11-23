@@ -609,6 +609,20 @@ case('sell: paid but removeItem fails -> sold goods swept by the next trade, pai
     T.eq(0, count(W.C1.bag, GUN)); T.eq(1000 + 3 * SELL, W.C1.money); T.eq(0, size(W.stash()))
 end)
 
+case('sell: removeItem fails after the lock was reclaimed -> no sweep flag, sold goods stay pinned', function()
+    local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
+    local a = start(function() return W.T.sell(1, GUN, 2) end, 'removeItem') -- paid, removal in flight
+    W.clock = cfg.lockStaleSeconds
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- B reclaims, sees the sold goods
+    W.fail.removeItem = 'fh_inventory_down'
+    T.same({ true, 2, 2 * SELL, n = 3 }, drain(a))
+    W.fail.removeItem = nil
+    assert(logged(W, 'removal failed (fh_inventory_down) and reclaimed'))
+    -- not flagged: the next trade refuses instead of sweeping (old code: flag set, stash wiped by the next trade)
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1)))
+    T.eq(2, count(W.stash(), GUN)); T.eq(nil, W.calls.clear)
+end)
+
 case('sell: backpack slot reused by another item mid-sell -> aborted, everything given back, no pay', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 1 }, [2] = { name = GUN, amount = 1 } } } } })
     W.hooks.move = function(_, n) if n == 2 then W.C1.bag[2] = { name = 'bread', amount = 1 } end end
@@ -664,6 +678,20 @@ case('settle: room vanishes during the transfer -> moved units put back, nothing
     T.eq(1, count(W.stash(), GUN)); T.eq(2, count(W.stash(), 'bread'))
     T.eq(1, count(W.C1.bag, GUN)); T.eq(0, count(W.C1.bag, 'bread')) -- the bag is as before the settle
     T.eq(1, W.calls.move)
+end)
+
+case('settle: lock reclaimed after the first rollback move -> the second move never runs', function()
+    local W = world({ stash = { [1] = { name = GUN, amount = 1 }, [2] = { name = 'bread', amount = 1 },
+        [3] = { name = 'water', amount = 2 } } })
+    W.hooks.transferAll = function() W.C1.room = 2 end -- 2 steps move (GUN, bread), water is left: rollback of 2 steps
+    W.hooks.move = function(_, n)
+        if n == 1 then W.clock = cfg.lockStaleSeconds; assert(W.T.locks.acquire('C1', 9)) end -- reclaimed mid-rollback
+    end
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.settle(1)))
+    T.eq(1, W.calls.move) -- the GUN step is not put back by a settle that lost the lock
+    T.eq(1, count(W.stash(), 'bread')); T.eq(2, count(W.stash(), 'water')); T.eq(1, count(W.C1.bag, GUN))
+    assert(logged(W, 'settle reclaimed mid-trade (rollback cut short'))
+    assert(W.T.locks.held('C1')) -- the newer holder keeps its lock
 end)
 
 case('settle: busy lock -> fence_busy, nothing moves; works once the trade is done', function()
