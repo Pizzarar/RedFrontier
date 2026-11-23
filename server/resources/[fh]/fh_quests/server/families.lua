@@ -39,14 +39,26 @@ CreateThread(function() Wait(1000) spawnGivers() end)
 
 -- WORKAROUND (plan quests-01 Q4): callbacks for the ox_lib giver dialogue (client/givers.lua). Thin, whitelisted
 -- over the public exports. Replaced by the @ui quest journal/dialogue screen.
+-- Proximity is enforced HERE, in the net handlers, because they are the only client-reachable path: the talk/start
+-- exports are server-only and also serve non-giver callers (other resources, npc ids with no fixed point), so they
+-- cannot know a position. The @ui screen's own net handler must run the same check (FhQuestsGivers.within).
+-- Position = the player's server-side ped vs the giver's fixed point (the ped is spawned there and frozen).
+local function near(src, giver)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return false end
+    return G.within(giver, GetEntityCoords(ped))
+end
+
 lib.callback.register('fh:quests:giver:talk', function(src, npc_id)
-    if type(npc_id) ~= 'string' or not G[npc_id] then return false, 'fh_bad_npc' end
+    local g = G.get(npc_id)
+    if not g then return false, 'fh_bad_npc' end
+    if not near(src, g) then return false, 'fh_too_far' end
     return exports.fh_quests:talk(src, npc_id)
 end)
 
 lib.callback.register('fh:quests:giver:start', function(src, quest_id)
-    local ok = false
-    for _, id in ipairs(G.ORDER) do if G[id].quest == quest_id then ok = true end end
-    if not ok then return false, 'fh_unknown_quest' end
+    local g = G.byQuest(quest_id)
+    if not g then return false, 'fh_unknown_quest' end
+    if not near(src, g) then return false, 'fh_too_far' end
     return exports.fh_quests:start(src, quest_id)
 end)

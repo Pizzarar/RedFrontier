@@ -484,3 +484,13 @@ via `exports.fh_core:requestSpawn` at fixed points; the client puts an rsg-targe
 calls the server `talk` export (so a finished talk step advances and its `talk.lines` are shown as ox_lib alert
 dialogs, one per line). If the line is not started, the giver's intro lines are shown and the player is offered
 to start it (`start`). No NUI. Coordinates, headings and ped models are guesses: TODO-verify-in-game.
+
+### Giver proximity (server-checked)
+
+The two net callbacks (`fh:quests:giver:talk`, `fh:quests:giver:start`) compare the player's server-side ped position
+with the giver's fixed point (`FhQuestsGivers.within`, radius `REACH` = 5 m) and refuse with **`fh_too_far`** beyond
+it, so a modified client cannot start a line or advance a talk step from across the map. The check lives in the net
+handlers, not in the `talk` export: the exports are server-only (no client can call them) and also serve callers
+whose npc has no fixed point, so only the handler knows the position. Any future client path (the @ui dialogue
+screen's handler) must run the same check. Other codes: `fh_bad_npc` (not a giver), `fh_unknown_quest`.
+Giver peds are frozen, invincible and ignore events on the client that spawned them (`client/givers.lua`).

@@ -1,4 +1,4 @@
--- Family 3: Old Whitlock and the legendary bear. DEPENDS ON @hunting: step 4 waits for
+-- Family 3: Old Whitlock and the legendary bear. DEPENDS ON @hunting: step 2 waits for
 -- fh:hunting:chain_complete with chain_id 'legendary_bear' (plan hunting-01-l8, H4). Until that event exists the
 -- line simply parks on that step. Original content.
 return {

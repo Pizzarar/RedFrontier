@@ -19,6 +19,37 @@ local M = {
 }
 M.ORDER = { 'npc_hale', 'npc_marrow', 'npc_whitlock' }
 
+M.REACH = 5.0 -- metres: how close a player must be to a giver to talk to it / start its line (server-checked)
+
+---The giver record for an npc id, or nil (only real givers: never a helper field of this table).
+function M.get(npc_id)
+    if type(npc_id) ~= 'string' then return nil end
+    for _, id in ipairs(M.ORDER) do
+        if id == npc_id then return M[id] end
+    end
+    return nil
+end
+
+---The giver whose quest line is `quest_id`, or nil.
+function M.byQuest(quest_id)
+    for _, id in ipairs(M.ORDER) do
+        if M[id].quest == quest_id then return M[id] end
+    end
+    return nil
+end
+
+---Is a player at `pos` ({x,y,z}, vector3 or table) within `radius` (default M.REACH) of `giver`? Bad input = false.
+function M.within(giver, pos, radius)
+    if type(giver) ~= 'table' or type(giver.coords) ~= 'table' or pos == nil then return false end
+    local px, py, pz = pos.x, pos.y, pos.z
+    if type(px) ~= 'number' or type(py) ~= 'number' or type(pz) ~= 'number' then return false end
+    if px ~= px or py ~= py or pz ~= pz then return false end -- NaN
+    local c = giver.coords
+    local dx, dy, dz = px - c.x, py - c.y, pz - c.z
+    local r = radius or M.REACH
+    return dx * dx + dy * dy + dz * dz <= r * r
+end
+
 if GetCurrentResourceName then
     FhQuestsGivers = M
 else
