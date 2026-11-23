@@ -1,0 +1,29 @@
+-- fh_trade tuning (spec L6 regional price model). Pure data: no natives. Global FhTradeConfig.
+-- All coordinates are APPROXIMATE and unverified in game (stand at the spot, read coords, adjust).
+FhTradeConfig = {
+    seed = 1337,                  -- seeds the price wobble; change it to reshuffle the whole world's drift
+    maxSellPerTx = 100,           -- units per sale request
+    minMultiplier = 0.1,          -- final price is never below base * this
+    wobble = { amplitude = 0.08, periodSeconds = 3600 },                        -- slow deterministic drift around baseline (+-8%)
+    shortage = { gain = 1.0, max = 1.0, halfLifeSeconds = 7200, threshold = 0.15, reliefPerUnit = 0.02 },
+    saturation = { capacityUnits = 40, maxDrop = 0.5, halfLifeSeconds = 3600 }, -- 40 units into one region = -50% (before recovery)
+    saveMs = 60000,               -- flush dirty price rows at most this often
+
+    -- Trade goods. Registered from this resource via fh_core.registerItems (never in fh_core's config).
+    -- base = baseline $ per unit; the item fields mirror fh_core/shared/items.lua.
+    goods = {
+        trade_salt    = { label = 'Salt Sack',     base = 6,  weight = 1500,  size_class = 'pocket', stackable = true, value_base = 6 },
+        trade_cloth   = { label = 'Bolt of Cloth', base = 14, weight = 2500,  size_class = 'pocket', stackable = true, value_base = 14 },
+        trade_whiskey = { label = 'Whiskey Crate', base = 40, weight = 15000, size_class = 'cargo',  stackable = true, value_base = 40 },
+    },
+
+    -- Regional baseline factor on top of goods[item].base. Unlisted = 1.0. Region ids from fh_core shared/regions.lua.
+    regionFactor = {
+        heartlands = { trade_salt = 1.0, trade_cloth = 1.1, trade_whiskey = 0.9 },
+    },
+
+    -- Trade posts (server checks the player is within `radius` of the post). `region` must be a known region id.
+    posts = {
+        { id = 'valentine_post', label = 'Valentine Trade Post', region = 'heartlands', x = -176.0, y = 630.0, z = 114.0, radius = 6.0 },
+    },
+}
