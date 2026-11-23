@@ -56,7 +56,7 @@ end
 ---  playerCoords(src)         -> coords|nil
 ---  refFor(kind, src, coords) -> container ref|nil   (kind 'saddlebag' | 'wagon'; wagon via the fh_cargo adapter)
 ---  snapshot(ref)             -> items (slot -> { name, amount, info })|nil, err
----  removeItem(ref, name, n, slot) -> ok, err
+---  removeItem(ref, name, n, slot) -> ok, removed?  (removed = { slot, info? }: the pelt actually taken, if it differs)
 ---  addItem(ref, name, n, info)    -> ok, err        (refund path)
 ---  pay(src, amount, reason, region_id) -> ok, err
 ---  emit(name, payload)       -> server-only TriggerEvent
@@ -131,8 +131,18 @@ function M.new(opts)
         if not amount or amount < 1 then return false, 'fh_bad_price' end
 
         -- Take the pelt first; pay only after it is gone.
-        local removed = deps.removeItem(ref, item.name, 1, req.slot)
+        local removed, took = deps.removeItem(ref, item.name, 1, req.slot)
         if removed ~= true then return false, 'fh_remove_failed' end
+        if type(took) == 'table' and took.slot ~= req.slot then
+            -- the container took another slot's pelt (removal is by name): pay for what really left, refund if unpriceable
+            item = { name = item.name, info = took.info }
+            stars = starsOf(animal, item)
+            amount = stars and price.price(animal.value, stars, animal.legendary == true, cfg)
+            if not amount or amount < 1 then
+                deps.addItem(ref, item.name, 1, item.info)
+                return false, 'fh_bad_price'
+            end
+        end
         local paid = deps.pay(src, amount, 'hunting:pelt', trapper.region_id)
         if paid ~= true then
             local back = deps.addItem(ref, item.name, 1, item.info)

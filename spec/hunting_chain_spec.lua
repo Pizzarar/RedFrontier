@@ -27,7 +27,8 @@ local function fake(store)
         save = function(cid, s) D.store[cid] = s; return true end,
         charge = function(src, cid, amount, reason, region)
             D.charges[#D.charges + 1] = { src = src, cid = cid, amount = amount, reason = reason, region = region }
-            return D.chargeResult
+            if D.chargeResult then return true end
+            return false, D.chargeErr
         end,
         spawn = function(cid, chainCfg)
             D.spawnCalls = D.spawnCalls + 1
@@ -218,6 +219,18 @@ describe('hunting chain: range and failure validation', function()
         D.chargeResult = false
         eq('fh_chain_pay_failed', select(2, D.chain.buyRumour(SRC, CID, atTrapper)))
         eq(Chain.STEP_RUMOUR, D.chain.state(CID).step)
+    end)
+    it('charge errors map to player messages and keep the step', function()
+        for err, want in pairs({ fh_insufficient_funds = 'fh_chain_no_funds', fh_charge_busy = 'fh_chain_pay_busy',
+            no_player = 'fh_chain_pay_failed' }) do
+            local D = fake()
+            D.chargeResult = false; D.chargeErr = err
+            eq(want, select(2, D.chain.buyRumour(SRC, CID, atTrapper)))
+            eq(Chain.STEP_RUMOUR, D.chain.state(CID).step)
+            eq(0, #D.events)
+            D.chargeResult = true -- a retry after the error goes through
+            assert(D.chain.buyRumour(SRC, CID, atTrapper))
+        end
     end)
     it('a failed spawn leaves the carcass clue re-inspectable and spawns nothing', function()
         local D = toClue3(fake())

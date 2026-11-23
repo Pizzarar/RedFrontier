@@ -148,15 +148,27 @@ end)
 
 -- ---------------------------------------------------------------- H3 trapper
 
--- WORKAROUND until @core removeItem export: take an item out of a world container. fh_core §4 has no remove export, so this goes through the rsg-inventory
--- compat RemoveItem (fh_inventory API.RemoveItem(containerId, name, amount, slot, reason); it only removes when the
--- slot really holds `name`). UNVERIFIED in game. Request to @core: a removeItem(ref, name, n, slot) export; this is
--- the only place that changes when it ships.
+-- Take one pelt out of a world container (saddlebag / wagon) with fh_core:removeItem (B7). That export removes by name,
+-- all-or-nothing, with no slot, so when a container holds several pelts of this name it may take a different slot
+-- than the one the player asked for. To keep the payout honest the adapter snapshots before and after, finds the slot
+-- that actually lost the pelt and hands its info back; shared/sell.lua then prices that pelt, not the requested one.
 local function removeItem(ref, name, amount, slot)
-    local ok, done = pcall(function()
-        return exports['rsg-inventory']:RemoveItem(ref.id, name, amount, slot, 'hunting:pelt')
-    end)
-    return ok and done == true
+    local before = exports.fh_core:snapshot(ref)
+    if type(before) ~= 'table' then return false end
+    local ok, done = pcall(function() return exports.fh_core:removeItem(ref, name, amount) end)
+    if not ok or done ~= true then return false end
+    local after = exports.fh_core:snapshot(ref)
+    if type(after) == 'table' then
+        for s, it in pairs(before) do
+            if type(it) == 'table' and it.name == name then
+                local now = after[s]
+                if not now or now.name ~= name or (tonumber(now.amount) or 0) < (tonumber(it.amount) or 0) then
+                    return true, { slot = s, info = it.info }
+                end
+            end
+        end
+    end
+    return true, { slot = slot } -- removed, but could not tell which slot: price the requested one
 end
 
 local function snapshotOf(ref)
@@ -239,15 +251,13 @@ local function playerByCid(cid)
     return p and p.PlayerData and p.PlayerData.source or nil
 end
 
----Charge the player for the rumour. INTERIM: rsg-core RemoveMoney directly (fh_economy exposes only `pay`, which
----credits, and `rep`). Queued follow-up to @core: an `fh_economy:charge`/debit export (with a ledger row). Until then
----the rumour charge has no fh_ledger row; RemoveMoney refuses to go below the configured minus limit.
-local function chargeSrc(src, amount, reason)
-    if not RSGCore and GetResourceState('rsg-core') == 'started' then RSGCore = exports['rsg-core']:GetCoreObject() end
-    local p = RSGCore and RSGCore.Functions.GetPlayer(src)
-    if not p or not p.Functions.RemoveMoney then return false end
-    local ok, done = pcall(function() return p.Functions.RemoveMoney('cash', amount, reason) end)
-    return ok and done == true
+---Charge the player for the rumour through fh_economy:charge (B7): ledger row, serialized per citizenid, never negative.
+---@return boolean ok, string? err
+local function chargeSrc(src, amount, reason, region_id)
+    local called, ok, err = pcall(function() return exports.fh_economy:charge(src, amount, reason, region_id) end)
+    if not called then return false, 'fh_charge_error' end
+    if ok == true then return true end
+    return false, type(err) == 'string' and err or 'fh_charge_error'
 end
 
 ---Adapter: fh_core requestSpawn for the legendary bear. onReady marks the adopted entity as the cid's legendary (so the
@@ -306,7 +316,7 @@ chain = FhHuntingChain.new({
             return ok
         end,
         charge = function(src, cid, amount, reason, region)
-            return chargeSrc(src, amount, reason)
+            return chargeSrc(src, amount, reason, region)
         end,
         spawn = function(cid, chainCfg) return requestLegendary(cid, chainCfg) end,
         despawn = function(requestId) pcall(function() exports.fh_core:despawn(requestId) end) end,

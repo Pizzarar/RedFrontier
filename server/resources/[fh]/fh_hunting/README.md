@@ -90,8 +90,7 @@ sides. Chain state persists in `fh_hunting_chains` (one row per `(citizenid, cha
 character left off.
 
 1. **Clue 1 (rumour):** at the trapper, the client prompt becomes "[E] Ask about the legendary bear" while the
-   character is at step 1. The server charges `LegendaryBear.rumourPrice` via rsg-core `RemoveMoney` (interim; see Known
-   gaps) with reason `hunting:rumour` and advances to step 2. Refused if already bought, paid-for, complete, or out of
+   character is at step 1. The server charges `LegendaryBear.rumourPrice` via `fh_economy:charge` (ledger row, B7) with reason `hunting:rumour` and advances to step 2. Refused if already bought, paid-for, complete, or out of
    range.
 2. **Clue 2 (track):** a track marker appears; inspecting it (in range, current step only) advances to step 3.
 3. **Clue 3 (carcass):** a carcass marker appears; inspecting it requests the bear through
@@ -155,7 +154,7 @@ No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_h
 (number, or nil for a non-trophy), see Exports.
 
 Consumes from other resources: `fh_core:registerItems`, `fh_core:saddlebagOf`, `fh_core:addItem` and the container
-rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay` and `fh_core:snapshot` (H3); `fh_core:requestSpawn` / `fh_core:despawn` (H4); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
+rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay`, `fh_core:snapshot` and `fh_core:removeItem` (H3), `fh_economy:charge` (H4 rumour); `fh_core:requestSpawn` / `fh_core:despawn` (H4); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
 
 ## Known gaps
 
@@ -166,13 +165,8 @@ rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_econo
   option).
 - `findCargoWagon` (`server/main.lua`) now calls `exports.fh_cargo:nearestWagon`; until `fh_cargo` (roads-r1) is on main
   every cargo pelt is refused (fail closed).
-- No `removeItem` export in fh_core §4: the trapper removes a pelt through the rsg-inventory compat `RemoveItem`
-  (`removeItem` in `server/main.lua`, unverified in game). Requested from @core: `removeItem(ref, name, n, slot)`.
-- `removeItem` workaround (rsg-inventory compat call) stays until @core ships a `removeItem` export; request queued.
+- `fh_core:removeItem` (B7) removes by name with no slot. `removeItem` in `server/main.lua` snapshots the container before and after to find the slot that really lost the pelt; the sale is priced from that pelt, so mixed-star stacks pay correctly. Pocket/backpack refs are refused by the export (`fh_not_registrable`) and only registered world containers work: the saddlebag and wagon, which are all the trapper uses. If fh_cargo has not registered the wagon stash with fh_core the removal fails closed (`fh_remove_failed`).
 - Pelts in the backpack are not sold (bulky and cargo pelts cannot be there); only the saddlebag and a nearby wagon.
-- The rumour charge uses rsg-core `RemoveMoney` directly (fh_economy exposes only `pay`, which credits, and `rep`), so
-  the charge has no `fh_ledger` row. Queued follow-up to @core: an `fh_economy:charge`/debit export that also writes the
-  ledger. (`chargeSrc` in `server/main.lua` is the one place to change when it ships.)
 - Legendary trophy is best-effort: if the saddlebag and the wagon are both full, the pelt is still granted and the chain
   completes, but the trophy is not stowed (the skin notification says so).
 - A legendary bear killed but never skinned, whose carcass is later cleaned up, is re-requested by fh_core (the general

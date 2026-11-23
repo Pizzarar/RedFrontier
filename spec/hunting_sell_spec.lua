@@ -147,6 +147,28 @@ describe('hunting sell: ordering, event, no double pay', function()
         eq(false, ok); eq('fh_remove_failed', err)
         eq(0, #W.pays); eq(0, #W.events)
     end)
+    it('when the container took a different slot, the payout follows the pelt that really left', function()
+        local W = world({ items = { [1] = pelt('pelt_deer', 3), [2] = pelt('pelt_deer', 1) } })
+        local real = W.deps.removeItem
+        W.deps.removeItem = function(ref, name, n, slot)
+            real(ref, name, n, 2) -- fh_core removes by name: it took slot 2, not the requested slot 1
+            return true, { slot = 2, info = { stars = 1 } }
+        end
+        W.t = S.new({ cfg = cfg, animals = A, price = P, deps = W.deps })
+        local ok, res = W.sell()
+        eq(true, ok)
+        eq(1, res.stars)
+        eq(res.price, W.pays[1].amount)
+        eq(1, W.events[1].payload.quality)
+    end)
+    it('an unpriceable pelt that was taken instead is put back and nothing is paid', function()
+        local W = world({ items = { [1] = pelt('pelt_deer', 3), [2] = pelt('pelt_deer', 1) } })
+        W.deps.removeItem = function() return true, { slot = 2, info = { stars = 9 } } end
+        W.t = S.new({ cfg = cfg, animals = A, price = P, deps = W.deps })
+        local ok, err = W.sell()
+        eq(false, ok); eq('fh_bad_price', err)
+        eq(0, #W.pays); eq(1, #W.adds)
+    end)
     it('a throwing dep is contained and releases the lock', function()
         local W = world()
         local real = W.deps.snapshot

@@ -84,6 +84,8 @@ local MESSAGES = {
     fh_chain_rumour_done = 'You already bought the rumour.',
     fh_chain_too_far = 'You are too far away for that.',
     fh_chain_pay_failed = 'You could not pay for the rumour.',
+    fh_chain_no_funds = 'You cannot afford the rumour.',
+    fh_chain_pay_busy = 'Another payment is still going through. Try again in a moment.',
     fh_chain_spawned = 'The legendary bear has already been found.',
     fh_chain_bad_marker = 'There is nothing to inspect here.',
     fh_chain_wrong_marker = 'You have not found the trail that leads here yet.',
@@ -98,7 +100,7 @@ function M.message(reason) return MESSAGES[reason] or ('Hunt: ' .. tostring(reas
 ---Build a chain. opts = { cfg (FhHuntingConfig), deps = {
 ---  load(cid)                              -> persisted state table|nil
 ---  save(cid, state)                       -> ok boolean (false = DB error; the in-memory state still advances)
----  charge(src, cid, amount, reason, region) -> ok boolean (the rumour charge: DEDUCTS cash from the player)
+---  charge(src, cid, amount, reason, region) -> ok, err (the rumour charge: DEDUCTS cash; err = fh_economy:charge code)
 ---  spawn(cid, chainCfg)                   -> requestId|nil (fh_core requestSpawn wrapper)
 ---  despawn(requestId)                     -> ok (fh_core despawn; stops the post-skin re-request)
 ---  emit(name, payload)                    -> server-only TriggerEvent
@@ -158,7 +160,10 @@ function M.new(opts)
             if s.spawned or s.step > M.STEP_RUMOUR then return false, 'fh_chain_rumour_done' end
             local d = M.distance(coords, cfg.Trapper.coords)
             if not d or d > lb.RumourRange then return false, 'fh_chain_too_far' end
-            if not deps.charge(src, cid, lb.rumourPrice, 'hunting:rumour', lb.region_id) then
+            local paid, cerr = deps.charge(src, cid, lb.rumourPrice, 'hunting:rumour', lb.region_id)
+            if not paid then
+                if cerr == 'fh_insufficient_funds' then return false, 'fh_chain_no_funds' end
+                if cerr == 'fh_charge_busy' then return false, 'fh_chain_pay_busy' end
                 return false, 'fh_chain_pay_failed'
             end
             s.step = M.STEP_TRACK
