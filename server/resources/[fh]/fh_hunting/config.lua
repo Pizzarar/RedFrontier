@@ -13,6 +13,25 @@ FhHuntingConfig = {
     SkinRange = 5.0,   -- metres, skinner to carcass (server-read positions)
     WagonRange = 8.0,  -- metres, cargo pelts go straight into a wagon this close
 
+    -- H2 skin flow.
+    -- Where a pelt goes, tried in order; each entry is also filtered by the fh_core size-class rules (FhContainers):
+    -- the backpack takes pocket items only (spec 4.1), so it is never a bulky or cargo destination.
+    GrantOrder = {
+        bulky = { 'saddlebag', 'wagon' },
+        cargo = { 'wagon' },
+    },
+    SkinDurationMs = 4000,    -- client progress bar before the request is sent
+    SkinCooldownMs = 1000,    -- server: one skin request per player per this many ms (extra ones are ignored)
+    SkinPromptDistance = 2.5, -- rsg-target reach to the aimed point; the server re-checks SkinRange to the carcass
+    DeleteCarcass = true,     -- delete the carcass after a grant (it is marked skinned either way)
+    ClaimPruneMs = 30000,     -- server: forget skinned-claim entries whose carcass no longer exists
+    -- Client tracking of live animals (last damage bone, weapon hits).
+    TrackRadius = 150.0,
+    TrackIntervalMs = 250,
+    DeadCacheSeconds = 900,   -- keep a dead animal's shot data this long, by netId
+    -- Cause-of-death weapons that count as explosive (1 star). UNVERIFIED names.
+    ExplosiveWeapons = { 'weapon_thrown_dynamite', 'weapon_thrown_molotov' },
+
     -- 'roll' source. A zone sets the star band; the roll only ever lowers it by one star, with this chance.
     -- Limb / gut / explosive / multi-hit stay 1 star.
     Zones = {
