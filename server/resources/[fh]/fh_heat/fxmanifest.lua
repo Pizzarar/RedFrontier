@@ -10,11 +10,18 @@ shared_scripts {
     '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
     'config.lua',
     'shared/heat_rules.lua',
+    'shared/roadblock_rules.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua',
+    'server/roadblocks.lua',
+}
+
+client_scripts {
+    '@fh_core/client/safe.lua',
+    'client/main.lua',
 }
 
 dependencies { 'fh_core', 'oxmysql', 'rsg-core' }

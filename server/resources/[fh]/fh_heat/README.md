@@ -42,7 +42,7 @@ Payloads follow `fh_core/docs/events.md`: one table argument, `src` first. Emits
 | `fh:heat:threshold` | `{ src, citizenid, faction, old_level, level, value }` when the level changes |
 
 Example consumer: `AddEventHandler('fh:heat:threshold', function(e) if e.level == 'wanted' then ... end end)`.
-**R6 hook point**: roadblocks / ambush / chase listen to `fh:heat:threshold`. Not implemented here.
+R6 (roadblocks / ambush / chase) listens to `fh:heat:threshold`, see "Roadblocks" below.
 Consumes: `fh:zones:camp_cleared` `{ camp_id, region_id, loot }`. The event names no player, so every player standing in
 a territory of that region gets `camp_clear` heat with that territory's faction.
 
@@ -72,6 +72,45 @@ with a message and nothing is charged (`rules.parsePoints`).
 
 Each decay tick and each player within it runs under `rules.safeTick` (pcall): an error is logged
 (`[fh_heat] ERROR decay ...`) and the loop keeps running.
+
+## Roadblocks, night ambush, chase (R6)
+
+Pure decisions: `shared/roadblock_rules.lua` (specced in `spec/roadblock_rules_spec.lua`); natives and spawning:
+`server/roadblocks.lua`; hostile AI: `client/main.lua`. Config: `FhHeatConfig.roadblock / ambush / chase`.
+
+**Roadblock (always on).** When a player's level for a faction RISES onto or past `roadblock.minLevel` (`wanted`) the
+server picks the chokepoint nearest the player (preferring chokepoints of the player's region, within
+`maxPlayerDistance`) and requests `ped.count` faction peds in a line across it with
+`exports.fh_core:requestSpawn` (kind `ped`, tag `fh_heat:roadblock:<faction>:<n>`). The spawning client makes them
+hostile (`fh:spawn:adopted`, same pattern as fh_zones). Guards: one live roadblock per player+faction,
+`cooldownSeconds` per player+faction, `maxConcurrent` server-wide. It is cleared (peds `despawn`ed) after
+`despawnMinutes`, when that player's level drops below `minLevel` (threshold event or the sweep), when the player
+drops, and on resource stop. Chokepoint coordinates are approximate and **unverified**.
+
+**Night ambush + mounted chase (gated).** Both run ONLY when convar `fh_spike_gated` is `false` (default `true`, read
+on every use). Gated: no-op, one log line per threshold event (`night ambush skipped: fh_spike_gated=true ...`).
+Rows 5-6 in `fh_core/docs/spike-gated.md`; flipped by S2 `spk_chase` RESULT.
+- Ambush: at `ambush.minLevel` (`hunted`) during `nightFrom`..`nightTo` game hours, peds ring the player at `radius`.
+- Chase: at `chase.minLevel` while the player is mounted/in a vehicle (server natives unverified), rider peds + horses
+  spawn `behind` metres back; the target's client seats each rider (`fh_heat:chase`, `TaskMountAnimal`).
+  No wagon pursuit: `requestSpawn` has no wagon kind until M4.
+Ungated, a sweep every `tickSeconds` also evaluates players already above the level.
+
+Events (one table, `src` first): `fh:heat:roadblock_spawned` `{ src, citizenid, faction, roadblock_id, chokepoint_id,
+region_id, level, peds, expires_at }`; `fh:heat:roadblock_cleared` `{ src, citizenid, faction, roadblock_id,
+chokepoint_id, reason }` (`heat_dropped` / `expired` / `player_dropped` / `resource_stop`). Ungated only:
+`fh:heat:ambush_spawned`, `fh:heat:chase_started` (`group_id`), `fh:heat:ambush_cleared`, `fh:heat:chase_cleared`.
+
+### In-game test checklist (not runtime-tested; no Cfx key yet)
+1. `exports.fh_heat:set(src, "outlaws", 55)` (or the fh_core admin `fh_heat`) outlaws heat to 55 near the heartlands: one roadblock of 4 outlaw peds
+   appears at the nearest chokepoint, hostile, and `fh:heat:roadblock_spawned` fires. Heat 30 -> 55 again: no second one.
+2. Read the real coords/heading at the spot, fix `chokepoints`, drop `unverified`.
+3. Drop heat below 50 (set 20): roadblock peds vanish, `roadblock_cleared` reason `heat_dropped`.
+4. Raise to 55 again inside `cooldownSeconds`: nothing spawns, log says `cooldown`. Different faction: independent.
+5. Wait `despawnMinutes` (set 1 to test): `expired`. Disconnect with one live: `player_dropped`, peds gone.
+6. `restart fh_heat`: peds gone. Spawn 5 roadblocks as different players: the 5th is refused (`max_concurrent`).
+7. Gated (default): heat 80 at night: log line for ambush and chase, nothing spawns. `set fh_spike_gated false`,
+   ride a horse at night with hunted heat: ring ambush, then riders behind that mount and attack.
 
 ## Install
 
