@@ -25,6 +25,7 @@
 - 2026-11-23 idea-616(2) closed: covered by @roads fh_cargo nearestWagon+getWagon (roads-r1 32817e7); roads briefed hunting.
 - 2026-11-23 core-03 carried-inventory API (docs/brainstorm/plans/core-03-carried-api.md): extend addItem/removeItem to carried refs {backpack|equipped,id=src}, new setItemInfo(ref,slot,info,expectName?), requestOfNetId(netId) for existing despawn. Checked fh_core exports + fh_inventory fh_api.lua first. Covers roads gap, idea-615/643/687/689/616(1); 600/692 covered by B7.
 - 2026-11-23 core-04 inbox sweep (docs/brainstorm/plans/core-04-inbox-sweep.md): 612/613 caps, 610 buffs remaining, 609 death bags mine/remaining, 611/699 run-specs, 700 offline credit = pending-credit queue claimed on load (raw money UPDATE races rsg save), B7-nit.
+- 2026-11-23 core-05 (plans/core-05-gun-parts-loot.md): gun_parts outlaw loot 0.8 x2-3 + unpend crafting sources spec. idea-721 declined: fh_core timeout cannot stop the late write; root fix = fence-side token.
 
 ## Open
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
@@ -52,3 +53,5 @@
 - 11-23 core-04: B1+U2 (fh_buffs caps + remaining) and T1 (run-specs load errors, venv re-exec) merged main e991426 stack (Gemini PASS; venv 65/1292/0). U1 low fix + E2 FAIL fix (float compare) in flight.
 - 11-23 core-04 U1 (fh:death:bags per player, mine/remaining, idea-609) merged main (c3b0fa3 + b5c7e70; Gemini PASS, venv 70/1358/0). E2 tierA re-review of fix 74cbbc1 pending.
 - 11-23 core-04 COMPLETE: E2 offline-safe fh_economy.credit (fh_pending_credit, mig 0015, claim on load) + B7-nit merged main (1713bde, b3e4acf fix, 313ec96 renumber; Gemini tierA PASS after 1 fix; venv 71/1382/0). Core playtest-ready.
+- core-04 COMPLETE main 018df02 (playtest-ready). core-05 handed to Cor2.
+- 11-23 core-05 COMPLETE: K1 gun_parts outlaw loot (0.8, 2-3) + rollLoot ranges + crafting_sources_spec unpend merged main (ae7a8ff, a488aba; Gemini PASS 0/0/2 folded; venv 71/1385/0). idea-721 declined (fix is fence-side). Core merges on hold until playtest gate docs land.
