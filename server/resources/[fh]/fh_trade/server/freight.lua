@@ -7,7 +7,8 @@ local F = FhFreight
 local fcfg = cfg.freight or {}
 
 local contracts = {}   -- citizenid -> { [key] = contract }
-local busy = {}        -- citizenid|key -> true while an accept / delivery is in flight (exports may yield)
+local busy = {}        -- citizenid|key -> true while a delivery check is in flight (exports may yield)
+local accepting = {}  -- citizenid -> true while an accept is in flight (one at a time: keeps maxActivePerPlayer exact)
 local STASH = 'fh:wagon:'
 
 local function log(fmt, ...) print(('[fh_trade/freight] ' .. fmt):format(...)) end
@@ -21,7 +22,11 @@ local function srcOf(citizenid)
     return p and p.PlayerData.source or nil
 end
 local function now() return os.time() end
-local function wagonIdOfRef(ref) return ref and ref.id and ref.id:sub(1, #STASH) == STASH and ref.id:sub(#STASH + 1) or nil end
+local function wagonIdOfRef(ref)
+    if type(ref) ~= 'table' or type(ref.id) ~= 'string' then return nil end
+    if ref.id:sub(1, #STASH) ~= STASH or #ref.id <= #STASH then return nil end
+    return ref.id:sub(#STASH + 1)
+end
 local function wagonRef(wagonId) return { type = 'wagon', id = STASH .. wagonId } end
 
 -- ---------------------------------------------------------------- persistence
@@ -48,7 +53,7 @@ local function load()
             contracts[r.citizenid] = contracts[r.citizenid] or {}
             contracts[r.citizenid][r.ckey] = {
                 key = r.ckey, citizenid = r.citizenid, wagon = r.wagon, from_region = r.from_region, to_region = r.to_region,
-                item = r.item, qty = r.qty, reward = r.reward, accepted_at = r.accepted_at, deadline = r.deadline, miss = 0,
+                item = r.item, qty = r.qty, reward = r.reward, accepted_at = r.accepted_at, deadline = r.deadline, miss = 0, seen = false, -- seen=false: wait for the wagon to spawn
             }
             n = n + 1
         end
@@ -74,32 +79,14 @@ local function cargoCount(wagonId, item)
     return n
 end
 
----Remove `qty` of `item` from the wagon. fh_core has no removeItem for world containers, so the cargo is moved into a
----throwaway drop bag at `coords`, which is then deleted. @return boolean ok, string? err
-local function consume(wagonId, item, qty, coords, src)
-    local from = wagonRef(wagonId)
-    local snap = exports.fh_core:snapshot(from)
-    if type(snap) ~= 'table' then return false, 'fh_unreadable' end
-    local slots = {}
-    for slot, it in pairs(snap) do if it.name == item then slots[#slots + 1] = { slot = slot, have = tonumber(it.amount) or 1 } end end
-    table.sort(slots, function(a, b) return a.slot < b.slot end)
-    local bagId = exports.fh_core:createDropBag(coords, {}, { label = 'freight' })
-    if not bagId then return false, 'fh_no_sink' end
-    local to, need, toSlot = { type = 'drop_bag', id = bagId }, qty, 0
-    for _, s in ipairs(slots) do
-        if need <= 0 then break end
-        local take = math.min(need, s.have)
-        toSlot = toSlot + 1
-        local ok, why = exports.fh_core:move(from, to, s.slot, toSlot, take, src)
-        if not ok then
-            exports.fh_core:transferAll(to, from, src) -- put back what already moved
-            exports.fh_core:deleteContainer(to)
-            return false, why or 'fh_move_failed'
-        end
-        need = need - take
-    end
-    exports.fh_core:deleteContainer(to)
-    if need > 0 then return false, 'fh_not_enough' end
+---Take the contract's cargo out of its wagon (fh_core:removeItem, all-or-nothing). Idempotent per contract
+---(c.cargoGone). @return boolean ok, string? why
+local function takeCargo(c)
+    if c.cargoGone then return true end
+    local ok, a, b = pcall(function() return exports.fh_core:removeItem(wagonRef(c.wagon), c.item, c.qty) end)
+    if not ok then return false, tostring(a) end
+    if a ~= true then return false, b or 'remove_failed' end
+    c.cargoGone = true
     return true
 end
 
@@ -116,12 +103,11 @@ local function accept(src, offer)
     if not citizenid then return false, 'fh_no_player' end
     local ok, err = F.validateOffer(cfg, offer, FhRegions.isKnownRegion)
     if not ok then return false, 'fh_freight_' .. err end
-    local tag = citizenid .. '|' .. offer.key
-    if busy[tag] then return false, 'fh_busy' end
-    if (contracts[citizenid] or {})[offer.key] then return false, 'fh_freight_active' end
-    if countActive(citizenid) >= (fcfg.maxActivePerPlayer or 2) then return false, 'fh_freight_too_many' end
-    busy[tag] = true
+    if accepting[citizenid] then return false, 'fh_busy' end
+    accepting[citizenid] = true -- held across the yielding exports below, so two accepts cannot both pass the cap
     local rok, res, extra = pcall(function()
+        if (contracts[citizenid] or {})[offer.key] then return false, 'fh_freight_active' end
+        if countActive(citizenid) >= (fcfg.maxActivePerPlayer or 2) then return false, 'fh_freight_too_many' end
         local ref = exports.fh_cargo:nearestWagon(src, nil, fcfg.acceptReach or 8.0)
         local wagonId = wagonIdOfRef(ref)
         if not wagonId then return false, 'fh_freight_no_wagon' end
@@ -135,19 +121,24 @@ local function accept(src, offer)
         persist(c)
         return true
     end)
-    busy[tag] = nil
+    accepting[citizenid] = nil
     if not rok then log('accept error: %s', tostring(res)) return false, 'internal_error' end
     return res, extra
 end
 
+---Undo an accept / drop an abandoned contract. Called on player abandon AND when fh_quests could not save the
+---accept, so it must fully undo accept (cargo out, row gone) and be idempotent. Never calls back into fh_quests
+---(hooks run inside its per-character lock). No abandon event: the contract just stops.
 local function abandon(src, state)
-    local citizenid = citizenidOf(src)
-    local key = type(state) == 'table' and F.keyOf(state.quest_id or state.id) or nil
+    local key = F.keyOfState(state)
+    local citizenid = type(state) == 'table' and state.citizenid or citizenidOf(src)
     local c = citizenid and key and (contracts[citizenid] or {})[key]
     if not c then return end
-    local w = exports.fh_cargo:getWagon(c.wagon)
-    drop(c) -- stop the timers first: abandoning must not also fire contract_failed
-    if w and w.coords then pcall(consume, c.wagon, c.item, c.qty, w.coords, src) end -- best effort: take the cargo back
+    c.abandoned = true -- an in-flight check sees this and emits nothing
+    drop(c)
+    if busy[citizenid .. '|' .. key] then return end -- that check removes the cargo itself on its way out
+    local ok, why = takeCargo(c)
+    if not ok then log('abandon: could not take cargo of %s out of the wagon (%s)', key, tostring(why)) end
 end
 
 local function onEvent(name, payload, state) return F.eventVerdict(name, payload, state) end
@@ -168,28 +159,34 @@ end
 
 local function check(c)
     local tag = c.citizenid .. '|' .. c.key
-    if busy[tag] then return end
+    if busy[tag] or c.abandoned then return end
     busy[tag] = true
     local ok, err = pcall(function()
-        local w = exports.fh_cargo:getWagon(c.wagon)
-        local usable = w and w.coords and w or nil
-        local facts = { wagon = usable, owner_ok = usable == nil or usable.owner == c.citizenid }
-        if usable then
-            facts.cargoCount = cargoCount(c.wagon, c.item)
-            facts.atTarget = F.atTarget(fcfg.destinations[c.to_region], usable.coords)
+        local src = srcOf(c.citizenid)
+        local facts = { online = src ~= nil }
+        if src then
+            local gok, w = pcall(function() return exports.fh_cargo:getWagon(c.wagon) end)
+            local usable = gok and w and w.coords and w or nil
+            facts.wagon = usable
+            facts.owner_ok = usable == nil or usable.owner == c.citizenid
+            if usable then
+                facts.cargoCount = cargoCount(c.wagon, c.item)
+                facts.atTarget = F.atTarget(fcfg.destinations[c.to_region], usable.coords)
+            end
         end
-        local verdict, miss = F.evaluate(c, facts, now(), fcfg.graceChecks or 3)
-        c.miss = miss
+        if c.abandoned then return end
+        local verdict, miss, seen = F.evaluate(c, facts, now(), fcfg.graceChecks or 3)
+        c.miss, c.seen = miss, seen
         if not verdict then return end
         if verdict ~= 'delivered' then return fail(c, verdict) end
-        local src = srcOf(c.citizenid)
-        if not src then return end -- offline: deliver when they are back (deadline still runs)
-        local done, why = consume(c.wagon, c.item, c.qty, usable.coords, src)
-        if not done then c.miss = (c.miss or 0) + 1 log('delivery consume failed for %s: %s', c.key, tostring(why)) return end
+        local removed, why = takeCargo(c) -- all-or-nothing; on false nothing was removed and nothing is emitted
+        if c.abandoned then return end -- abandon() ran meanwhile: it already dropped the contract
+        if not removed then return log('delivery cargo removal failed for %s: %s', c.key, tostring(why)) end
         drop(c)
         TriggerEvent(F.EVENT_DELIVERED, payloadOf(c, src))
     end)
     busy[tag] = nil
+    if c.abandoned then takeCargo(c) end -- abandon() skipped removal while we were in flight: finish the undo (no-op if done)
     if not ok then log('check error for %s: %s', c.key, tostring(err)) end
 end
 

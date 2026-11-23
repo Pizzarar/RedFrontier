@@ -29,7 +29,7 @@ local function defaults(cfg)
     return {
         minQty = f.minQty or 1, maxQty = f.maxQty or 20, qtyPerLevel = f.qtyPerLevel or 20,
         premium = f.premium or 1.25, repDelta = f.repDelta or 2, deadlineSeconds = f.deadlineSeconds or 1800,
-        maxOffers = f.maxOffers or 3, rewardCap = f.rewardCapMultiple or 4,
+        maxOffers = f.maxOffers or 3, cooldownMin = f.cooldownMin or 30, rewardCap = f.rewardCapMultiple or 4,
         allowSameRegion = f.allowSameRegion == true, destinations = f.destinations or {},
     }
 end
@@ -59,7 +59,7 @@ function M.generate(cfg, fromRegion, shortagesByRegion)
                             title = ('Freight: %dx %s to %s'):format(qty, label, to),
                             text = ('Haul %dx %s from %s to %s before time runs out.'):format(qty, label, fromRegion, to),
                             region_id = fromRegion, from_region = fromRegion, to_region = to,
-                            item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = d.deadlineSeconds,
+                            item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = d.deadlineSeconds, cooldown_min = d.cooldownMin,
                             rewards = { money = reward, rep = { region_id = to, delta = d.repDelta } },
                         }
                     end
@@ -93,52 +93,72 @@ end
 function M.newContract(offer, citizenid, wagonId, now)
     return {
         key = offer.key, citizenid = citizenid, wagon = wagonId, from_region = offer.from_region, to_region = offer.to_region,
-        item = offer.item, qty = offer.qty, reward = offer.reward, accepted_at = now, deadline = now + offer.deadline_s, miss = 0,
+        item = offer.item, qty = offer.qty, reward = offer.reward, accepted_at = now, deadline = now + offer.deadline_s, miss = 0, seen = true, -- seen: its wagon was just used to accept
     }
 end
 
-local function dist3(a, b)
-    local dx, dy, dz = a.x - b.x, a.y - b.y, (a.z or 0) - (b.z or 0)
-    return math.sqrt(dx * dx + dy * dy + dz * dz)
+-- RedM hands back vector3 userdata, not tables: read the fields through pcall (same as fh_cargo/shared/cargo_rules.lua).
+local function xyz(v)
+    if v == nil then return nil end
+    local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
+    if not ok or not finite(x) or not finite(y) then return nil end
+    return x, y, finite(z) and z or 0
 end
 
----Is `wagonCoords` inside the destination reach circle?
+---Is `wagonCoords` (table or vector3) inside the destination reach circle?
 function M.atTarget(dest, wagonCoords)
-    if type(dest) ~= 'table' or type(wagonCoords) ~= 'table' or not finite(wagonCoords.x) or not finite(wagonCoords.y) then return false end
-    return dist3(dest, wagonCoords) <= (dest.radius or 30.0)
+    local dx, dy, dz = xyz(dest)
+    local wx, wy, wz = xyz(wagonCoords)
+    if not dx or not wx then return false end
+    local rad = 30.0
+    local ok, r = pcall(function() return dest.radius end)
+    if ok and finite(r) then rad = r end
+    local ex, ey, ez = dx - wx, dy - wy, dz - wz
+    return math.sqrt(ex * ex + ey * ey + ez * ez) <= rad
 end
 
----Decide what a periodic check means. facts = { wagon = table|nil (getWagon result), coordsKnown?, owner_ok?,
----cargoCount = number|nil (nil = unreadable, fail closed: neither delivered nor lost), atTarget = boolean }.
----Order: deadline first, then wagon gone, then cargo short, then delivery.
----`graceChecks` consecutive "gone/short" reads are tolerated (wagon respawn, a moment in a chest) before it counts.
----@return string|nil verdict 'delivered'|'timeout'|'wagon_lost'|'cargo_missing'; integer newMiss
+---Decide what a periodic check means. facts = { online = boolean, wagon = table|nil (getWagon result with coords),
+---owner_ok?, cargoCount = number|nil (nil = unreadable, fail closed), atTarget = boolean }.
+---Order: deadline first (always, even offline), then presence, then wagon gone, cargo short, delivery.
+---Presence (restart/login safety): while the player is offline, or the wagon has not been seen spawned since the
+---restart/login (`c.seen` false), only the deadline applies and the loss counter restarts from 0, so a restart never
+---fails a contract by itself. After the wagon is seen, `graceChecks` consecutive "gone/short" reads are tolerated
+---(wagon respawn, a moment in a chest) before they count.
+---@return string|nil verdict 'delivered'|'timeout'|'wagon_lost'|'cargo_missing'; integer newMiss; boolean seen
 function M.evaluate(c, facts, now, graceChecks)
-    if not finite(now) or type(c) ~= 'table' or type(facts) ~= 'table' then return nil, c and c.miss or 0 end
-    if now >= c.deadline then return 'timeout', c.miss end
+    if not finite(now) or type(c) ~= 'table' or type(facts) ~= 'table' then return nil, c and c.miss or 0, c and c.seen == true end
+    if now >= c.deadline then return 'timeout', c.miss or 0, c.seen == true end
+    if facts.online ~= true then return nil, 0, false end
     local grace = graceChecks or 3
     local gone = facts.wagon == nil or facts.owner_ok == false
+    if gone and c.seen ~= true then return nil, 0, false end -- not spawned since restart/login: wait for it
     local short = not gone and facts.cargoCount ~= nil and facts.cargoCount < c.qty
     if gone or short then
         local miss = (c.miss or 0) + 1
-        if miss >= grace then return gone and 'wagon_lost' or 'cargo_missing', miss end
-        return nil, miss
+        if miss >= grace then return gone and 'wagon_lost' or 'cargo_missing', miss, true end
+        return nil, miss, true
     end
-    if facts.cargoCount == nil then return nil, c.miss or 0 end -- unreadable: hold state
-    if facts.atTarget then return 'delivered', 0 end
-    return nil, 0
+    if facts.cargoCount == nil then return nil, c.miss or 0, true end -- unreadable: hold state
+    if facts.atTarget then return 'delivered', 0, true end
+    return nil, 0, true
 end
 
----fh_quests onEvent hook mapping. Only our two events; must be the player's own contract.
----`state` is whatever fh_quests passes: quest id read from state.quest_id / state.id when present.
+---Quest key out of the fh_quests state copy: state.progress.job.key, else state.quest_id (state.id does not exist).
+function M.keyOfState(state)
+    if type(state) ~= 'table' then return nil end
+    local job = type(state.progress) == 'table' and state.progress.job
+    if type(job) == 'table' and type(job.key) == 'string' and job.key ~= '' then return job.key end
+    return M.keyOf(state.quest_id)
+end
+
+---fh_quests onEvent hook mapping. Only our two events, and only for this quest (state.quest_id must equal
+---job:freight:<payload.key>; fh_quests already filtered to events crediting the holder).
 ---@return string|nil 'complete'|'fail'|nil
 function M.eventVerdict(name, payload, state)
     if type(payload) ~= 'table' or type(payload.key) ~= 'string' then return nil end
     if name ~= M.EVENT_DELIVERED and name ~= M.EVENT_FAILED then return nil end
-    local qid = type(state) == 'table' and (state.quest_id or state.id) or nil
-    if qid ~= nil and qid ~= M.questId(payload.key) then return nil end
-    if name == M.EVENT_DELIVERED then return 'complete' end
-    return 'fail'
+    if type(state) ~= 'table' or state.quest_id ~= M.questId(payload.key) then return nil end
+    return name == M.EVENT_DELIVERED and 'complete' or 'fail'
 end
 
 ---Soft-dependency registration: only when fh_quests is started. `getState` = GetResourceState, `quests` = the

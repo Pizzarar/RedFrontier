@@ -36,6 +36,7 @@ FhTradeConfig = {
         repDelta = 2,                  -- rep gained at the destination region
         deadlineSeconds = 1800,        -- from accept
         maxOffers = 3, rewardCapMultiple = 4,
+        cooldownMin = 30,              -- fh_quests cooldown_min: minutes before the same route/cargo offer can be taken again (= deadline)
         maxActivePerPlayer = 2,
         allowSameRegion = false,       -- only one region exists today: no offers until a 2nd region is added (or set true to test)
         checkMs = 5000, graceChecks = 3, -- delivery/loss scan period; consecutive misses before wagon/cargo loss counts
