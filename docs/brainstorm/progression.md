@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Progression
-- Lead: none
+- Lead: Progression lead · P1-P4 resume
 - Workers: 0
 
 ## Done when
@@ -13,7 +13,7 @@
 ## Decided
 - Plan: docs/brainstorm/plans/progression-01-l9.md (P0 core request → P1 fh_progression → P2 fh_fence ∥ P3 fh_hands → P4 tests).
 - Overlord rules: vs worktree units; merge only after PASS + rebase + run-specs green; one lane merges at a time; tests in OWNER-TESTS.md progression section (not README); no push; log playtest-ready.
-- fh_economy has only pay/rep (+rep_changed event). Asked @core for getRep + charge (idea-600); read-only shim until then.
+- idea-600 delivered: core B7 on local main 334642c (getRep, charge, removeItem). P1b swaps shim to getRep; P2/P3 debits use charge (retry on fh_charge_busy) + removeItem. Sent to lead rn-5dc775ae6f22.
 - Reuse fh_spike_gated for fence NPC spawn. Fence shop = ox_lib menu stopgap, @ui screen follow-up (idea-601).
 - Hand's first task = chest feed top-up (troughs unowned).
 
@@ -22,10 +22,9 @@
 - (orig ask) L9 fh_fence + fh_hands + rep-tier unlocks on top of @core's fh_economy ledger: regional rep tiers, roving fence on a schedule (stops, not real driving), rare parts/treasure leads, hired hands as timers automating upkeep. Insurance stays with @core fh_death. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
 ## In flight
-- FORGE FREEZE: lead drained, 'drained forge-freeze progression' sent to Overlord rn-5930636cd935. Lead Prg rn-cf119741f978 idle. Core B7 (getRep/charge, idea-600) still pending; P2/P3 debits return charge_unavailable until it merges.
-- PARKED (forge freeze 2026-11-22), all worktrees clean, nothing merged, nothing pushed:
-  - prog-p1 aef3632: P1 review fixes done (was FAIL 2/2/2 802dd2b), needs Gemini re-review. Specs green (17/274).
-  - prog-p2 8a9611e (on 802dd2b): P2 fence, Gemini FAIL 2/2/3 (fence_stash per-player lock/dupe race + more). Needs fixes + rebase on prog-p1. Specs green.
-  - prog-p3 d76a817 (on 802dd2b): P3 hands, Gemini FAIL 2/3/2 (double-charge/persistence races in processOwner/load/save + more). Needs fixes + rebase on prog-p1. Specs green.
-  - 2026-11-23: freeze still on (Overlord: ignore idle-kicks until cutover). Core says getRep is in B7 core-b7 9bad7c4 (passed); charge FAILed, ships with B7 fix after thaw.
-  - Resume: send P2/P3 review findings (vs status rn-27c91b8a6c9b / rn-2733cf6127b7) to Prg3/Prg4, re-review P1, then P1b after Core B7, then P4.
+- 2026-11-23 P1 PASS 0/0/1 prog-p1 34ace36 (Gemini rn-adef187ccf78; SPECS BLOCKED, no lupa). Merge waits on lupa + slot.
+- 2026-11-23 P3 PASS 0/0/2 prog-p3 0ee8d0a on p1 (Gemini rn-158fa422dc56; SPECS BLOCKED). Merge after P1.
+- 2026-11-23 P2 PASS 0/0/0 prog-p2 99bb8bf on p1 (Gemini rn-07e02880a7ff; SPECS BLOCKED). Merge after P1; ping UI Buddy (idea-601) on merge.
+- 2026-11-23 P4 PASS 0/0/2 prog-p4 b059206 (p3+p2 merge adacb09 + admin cmds + OWNER-TESTS Progression; Gemini rn-7729a72b765a; SPECS BLOCKED). Merge order P1 > P2 > P3 > P4. Left: P1b after core B7 on main.
+- 2026-11-23 MERGED P1-P4 to local main (slot from Red2): P1 84087d6, P2 f60805c, P3 f13e710 (hands migration renumbered 0009), P4 ed2cb1e. Venv specs 41/808/0, syntax 18/0, dedupe empty. Not pushed. Next: P1b (Prg16) review, then playtest-ready.
+- Freeze lifted. Lead rn-5dc775ae6f22 ack'd B7 -> task prog-p1b (getRep swap, charge + error map + busy retry, fence sell via removeItem, P4 review lows). Order: P1 rebased b63a340 (25/454/0), queued after ui+guide -> merge P2/P3/P4 (reviewed) -> P1b (after Prg9 P2 spec fix; both touch fh_fence trade.lua).

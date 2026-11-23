@@ -38,3 +38,9 @@ Insurance, contracts board, wagon tiers themselves (we expose the gate only), NU
 
 ## Credits
 No plugin parity; nothing to credit.
+
+## Update 2026-11-23: P0 delivered (core B7, local main 334642c, not pushed)
+- `fh_economy.getRep(who, region_id)` → P1b: drop the oxmysql read-only shim, read via the export.
+- `fh_economy.charge(src, amount, reason, region_id)` → P2/P3 debits replace `charge_unavailable`. Handle: fh_insufficient_funds, ledger_failed, removemoney_refused, no_player, player_changed, fh_charge_busy (fail fast; retry, never double-charge).
+- `fh_core.removeItem(ref, item, amount)` all-or-nothing (fh_not_enough): use for fence sell/stash removal.
+- Contract: resources fh_economy/README.md, fh_core/README.md.
