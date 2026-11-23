@@ -53,16 +53,38 @@ local function onUse(src, item)
     lastUse[src] = t
     local live = itemAt(src, item.name, item.slot)
     if not live then return end -- not actually in the inventory
-    -- Apply first: if fh_buffs refuses (e.g. no cap for `hydrated` yet) nothing is consumed and nothing is promised.
+    -- Consume first, grant after: a failed inventory update never leaves a free buff. fh_buffs has no remove, so if it
+    -- refuses the buff (e.g. no cap for `hydrated` yet) the consumption is refunded instead.
+    local inv = exports['rsg-inventory']
     if eff.kind == 'food' then
-        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then notify(src, 'You cannot eat right now.') return end
-        pcall(function() return exports['rsg-inventory']:RemoveItem(src, item.name, 1, live.slot, 'survival use') end)
+        local pok, removed = pcall(function() return inv:RemoveItem(src, item.name, 1, live.slot, 'survival use') end)
+        if not (pok and removed) then
+            print(('[fh_survival] RemoveItem %s failed for %s; nothing granted'):format(item.name, tostring(src)))
+            notify(src, 'You cannot eat right now.')
+            return
+        end
+        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then
+            local rok, added = pcall(function() return inv:AddItem(src, item.name, 1, nil, live.info, 'survival refund') end)
+            if not (rok and added) then print(('[fh_survival] refund of %s to %s FAILED'):format(item.name, tostring(src))) end
+            notify(src, 'You cannot eat right now.')
+            return
+        end
         notify(src, 'You feel fed.')
     else -- canteen
         local ok, res = I.useCanteen(live.info, cfg.CanteenMax)
         if not ok then notify(src, res == 'empty' and 'The canteen is empty. Refill it at water.' or 'The canteen is damaged.') return end
-        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then notify(src, 'You cannot drink right now.') return end
-        pcall(function() return exports['rsg-inventory']:SetItemInfo(src, live.slot, res) end)
+        local pok, saved = pcall(function() return inv:SetItemInfo(src, live.slot, res) end)
+        if not (pok and saved) then
+            print(('[fh_survival] SetItemInfo %s failed for %s; nothing granted'):format(item.name, tostring(src)))
+            notify(src, 'You cannot drink right now.')
+            return
+        end
+        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then
+            local rok, back = pcall(function() return inv:SetItemInfo(src, live.slot, live.info or {}) end)
+            if not (rok and back) then print(('[fh_survival] charge refund of %s to %s FAILED'):format(item.name, tostring(src))) end
+            notify(src, 'You cannot drink right now.')
+            return
+        end
         notify(src, ('You drink. %d charges left.'):format(res.charges))
     end
 end
