@@ -18,13 +18,23 @@ M.TEXT = {
     fh_bounty_spawn_failed = 'The target could not be found. Try again later.',
     fh_db = 'Could not save that. Try again.',
 }
+M.TEXT.fh_not_active = 'You are not on that quest.'
+M.TEXT.fh_unknown_quest = 'That quest is unknown.'
 M.DEFAULT = 'Could not take that job.'
 M.ACCEPTED = 'Job accepted.'
+M.ABANDON_DEFAULT = 'Could not abandon that.'
+M.ABANDONED = 'Quest abandoned.'
 
 ---accept result -> { notice, notice_kind }
 function M.acceptNotice(ok, err)
     if ok == true then return { notice = M.ACCEPTED, notice_kind = 'ok' } end
     return { notice = M.TEXT[err] or M.DEFAULT, notice_kind = 'error' }
+end
+
+---abandon result -> { notice, notice_kind } (unknown codes get the abandon default, not the accept one)
+function M.abandonNotice(ok, err)
+    if ok == true then return { notice = M.ABANDONED, notice_kind = 'ok' } end
+    return { notice = M.TEXT[err] or M.ABANDON_DEFAULT, notice_kind = 'error' }
 end
 
 if GetCurrentResourceName then

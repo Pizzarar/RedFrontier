@@ -98,6 +98,14 @@ Jobs board, the real `fh_quests` board (README "Client sync: fh:quests:sync").
 Actions: `accept` `{ id }` (relays `fh:quests:ui_accept`; the lane answers with a `notice` update), `close` `{}`. No autofocus, Enter does nothing.
 The client adapter (`client/adapter.lua` + `shared/quests_view.lua`) turns each `fh:quests:sync` into an `update` while the screen is open.
 
+### journal (owner `quests`)
+Quest journal, the `journal[]` of `fh:quests:sync` (fh_quests README "Client sync").
+`open/update` data `{ entries = { { quest_id, kind, title, giver?, region_id?, status, step?, steps_total?, step_text?, count?, need?, rewards = { money?, rep?, items? }, cooldown_until?, updated_at? } }, notice?, notice_kind? }`.
+`status` is `active|done|failed|abandoned`; entries come active first, then history newest first. An `update` without `entries` only
+changes the inline `notice`. Only active rows have an Abandon button (second click: "Confirm abandon?").
+Actions: `abandon` `{ id }` (the quest_id; relays `fh:quests:ui_abandon`, the lane answers with a notice update and a fresh sync), `close` `{}`.
+Opened by `/journal` -> `fh:quests:ui_journal_open`; the client adapter fills it from the last sync (it caches the latest snapshot). No autofocus, Enter does nothing.
+
 ### station (owner `homestead`)
 `open/update` data `{ title, options = { { id, label, inputs = { { item, qty } }, outputs = { { item, qty } }, time_seconds, can_craft } } }`.
 Actions: `craft` `{ id }` (button disabled when `can_craft` is false; the lane rechecks), `close` `{}`.

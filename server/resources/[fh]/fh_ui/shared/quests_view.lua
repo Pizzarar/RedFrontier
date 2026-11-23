@@ -1,6 +1,5 @@
 -- Pure mapping from the fh_quests `fh:quests:sync` v1 snapshot to fh_ui screen data (no natives; specced in
 -- spec/ui_quests_view_spec.lua). One feed per screen; the client adapter (client/adapter.lua) calls them.
--- W3 (journal) adds M.feeds.journal here.
 local M = {}
 
 local function asTable(x) return type(x) == 'table' and x or {} end
@@ -43,8 +42,39 @@ function M.jobs(snap, now)
     return { region_id = tostring(board.region_id or ''), expires_at = expires or 0, expired = expired, offers = offers }
 end
 
+local function str(x) return type(x) == 'string' and x or nil end
+local function num(x) return type(x) == 'number' and x == x and x or nil end
+
+---Journal screen data from a sync snapshot (`journal[]`, README sync v1; fields are not invented). Returns nil when the
+---snapshot has no journal table. Active quests first, then history newest first; malformed rows are skipped.
+function M.journal(snap)
+    local j = type(snap) == 'table' and snap.journal or nil
+    if type(j) ~= 'table' then return nil end
+    local rows = {}
+    for i, e in ipairs(j) do
+        if type(e) == 'table' and type(e.quest_id) == 'string' then
+            rows[#rows + 1] = { i = i, e = {
+                quest_id = e.quest_id, kind = tostring(e.kind or ''), title = tostring(e.title or e.quest_id),
+                giver = str(e.giver), region_id = str(e.region_id), status = tostring(e.status or ''),
+                step = num(e.step), steps_total = num(e.steps_total), step_text = str(e.step_text) or '',
+                count = num(e.count), need = num(e.need), rewards = rewards(e.rewards),
+                cooldown_until = num(e.cooldown_until), updated_at = num(e.updated_at) or 0,
+            } }
+        end
+    end
+    table.sort(rows, function(a, b)
+        local aa, ba = a.e.status == 'active', b.e.status == 'active'
+        if aa ~= ba then return aa end
+        if a.e.updated_at ~= b.e.updated_at then return a.e.updated_at > b.e.updated_at end
+        return a.i < b.i
+    end)
+    local entries = {}
+    for k, r in ipairs(rows) do entries[k] = r.e end
+    return { entries = entries }
+end
+
 -- screen -> feed(snapshot, now) -> data | nil
-M.feeds = { jobs = M.jobs }
+M.feeds = { jobs = M.jobs, journal = M.journal }
 
 if GetCurrentResourceName then
     FhUiQuestsView = M

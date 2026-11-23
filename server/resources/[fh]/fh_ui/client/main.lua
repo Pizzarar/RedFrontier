@@ -32,6 +32,7 @@ local function openScreen(p)
     open[p.screen] = true
     send('open', p.screen, p.data)
     syncFocus()
+    if FhUiClient and FhUiClient.onOpen then FhUiClient.onOpen(p.screen) end
 end
 
 local function closeScreen(p)

@@ -1,4 +1,4 @@
--- Fixture data + pure helpers for the U3 screens (heat, insurance, jobs, station, fence). No natives, specced
+-- Fixture data + pure helpers for the U3 screens (heat, insurance, jobs, journal, station, fence). No natives, specced
 -- under busted (spec/ui_fixtures_spec.lua). The producing lanes do not exist yet, so `fh_ui_demo <screen>` opens these.
 local M = {}
 
@@ -27,6 +27,17 @@ M.fixtures = {
             { id = 'heartlands:1:bounty:hollis', job_type = 'bounty', title = 'Hollis Gang lookout',
               text = 'Take down the lookout.', rewards = { money = 150, rep = { region_id = 'heartlands', delta = 5 } },
               accepted = true },
+        },
+    },
+    journal = {
+        entries = {
+            { quest_id = 'family_hale_1', kind = 'line', title = 'A Roof Over Your Head', giver = 'npc_hale',
+              region_id = 'heartlands', status = 'active', step = 2, steps_total = 3, step_text = 'Sell three good pelts.',
+              count = 1, need = 3, updated_at = 1795651200,
+              rewards = { money = 25, rep = { region_id = 'heartlands', delta = 5 }, items = { { name = 'bread', amount = 2 } } } },
+            { quest_id = 'job:heartlands:hunt_request:wolf_2', kind = 'job', title = 'Two-star wolf pelt',
+              status = 'done', step = 1, steps_total = 1, step_text = 'Sell a 2-star or better wolf pelt.',
+              updated_at = 1795640000, rewards = { money = 12 } },
         },
     },
     station = {
@@ -63,6 +74,12 @@ S.jobs = {
     region_id = 'string', expires_at = 'number', expired = 'boolean?', notice = 'string?',
     offers = { list = { id = 'string', job_type = 'string', title = 'string', text = 'string?', accepted = 'boolean',
         rewards = { obj = { money = 'number?' } } } },
+}
+S.journal = {
+    notice = 'string?', notice_kind = 'string?',
+    entries = { list = { quest_id = 'string', kind = 'string', title = 'string', giver = 'string?', region_id = 'string?',
+        status = 'string', step = 'number?', steps_total = 'number?', step_text = 'string?', count = 'number?',
+        need = 'number?', cooldown_until = 'number?', updated_at = 'number?', rewards = { obj = { money = 'number?' } } } },
 }
 S.station = {
     title = 'string',

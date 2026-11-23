@@ -30,7 +30,7 @@ server_scripts {
     'server/jobtypes.lua', -- built-in job types, registered through the public registerJobType
     'server/menu.lua',     -- WORKAROUND: ox_lib fallback jobs menu, server side (replaced by the @ui jobs board)
     'server/ui_text.lua',  -- pure error code -> notice text for the fh_ui jobs screen
-    'server/ui.lua',       -- fh_ui jobs board glue (open + fh:quests:ui_accept)
+    'server/ui.lua',       -- fh_ui glue (jobs open + ui_accept; journal open + ui_abandon)
     'server/families.lua', -- Q4: register the family questlines, spawn givers, WORKAROUND dialogue callbacks
 }
 
@@ -39,6 +39,7 @@ client_scripts {
     '@fh_core/client/safe.lua',
     'client/bounty.lua',     -- permanent: bounty NPC hostile-AI setup
     'client/jobs_menu.lua',  -- WORKAROUND: ox_lib fallback jobs menu (/jobs + board prop via rsg-target), replaced by the @ui jobs-board screen
+    'client/journal.lua',    -- /journal opens the fh_ui journal screen
     'client/givers.lua', -- WORKAROUND: ox_lib giver dialogue (replaced by the @ui journal/dialogue screen)
 }
 

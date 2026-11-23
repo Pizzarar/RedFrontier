@@ -1,4 +1,4 @@
--- fh_ui jobs board glue (plan ui-wiring W2). Thin: the client opens the board, fh_ui relays `accept`, and the
+-- fh_ui jobs board + journal glue (plan ui-wiring W2/W3). Thin: the client opens the board, fh_ui relays `accept`, and the
 -- answer goes back as `fh:ui:update` (a notice-only update; the board itself arrives via fh:quests:sync).
 local T = FhQuestsUiText
 local regions = FhRegions.regions
@@ -28,4 +28,27 @@ AddEventHandler('fh:quests:ui_accept', function(ev)
     local region = p and type(p.id) == 'string' and p.id:match('^([^:]+):') or nil
     if region and regions[region] then exports.fh_quests:getBoard(src, region) end -- refresh via sync (also on refusal)
     TriggerClientEvent('fh:ui:update', src, { screen = 'jobs', data = T.acceptNotice(ok, err) })
+end)
+
+-- W3: /journal. The screen opens empty-handed; the fh_ui client adapter fills it from the player's last fh:quests:sync
+-- (journal rows + history). A player whose character is not loaded gets the screen with an error notice instead.
+RegisterNetEvent('fh:quests:ui_journal_open', function()
+    local src = source
+    local _, err = exports.fh_quests:getActive(src)
+    local data = { entries = {} }
+    if err then data.notice, data.notice_kind = T.TEXT[err] or T.ABANDON_DEFAULT, 'error' end
+    TriggerClientEvent('fh:ui:open', src, { screen = 'journal', data = data })
+end)
+
+-- fh_ui relay: fh:ui:action { screen = 'journal', action = 'abandon', payload = { id } } -> this event. Server-local
+-- (fh_ui does TriggerEvent), so AddEventHandler receives it; clients cannot fire it directly.
+AddEventHandler('fh:quests:ui_abandon', function(ev)
+    if type(ev) ~= 'table' or type(ev.src) ~= 'number' then return end
+    local src, p = ev.src, ev.payload
+    local ok, err = false, 'fh_not_active'
+    if type(p) == 'table' and type(p.id) == 'string' and #p.id <= 128 then
+        ok, err = exports.fh_quests:abandon(src, p.id)
+    end
+    -- abandon() already pushes a fresh fh:quests:sync on success; the notice goes separately.
+    TriggerClientEvent('fh:ui:update', src, { screen = 'journal', data = T.abandonNotice(ok, err) })
 end)
