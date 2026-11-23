@@ -234,6 +234,122 @@ function M.fastTravelVerdict(f)
     return true
 end
 
+-- ---------------------------------------------------------------- R2: wheel break + repair (spec L6)
+-- The break roll runs on the server each tick from server-known state. A client hint is only ever a bool (off-road),
+-- and any reported speed goes through sanitizeSpeed first.
+-- TODO(R2 tune): numbers are first guesses, tune on the first drive test.
+M.WHEEL = {
+    minSpeed = 1.5,        -- m/s: below this a wagon never breaks a wheel
+    baseChance = 0.004,    -- per tick at the tier's top speed, on road, empty
+    offRoadMult = 4.0,
+    loadMult = 1.0,        -- full load doubles the chance (1 + loadMult * fraction)
+    speedSlack = 1.5,      -- sanitizeSpeed accepts up to tier speed * this (downhill / physics noise)
+    brokenSpeedMult = 0.4, -- speed cap multiplier while a wheel is broken
+    repairMs = 8000,
+    repairMoveMax = 3.0,   -- m the player may drift from where they started before the repair cancels
+}
+
+---Item defs registered via fh_core.registerItems (never in fh_core's config).
+M.ITEMS = {
+    hammer = { label = 'Hammer', weight = 800, size_class = 'bulky', stackable = false, value_base = 4 },
+    wagon_wheel = { label = 'Wagon Wheel', weight = 6000, size_class = 'bulky', stackable = true, value_base = 12 },
+}
+
+local function num(v)
+    if type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge then return v end
+end
+
+local function clamp(v, lo, hi) if v < lo then return lo elseif v > hi then return hi end return v end
+
+---Fraction of the tier's max weight carried, 0..1.
+function M.loadFraction(tierKey, weight)
+    local t = M.TIERS[tierKey]
+    if not t then return 0 end
+    return clamp((num(weight) or 0) / t.maxWeight, 0, 1)
+end
+
+---Clamp a reported speed to [0, tier cap * slack]. nil when it is not a usable number or the tier is unknown.
+function M.sanitizeSpeed(speed, tierKey)
+    local t = M.TIERS[tierKey]
+    local v = num(speed)
+    if not t or not v then return nil end
+    return clamp(v, 0, t.speed * M.WHEEL.speedSlack)
+end
+
+---Per-tick wheel-break probability 0..1. p = { tier, speed (m/s), offRoad?, loadFraction? }.
+function M.breakChance(p)
+    if type(p) ~= 'table' then return 0 end
+    local t = M.TIERS[p.tier]
+    local speed = num(p.speed)
+    if not t or not speed or speed < M.WHEEL.minSpeed then return 0 end
+    local w = M.WHEEL
+    local frac = clamp(speed / t.speed, 0, w.speedSlack)
+    local c = w.baseChance * frac * frac
+    if p.offRoad == true then c = c * w.offRoadMult end
+    c = c * (1 + w.loadMult * clamp(num(p.loadFraction) or 0, 0, 1))
+    return clamp(c, 0, 1)
+end
+
+---Roll once. rng() returns a float in [0,1) (math.random in production, injected in specs). true = wheel breaks.
+function M.rollWheelBreak(p, rng)
+    if type(rng) ~= 'function' then return false end
+    local c = M.breakChance(p)
+    if c <= 0 then return false end
+    return rng() < c
+end
+
+---Speed cap (m/s): the load-adjusted tier cap, cut further while a wheel is broken.
+function M.effectiveSpeedLimit(tierKey, weight, broken)
+    local lim = M.speedLimit(tierKey, weight)
+    if not lim then return nil end
+    if broken then lim = lim * M.WHEEL.brokenSpeedMult end
+    return lim
+end
+
+---Spike gate (convar fh_spike_gated, fh_core/docs/spike-gated.md): gated = broken state + speed cap only; the native
+---wheel break runs only when ungated. Anything but an explicit false counts as gated.
+function M.nativeBreakAllowed(gated) return gated == false end
+
+---Can this player start repairing? p = { citizenid, playerCoords, wagon = { id, owner, tier, coords, broken },
+---hasHammer, hasWheel, reach? }. Checks only.
+---@return boolean ok, string|nil reason
+function M.planRepair(p)
+    if type(p) ~= 'table' then return false, 'fh_bad_request' end
+    local ok, why = M.canUseWagon(p.wagon, p.citizenid, p.playerCoords, p.reach)
+    if not ok then return false, why end
+    if p.wagon.broken ~= true then return false, 'fh_wheel_ok' end
+    if not p.hasHammer then return false, 'fh_need_hammer' end
+    if not p.hasWheel then return false, 'fh_not_enough' end
+    return true
+end
+
+---Progress of a running repair. s = { startedAt, duration (ms), startCoords }, now in ms.
+---Optional wagonCoords (+ reach): cancels when the wagon is no longer in reach of the player.
+---@return string state 'continue'|'done'|'cancel', string|nil reason
+function M.repairStep(s, now, playerCoords, wagonCoords, reach)
+    local moved = within(s.startCoords, playerCoords, M.WHEEL.repairMoveMax)
+    if moved == nil then return 'cancel', 'fh_no_player_coords' end
+    if not moved then return 'cancel', 'fh_moved' end
+    if wagonCoords ~= nil and not within(wagonCoords, playerCoords, reach or M.DEFAULT_REACH) then
+        return 'cancel', 'fh_out_of_reach'
+    end
+    if now - s.startedAt >= s.duration then return 'done' end
+    return 'continue'
+end
+
+---First of `refs` whose snapshot (snaps[i], slot -> { name, amount }) holds `amount` of `item`, else nil.
+function M.findHolder(refs, snaps, item, amount)
+    amount = int(amount)
+    if not amount or amount < 1 then return nil end
+    for i, r in ipairs(refs or {}) do
+        local n = 0
+        for _, it in pairs(snaps and snaps[i] or {}) do
+            if it.name == item then n = n + (int(it.amount) or 0) end
+        end
+        if n >= amount then return r end
+    end
+end
+
 if GetCurrentResourceName then
     FhCargoRules = M
 else

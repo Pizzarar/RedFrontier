@@ -16,6 +16,10 @@ server_scripts {
     'server/main.lua',
 }
 
+client_scripts {
+    'client/main.lua',
+}
+
 dependencies { 'fh_core', 'rsg-core', 'ox_lib' }
 
-server_exports { 'canFastTravel', 'getWagon', 'spawnWagon', 'nearestWagon' }
+server_exports { 'canFastTravel', 'getWagon', 'spawnWagon', 'nearestWagon', 'isWheelBroken', 'getSpeedLimit' }

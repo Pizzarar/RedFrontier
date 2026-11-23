@@ -1,6 +1,6 @@
 # fh_cargo
 
-Lane L6 (spec §5, M4), block R1: wagon tiers, cargo loading, fast-travel veto. Uses `fh_core` exports only.
+Lane L6 (spec §5, M4), blocks R1 and R2 (wheel break + repair): wagon tiers, cargo loading, fast-travel veto. Uses `fh_core` exports only.
 
 - `shared/cargo_rules.lua`: pure rules (no natives), specced in `spec/cargo_rules_spec.lua`. Tier table, ownership,
   reach, capacity, cargo-only check, fast-travel verdict.
@@ -26,7 +26,7 @@ Tier numbers are not config: they live in `shared/cargo_rules.lua` (`TIERS`).
 | `t2` wagon | 30 | 300 000 | 7.0 |
 | `t3` freight | 60 | 500 000 | 6.0 |
 
-A full wagon is slowed by 40% (`speedLimit(tier, weight)`). Nothing applies the cap to the vehicle yet (R2).
+A full wagon is slowed by 40% (`speedLimit(tier, weight)`). The cap applies to a broken wagon (R2, `client/main.lua`); an unbroken one is not capped yet.
 Each wagon is an fh_core `wagon` container, stash `fh:wagon:<citizenid>:<tier>` (one per character per tier, so
 respawning a wagon keeps its cargo). Tier caps are passed to `registerContainer`; they sit inside fh_core's wagon default.
 
@@ -72,4 +72,31 @@ Only `cargo` items move (spec §4.1). Cargo cannot live in a backpack, so loadin
   intended contract and says so at runtime (`fh_core cannot spawn wagons yet`) until R0 merges.
 - Wagon state is in memory (stash contents persist in fh_inventory by id; the wagon entity does not survive a restart).
 - Not runtime-tested (no Cfx key yet); natives side unverified.
-- Wheel break / repair is R2; contracts and delivery are R4.
+- Contracts and delivery are R4.
+- **TODO(B7 @core):** `removeItem(ref, item, amt)` is not exported by fh_core yet: `/fh_repair` finishes with `fh_core_no_removeitem` until it lands. `registerItems` is used as-is and failure only prints a warning.
+- **TODO(R2 off-road):** no verified road/off-road native, so the client never sends the `fh:cargo:offroad_hint`; every wagon counts as on-road. Break numbers (`WHEEL` in `cargo_rules.lua`) are untuned guesses.
+
+## Wheel break and repair (R2)
+
+- **Break roll** (`rules.breakChance` / `rollWheelBreak`, pure, injected RNG): per 1 s server tick, from server-known
+  state only: wagon entity velocity (`GetEntityVelocity`, clamped by `sanitizeSpeed`), tier, carried weight. Probability
+  rises with speed squared, x4 off-road (owner client's bool hint, accepted only from the owner), up to x2 loaded.
+  Never below 1.5 m/s.
+- **Broken** wagon: speed cap is 40% of its normal cap (`effectiveSpeedLimit`), pushed to the owner client.
+- **Spike gate** (existing convar `fh_spike_gated`, default `true`, no new flag; row 5 of `fh_core/docs/spike-gated.md`):
+  gated = broken state + speed cap only, no native; ungated = the client also calls the native wheel break (S3 `spk_wheel`).
+- **Items** `hammer` and `wagon_wheel` are registered at start through `exports.fh_core:registerItems` (`rules.ITEMS`).
+- `/fh_repair`: own broken wagon within reach, a `hammer` and a `wagon_wheel` in equipped/backpack. An 8 s timed repair
+  cancels if you move more than 3 m or leave reach of the wagon. At the end one wheel is consumed with
+  `fh_core:removeItem` (all-or-nothing, `false, 'fh_not_enough'`); only then is the wheel fixed.
+- `/fh_wheelbreak` (admin): force a break for testing.
+
+| Export | Returns |
+|---|---|
+| `isWheelBroken(wagonId)` | boolean |
+| `getSpeedLimit(wagonId)` | m/s cap incl. load and broken state, or `nil` |
+
+| Event | Payload |
+|---|---|
+| `fh:cargo:wheel_broken` | `{ src, citizenid, wagon, tier, native }` |
+| `fh:cargo:wheel_repaired` | `{ src, citizenid, wagon, tier }` |
