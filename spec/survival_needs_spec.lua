@@ -191,6 +191,8 @@ case('backward clock skew: saved remaining beyond max is clamped on restore', fu
     by = {}
     for _, r in ipairs(list) do by[r.buff_id] = r end
     assert(by.well_fed.duration == 60 and by.rested.duration == 7300, 'clamp to cfg max, never extend past saved')
+end)
+
 case('stateChanged compares level and missing list', function()
     assert(N.stateChanged(nil, 0, {}) == true)
     assert(N.stateChanged({ level = 0, missing = {} }, 0, {}) == false)
