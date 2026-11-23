@@ -16,7 +16,7 @@ type) build against now. Every export and event lives here; anything not listed 
 | Server: migration, event intake, all 8 exports, payouts via fh_economy, `fh:quests:*` events, `fh:quests:sync` | Q2 | **built**, pure parts specced |
 | Jobs board plumbing: generic `registerJobType` registry, `getBoard`, `acceptOffer`, board sync, rotation timer | Q2 | **built** |
 | Built-in job types `hunt_request`, `camp_clear`, `bounty`; ox_lib `/jobs` fallback menu (**workaround**) | Q3 | **built**, pure parts specced; in-game unverified |
-| 3 family questlines (data files, giver NPCs, ox_lib text dialogue fallback) | Q4 | coming |
+| 3 family questlines (data files, giver NPCs, ox_lib text dialogue **workaround**) | Q4 | **built**, defs and walk-throughs specced; in-game unverified |
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
 
 The server side is in (`server/main.lua`: state cache, per-character lock, persistence, payouts, sync;
@@ -455,3 +455,42 @@ Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests
 ## In-game test card
 
 (Filled in by Q2-Q5; the lane's in-game checks go in `OWNER-TESTS.md`, section `## Quests`.)
+
+## Family questlines (Q4)
+
+Three one-time `kind = 'line'` quests in `data/families/<family>.lua` (region `heartlands`, text dialogue only, no
+cutscenes or voice). `server/families.lua` loads them with `LoadResourceFile` and calls `registerQuest` at start.
+Families are independent (no `prereq`); the steps inside a line run in order. Rewards are money + rep only (item
+rewards stay owed until core idea-643 lands). The giver NPC id is the def's `giver`; the giver's intro lines
+(shown before the start offer) and fixed spawn point live in `shared/givers.lua`.
+
+| Family | Quest id / giver | Steps (events) | Reward |
+|---|---|---|---|
+| Hale & Daughters: A Roof Over Your Head | `family_hale` / `npc_hale` | claim a plot (`fh:homestead:claimed`), earn $15+ in one payment (`fh:economy:paid`, `amount.min 15`), report back (talk) | $40, +5 rep |
+| Marrow's Debt: Smoke on the Ridge | `family_marrow` / `npc_marrow` | clear an outlaw camp (`fh:zones:camp_cleared`), sell 2 pelts (`fh:hunting:pelt_sold`), report back (talk) | $60, +8 rep |
+| Whitlock's Ghost: The Bear of Bear Hollow | `family_whitlock` / `npc_whitlock` | sell a quality 2+ pelt (`fh:hunting:pelt_sold`), finish the Legendary Bear hunt (`fh:hunting:chain_complete`, `chain_id = 'legendary_bear'`), report back (talk) | $120, +12 rep |
+
+**Depends on other lanes (the lines park on that step until then):**
+- `family_whitlock` step 2 depends on **@hunting** (H4, plan hunting-01-l8): `fh:hunting:chain_complete` with
+  `chain_id = 'legendary_bear'`. It is already in the intake whitelist; fh_hunting needs no code from this lane.
+- `family_marrow` step 1: `fh:zones:camp_cleared` carries no player today, so it credits nobody until the zones lane
+  adds `participants` (Q0a).
+
+### Giver dialogue (WORKAROUND)
+
+`client/givers.lua` + the callbacks at the end of `server/families.lua` are a **workaround**, replaced by the @ui
+quest journal/dialogue screen (delete them and the fxmanifest lines then). The givers are spawned by the server
+via `exports.fh_core:requestSpawn` at fixed points; the client puts an rsg-target sphere zone on each. Opening it
+calls the server `talk` export (so a finished talk step advances and its `talk.lines` are shown as ox_lib alert
+dialogs, one per line). If the line is not started, the giver's intro lines are shown and the player is offered
+to start it (`start`). No NUI. Coordinates, headings and ped models are guesses: TODO-verify-in-game.
+
+### Giver proximity (server-checked)
+
+The two net callbacks (`fh:quests:giver:talk`, `fh:quests:giver:start`) compare the player's server-side ped position
+with the giver's fixed point (`FhQuestsGivers.within`, radius `REACH` = 5 m) and refuse with **`fh_too_far`** beyond
+it, so a modified client cannot start a line or advance a talk step from across the map. The check lives in the net
+handlers, not in the `talk` export: the exports are server-only (no client can call them) and also serve callers
+whose npc has no fixed point, so only the handler knows the position. Any future client path (the @ui dialogue
+screen's handler) must run the same check. Other codes: `fh_bad_npc` (not a giver), `fh_unknown_quest`.
+Giver peds are frozen, invincible and ignore events on the client that spawned them (`client/givers.lua`).
