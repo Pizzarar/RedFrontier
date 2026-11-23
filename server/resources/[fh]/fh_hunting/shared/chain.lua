@@ -27,23 +27,28 @@ M.MARKERS = { track = M.STEP_TRACK, carcass = M.STEP_CARCASS }
 
 local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
 
--- Position/distance: reuse the H3 helpers (shared/sell.lua FhHuntingSell.xyz/distance, which handle vector3 userdata)
--- when they are loaded (server runtime: sell.lua loads before chain.lua). The spec loads chain.lua alone, so a local
--- fallback of the same shape is kept for it.
-local function localXyz(v)
-    local t = type(v)
-    if t ~= 'table' and t ~= 'userdata' then return nil end
+-- Position reader: reuse the single shared reader FhHuntingWagon.xyz (shared/wagon.lua) at runtime. It has NO type
+-- gate — under CfxLua 5.4 `type(vector3)` is 'vector3', not 'table'/'userdata' — so it probes any value through a pcall
+-- and accepts x/y/z (or [1]/[2]/[3]) that are finite numbers. The spec loads chain.lua alone, so a minimal no-gate
+-- fallback of the same shape is kept for that case.
+local function probeXyz(v)
+    if v == nil then return nil end
     local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
     if not ok or not finite(x) or not finite(y) or not finite(z) then return nil end
-    return { x = x, y = y, z = z }
+    return x, y, z
+end
+
+local function xyz(v)
+    if FhHuntingWagon and FhHuntingWagon.xyz then return FhHuntingWagon.xyz(v) end
+    return probeXyz(v)
 end
 
 ---Distance in metres between two {x,y,z} / vector3 positions; nil when either is unreadable.
 function M.distance(a, b)
-    if FhHuntingSell and FhHuntingSell.distance then return FhHuntingSell.distance(a, b) end
-    local pa, pb = localXyz(a), localXyz(b)
-    if not pa or not pb then return nil end
-    local dx, dy, dz = pa.x - pb.x, pa.y - pb.y, pa.z - pb.z
+    local ax, ay, az = xyz(a)
+    local bx, by, bz = xyz(b)
+    if not ax or not bx then return nil end
+    local dx, dy, dz = ax - bx, ay - by, az - bz
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 

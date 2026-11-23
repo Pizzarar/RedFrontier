@@ -6,6 +6,7 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local describe, it, eq, same = T.describe, T.it, T.eq, T.same
 local base = here .. '../server/resources/[fh]/fh_hunting/'
 local cfg = dofile(base .. 'config.lua')
+FhHuntingWagon = dofile(base .. 'shared/wagon.lua') -- the shared xyz reader chain.lua uses
 local Chain = dofile(base .. 'shared/chain.lua')
 
 local SRC, CID = 7, 'CID123'
@@ -257,6 +258,24 @@ describe('hunting chain: default and normalise', function()
         local s = D.chain.state(CID)
         s.step = 99
         eq(Chain.STEP_RUMOUR, D.chain.state(CID).step)
+    end)
+end)
+
+describe('hunting chain: distance reads vector3 (CfxLua 5.4)', function()
+    it('computes distance when type() reports vector3', function()
+        local v = setmetatable({}, { __index = { x = 0, y = 0, z = 0 } })
+        local real = type
+        _G.type = function(x) if x == v then return 'vector3' end return real(x) end
+        local ok, err = pcall(function()
+            eq(5, Chain.distance(v, { x = 3, y = 4, z = 0 }))
+        end)
+        _G.type = real
+        if not ok then error(err, 0) end
+    end)
+    it('rejects nil, strings and non-numeric positions', function()
+        eq(nil, Chain.distance(nil, { x = 0, y = 0, z = 0 }))
+        eq(nil, Chain.distance('abc', { x = 0, y = 0, z = 0 }))
+        eq(nil, Chain.distance({ x = 0, y = 'a', z = 0 }, { x = 0, y = 0, z = 0 }))
     end)
 end)
 

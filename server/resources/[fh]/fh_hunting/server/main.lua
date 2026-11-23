@@ -222,6 +222,23 @@ end)
 -- ---------------------------------------------------------------- H4 legendary bear chain
 
 local chain
+
+local function chainNotify(src, kind, msg)
+    TriggerClientEvent('ox_lib:notify', src, { title = 'Legendary Hunt', description = msg, type = kind })
+end
+
+local function pushChainState(src, cid)
+    local s = chain.state(cid)
+    TriggerClientEvent('fh:hunting:chain_state', src, { step = s.step, spawned = s.spawned, completed = s.completed })
+end
+
+---Server id of the online player with this citizenid, or nil.
+local function playerByCid(cid)
+    if not RSGCore and GetResourceState('rsg-core') == 'started' then RSGCore = exports['rsg-core']:GetCoreObject() end
+    local p = RSGCore and RSGCore.Functions.GetPlayerByCitizenId(cid)
+    return p and p.PlayerData and p.PlayerData.source or nil
+end
+
 ---Charge the player for the rumour. INTERIM: rsg-core RemoveMoney directly (fh_economy exposes only `pay`, which
 ---credits, and `rep`). Queued follow-up to @core: an `fh_economy:charge`/debit export (with a ledger row). Until then
 ---the rumour charge has no fh_ledger row; RemoveMoney refuses to go below the configured minus limit.
@@ -252,7 +269,13 @@ local function requestLegendary(cid, chainCfg)
             end,
             onFailed = function(reason, requestId)
                 print(('^1[fh_hunting] legendary bear spawn for %s failed: %s^7'):format(cid, tostring(reason)))
-                chain.onSpawnFailed(cid, requestId)
+                if chain.onSpawnFailed(cid, requestId) then
+                    local src = playerByCid(cid)
+                    if src then
+                        pushChainState(src, cid) -- back to the carcass clue, so the player can retry without relogging
+                        chainNotify(src, 'error', FhHuntingChain.message('fh_chain_spawn_failed'))
+                    end
+                end
             end,
         })
     end)
@@ -290,15 +313,6 @@ chain = FhHuntingChain.new({
         emit = function(name, payload) TriggerEvent(name, payload) end,
     },
 })
-
-local function chainNotify(src, kind, msg)
-    TriggerClientEvent('ox_lib:notify', src, { title = 'Legendary Hunt', description = msg, type = kind })
-end
-
-local function pushChainState(src, cid)
-    local s = chain.state(cid)
-    TriggerClientEvent('fh:hunting:chain_state', src, { step = s.step, spawned = s.spawned, completed = s.completed })
-end
 
 RegisterNetEvent('fh:hunting:chain_status', function()
     local src = source
