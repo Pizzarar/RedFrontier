@@ -5,7 +5,7 @@
 -- Order (remove first, so no failure can leave a reusable tonic):
 --   1. tonic known? remover present? giver present? player holds one?  (refuse, nothing touched)
 --   2. remove one tonic. Fails -> 'remove_failed', NOTHING applied.
---   3. fh_buffs.apply. Fails or throws (e.g. buff id missing from fh_buffs caps until @core idea-612) -> give the
+--   3. fh_buffs.apply. Fails or throws (e.g. an unknown buff id; tonic caps landed with @core idea-612) -> give the
 --      tonic back through the injected giver and tell the player ('buff_failed').
 --   4. Give-back fails -> 'refund_failed', logged at error level by the wiring, no buff. A lost tonic is accepted;
 --      a duplicated buff is not.

@@ -127,8 +127,7 @@ No custom net events are emitted by this resource.
   is owner-only (own plot), so crafting works only on the player's own plot. `/fh_restore` reach reads
   `getStations(citizenid)` filtered to `workbench` and compares coordinates with the open container.
   `stationAt` returns the raw H3 type (`workbench`), not the crafting type.
-- **idea-612 (tonic caps in fh_buffs)**: `fh_buffs/config.lua` has no caps for `tonic_vigor`/`tonic_steady`, so
-  `fh_buffs.apply` refuses and the tonic is returned (`buff_failed`) instead of applying a buff.
 
-Resolved: core-03 carried `addItem`/`removeItem` (refs `{ type = 'backpack'|'equipped', id = src }`; idea-615) and
+Resolved: idea-612 (`fh_buffs` caps `tonic_vigor` 1.15 / `tonic_steady` 1.10 on main; `TONICS` equal the caps, and
+`fh_buffs` validate does not reject magnitude == cap); core-03 carried `addItem`/`removeItem` (refs `{ type = 'backpack'|'equipped', id = src }`; idea-615) and
 `setItemInfo(ref, slot, info, expectName)` (idea-689); B7 `removeItem`.

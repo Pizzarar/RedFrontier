@@ -528,8 +528,8 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
 Preconditions: stations come from @homestead H3 (on main): crafting uses a built `workbench` (gunsmith, reload) or
 `campfire` (apothecary) on your OWN plot, so in-game testing needs @homestead H2 `/fh_build` (not on main yet), or
 `fh_dev 1` and the dev stations. Without fh_homestead started, crafting refuses `no_homestead`. Carried item moves and
-`/fh_restore` use the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff still needs idea-612
-(caps in fh_buffs). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+`/fh_restore` use the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff caps (idea-612) are on
+main. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle
@@ -565,13 +565,12 @@ Preconditions: stations come from @homestead H3 (on main): crafting uses a built
    backpack. `/fh_craft tonic_steady` uses 2 Oregano + 1 Red Sage for 1 Steady Tonic.
    RESULT:
 8. Drink the tonic from the inventory (use it, do not craft it again).
-   Expected with idea-612 landed: the toast says `You drink the tonic.` and the Vigor Tonic count drops by 1. Without
-   the caps: `The tonic has no effect right now. It was returned to you.` and the count is unchanged (safe refusal).
+   Expected: the toast says `You drink the tonic.` and the Vigor Tonic count drops by 1.
    RESULT:
 9. Check the buff. `fh_buffs` has no HUD yet (client is a stub), so from the server console run
    `fh_buff <yourId> tonic_vigor 1.0 600`.
    Expected: the printed result keeps magnitude 1.15 (same-buff refresh uses `max(old, new)`), proving the drink applied
-   it; the printed active list shows `tonic_vigor` with an expiry about 600 s out. Without idea-612 the list is empty.
+   it; the printed active list shows `tonic_vigor` with an expiry about 600 s out.
    RESULT:
 10. Failure path, no station. Have the open container (chest/wagon/saddlebag) itself 10+ m from every station, then run
     `/fh_craft ammo_rifle` and `/fh_restore <slot>`.
