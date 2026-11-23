@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Hunting
-- Lead: Hunting lead · H2 merge + H3-H5
-- Workers: 0
+- Lead: ★ Hun2
+- Workers: 1
 
 ## Done when
 - H1–H5 of docs/brainstorm/plans/hunting-01-l8.md merged to local main with reviewer PASS + run-specs green, a `## Hunting` section in OWNER-TESTS.md, and `decision hunting playtest-ready <hash>` logged.
@@ -25,6 +25,7 @@
 - When S4 spk_pelt returns GO, consider flipping `PeltQualitySource` to `native`.
 
 ## In flight
+- 2026-11-23 Hun2: H6 MERGED to main 3ba2783 (ab49b50+3ba2783, range-diff '=' vs reviewed 3a97873, venv 57/1164/0, no migration). H7 despawn(requestOfNetId) on hunting-h7 cc030aa, in Gemini review rn-452bd87f8fa2.
 - 2026-11-23 MERGED to main (slot, main 0fb8dc6 base): H2 43742a4, H3 ec31845, H5 f7b8eb8, H4 855ef3f (migration renumbered 0010). venv specs 49/962/0. H6 (core B7 charge/removeItem, hunting-h6) awaits re-review -> next slot; despawn(requestOfNetId) wiring -> next slot.
 - 2026-11-23 Hunting lead rn-fba839f5dc6c: ALL BLOCKS REVIEW-CLEAN, merges held on lupa. Stack h2>h3>h5>h4 (branches hunting-h2..h4, local only):
   - H2 PASS: 45fb835 (= reviewed 2a841b6, range-diff Author-only).
