@@ -71,29 +71,29 @@ FhHomesteadConfig = {
             chest = { coords = V(-296.0, 790.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
             slots = slotTemplate(),
         },
-        -- Plots 2-4: TODO-verify. Safe fallback coords near plot 1; fh_plots.citizenid stays UNIQUE (one plot per character).
+        -- Plots 2-4: TODO-verify. Placeholder coords 150 apart so plots never overlap even at max fenced radius; fh_plots.citizenid stays UNIQUE (one plot per character).
         heartlands_02 = {
             id = 'heartlands_02',
             region = 'heartlands',
-            center = V(-250.0, 790.0, 118.0), -- TODO-verify
+            center = V(-150.0, 790.0, 118.0), -- TODO-verify
             radius = 25.0,
-            chest = { coords = V(-246.0, 790.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            chest = { coords = V(-146.0, 790.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
             slots = slotTemplate(),
         },
         heartlands_03 = {
             id = 'heartlands_03',
             region = 'heartlands',
-            center = V(-300.0, 840.0, 118.0), -- TODO-verify
+            center = V(-300.0, 940.0, 118.0), -- TODO-verify
             radius = 25.0,
-            chest = { coords = V(-296.0, 840.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            chest = { coords = V(-296.0, 940.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
             slots = slotTemplate(),
         },
         heartlands_04 = {
             id = 'heartlands_04',
             region = 'heartlands',
-            center = V(-250.0, 840.0, 118.0), -- TODO-verify
+            center = V(-150.0, 940.0, 118.0), -- TODO-verify
             radius = 25.0,
-            chest = { coords = V(-246.0, 840.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            chest = { coords = V(-146.0, 940.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
             slots = slotTemplate(),
         },
     },

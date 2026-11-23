@@ -76,4 +76,24 @@ case('4 plots, unique ids/centers, all slot configs valid', function()
     assert(n == 4)
     assert(#R.validatePlot({ slots = { x = { maxTier = 1, tiers = {} } } }) > 0)
 end)
+case('no two plots overlap at max fenced radius', function()
+    local function maxR(p)
+        local r = p.radius
+        for _, slot in pairs(p.slots) do
+            for tier = 1, slot.maxTier do r = r + ((R.unlocks(slot, tier) or {}).safeRadiusBonus or 0) end
+        end
+        return r
+    end
+    assert(maxR(cfg.plots.heartlands_01) == 35.0)
+    local ids = {}
+    for id in pairs(cfg.plots) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for i = 1, #ids do
+        for j = i + 1, #ids do
+            local a, b = cfg.plots[ids[i]], cfg.plots[ids[j]]
+            local d = math.sqrt((a.center.x - b.center.x) ^ 2 + (a.center.y - b.center.y) ^ 2 + (a.center.z - b.center.z) ^ 2)
+            assert(d > maxR(a) + maxR(b), ids[i] .. ' overlaps ' .. ids[j])
+        end
+    end
+end)
 T.finish()
