@@ -1,5 +1,5 @@
 -- Survival items + action rules (plan survival-01, block S3). Pure Lua: no natives, no FiveM globals.
--- Items live here until @core registerItems (B7) is on main and S3b removes the guard in server/actions.lua.
+-- Items are registered with exports.fh_core:registerItems (B7) from server/actions.lua.
 -- Canteen charges live in item.info.charges. A canteen with no `charges` key is fresh and counts as full.
 local I = {}
 
@@ -10,10 +10,10 @@ I.DEFAULT_WATER_RADIUS = 6.0
 
 -- fh_core registerItems definitions (spec 4.1). weight is grams per unit.
 I.ITEMS = {
-    fh_jerky   = { label = 'Beef Jerky',    weight = 150, size_class = 'pocket', stackable = true,  value_base = 2 },
-    fh_biscuit = { label = 'Hardtack',      weight = 120, size_class = 'pocket', stackable = true,  value_base = 1 },
-    fh_stew    = { label = 'Tin of Stew',   weight = 400, size_class = 'pocket', stackable = true,  value_base = 4 },
-    fh_canteen = { label = 'Canteen',       weight = 500, size_class = 'pocket', stackable = false, value_base = 6 },
+    fh_jerky   = { label = 'Beef Jerky',    weight = 150, size_class = 'pocket', stackable = true,  value_base = 2, illicit = false },
+    fh_biscuit = { label = 'Hardtack',      weight = 120, size_class = 'pocket', stackable = true,  value_base = 1, illicit = false },
+    fh_stew    = { label = 'Tin of Stew',   weight = 400, size_class = 'pocket', stackable = true,  value_base = 4, illicit = false },
+    fh_canteen = { label = 'Canteen',       weight = 500, size_class = 'pocket', stackable = false, value_base = 6, illicit = false },
 }
 
 -- Item -> effect. kind 'food' is consumed; 'canteen' spends one charge. `scale` multiplies the configured duration.

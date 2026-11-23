@@ -24,7 +24,7 @@ once per id and the other needs keep running.
 Logic lives in `shared/needs.lua` (`FhSurvivalNeeds`) and `shared/items.lua` (`FhSurvivalItems`), both pure and specced.
 
 ## Items and actions (S3)
-Items are defined in `shared/items.lua` and registered with `exports.fh_core:registerItems` inside a `pcall` (guard removed by S3b once @core B7 is on main).
+Items are defined in `shared/items.lua` and registered with `exports.fh_core:registerItems` on resource start and again whenever `fh_core` restarts (no guard; a refusal is logged with its error code and item name). Names are lowercase `[a-z0-9_]` and each def is a full §4.1 definition (`illicit` explicit).
 | Item | Effect |
 |---|---|
 | `fh_jerky` | consumed, `well_fed` 1.0 for 50% of the configured duration |

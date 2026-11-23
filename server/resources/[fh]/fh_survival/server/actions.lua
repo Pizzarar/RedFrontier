@@ -18,13 +18,11 @@ local function applyBuff(src, id, mag, dur)
     return true
 end
 
--- ---- item registration (WA: guarded until @core B7 is on main; S3b removes the pcall) ----
+-- ---- item registration (exports.fh_core:registerItems, B7; re-run when fh_core restarts) ----
 
 local function registerItems()
-    local ok, res, err, bad = pcall(function() return exports.fh_core:registerItems(I.ITEMS) end)
+    local ok, err, bad = exports.fh_core:registerItems(I.ITEMS)
     if not ok then
-        print(('[fh_survival] registerItems unavailable (%s); items not registered'):format(tostring(res)))
-    elseif res == false then
         print(('[fh_survival] registerItems failed: %s (%s)'):format(tostring(err), tostring(bad)))
     end
 end

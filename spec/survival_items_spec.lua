@@ -100,4 +100,25 @@ case('water zones and heat sources', function()
     assert(I.nearHeat({ x = 10, y = 10 }, nil) == false)
 end)
 
+case('ITEMS pass fh_core registerItems validation (B7)', function()
+    local saved = _G.FhConfig
+    _G.FhConfig = { Items = {} }
+    local Core = dofile(here .. '../server/resources/[fh]/fh_core/shared/items.lua')
+    Core._reset()
+    local ok, err, bad = Core.checkRegister(I.ITEMS, 'fh_survival', function() return false end)
+    assert(ok, tostring(err) .. ' / ' .. tostring(bad))
+    for name, def in pairs(I.ITEMS) do
+        assert(Core.validName(name), name)
+        assert(def.illicit == false, name .. ' full 4.1 def has explicit illicit')
+    end
+    ok, err, bad = Core.register(I.ITEMS, 'fh_survival', nil)
+    assert(ok, tostring(err))
+    ok = Core.register(I.ITEMS, 'fh_survival', nil) -- re-register after a restart is fine
+    assert(ok, 'same owner may re-register')
+    ok, err = Core.checkRegister(I.ITEMS, 'someone_else', nil)
+    assert(not ok and err == 'fh_duplicate_item')
+    Core._reset()
+    _G.FhConfig = saved
+end)
+
 T.finish()
