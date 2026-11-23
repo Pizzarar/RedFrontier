@@ -610,13 +610,13 @@ Prereqs (all must be merged before this card is meaningful):
 3. Walk 20 m away with the chest open (or reopen it) and run `/fh_cargo load 1` again. Try `/fh_cargo load` with `bread` in the chest.
    Expected: far: `fh_out_of_reach`; bread: `fh_not_cargo`. A second character gets `fh_not_owner` on your wagon.
    RESULT:
-4. Fast travel veto. With the loaded wagon within 30 m, in the server console run `exports.fh_cargo:canFastTravel(<yourId>)` (e.g. via a test resource or `/fh_ft` if present); then move the wagon 30+ m away or unload it (`/fh_cargo unload 1`) and call again.
-   Expected: `false, fh_cargo_wagon_near` and a `fh:cargo:fasttravel_blocked` event on each block; `true` after unloading or going far. With `fh_inventory` stopped: `false, fh_cargo_unknown` (fails closed; restart it afterwards). No fast-travel system exists yet, so this is an export check only.
+4. Fast travel veto. With the loaded wagon within 30 m, there is no fast-travel system yet, so check the veto from the server console: `exports.fh_cargo:canFastTravel(<yourId>)` returns false plus a reason while you own a loaded wagon. Then move the wagon 30+ m away or unload it (`/fh_cargo unload 1`) and call again.
+   Expected: `false, fh_cargo_wagon_near` and a `fh:cargo:fasttravel_blocked` event on each block; `true` after unloading or going far. With `fh_inventory` stopped: `false, fh_cargo_unknown` (fails closed; restart it afterwards). This is an export check only.
    RESULT:
 5. Weight/tier: fill a `t1` (`/fh_wagon t1`) past 120 kg of cargo.
    Expected: `fh_too_heavy`. `/fh_wagon t2` again later: the old wagon is replaced and its cargo is still inside.
    RESULT:
-6. Wheel break, GATED (`fh_spike_gated true`). Mount the wagon, drive fast (off-road is not detected, all wagons count as on-road, so use full speed and a loaded wagon), or force it with `/fh_wheelbreak`.
+6. Wheel break, GATED (`fh_spike_gated true`). Mount the wagon, drive fast with a loaded wagon, or force it with `/fh_wheelbreak` (admin). The off-road break factor is inactive (TODO(R2 off-road): no verified road native), so only speed + load drive the roll.
    Expected: `fh:cargo:wheel_broken` fires with `native=false`; the wagon is capped to 40% of its normal speed but no wheel visibly breaks. `exports.fh_cargo:isWheelBroken(<wagonId>)` is true.
    RESULT:
 7. Wheel break, UNGATED (`set fh_spike_gated false`, S3 `spk_wheel` RESULT must be GO; if not, report what happens). Spawn a fresh wagon and `/fh_wheelbreak`.
@@ -628,7 +628,7 @@ Prereqs (all must be merged before this card is meaningful):
 9. REQUIRED: Break a wheel (gated and ungated), repair with hammer + wagon_wheel: wagon returns to full top speed (MODIFY_VEHICLE_TOP_SPEED 0.0 reset = no modifier). Drive the repaired wagon flat out and compare with a never-broken wagon of the same tier.
    Expected: same top speed in both modes (note any residual slowdown in RESULT).
    RESULT:
-10. nearestWagon for @hunting: `/fh_wagon t2`, kill an animal and take its pelt, stand within 25 m of your wagon and load the pelt (the hunting flow calls `exports.fh_cargo:nearestWagon`). Try again from 40 m, and with another player's wagon.
+10. nearestWagon for @hunting (needs @hunting's cargo-pelt flow on main; otherwise skip): `/fh_wagon t2`, kill an animal and take its pelt, stand within 25 m of your wagon and load the pelt (the hunting flow calls `exports.fh_cargo:nearestWagon`). Try again from 40 m, and with another player's wagon.
    Expected: pelt goes into YOUR wagon within 25 m; beyond 25 m or someone else's wagon it returns nil and the pelt stays on you/the carcass.
    RESULT:
 11. Shortage route. In the server console: `fh_trade_shortage heartlands trade_salt 0.8`, then `/tradequote` at the trade post.
@@ -661,7 +661,7 @@ Prereqs (all must be merged before this card is meaningful):
 19. Bounty payoff. With heat 40 and cash on hand run `/paybounty outlaws 10`, then `/paybounty outlaws`.
    Expected: 10 points then the rest are cleared, money charged = points x `bountyPerPoint` (one `fh_ledger` charge row each); `0`, `-5`, `abc` or more than your heat: refused, nothing charged. With too little cash: `fh_insufficient_funds`, nothing changes. Needs core B7 `charge`; before it: `fh_economy_unavailable`.
    RESULT:
-20. Payoff refund check. Make the heat write fail after the charge (stop oxmysql just before `/paybounty outlaws`, or force it in a dev build).
+20. Payoff refund check. The commit-failure refund is spec-covered; in-game is optional and dev only (do NOT stop oxmysql; only if a dev build can force the heat write to fail after the charge).
    Expected: the message says you were not charged / refunded (`fh_payoff_refunded`), cash back to the exact amount, heat unchanged, retry works. If it instead reports `fh_payoff_refund_failed`, you were charged and there is an `[fh_heat] ERROR payoff ...` log line: do not retry, report it.
    RESULT:
 21. Double submit: run `/paybounty outlaws` twice in quick succession.
