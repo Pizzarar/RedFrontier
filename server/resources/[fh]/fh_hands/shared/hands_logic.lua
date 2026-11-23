@@ -209,6 +209,23 @@ function M.countItem(items, name)
     return total
 end
 
+---`fh_hand_tick <serverId>` arg parsing. @return table|nil { target }, string? err
+function M.parseTickArgs(args)
+    local t = type(args) == 'table' and tonumber(args[1]) or nil
+    if not (isInt(t) and t > 0) then return nil, 'fh_bad_target' end
+    return { target = t }
+end
+
+---The `now` that makes exactly the oldest hand's next tick due (never earlier than the real now). nil when no hands.
+function M.forcedNow(list, cfg, now)
+    local oldest
+    for _, h in pairs(list or {}) do
+        if isNum(h.last_tick) and (not oldest or h.last_tick < oldest) then oldest = h.last_tick end
+    end
+    if not oldest then return nil end
+    return math.max(now, oldest + cfg.tickSeconds)
+end
+
 ---Validate a hands config. @return boolean ok, string|nil err
 function M.validateConfig(cfg)
     if type(cfg) ~= 'table' then return false, 'bad_config' end

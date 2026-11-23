@@ -49,5 +49,18 @@ function logic.repExportResult(callOk, v, err)
     return 'value', v
 end
 
+---Admin `fh_rep <serverId> <region> <delta>` argument parsing. Whole numbers only, region must be known,
+---|delta| <= maxDelta (fh_economy re-validates against its own cap). @return table|nil { target, region_id, delta }, string? err
+function logic.parseRepCmd(args, isKnownRegion, maxDelta)
+    args = type(args) == 'table' and args or {}
+    local function fin(n) return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge end
+    local target, delta = tonumber(args[1]), tonumber(args[3])
+    if not (fin(target) and target > 0 and target % 1 == 0) then return nil, 'fh_bad_target' end
+    if type(args[2]) ~= 'string' or not isKnownRegion(args[2]) then return nil, 'unknown_region' end
+    if not (fin(delta) and delta ~= 0 and delta % 1 == 0) then return nil, 'invalid_delta' end
+    if maxDelta and math.abs(delta) > maxDelta then return nil, 'delta_too_large' end
+    return { target = target, region_id = args[2], delta = delta }
+end
+
 if _G.GetCurrentResourceName then _G.FhProgressionLogic = logic end
 return logic

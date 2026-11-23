@@ -31,6 +31,12 @@ function M.schedule(cfg, now)
         remaining = started + dwell - now, startedAt = started }
 end
 
+---Seconds until the fence moves to its next stop (admin `fh_fence_next` skews the clock forward by this much).
+function M.secondsToNext(cfg, now)
+    local s = M.schedule(cfg, now)
+    return s and s.remaining or nil
+end
+
 ---Stock entries visible to a player: common always, rare / leads only when unlocked. Each result has category set.
 function M.filterStock(stopStock, canRare, canLeads)
     local out = {}

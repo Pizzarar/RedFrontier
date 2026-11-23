@@ -9,7 +9,9 @@ local current = nil -- { id = stopId, reqId, tried = spawn requested at this sto
 
 local function log(fmt, ...) print(('[fh_fence] ' .. fmt):format(...)) end
 
-local function schedule() return logic.schedule(cfg, os.time()) end
+local skew = 0 -- seconds added to the clock by the admin `fh_fence_next` test command (0 in normal play)
+
+local function schedule() return logic.schedule(cfg, os.time() + skew) end
 
 -- ---------------------------------------------------------------- items
 
@@ -174,3 +176,24 @@ end)
 -- buy -> true, delivered, refunded | false, code.  sell -> true, sold, total | false, code.
 lib.callback.register('fh:fence:buy', function(src, item, qty) return trader.buy(src, item, qty) end)
 lib.callback.register('fh:fence:sell', function(src, item, qty) return trader.sell(src, item, qty) end)
+
+-- ---------------------------------------------------------------- admin test command
+-- `fh_fence_next`: jump the fence to its next stop now. It only skews the clock schedule() reads, so the NPC move,
+-- stock and every trade (stopFor -> schedule, under trader's per-citizen lock) behave exactly as at a normal rotation:
+-- a trade already running keeps its lock and its stop check is done at its start, like when the dwell timer expires.
+-- Restricted: console, or ACE `command.fh_fence_next` (server.cfg: add_ace group.admin command allow).
+RegisterCommand('fh_fence_next', function(source)
+    if source ~= 0 and not IsPlayerAceAllowed(source, 'command.fh_fence_next') then return end
+    local jump = logic.secondsToNext(cfg, os.time() + skew)
+    local msg
+    if not jump then
+        msg = 'fh_fence_next: no schedule'
+    else
+        skew = skew + jump
+        pcall(tick) -- apply at once instead of waiting for the 5 s poll
+        local s = schedule()
+        msg = ('fh_fence_next: now at %s (next %s)'):format(s and s.stop or '?', s and s.nextStop or '?')
+    end
+    if source == 0 then print('[fh_fence] ' .. msg)
+    else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end
+end, true)

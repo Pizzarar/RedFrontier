@@ -339,3 +339,54 @@ Known limits (not failures):
 - Item rewards stay owed: fh_core refuses `backpack`/`equipped` item adds (idea-643), so a quest with `items` keeps
   `reward_pending`, pays money/rep once, retries on each load, and a repeatable with items cannot be taken again
   (`fh_reward_pending`). No shipped content uses item rewards yet.
+
+## Progression (fh_progression, fh_fence, fh_hands)
+
+Needs `ensure fh_progression`, `ensure fh_fence`, `ensure fh_hands` (shipped in `server.cfg`) and the `fh_ledger` / `fh_rep` / `fh_hands` tables (migrations 0002 and 0009). Admin test commands (console, or `group.admin` via ACE `command.<name>`; anything else is ignored): `/fh_rep <id> <region> <delta>` (lives in fh_progression and calls `fh_economy`'s `rep`; fh_economy still carries its older console-only `fh_rep <id> <delta>` with the same name, so if `fh_rep <id> heartlands 99` answers with no `fh_rep: ok` line or acts on heartlands without the region argument, the old one won: write FAIL and say so), `/fh_fence_next`, `/fh_hand_tick <id>`, plus `fh_pay <id> <amount>` from the server console. Use `heartlands` as the region. Tier gates: tier 2 at 100 rep, tier 3 at 400. `<id>` is your server id (`status` in F8, or the player list). Start with a fresh character at 0 rep and $0 unless a step says otherwise. Run with `set fh_spike_gated true` (as shipped) until step 4.
+
+1. Rep tier gate: in the server console run `fh_rep <id> heartlands 99`. Walk to the fence (step 3 explains finding it) and open the menu with E.
+   Expected: console `fh_rep: ok (heartlands +99 for <id>)`. Menu lists only common stock (bread, water); no gunsmith parts, no treasure lead.
+   RESULT:
+2. Run `fh_rep <id> heartlands 1` (rep 100 = tier 2), then reopen the fence menu. Then run `fh_rep <id> heartlands 300` (rep 400 = tier 3) and reopen it. Finally try bad input: `fh_rep abc heartlands 5`, `fh_rep <id> nowhere 5`, `fh_rep <id> heartlands 0`, `fh_rep <id> heartlands 2.5`, `fh_rep <id> heartlands 5000`.
+   Expected: at 100 rep rare parts appear (gunsmith parts; at the camp stop saddlery fittings too) but no treasure lead. At 400 the treasure lead appears. Bad input prints `fh_rep: fh_bad_target`, `unknown_region`, `invalid_delta`, `invalid_delta`, `delta_too_large` and changes nothing. (`canUnlock` is exactly this gate: `contracts_t2`, `wagon_t2`, `fence_rare_stock`, `hire_hand` need tier 2, `fence_treasure_leads` needs tier 3.) Going back below the line (`fh_rep <id> heartlands -300`) hides the lead again on the next menu open.
+   RESULT:
+3. Fence schedule: in F8 or the console read the log line `[fh_fence] fence now at <stop>`. The fence rotates between `heartlands_road` and `heartlands_camp` every 20 minutes. Walk to the current stop (road: about -280 800 118; camp: about -170 830 117; coords are approximate, `fh_tp` helps). Run `fh_fence_next` in the console.
+   Expected: console `[fh_fence] fh_fence_next: now at <the other stop> (next <the first>)` and a `fence now at` line. Menu E at the old stop now answers `Step closer to the fence.`; at the new stop it opens. Run `fh_fence_next` again: it returns to the first stop. (The test command skips the wait only; with no command the stop changes by itself on the 20 minute boundary.)
+   RESULT:
+4. `fh_spike_gated` on and off. With `set fh_spike_gated true` (default) stand at the current stop.
+   Expected: no fence ped appears (spawn is held back), but the E prompt and menu still work. Now run `set fh_spike_gated false` in the console and wait up to 5 s (or run `fh_fence_next` twice).
+   Expected: a fence ped spawns at the current stop (`[fh_core:spawn]` lines); on `fh_fence_next` it despawns and respawns at the new stop. Set it back to `true` afterwards: the ped goes away within 5 s.
+   RESULT:
+5. Tier-gated stock, per stop: at 100 rep (`fh_rep` to adjust) open the menu at each stop (use `fh_fence_next`).
+   Expected: road stop: gunsmith parts $90; camp stop: gunsmith parts $95 and saddlery fittings $100. At 400 rep the lead is $250 (road) / $300 (camp). Common stock is bread and water ($3, $2) at the road stop and bread only at the camp.
+   RESULT:
+6. Buy rare parts: give yourself money (`fh_pay <id> 1000` in the server console), at 100+ rep buy 2 gunsmith parts. Check your backpack.
+   Expected: `Bought.`, backpack holds 2 `Gunsmith Parts`, cash down by 2 x the price. A second look at the menu shows the same price (stock is not limited).
+   RESULT:
+7. Buy a treasure lead at 400+ rep.
+   Expected: `Bought.`, backpack holds 1 `Treasure Lead` ($250 or $300 less cash). The item info carries the target hint text (inspect the item if your UI shows it; otherwise check the `fh_dump backpack <id>` console output).
+   RESULT:
+8. Sell: with parts in your backpack choose `Sell Gunsmith Parts` (pays $30 each) or saddlery ($35 each). Try selling more than you carry.
+   Expected: `Sold N for $X.` with your cash up by exactly X and the parts gone. Selling more than you hold says `You don't have that to sell.` and nothing moves. The menu works again straight away.
+   RESULT:
+9. Insufficient funds: with less cash than a part costs (spend it or start at $0) try to buy 1 gunsmith part.
+   Expected: `You can't afford that.` No item arrives, cash unchanged, and an immediate second attempt behaves the same (no stuck `The fence is still handling your last deal.`).
+   RESULT:
+10. charge_unavailable: only if core B7 (`fh_economy` `charge` export) is NOT merged on this server. Have cash and try to buy.
+    Expected: `The fence is not taking payment right now.` No item, no cash change. Selling still works (it uses `pay`). If B7 IS merged, write `SKIP B7 merged` (the buy works as in step 6).
+    RESULT:
+11. One hand hired: at 100+ rep, with a homestead plot and its chest, run `fh_hand_hire <id> ranch_hand` (a test wrapper over the hire export, same admin restriction). Put $50 in cash (`fh_pay <id> 50`), keep feed under 40 in the plot chest (open with E), then run `fh_hand_tick <id>`. Below 100 rep the hire is refused with `locked`.
+    Expected: console `fh_hand_tick: ticked <id>`. The ranch hand is paid $5 (`wage:ranch_hand` ledger row) and the chest feed went up by 10 (cap 40). Run it again: +10 more, until the chest holds 40, then the tick adds 0. The timer also runs on its own every 10 minutes (do not wait for it; this is the same code path).
+    RESULT:
+12. Unpaid wage: spend your cash to $0, then run `fh_hand_tick <id>` once.
+    Expected: `fh_hand_tick: ticked <id>`, cash stays $0 (never negative), the chest feed does NOT rise (hand idles), `fh:hands:unpaid` appears in the server log if verbose. After 3 unpaid ticks in a row the hand quits; one paid tick before that resets the count. With B7 not merged the same happens with reason `charge_unavailable` even with cash (nothing is debited).
+    RESULT:
+13. Offline catch-up: with the hand hired and $50+ cash, note cash and the chest feed. Disconnect. In the server DB run `UPDATE fh_hands SET last_tick = last_tick - 3600;` (simulates an hour offline, 6 ticks, the cap). Rejoin and open the chest.
+    Expected: on login the missed ticks run once each, capped at 6: at most $30 wages taken and feed topped up to the cap of 40. Wait 30 s: no extra ticks beyond that (no double charge).
+    RESULT:
+14. Fire: run `fh_hand_fire <id> ranch_hand`. Then `fh_hand_tick <id>`.
+    Expected: `fh_hand_fire: ok (ranch_hand)`; `fh_hand_tick: no_hands`; no more wages or feed. Re-hiring with `fh_hand_hire` works again (no `already_hired`). Also try `fh_hand_tick` with a bad id (`abc`, `0`, a disconnected id): `fh_bad_target` / `no_player`.
+    RESULT:
+15. Permission check: as a non-admin player run `/fh_rep <id> heartlands 5`, `/fh_fence_next`, `/fh_hand_tick <id>` and `/fh_hand_hire <id> ranch_hand` from F8.
+    Expected: nothing happens (no rep change, the fence does not move, no tick). The same three from the server console or as `group.admin` work.
+    RESULT:

@@ -127,4 +127,13 @@ case('sellOutcome: pay AND restore fail -> WARNING with citizenid/item/qty', fun
         and o.log:find('fh_part_gunsmith', 1, true) and o.log:find('qty=2', 1, true) and o.log:find('fh_refused', 1, true))
 end)
 
+case('admin: secondsToNext lands exactly on the next stop', function()
+    local now = 1700000000
+    local s = logic.schedule(cfg, now)
+    local jump = logic.secondsToNext(cfg, now)
+    T.eq(s.remaining, jump)
+    T.eq(s.nextStop, logic.schedule(cfg, now + jump).stop)
+    assert(logic.secondsToNext({}, now) == nil)
+end)
+
 T.finish()

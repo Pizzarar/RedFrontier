@@ -108,4 +108,21 @@ case('repExportResult follows getRep(who, region_id) -> integer|nil, err', funct
     T.eq('fallback', kind); T.eq(nil, v)
 end)
 
+case('parseRepCmd: valid args and every refusal code', function()
+    local p = logic.parseRepCmd({ '3', 'heartlands', '-25' }, regions.isKnownRegion, 1000)
+    assert(p.target == 3 and p.region_id == 'heartlands' and p.delta == -25)
+    local function code(a) local _, e = logic.parseRepCmd(a, regions.isKnownRegion, 1000) return e end
+    T.eq('fh_bad_target', code({ 'x', 'heartlands', '5' }))
+    T.eq('fh_bad_target', code({ '0', 'heartlands', '5' }))
+    T.eq('fh_bad_target', code({ '1.5', 'heartlands', '5' }))
+    T.eq('unknown_region', code({ '1', 'nowhere', '5' }))
+    T.eq('unknown_region', code({ '1' }))
+    T.eq('invalid_delta', code({ '1', 'heartlands' }))
+    T.eq('invalid_delta', code({ '1', 'heartlands', '0' }))
+    T.eq('invalid_delta', code({ '1', 'heartlands', '2.5' }))
+    T.eq('invalid_delta', code({ '1', 'heartlands', 'nan' }))
+    T.eq('delta_too_large', code({ '1', 'heartlands', '1001' }))
+    T.eq('fh_bad_target', code(nil))
+end)
+
 T.finish()

@@ -485,4 +485,21 @@ case('entryFromRows: unknown kinds skipped, numbers coerced, bad status -> worki
     T.eq('C', e.citizenid); T.eq(3, e.src)
 end)
 
+case('admin: parseTickArgs', function()
+    T.eq(4, logic.parseTickArgs({ '4' }).target)
+    for _, a in ipairs({ {}, { 'x' }, { '0' }, { '-1' }, { '1.5' } }) do
+        local p, e = logic.parseTickArgs(a)
+        assert(p == nil and e == 'fh_bad_target')
+    end
+end)
+case('admin: forcedNow makes exactly the oldest hand' .. "'" .. 's next tick due', function()
+    T.eq(nil, logic.forcedNow({}, cfg, 1000))
+    local list = { a = { last_tick = 900 }, b = { last_tick = 950 } }
+    local now = logic.forcedNow(list, cfg, 1000)
+    T.eq(900 + cfg.tickSeconds, now)
+    T.eq(1, (logic.ticksDue(900, now, cfg.tickSeconds, cfg.maxCatchupTicks)))
+    T.eq(0, (logic.ticksDue(950, now, cfg.tickSeconds, cfg.maxCatchupTicks)))
+    T.eq(5000, logic.forcedNow({ a = { last_tick = 0 } }, cfg, 5000)) -- never earlier than the real now
+end)
+
 T.finish()

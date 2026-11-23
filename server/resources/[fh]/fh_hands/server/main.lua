@@ -278,3 +278,43 @@ exports('hire', hire)
 exports('fire', fire)
 exports('getHands', getHands)
 exports('registerTask', registerTask)
+
+-- ---------------------------------------------------------------- admin test command
+-- `fh_hand_tick <serverId>`: run one wage + task tick for that player's hands now. It goes through withOwner (the same
+-- per-citizenid lock as login / poll / hire / fire) and tickOwner -> runOwner (claim-before-charge), only with a clock
+-- moved just far enough that the oldest hand's next tick is due. Never a bypass: charge, strikes and quit rules apply.
+-- Restricted: console, or ACE `command.fh_hand_tick` (server.cfg: add_ace group.admin command allow).
+RegisterCommand('fh_hand_tick', function(source, args)
+    if source ~= 0 and not IsPlayerAceAllowed(source, 'command.fh_hand_tick') then return end
+    local function say(msg)
+        if source == 0 then print('[fh_hands] ' .. msg)
+        else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end
+    end
+    local p, err = logic.parseTickArgs(args)
+    if not p then return say('fh_hand_tick: ' .. err) end
+    local ok, why = withOwner(p.target, function(e, cid)
+        local now = logic.forcedNow(e.list, cfg, os.time())
+        if not now then return false, 'no_hands' end
+        tickOwner(cid, now)
+        return true
+    end)
+    say(ok and ('fh_hand_tick: ticked %d'):format(p.target) or ('fh_hand_tick: %s'):format(tostring(why)))
+end, true)
+
+-- `fh_hand_hire <serverId> <kind>` / `fh_hand_fire <serverId> <kind>`: test-only wrappers over the exports above
+-- (hire keeps its canUnlock gate; both run under the owner's lock). Same restriction as fh_hand_tick.
+for cmd, fn in pairs({ fh_hand_hire = hire, fh_hand_fire = fire }) do
+    RegisterCommand(cmd, function(source, args)
+        if source ~= 0 and not IsPlayerAceAllowed(source, 'command.' .. cmd) then return end
+        local target, kind = tonumber(args[1]), args[2]
+        local msg
+        if not (target and target > 0 and target % 1 == 0) then msg = cmd .. ': fh_bad_target'
+        elseif type(kind) ~= 'string' or not cfg.hands[kind] then msg = cmd .. ': unknown_hand'
+        else
+            local ok, why = fn(target, kind)
+            msg = ok and ('%s: ok (%s)'):format(cmd, kind) or ('%s: %s'):format(cmd, tostring(why))
+        end
+        if source == 0 then print('[fh_hands] ' .. msg)
+        else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end
+    end, true)
+end
