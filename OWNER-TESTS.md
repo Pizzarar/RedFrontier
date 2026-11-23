@@ -595,7 +595,7 @@ Console prefixes: `[fh_cargo]`, `[fh_trade]`, `[fh_heat]`.
 
 Prereqs (all must be merged before this card is meaningful):
 - Branches: roads-r1 + roads-r2 (fh_cargo), roads-r4 (fh_trade freight), roads-r6 (fh_heat roadblocks); core B7 (`removeItem`, `registerItems`, `fh_economy:charge`) and fh_core R0 (`requestSpawn` kind `wagon`); quests Q1+ (fh_quests with `registerJobType`).
-- server.cfg: `ensure fh_core`, `fh_economy`, `fh_inventory`, `fh_quests`, `fh_cargo`, `fh_trade`, `fh_heat` (fh_quests BEFORE fh_trade, or restart fh_trade after it). Apply the fh_trade and fh_heat migrations (`0005`/`0006`).
+- server.cfg: `ensure fh_core`, `fh_economy`, `fh_inventory`, `fh_quests`, `fh_cargo`, `fh_trade`, `fh_heat` (fh_quests BEFORE fh_trade, or restart fh_trade after it). Apply the fh_trade, fh_trade_contracts and fh_heat migrations (`0013`, `0014`, `0008`).
 - Convars: `set fh_spike_gated true` (default) for the gated passes; `set fh_spike_gated false` for the ungated passes. To test freight with one region, set `FhTradeConfig.freight.allowSameRegion = true` (only heartlands exists), and `deadlineSeconds = 60` for step 14.
 - You are an admin and have a claimed plot with a chest (see `## M1 end-to-end` step 1).
 

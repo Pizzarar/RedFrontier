@@ -69,7 +69,7 @@ end
 local function load()
     local ok, rows = pcall(MySQL.query.await, 'SELECT region_id, item, shortage, saturation, updated_at FROM fh_trade_prices')
     if not ok then
-        log('could not load prices (%s): did migration 0005_fh_trade.sql run? Starting from baseline.', tostring(rows))
+        log('could not load prices (%s): did migration 0013_fh_trade.sql run? Starting from baseline.', tostring(rows))
         return
     end
     local n = 0
