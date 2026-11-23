@@ -77,20 +77,16 @@ try {
     if (-not $ReplayLog) { $proc = Start-Process -FilePath $Fx -ArgumentList @('+exec', '.boot-check.cfg') -WorkingDirectory $Server `
         -WindowStyle Hidden -PassThru -RedirectStandardOutput $log -RedirectStandardError $err }
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    $errPat = 'SCRIPT ERROR|Couldn''t start resource|Couldn''t find resource|Failed to load|ECONNREFUSED|Unable to establish connection|Access denied for user'
+    $errPat = $script:BootErrPat
     $verdict = $null
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 1000
         $text = Remove-Ansi ((Read-Shared $log) + "`n" + (Read-Shared $err))
         $lines = $text -split "`r?`n"
-        if ($lines | Where-Object { $_ -match 'license key|svadhesive.*(Error|Fatal)' -and $_ -match 'Error|Fatal|Invalid|invalid' }) { $verdict = 'license'; break }
-        $bad = @($lines | Where-Object { $_ -match $errPat })
-        if ($bad) { Start-Sleep -Seconds 2; $verdict = 'error'; break }
-        $started = @($lines | ForEach-Object { if ($_ -match 'Started resource (\S+)') { $Matches[1] } })
-        $missing = @($expected | Where-Object { $_ -notin $started })
-        $dbOk = [bool]($lines | Where-Object { $_ -match 'oxmysql' -and $_ -match 'connection established|Database server connection' }) -or `
-                [bool]($lines | Where-Object { $_ -match 'Database server connection established' })
-        if (-not $missing -and $dbOk) { $verdict = 'ok'; break }
+        $state = Get-BootState $lines $expected
+        if ($state -eq 'license') { $verdict = 'license'; break }
+        if ($state -eq 'error') { Start-Sleep -Seconds 2; $verdict = 'error'; break }
+        if ($state -eq 'ok') { $verdict = 'ok'; break }
         if ($ReplayLog -or $proc.HasExited) { $verdict = 'exited'; break }
     }
     $text = Remove-Ansi ((Read-Shared $log) + "`n" + (Read-Shared $err))

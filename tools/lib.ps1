@@ -37,3 +37,34 @@ function Stop-Db {
         for ($i = 0; $i -lt 40 -and (Test-DbUp); $i++) { Start-Sleep -Milliseconds 500 }
     }
 }
+
+# ---- first-run helpers (pure; tested by tools/test-firstrun.ps1) ----
+function Test-CfxKey([string]$Key) { [bool]($Key -cmatch '^cfxk_[A-Za-z0-9_]{16,80}$') }
+
+# Returns the sv_licenseKey value in a secrets.cfg, or $null if absent.
+function Get-SecretsKey([string]$Path) {
+    if (-not (Test-Path $Path)) { return $null }
+    foreach ($l in [IO.File]::ReadAllLines($Path)) { if ($l -match '^\s*sv_licenseKey\s+"([^"]*)"') { return $Matches[1] } }
+    $null
+}
+# Sets sv_licenseKey in the file, preserving every other line. UTF-8 without BOM.
+function Set-SecretsKey([string]$Path, [string]$Key) {
+    $lines = @(); if (Test-Path $Path) { $lines = @([IO.File]::ReadAllLines($Path)) }
+    $new = "sv_licenseKey `"$Key`""; $done = $false
+    $out = foreach ($l in $lines) {
+        if ($l -match '^\s*sv_licenseKey\b') { if (-not $done) { $new; $done = $true } } else { $l }
+    }
+    $out = @($out); if (-not $done) { $out += $new }
+    [IO.File]::WriteAllText($Path, (($out -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+}
+# Classifies boot-log lines: 'license' | 'error' | 'ok' | 'pending'. Shared by boot-check and first-run.
+$script:BootErrPat = 'SCRIPT ERROR|Couldn''t start resource|Couldn''t find resource|Failed to load|ECONNREFUSED|Unable to establish connection|Access denied for user'
+function Get-BootState([string[]]$Lines, [string[]]$Expected) {
+    if ($Lines | Where-Object { $_ -match 'license key|svadhesive.*(Error|Fatal)' -and $_ -match 'Error|Fatal|Invalid|invalid' }) { return 'license' }
+    if ($Lines | Where-Object { $_ -match $script:BootErrPat }) { return 'error' }
+    $started = @($Lines | ForEach-Object { if ($_ -match 'Started resource (\S+)') { $Matches[1] } })
+    $missing = @($Expected | Where-Object { $_ -notin $started })
+    $dbOk = [bool]($Lines | Where-Object { $_ -match 'Database server connection established' -or ($_ -match 'oxmysql' -and $_ -match 'connection established') })
+    if (-not $missing -and $dbOk) { return 'ok' }
+    'pending'
+}

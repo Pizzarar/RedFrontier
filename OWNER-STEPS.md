@@ -1,29 +1,19 @@
-# Owner steps: first join (only Aub can do these)
+# Owner steps: first join (only you can do these)
 
-Two machines. **DevPC** has the repo, FXServer, MariaDB, `server/server.cfg` and the Cfx key. **Main PC** runs only RDR2 + RedM.
+Two machines. **DevPC** has the repo, FXServer, MariaDB and the Cfx key. **Main PC** runs only RDR2 + RedM.
 
-## On the DevPC
+1. **Main PC:** install RDR2 (your own legit copy) and the RedM client.
+2. **Cfx key:** get a server key at https://portal.cfx.re (Server Keys). Where it asks for an IP/name, give the DevPC's Tailscale IP `100.83.196.251` (not `localhost`).
+3. **DevPC:** double-click `tools/first-run.cmd`, accept the UAC prompt (opens the firewall on port 30120), and paste the key when asked (it is hidden and saved to the gitignored `server/secrets.cfg`). It starts the server and prints the connect line.
+4. **Main PC:** open RedM, press F8, type `connect 100.83.196.251:30120`, then work through OWNER-TESTS.md.
 
-1. Get a server key at https://portal.cfx.re/servers/registration-keys (any name). Set the IP/host to the **DevPC's** address (its Tailscale IP `100.83.196.251` or its LAN IP), not `localhost`.
-2. Open `server/secrets.cfg` (setup already created it) and replace `REPLACE_WITH_CFX_LICENSE_KEY` with the key. This file is gitignored; never commit it or paste the key anywhere.
-3. In PowerShell from the repo root: `tools/setup-server.ps1` (only the first time; it downloads for about 10 minutes), then `tools/start-server.ps1` in its own window. This is the one way to start the server (plain FXServer; the headless boot-check uses it too). txAdmin is optional and not needed.
-4. **Owner-only, once** (changes system settings): open the firewall from an elevated PowerShell on the DevPC:
-   ```powershell
-   New-NetFirewallRule -DisplayName "RedM 30120 TCP" -Direction Inbound -Protocol TCP -LocalPort 30120 -Action Allow
-   New-NetFirewallRule -DisplayName "RedM 30120 UDP" -Direction Inbound -Protocol UDP -LocalPort 30120 -Action Allow
-   ```
+## If something breaks
 
-## On the Main PC
-
-5. You need RDR2 (your own legit copy) and the RedM client installed.
-6. Open RedM, press F8, type `connect 100.83.196.251:30120` (DevPC Tailscale) or `connect <DevPC LAN IP>:30120`.
-7. Test: create a character, spawn in, walk around, press the inventory key. There's no HUD yet; that's expected.
-
-## Stopping and reporting
-
-8. To stop: Ctrl+C in the server window on the DevPC, then `tools/stop-server.ps1`.
-9. Report anything odd to Core, and include the last lines of `server/logs/fxserver.log` (DevPC). If the RSG client log is needed, send the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` from the Main PC (path to be confirmed).
-10. With `fh_dev` on (see `server.cfg`), client script errors are also appended to `server/logs/client-errors.log` on the DevPC. To check the pipe, run `fh_clienterr` in game (admin): expect a line in that file. Exception: `fh_inventory` (an rsg-inventory fork) is not wrapped, so its client errors only show in the RedM client log from the Main PC, like RSG resources.
+- First time on a fresh DevPC only: run `tools/setup-server.ps1` once (about 10 minutes of downloads), then repeat step 3. `first-run.cmd` is safe to run again any time.
+- Stop the server: close its window, then `tools/stop-server.ps1`.
+- Declined UAC: LAN/Tailscale may still work; run `first-run.cmd` again to retry the firewall rules.
+- Report anything odd to Core with the last lines of `server/logs/fxserver.log` (DevPC). If the client log is needed, send the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` from the Main PC (path to be confirmed).
+- With `fh_dev` on (see `server.cfg`), client script errors are also appended to `server/logs/client-errors.log` on the DevPC. Run `fh_clienterr` in game (admin) to check the pipe: expect a line in that file. Exception: `fh_inventory` (an rsg-inventory fork) is not wrapped, so its client errors only show in the RedM client log on the Main PC.
 
 ## B5 admin commands (needs your account in `group.admin`; none of this is runtime-tested yet)
 
