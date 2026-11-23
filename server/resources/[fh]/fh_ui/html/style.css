@@ -15,3 +15,17 @@ html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times
 .btn:hover, .btn:focus { background: #f6e6bd; outline: 2px solid var(--sepia-a); }
 @keyframes drift { from { background-position: 0% 0; } to { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .title { animation: none; } }
+
+/* Passive HUD widgets (U2): small corner cards, opaque-ish backing so they read over bright daytime scenes. */
+.hud { position: fixed; right: 16px; min-width: 200px; max-width: 280px; background: rgba(243,233,210,.94);
+  border: 2px solid var(--edge); box-shadow: 2px 2px 0 rgba(0,0,0,.4); pointer-events: none; }
+.hud-buffs { top: 16px; }
+.hud-bags { bottom: 16px; }
+.hud-title { margin: 0; padding: 3px 10px; font-size: 14px; color: #fff8e8; text-shadow: 0 1px 0 #000;
+  background: linear-gradient(100deg, var(--sepia-a), var(--sepia-b), var(--sepia-a)); background-size: 300% 100%;
+  animation: drift 40s ease-in-out infinite alternate; }
+.hud-rows { list-style: none; margin: 0; padding: 4px 10px 6px; }
+.hud-rows li { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; line-height: 1.5;
+  color: var(--ink); text-shadow: 0 0 2px rgba(255,255,255,.8); }
+.hud-time { font-variant-numeric: tabular-nums; font-weight: bold; }
+@media (prefers-reduced-motion: reduce) { .hud-title { animation: none; } }
