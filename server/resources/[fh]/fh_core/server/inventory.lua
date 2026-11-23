@@ -224,6 +224,30 @@ local function open(src, ref)
     return inv('FhOpen', src, ref)
 end
 
+---Put `amount` of an item (with optional info) into a registered world container, through fh_inventory's AddItem
+---(the container rules veto still applies). For server-side loot (camps). @return boolean ok, string|nil reason
+local function addItem(ref, name, amount, info)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
+    local done, err = inv('AddItem', ref.id, name, amount or 1, info)
+    if done == true then return true end
+    return false, type(err) == 'string' and err or 'fh_refused'
+end
+
+---Empty a registered world container (fh_inventory only lets fh_core wipe an fh_core container).
+---@return boolean ok, string|nil reason
+local function clearContainer(ref)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
+    local r, err = inv('ClearStash', ref.id)
+    if r == false then return false, err end
+    return true
+end
+
 ---Create a drop bag (death / spill) at coords holding `items` (array of {name, amount, info}).
 ---opts = { owner = citizenid?, label? }.
 ---@return string|nil id, string|nil reason
@@ -313,4 +337,6 @@ exports('registerContainer', registerContainer)
 exports('setContainerCoords', setContainerCoords)
 exports('open', open)
 exports('createDropBag', createDropBag)
+exports('addItem', addItem)
+exports('clearContainer', clearContainer)
 exports('registerItems', registerItems)

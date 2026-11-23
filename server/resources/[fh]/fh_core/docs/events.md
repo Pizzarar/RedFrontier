@@ -36,5 +36,11 @@ The emitting lane owns the name and documents it in its README.
 | `fh:spawn:release` | fh_core (server -> client) | `{ requestId, token, netId }`; adopted: the client stops tracking it (server owns its lifetime) |
 | `fh:spawn:client_ready` | fh_core (client -> server) | `{}`; this client can take spawn requests (only ready clients are picked) |
 | `fh:dev:clientError` | fh_core (client -> server, dev only) | `{ resource, msg, traceback }` (strings; server truncates, drops unless convar `fh_dev` is 1, rate-limits 10/min per `source`, logs to `server/logs/client-errors.log`) |
+| `fh:zones:camp_activated` | fh_zones | `{ camp_id, region_id }`; a player came within `activationRadius` of an idle camp, its peds are being requested |
+| `fh:zones:camp_cleared` | fh_zones | `{ camp_id, region_id, loot }`; every adopted ped is dead (server-checked); loot = array of `{ name, amount, info? }` placed in the camp stash |
+| `fh:zones:camp_respawned` | fh_zones | `{ camp_id, region_id }`; `respawnMinutes` elapsed, bodies despawned, stash emptied, camp idle again |
+| `fh:zones:ped_dead` | fh_zones (client -> server) | `{ tag }`; a hint only: believed from a player within activation radius + 25 m of the camp, then the server re-reads the ped's health itself |
+| `fh:zones:open_loot` | fh_zones (client -> server request) | `{ camp_id }`; only honoured once the camp is cleared; `fh_core.open` re-checks reach server-side |
+| `fh:spawn:adopted` | fh_core (LOCAL client event, post-adopt hook) | `{ requestId, tag, owner, kind, netId, entity }`; fires on the spawning client when the server released the adopted entity (again after a re-request, on the new spawner). `tag`/`owner` ride on `fh:spawn:create` |
 
 Payloads for events not emitted by B4b are a contract proposal; the emitting lane may extend them additively.

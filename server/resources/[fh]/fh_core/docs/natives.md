@@ -263,3 +263,9 @@ do not build on any of these. Source: `alloc8or` = RDR3 native DB, `cfx` = docs.
 | `GET_ENTITY_HEADING` | `0xC230DD956E2F5507` | alloc8or | **candidate, unproven** |
 
 Dev client-error return (`client/safe.lua`, `server/dev_errors.lua`): Cfx infra only, **unverified in-game**: `GetConvarInt('fh_dev')` (client reads the replicated convar set by `setr fh_dev 1`; server reads it too), `TriggerServerEvent`, `GetResourcePath`, `io.open`, `os.date`/`os.time`, `lib.addCommand` (`fh_clienterr`, `group.admin`). No game natives.
+
+fh_zones camp (`fh_zones/server/main.lua`, `fh_zones/client/main.lua`), all **unverified in-game**: server `GetEntityHealth`
+(dead = health <= 0), plus the B4c server natives already listed. Client: `AddRelationshipGroup`, `SetPedRelationshipGroupHash`,
+`SetRelationshipBetweenGroups` (5 = hate, both directions vs `PLAYER`), `SetBlockingOfNonTemporaryEvents`, `SetPedCombatAttributes`
+(46 = always fight), `GiveWeaponToPed_2` (attach point `0x2CD419DC`), `SetCurrentPedWeapon`, `TaskCombatHatedTargetsAroundPed`,
+`IsEntityDead`, `IsControlJustReleased` (E = `0xCEFD9220`), `joaat`. Model `g_m_m_unibanditos_01` and the weapon names are guesses.

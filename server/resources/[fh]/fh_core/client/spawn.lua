@@ -73,7 +73,7 @@ end
 FH.onNet('fh:spawn:create', function(d)
     if type(d) ~= 'table' or type(d.token) ~= 'string' or type(d.coords) ~= 'table' then return end
     if made[d.token] then return end -- already handling this attempt
-    local slot = {}
+    local slot = { tag = type(d.tag) == 'string' and d.tag or nil, owner = d.owner, kind = d.kind }
     made[d.token] = slot
     FH.thread(function() create(d, slot) end)
 end)
@@ -94,7 +94,13 @@ end)
 FH.onNet('fh:spawn:release', function(d)
     if type(d) ~= 'table' or d.token == nil then return end
     local slot = made[d.token]
-    if slot and slot.netId ~= nil and slot.netId == d.netId then made[d.token] = nil end
+    if slot and slot.netId ~= nil and slot.netId == d.netId then
+        made[d.token] = nil
+        -- Post-adopt hook: other resources set the entity up (AI, relationship group, weapon) on THIS client.
+        -- Local event (never networked): { requestId, tag, owner, kind, netId, entity }. Fires again after a re-request.
+        TriggerEvent('fh:spawn:adopted', { requestId = d.requestId, tag = slot.tag, owner = slot.owner, kind = slot.kind,
+            netId = slot.netId, entity = slot.entity })
+    end
 end)
 
 FH.on('onClientResourceStop', function(res)
