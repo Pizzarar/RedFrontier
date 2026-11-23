@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T01:17:04.989Z",
+  "updatedAt": "2026-11-23T03:05:36.938Z",
   "units": [
     {
       "id": "B5",
@@ -105,6 +105,23 @@
       "status": "done",
       "branch": "core-brun",
       "commit": "de086db"
+    },
+    {
+      "id": "B-admin",
+      "goal": "B-access: unlisted 6-slot server, first-joiner auto-admin (fh_dev+fh_dev_autoadmin, admins.cfg), rsg-core whitelist via gitignored allowlist.cfg, Friends-over-Tailscale docs",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-badmin"
+    },
+    {
+      "id": "B7",
+      "goal": "core-02 contracts: fh_economy charge+getRep, fh_core removeItem, spawn kind wagon, fh_heat admin delegate, registerItems for siblings",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-b7",
+      "commit": "9bad7c4"
     }
   ]
 }
