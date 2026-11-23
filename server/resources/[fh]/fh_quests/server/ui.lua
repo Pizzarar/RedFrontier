@@ -19,7 +19,7 @@ end)
 
 -- fh_ui relay: fh:ui:action { screen = 'jobs', action = 'accept' } -> this event { src, screen, action, payload }.
 AddEventHandler('fh:quests:ui_accept', function(ev)
-    if type(ev) ~= 'table' or type(ev.src) ~= 'number' then return end
+    if type(ev) ~= 'table' or type(ev.src) ~= 'number' or ev.screen ~= 'jobs' then return end
     local src, p = ev.src, ev.payload
     local ok, err = false, 'fh_offer_gone'
     if type(p) == 'table' and type(p.id) == 'string' and #p.id <= 128 then
@@ -44,7 +44,7 @@ end)
 -- fh_ui relay: fh:ui:action { screen = 'journal', action = 'abandon', payload = { id } } -> this event. Server-local
 -- (fh_ui does TriggerEvent), so AddEventHandler receives it; clients cannot fire it directly.
 AddEventHandler('fh:quests:ui_abandon', function(ev)
-    if type(ev) ~= 'table' or type(ev.src) ~= 'number' then return end
+    if type(ev) ~= 'table' or type(ev.src) ~= 'number' or ev.screen ~= 'journal' then return end
     local src, p = ev.src, ev.payload
     local ok, err = false, 'fh_not_active'
     if type(p) == 'table' and type(p.id) == 'string' and #p.id <= 128 then
@@ -82,7 +82,7 @@ end)
 
 -- fh_ui relay: fh:ui:action { screen = 'dialogue', action = 'start', payload = { quest_id } } -> this event.
 AddEventHandler('fh:quests:ui_start', function(ev)
-    if type(ev) ~= 'table' or type(ev.src) ~= 'number' then return end
+    if type(ev) ~= 'table' or type(ev.src) ~= 'number' or ev.screen ~= 'dialogue' then return end
     local src, p = ev.src, ev.payload
     local ok, err = false, 'fh_unknown_quest'
     if type(p) == 'table' and type(p.quest_id) == 'string' and #p.quest_id <= 128 then

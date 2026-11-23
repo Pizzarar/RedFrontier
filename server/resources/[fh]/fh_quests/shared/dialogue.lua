@@ -12,10 +12,10 @@ M.NOTHING = 'Nothing more to say right now.'
 ---(quest ids this npc can start). Talk lines come first; giver.intro follows only when an offer for the giver's own
 ---line is present. No pages and no offer -> one fallback page.
 function M.build(giver, dialogue)
-    local pages, spoke = {}, false
+    local pages = {}
     for _, d in ipairs(type(dialogue) == 'table' and dialogue or {}) do
         for _, line in ipairs(type(d) == 'table' and d.lines or {}) do
-            if type(line) == 'string' then pages[#pages + 1] = line; spoke = true end
+            if type(line) == 'string' then pages[#pages + 1] = line end
         end
     end
     local offer = nil

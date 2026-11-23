@@ -30,7 +30,6 @@ M.ABANDONED = 'Quest abandoned.'
 M.STARTED = 'Quest started.'
 M.START_DEFAULT = 'Could not start that job.'
 M.TALK_DEFAULT = 'Not now.'
-M.NOTHING = 'Nothing more to say right now.'
 
 ---accept result -> { notice, notice_kind }
 function M.acceptNotice(ok, err)
