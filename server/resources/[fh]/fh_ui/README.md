@@ -81,3 +81,28 @@ Fed by `fh:death:bags` plus the `fh:death:bags` callback fetch at start. `open/u
 - **fh_buffs**: `fh:buffs:sync` entries carry `expires_at` on the server's `GetGameTimer()/1000` clock, which the
   client cannot compare to its own. Add `remaining = expires_at - now()` to each snapshot entry. Until then the
   buffs widget lists active buffs with `--` instead of a time.
+
+### heat (passive)
+`open/update` data `{ factions = { { id, label, level (0-100), tier } }, lay_low = { active, seconds_left? } }`. Producer (future
+`fh_heat`) re-sends via `fh:ui:update` on `fh:heat:changed`. No actions.
+
+### insurance (dialog, owner `death`)
+`open` data `{ title, fee, delay_minutes, target_chest, note? }`. Actions: `confirm` `{}` (button or Enter), `cancel` `{}`; Esc relays `close`.
+Lane revalidates fee and chest ownership.
+
+### contracts (owner `trade`)
+`open/update` data `{ title?, region?, contracts = { { id, cargo, origin, destination, pay, deadline_minutes, risk } } }`
+(`risk` is free text: low/medium/high). Actions: `accept` `{ id }`, `close` `{}`.
+
+### station (owner `homestead`)
+`open/update` data `{ title, options = { { id, label, inputs = { { item, qty } }, outputs = { { item, qty } }, time_seconds, can_craft } } }`.
+Actions: `craft` `{ id }` (button disabled when `can_craft` is false; the lane rechecks), `close` `{}`.
+
+### fence (owner `fence`)
+`open/update` data `{ title?, stock = { { id, label, price, qty, rare? } }, sell = { { id, label, price, qty } } }`.
+Actions: `buy` `{ id, qty }`, `sell` `{ id, qty }` (qty clamped client-side to 1..listed qty; lane revalidates), `close` `{}`.
+
+### Dev demo (fixtures)
+`/fh_ui_demo <heat|insurance|contracts|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo close [screen]` closes. Gated like fh_core admin commands (`group.admin`, command ACE). Fixture actions relay to
+lanes that do not exist yet and are simply unhandled.

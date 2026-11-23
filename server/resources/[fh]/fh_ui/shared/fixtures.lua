@@ -1,0 +1,127 @@
+-- Fixture data + pure helpers for the U3 screens (heat, insurance, contracts, station, fence). No natives, specced
+-- under busted (spec/ui_fixtures_spec.lua). The producing lanes do not exist yet, so `fh_ui_demo <screen>` opens these.
+local M = {}
+
+M.fixtures = {
+    heat = {
+        factions = {
+            { id = 'lawmen',   label = 'Lawmen',        level = 62, tier = 'wanted' },
+            { id = 'bandits',  label = 'Hollis Gang',   level = 18, tier = 'watched' },
+            { id = 'railroad', label = 'Railroad Guard', level = 0,  tier = 'clear' },
+        },
+        lay_low = { active = true, seconds_left = 340 },
+    },
+    insurance = {
+        title = 'Tracker Insurance',
+        fee = 75,
+        delay_minutes = 20,
+        target_chest = 'Homestead stash chest',
+        note = 'Pay now; if you die your pack is delivered to the chest after the delay.',
+    },
+    contracts = {
+        title = 'Contract Board',
+        region = 'Heartlands',
+        contracts = {
+            { id = 'c1', cargo = 'Crated rifles', origin = 'Heartlands', destination = 'Big Valley', pay = 240,
+              deadline_minutes = 45, risk = 'high' },
+            { id = 'c2', cargo = 'Flour sacks', origin = 'Heartlands', destination = 'Roanoke Ridge', pay = 90,
+              deadline_minutes = 90, risk = 'low' },
+            { id = 'c3', cargo = 'Medicine crate', origin = 'Heartlands', destination = 'Tall Trees', pay = 160,
+              deadline_minutes = 60, risk = 'medium' },
+        },
+    },
+    station = {
+        title = 'Cookfire',
+        options = {
+            { id = 'stew', label = 'Hearty stew', inputs = { { item = 'meat', qty = 2 }, { item = 'carrot', qty = 1 } },
+              outputs = { { item = 'stew', qty = 1 } }, time_seconds = 20, can_craft = true },
+            { id = 'jerky', label = 'Jerky', inputs = { { item = 'meat', qty = 3 }, { item = 'salt', qty = 1 } },
+              outputs = { { item = 'jerky', qty = 2 } }, time_seconds = 45, can_craft = false },
+        },
+    },
+    fence = {
+        title = 'Roving Fence',
+        stock = {
+            { id = 'lockpick', label = 'Lockpick', price = 12, qty = 6, rare = false },
+            { id = 'old_map', label = 'Torn treasure map', price = 220, qty = 1, rare = true },
+        },
+        sell = {
+            { id = 'pocket_watch', label = 'Pocket watch', price = 30, qty = 2 },
+            { id = 'silver_ring', label = 'Silver ring', price = 45, qty = 1 },
+        },
+    },
+}
+
+-- Tiny schema: field -> type, with '?' suffix for optional. 'table[]' / '<name>[]' nested lists via {list=schema}.
+local S = {}
+S.heat = {
+    factions = { list = { id = 'string', label = 'string', level = 'number', tier = 'string' } },
+    lay_low = { obj = { active = 'boolean', seconds_left = 'number?' } },
+}
+S.insurance = { title = 'string', fee = 'number', delay_minutes = 'number', target_chest = 'string', note = 'string?' }
+local item = { list = { item = 'string', qty = 'number' } }
+S.contracts = {
+    title = 'string?', region = 'string?',
+    contracts = { list = { id = 'string', cargo = 'string', origin = 'string', destination = 'string', pay = 'number',
+        deadline_minutes = 'number', risk = 'string' } },
+}
+S.station = {
+    title = 'string',
+    options = { list = { id = 'string', label = 'string', inputs = item, outputs = item, time_seconds = 'number',
+        can_craft = 'boolean' } },
+}
+S.fence = {
+    title = 'string?',
+    stock = { list = { id = 'string', label = 'string', price = 'number', qty = 'number', rare = 'boolean?' } },
+    sell = { list = { id = 'string', label = 'string', price = 'number', qty = 'number' } },
+}
+M.schemas = S
+
+local function check(schema, v, path, errs)
+    if type(v) ~= 'table' then errs[#errs + 1] = path .. ': not a table'; return end
+    for k, t in pairs(schema) do
+        local x, p = v[k], path .. '.' .. k
+        if type(t) == 'string' then
+            local base, opt = t:gsub('%?$', '')
+            if x == nil then
+                if opt == 0 then errs[#errs + 1] = p .. ': missing' end
+            elseif type(x) ~= base or (base == 'number' and x ~= x) then
+                errs[#errs + 1] = p .. ': expected ' .. base
+            end
+        elseif t.obj then
+            if x == nil then errs[#errs + 1] = p .. ': missing' else check(t.obj, x, p, errs) end
+        elseif t.list then
+            if type(x) ~= 'table' then errs[#errs + 1] = p .. ': expected list'
+            else for i, e in ipairs(x) do check(t.list, e, p .. '[' .. i .. ']', errs) end end
+        end
+    end
+end
+
+-- Returns true | false, { error strings }.
+function M.validate(screen, data)
+    local schema = S[screen]
+    if not schema then return false, { 'no schema for ' .. tostring(screen) } end
+    local errs = {}
+    check(schema, data, screen, errs)
+    return #errs == 0, errs
+end
+
+-- Pure arg parsing for `fh_ui_demo <screen|close> [screen]`. Returns { action = 'open'|'close', screen } | nil, code.
+function M.parseDemo(args)
+    local a = args and args[1]
+    if type(a) ~= 'string' or a == '' then return nil, 'fh_ui_demo_usage' end
+    a = a:lower()
+    if a == 'close' then
+        local s = args[2] and tostring(args[2]):lower() or nil
+        if s and not M.fixtures[s] then return nil, 'fh_ui_demo_unknown_screen' end
+        return { action = 'close', screen = s }
+    end
+    if not M.fixtures[a] then return nil, 'fh_ui_demo_unknown_screen' end
+    return { action = 'open', screen = a }
+end
+
+if GetCurrentResourceName then
+    FhUiFixtures = M
+else
+    return M
+end

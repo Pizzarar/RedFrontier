@@ -19,6 +19,7 @@ shared_scripts {
     '@ox_lib/init.lua',
     'shared/relay.lua',
     'shared/hud.lua',
+    'shared/fixtures.lua',
 }
 
 server_scripts {
