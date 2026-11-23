@@ -12,6 +12,7 @@ shared_scripts {
     'shared/needs.lua',
     'shared/items.lua',
     'shared/rest.lua',
+    'shared/effects.lua',
 }
 
 server_scripts {
@@ -24,8 +25,9 @@ server_scripts {
 
 client_scripts {
     '@fh_core/client/safe.lua',
-    'client/main.lua', -- stub: S5 adds the sluggish effect
+    'client/main.lua',
     'client/actions.lua',
+    'client/effects.lua',
 }
 
 dependencies { 'fh_core', 'fh_buffs', 'oxmysql', 'rsg-core' }

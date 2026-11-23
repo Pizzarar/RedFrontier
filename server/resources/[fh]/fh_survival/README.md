@@ -4,7 +4,7 @@ Survival needs as timed buffs (plan `docs/brainstorm/plans/survival-01-needs.md`
 and (in cold regions) warmth are positive `fh_buffs` buffs. What is missing is turned into a sluggish level 0-3.
 **Never lethal:** this resource never reads or writes health. It does not use rsg-core hunger/thirst/cleanliness metadata.
 
-Status: S2 server core (tick, state event, persistence) and S3 actions (food, canteen, wash, warmth). Rest/comfort (S4) and the client effect (S5) follow.
+Status: S2 server core, S3 actions (food, canteen, wash, warmth), S4 rest/comfort and S5 client sluggish effect.
 
 ## Needs
 | Need | Buff id | Default duration | Counts as core |
@@ -71,7 +71,7 @@ Lifecycle rules (Tier A):
 
 ## Config keys (`config.lua`, `FhSurvivalConfig`)
 `TickSeconds` (15), `LoginGraceSeconds` (600), `Durations`, `ColdRegions` (`{ region_id = true }`, empty: no cold region exists yet),
-`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`, used from S5). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). S4 keys: `ComfortK` (0.01), `RestedCap` (1.20). Section reserved for S5.
+`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). S4 keys: `ComfortK` (0.01), `RestedCap` (1.20). S5 keys: `SluggishText`, `SluggishRegen`, `SluggishClipset` (nil), `SluggishDeadeyeHash` (nil), `SluggishNotifyCooldownMs` (60000).
 Seeded defaults (approximate, owner-verifiable, all 2D): `WaterZones` (-250,760,r40) and (-140,790,r40) on the Dakota River near the
 heartlands homestead (-300,790,118) / outlaw camp (-145,845,117); `Campfires` (-300,790,r8) homestead and (-145,845,r8) camp.
 Native mode never runs unless `WaterCheck = 'native'`: the client does not call `IsEntityInWater` in zones mode.
@@ -89,3 +89,10 @@ The player's region is `FhRegions.territoryAt(x, y).region` from the server-side
 3. Fresh character: level stays 0 for 10 min even with nothing applied. After that, level rises with each missing need.
 4. Apply `well_fed`, relog: it is re-applied with the remaining time. Restart the server: same.
 5. Health never changes at any level.
+
+## Sluggish effect (S5, `client/effects.lua`, `shared/effects.lua`)
+Consumes `fh:survival:state`. `notify` (default): one chat line `<text> (level N/3)` when the level changes to a non-zero level,
+at most once per `SluggishNotifyCooldownMs`; no natives. `native` (opt-in, unverified in game): stamina recharge multiplier by level
+(`SluggishRegen`, clamped 0.1..1.0, never fully stopped), dead-eye multiplier only if `SluggishDeadeyeHash` is set, and a movement
+clipset at level 3 only if `SluggishClipset` is set. Effects are reset at level 0 and on resource stop. Natives and hashes: `fh_core/docs/natives.md`.
+Pure mapping `FhSurvivalEffects.params(level, mode, cfg)` is covered by `spec/survival_effects_spec.lua`.

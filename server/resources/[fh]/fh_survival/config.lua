@@ -40,4 +40,14 @@ FhSurvivalConfig = {
     ComfortK = 0.01,               -- homestead bed: rested magnitude = 1.0 + comfort * ComfortK
     RestedCap = 1.20,              -- must match the fh_buffs cap for `rested`
     -- == S5 sluggish effect ==
+    -- Used by client/effects.lua. SluggishEffect (above) picks the mode. Text = notify line per level (nil = default).
+    SluggishText = nil,            -- { [1] = '...', [2] = '...', [3] = '...' }
+    -- 'native' only: regen multiplier per level (clamped 0.1..1.0, so never fully stopped) and the level-3 movement clipset.
+    SluggishRegen = { [0] = 1.0, 0.85, 0.7, 0.5 },
+    -- Clipset dictionary name for level 3 (native mode). nil = no clipset. UNVERIFIED in game: set a name the owner
+    -- confirms (OWNER-TESTS Survival card step 'native'). Left nil so native mode only reduces regen until confirmed.
+    SluggishClipset = nil,
+    -- Native hash (number) for the dead-eye recharge multiplier, signature (player, float). nil = dead-eye part skipped until a hash is confirmed.
+    SluggishDeadeyeHash = nil,
+    SluggishNotifyCooldownMs = 60000, -- min gap between repeated notify lines
 }

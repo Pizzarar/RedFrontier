@@ -594,6 +594,83 @@ yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what yo
     `/fh_restore <slot>`; at the gunsmith run `/fh_craft ammo_rifle`.
     Expected: both `no_station` messages (`You need to be at a gunsmith station.` / `You need to be at the right
     station.`); the station types do not substitute for each other.
+
+## Survival (fh_survival, plan survival-01, S1-S5 combined)
+
+One card, run once. Needs are positive timed buffs (HUD buffs); what is missing becomes sluggish level 0-3. Nothing here may
+ever reduce health. Server console lines start with `[fh_survival]`. Fastest way to wait out a need: set short
+durations in `fh_survival/config.lua` (`Durations`, e.g. 60 s each, and `LoginGraceSeconds = 60`), restart the resource,
+and put them back afterwards. `fh_give <id> <item> <n>` / `fh_buff <id> <buff> <mag> <secs>` are the admin helpers.
+Steps marked "needs @core caps (idea-613)" depend on `hydrated` and `clean` caps in `fh_buffs/config.lua`; on this branch's
+base they are NOT there yet (boot logs `unknown_buff hydrated` / `unknown_buff clean`). SKIP them until @core lands the caps.
+Item names for S3/S4 are whatever `fh_survival/shared/items.lua` registers (check that file if a name below differs).
+
+### Grace, buffs, sluggish, persistence (S1/S2)
+1. Create a brand-new character and join. Do not eat, drink or sleep for the grace period (10 min by default).
+   Expected: no sluggish text for the whole grace window, even though nothing is active.
+   RESULT:
+2. Give yourself buffs with `fh_buff <id> well_fed 1.0 600` and `fh_buff <id> rested 1.0 600`.
+   Expected: both show as buffs in the HUD with a countdown.
+   RESULT:
+3. Let all needs lapse (short durations, grace over). Watch the level climb as needs run out.
+   Expected: sluggish level rises 0 -> 1 -> 2 -> 3 as the missing count rises (3 at three or more missing); your health never drops at any level and you never die from it.
+   RESULT:
+4. Re-apply one need at level 3.
+   Expected: level falls by one on the next tick (up to ~15 s later).
+   RESULT:
+5. With `well_fed` at ~5 min left, relog (disconnect, rejoin the same character).
+   Expected: `well_fed` is back with about the same remaining time (never longer; time spent offline does not count down or extend it).
+   RESULT:
+6. With a buff active, restart the server and rejoin.
+   Expected: the buff is back with about the remaining time it had.
+   RESULT:
+7. Quick drop: join, and within a few seconds (before the first tick) disconnect. Rejoin.
+   Expected: buffs you had before are not wiped (still there with their remaining time).
+   RESULT:
+8. Hydrated and clean as buffs: `fh_buff <id> hydrated 1.0 600` and `fh_buff <id> clean 1.0 600`. (needs @core caps (idea-613))
+   Expected: both show in the HUD; without the caps the console says `unknown_buff`.
+   RESULT:
+
+### Food, drink, wash, warmth (S3)
+9. Eat a food item.
+   Expected: item consumed, `well_fed` appears (about 60 min).
+   RESULT:
+10. Drink from a full canteen (check the charge count in the item metadata/tooltip).
+    Expected: one charge used, `hydrated` appears (about 45 min). (needs @core caps (idea-613))
+    RESULT:
+11. Drink until the canteen is empty, then use it once more.
+    Expected: refused with an "empty" message, no buff.
+    RESULT:
+12. Stand in a river/lake (or a configured water zone) and refill the canteen.
+    Expected: charges back to full; refilling a full canteen is refused ("full").
+    RESULT:
+13. Wash while standing in water.
+    Expected: `clean` appears (about 90 min); washing again right away hits the wash cooldown. (needs @core caps (idea-613))
+    RESULT:
+14. Stand next to a lit campfire.
+    Expected: `warm` appears and refreshes while you stay near. `warm` is only a bonus: ColdRegions is empty, so being without it never makes you sluggish.
+    RESULT:
+
+### Rest (S4)
+15. Use a bedroll anywhere to sleep/rest.
+    Expected: `rested` appears at magnitude 1.0 (about 120 min).
+    RESULT:
+16. Sleep in your claimed homestead's bed with comfort furnishings.
+    Expected: `rested` with a higher magnitude (1.0 + comfort x 0.01, capped at 1.20). If the homestead bed/comfort exports (H3/H4) are not on main yet, expect bedroll-only (1.0): note SKIP.
+    RESULT:
+
+### Sluggish effect (S5)
+17. Default `SluggishEffect = 'notify'`. Let a need lapse so the level rises from 0 to 1, then 2, then 3.
+    Expected: one chat line per change, e.g. `You feel a little sluggish. (level 1/3)`, then level 2 and 3 texts; repeated lines are limited to once a minute; no stamina or movement change. Getting a need back down to level 0 prints nothing.
+    RESULT:
+18. Set `SluggishEffect = 'native'` in `config.lua`, `restart fh_survival`, rejoin, and reach level 1-3 again.
+    Expected: stamina regenerates visibly slower as the level rises (about 85% / 70% / 50%), never stops; the notify text still shows. Dead-eye regen is untouched (no hash known; `SluggishDeadeyeHash` is nil). Note anything odd in F8 (a wrong hash is swallowed silently, so "no change" means the stamina hash is wrong: report FAIL).
+    RESULT:
+19. Still on `native`, reach level 3 with `SluggishClipset` set to a movement clipset name you want to try (leave it nil to skip).
+    Expected: at level 3 your walk changes to the clipset; as soon as the level drops, the walk is back to normal. With nil, nothing changes.
+    RESULT:
+20. Restore a need to reach level 0 on `native`, then set `SluggishEffect = 'notify'` and restart the resource.
+    Expected: stamina regen and walk are normal; health was never touched in any step.
     RESULT:
 
 ## Roads

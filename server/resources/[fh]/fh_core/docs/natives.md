@@ -309,3 +309,12 @@ Default path (`FhSurvivalConfig.WaterCheck = 'zones'`) uses no water native: the
 | `GetPlayerPed`, `GetEntityCoords`, `GetPlayers`, `GetGameTimer` | see above | `fh_survival/server/actions.lua` (water zone check, campfire proximity, cooldown clock) | server |
 
 Cfx/RSG glue (not natives): `exports['rsg-core']:CreateUseableItem`, `exports['rsg-inventory']:GetItemBySlot/GetItemByName/RemoveItem/SetItemInfo`, `exports.fh_core:registerItems`, event `ox_lib:notify` (client).
+
+fh_survival sluggish effect (`fh_survival/client/effects.lua`, S5), only when `FhSurvivalConfig.SluggishEffect = 'native'`; all **candidate, unproven in game**, each wrapped in `pcall(Citizen.InvokeNative, ...)`:
+| Native | Hash | Why |
+|---|---|---|
+| `SET_PLAYER_STAMINA_RECHARGE_MULTIPLIER(player, float)` | `0xFECA17CF3343694B` | Reduce stamina regen by sluggish level (0.85 / 0.7 / 0.5), reset to 1.0 at level 0 and on resource stop |
+| dead-eye recharge multiplier | none known | `FhSurvivalConfig.SluggishDeadeyeHash` (nil default): skipped until a hash is confirmed |
+| `SET_PED_MOVEMENT_CLIPSET(ped, clipSetHash, transitionSpeed)` | `0x923583741DC87BCE` | Level-3 movement clipset; only when `SluggishClipset` is set |
+| `RESET_PED_MOVEMENT_CLIPSET(ped, transitionSpeed)` | `0x58F7DB5BD8FA2288` | Clear the clipset when level drops |
+Also `PlayerId`, `PlayerPedId`, `GetHashKey`, `RequestClipSet`, `HasClipSetLoaded`, `GetGameTimer`. No health native is used anywhere (never lethal). The notify mode uses no game natives (chat event only).
