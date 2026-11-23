@@ -78,6 +78,19 @@ case('bagRows: countdown, expiry and missing player/remaining', function()
     T.eq(1, #rows); T.eq(nil, H.view(rows, clock)[1].remaining)
 end)
 
+case('retarget: ticks refresh direction/distance but never the deadline', function()
+    local rows = H.bagRows({ { id = 'a', x = 0, y = 100, remaining = 60, mine = true } }, clock, { x = 0, y = 0 })
+    T.eq(clock + 60, rows[1].deadline)
+    for t = 1, 5 do
+        H.retarget(rows, { x = 100, y = 100 }) -- 5 s ticks; clock advances but deadline must stay put
+        T.eq(clock + 60, rows[1].deadline)
+        T.eq(60 - t * 5, H.view(rows, clock + t * 5)[1].remaining)
+    end
+    T.eq('W', rows[1].dir); T.eq(100, rows[1].dist)
+    H.retarget(rows, nil)
+    T.eq(nil, rows[1].dir)
+end)
+
 case('compass: 8 directions, same spot', function()
     T.eq('N', H.compass(0, 0, 0, 5)); T.eq('NE', H.compass(0, 0, 5, 5)); T.eq('E', H.compass(0, 0, 5, 0))
     T.eq('SE', H.compass(0, 0, 5, -5)); T.eq('S', H.compass(0, 0, 0, -5)); T.eq('SW', H.compass(0, 0, -5, -5))

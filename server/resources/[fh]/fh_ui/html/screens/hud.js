@@ -3,7 +3,7 @@
 window.FH_HUD = (function () {
   function fmt(sec) {
     if (typeof sec !== 'number' || !isFinite(sec)) return '--';
-    sec = Math.max(0, Math.floor(sec));
+    sec = Math.max(0, Math.ceil(sec));
     const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
     const pad = function (n) { return (n < 10 ? '0' : '') + n; };
     return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : m + ':' + pad(s);

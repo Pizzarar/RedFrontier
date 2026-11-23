@@ -63,6 +63,19 @@ function M.compass(px, py, bx, by)
     return names[math.floor((deg + 22.5) / 45) % 8 + 1]
 end
 
+-- Refresh only direction/distance on stored bag rows from the player position. The deadline is never touched, so
+-- periodic refreshes cannot reset the countdown (it is fixed when the server list arrives).
+function M.retarget(rows, player)
+    for _, r in ipairs(rows or {}) do
+        r.dir, r.dist = nil, nil
+        if type(player) == 'table' and finite(r.x) and finite(r.y) and finite(player.x) and finite(player.y) then
+            r.dir = M.compass(player.x, player.y, r.x, r.y)
+            r.dist = math.floor(math.sqrt((r.x - player.x) ^ 2 + (r.y - player.y) ^ 2) + 0.5)
+        end
+    end
+    return rows
+end
+
 -- Bag list (fh:death:bags) -> own bags only. Ownership is never guessed: only entries the server marked
 -- `mine == true` are shown. TODO(contract): publicList currently has no `mine`/`remaining`; request in README.
 -- player = { x, y } optional, for direction and distance.
@@ -73,13 +86,9 @@ function M.bagRows(list, now, player)
         if type(b) == 'table' and type(b.id) == 'string' and b.mine == true then
             local left = secondsLeft(b)
             if left == nil or left > 0 then
-                local row = { id = b.id, deadline = left and (now + left) or nil }
-                if type(player) == 'table' and finite(b.x) and finite(b.y) then
-                    row.dir = M.compass(player.x, player.y, b.x, b.y)
-                    if finite(player.x) and finite(player.y) then
-                        row.dist = math.floor(math.sqrt((b.x - player.x) ^ 2 + (b.y - player.y) ^ 2) + 0.5)
-                    end
-                end
+                local row = { id = b.id, deadline = left and (now + left) or nil,
+                    x = finite(b.x) and b.x or nil, y = finite(b.y) and b.y or nil }
+                M.retarget({ row }, player)
                 rows[#rows + 1] = row
             end
         end
