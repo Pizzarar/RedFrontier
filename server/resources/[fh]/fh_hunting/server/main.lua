@@ -148,16 +148,22 @@ end)
 
 -- ---------------------------------------------------------------- H3 trapper
 
+local function snapshotOf(ref)
+    local ok, items = pcall(function() return exports.fh_core:snapshot(ref) end)
+    if not ok or type(items) ~= 'table' then return nil end
+    return items
+end
+
 -- Take one pelt out of a world container (saddlebag / wagon) with fh_core:removeItem (B7). That export removes by name,
 -- all-or-nothing, with no slot, so when a container holds several pelts of this name it may take a different slot
 -- than the one the player asked for. To keep the payout honest the adapter snapshots before and after, finds the slot
 -- that actually lost the pelt and hands its info back; shared/sell.lua then prices that pelt, not the requested one.
 local function removeItem(ref, name, amount, slot)
-    local before = exports.fh_core:snapshot(ref)
+    local before = snapshotOf(ref)
     if type(before) ~= 'table' then return false end
     local ok, done = pcall(function() return exports.fh_core:removeItem(ref, name, amount) end)
     if not ok or done ~= true then return false end
-    local after = exports.fh_core:snapshot(ref)
+    local after = snapshotOf(ref) -- pcall'd: a throw here must not strand a removed pelt unpaid
     if type(after) == 'table' then
         for s, it in pairs(before) do
             if type(it) == 'table' and it.name == name then
@@ -169,12 +175,6 @@ local function removeItem(ref, name, amount, slot)
         end
     end
     return true, { slot = slot } -- removed, but could not tell which slot: price the requested one
-end
-
-local function snapshotOf(ref)
-    local ok, items = pcall(function() return exports.fh_core:snapshot(ref) end)
-    if not ok or type(items) ~= 'table' then return nil end
-    return items
 end
 
 local function paySrc(src, amount, reason, region)

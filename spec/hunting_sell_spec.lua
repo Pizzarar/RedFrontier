@@ -169,6 +169,26 @@ describe('hunting sell: ordering, event, no double pay', function()
         eq(false, ok); eq('fh_bad_price', err)
         eq(0, #W.pays); eq(1, #W.adds)
     end)
+    it('a failed refund of an unpriceable different-slot pelt is logged', function()
+        local W = world({ items = { [1] = pelt('pelt_deer', 3), [2] = pelt('pelt_deer', 1) } })
+        local logs = {}
+        W.deps.log = function(m) logs[#logs + 1] = m end
+        W.deps.removeItem = function() return true, { slot = 2, info = { stars = 9 } } end
+        W.deps.addItem = function() return false end
+        W.t = S.new({ cfg = cfg, animals = A, price = P, deps = W.deps })
+        local ok, err = W.sell()
+        eq(false, ok); eq('fh_bad_price', err)
+        eq(1, #logs); assert(logs[1]:find('REFUND FAILED', 1, true))
+        eq(0, #W.pays)
+    end)
+    it('a removal with no slot report (post-remove snapshot failed) still pays the requested pelt', function()
+        local W = world()
+        local real = W.deps.removeItem
+        W.deps.removeItem = function(ref, name, n, slot) real(ref, name, n, slot); return true, { slot = slot } end
+        W.t = S.new({ cfg = cfg, animals = A, price = P, deps = W.deps })
+        eq(true, (W.sell()))
+        eq(1, #W.pays); eq(0, #W.adds)
+    end)
     it('a throwing dep is contained and releases the lock', function()
         local W = world()
         local real = W.deps.snapshot

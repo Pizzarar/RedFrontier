@@ -139,7 +139,10 @@ function M.new(opts)
             stars = starsOf(animal, item)
             amount = stars and price.price(animal.value, stars, animal.legendary == true, cfg)
             if not amount or amount < 1 then
-                deps.addItem(ref, item.name, 1, item.info)
+                local back = deps.addItem(ref, item.name, 1, item.info)
+                if back ~= true and deps.log then
+                    deps.log(('REFUND FAILED: %s lost 1x %s (unpriceable) unpaid, container %s'):format(cid, item.name, req.container))
+                end
                 return false, 'fh_bad_price'
             end
         end
