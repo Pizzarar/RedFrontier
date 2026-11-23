@@ -140,8 +140,12 @@ case('publicBags: per-receiver mine, remaining >= 0, no owner id', function()
     for _, e in ipairs(l1) do assert(e.owner == nil and e.citizenid == nil and e.cid == nil) end
     for _, e in ipairs(R.publicBags(bags, 1000, 'C1')) do assert(e.remaining >= 0) end
     assert(#R.publicBags(bags, 1000, 'C1') == 0) -- expired bags are not listed
-    bags.b1.expiresAt = 100
-    assert(#R.publicBags(bags, 100, 'C1') == #l1 - 1 or find(R.publicBags(bags, 100, 'C1'), 'b1') == nil or find(R.publicBags(bags, 100, 'C1'), 'b1').remaining == 0)
+    bags.b1.expiresAt = 100 -- expiresAt == now: expired, excluded
+    local l3 = R.publicBags(bags, 100, 'C1')
+    assert(#l3 == 1 and l3[1].id == 'b2')
+    -- guards nil == nil: an ownerless bag is never "mine" for a receiver without a character
+    bags.b3 = { id = 'b3', owner = nil, coords = { x = 7, y = 8, z = 9 }, expiresAt = 200 }
+    assert(find(R.publicBags(bags, 100, nil), 'b3').mine == false)
 end)
 
 T.finish()
