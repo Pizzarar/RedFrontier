@@ -6,6 +6,11 @@ local R = dofile(here .. '../server/resources/[fh]/fh_core/shared/saddlebag_rule
 local S = dofile(here .. '../server/resources/[fh]/fh_core/shared/spawn_rules.lua')
 local cfg = dofile(here .. '../server/resources/[fh]/fh_core/config.lua')
 local A = dofile(here .. '../server/resources/[fh]/fh_core/shared/admin_args.lua')
+-- What fh_core/server/inventory.lua wires at runtime: base RSG items (bread, ...) resolve through
+-- RSGCore.Shared.Items, which is where their `unique` (stackable) flag comes from. Without a definition an item
+-- cannot resolve as stackable, so rules.canStack would refuse every merge.
+local Items = require('items')
+Items.sharedLookup = function(name) return name == 'bread' and { label = 'Bread', weight = 100 } or nil end
 
 local horses = R.horseSet(cfg.Saddlebag.HorseModels, S.modelHash)
 local me = { x = 0, y = 0, z = 0 }
@@ -104,6 +109,31 @@ case('planTransfer: bad direction, slot, amount, empty source slot', function()
     assert(why(plan({ amount = 0 })) == 'fh_bad_amount')
     assert(why(plan({ amount = -3 })) == 'fh_bad_amount')
     assert(why(plan({ slot = 40 })) == 'fh_no_item')
+end)
+case('pickSlot: same name but different info is not a merge target (first free slot instead)', function()
+    local bag = { slots = 4, items = {
+        [1] = { name = 'bread', amount = 2, info = { condition = 90 } },
+        [2] = { name = 'bread', amount = 2, info = { condition = 50 } } } }
+    assert(R.pickSlot(bag, { name = 'bread', amount = 1, info = { condition = 10 } }) == 3)
+end)
+case('pickSlot: same name and equal info, stackable -> that stack', function()
+    local bag = { slots = 3, items = {
+        [1] = { name = 'bread', amount = 2 },
+        [2] = { name = 'bread', amount = 2, info = { condition = 50 } } } }
+    assert(R.pickSlot(bag, { name = 'bread', amount = 1 }) == 1)
+    assert(R.pickSlot(bag, { name = 'bread', amount = 1, info = { condition = 50 } }) == 2)
+end)
+case('pickSlot: non-stackable item never merges', function()
+    Items.define('fh_spec_unique', { label = 'Spec Unique', weight = 100, size_class = 'pocket', stackable = false })
+    local bag = { slots = 3, items = { [1] = { name = 'fh_spec_unique', amount = 1 } } }
+    assert(R.pickSlot(bag, { name = 'fh_spec_unique', amount = 1 }) == 2)
+end)
+case('planTransfer: a same-name stack with different info does not absorb the transfer', function()
+    local o = { type = 'chest', id = 'x', coords = me, slots = 5, reach = 3.5,
+        items = { [1] = { name = 'bread', amount = 4, info = { condition = 90 } } } }
+    local p = plan({ open = o, slot = 1, bag = { slots = 4,
+        items = { [1] = { name = 'bread', amount = 2, info = { condition = 10 } } } } })
+    assert(p.toSlot == 2, 'first free bag slot, not the occupied cond-10 stack at 1')
 end)
 
 T.finish()
