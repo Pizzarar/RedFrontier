@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor2
-- Workers: 0
+- Workers: 1
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -24,8 +24,9 @@
 - No GitHub push without owner OK (Pizzarar/RedFrontier not pre-approved).
 - 2026-11-23 idea-616(2) closed: covered by @roads fh_cargo nearestWagon+getWagon (roads-r1 32817e7); roads briefed hunting.
 - 2026-11-23 core-03 carried-inventory API (docs/brainstorm/plans/core-03-carried-api.md): extend addItem/removeItem to carried refs {backpack|equipped,id=src}, new setItemInfo(ref,slot,info,expectName?), requestOfNetId(netId) for existing despawn. Checked fh_core exports + fh_inventory fh_api.lua first. Covers roads gap, idea-615/643/687/689/616(1); 600/692 covered by B7.
+- 2026-11-23 core-04 inbox sweep (docs/brainstorm/plans/core-04-inbox-sweep.md): 612/613 caps, 610 buffs remaining, 609 death bags mine/remaining, 611/699 run-specs, 700 offline credit = pending-credit queue claimed on load (raw money UPDATE races rsg save), B7-nit.
+
 ## Open
-- B7-nit: fh_economy README Tests list (lead queue).
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
 - Aub: Cfx key + first join (OWNER-STEPS.md), then run OWNER-TESTS.md; flip fh_spike_gated after S1/S2.
 - RSG + fh_inventory (fork, unwrapped) client errors still need Aub to send CitizenFX log from Main.
@@ -47,3 +48,5 @@
 - 11-23 merged to local main (unpushed): B-access 495621d, B7 334642c, idea-614 b63a340; 23 spec files / 431 green. Siblings notified.
 - core-03 handed to lead rn-f602a24ed9c2 (C3a+b one worker, C3c parallel).
 - 11-23 core-03 COMPLETE: C3c 07449f7 + C3a 2b7587d / C3b 1baff20 merged main (Gemini tierA PASS 0/0/0 57161cd, range-diff '='; venv 51/1057/0). Siblings to swap adapters for fh_core addItem/removeItem carried refs + setItemInfo.
+- core-03 COMPLETE main 9beb4c0 (614/615/616/643/687/689 archived). core-04 handed to Cor2 rn-d9e827279687.
+- 11-23 core-04: B1+U2 (fh_buffs caps + remaining) and T1 (run-specs load errors, venv re-exec) merged main e991426 stack (Gemini PASS; venv 65/1292/0). U1 low fix + E2 FAIL fix (float compare) in flight.

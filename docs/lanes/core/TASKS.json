@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T22:09:47.851Z",
+  "updatedAt": "2026-11-23T22:42:57.670Z",
   "units": [
     {
       "id": "B5",
@@ -138,7 +138,9 @@
       "goal": "fh_economy README ## Tests: list spec/fh_economy_server_spec.lua (B7 re-review low; fold into next fh_economy unit)",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running",
+      "branch": "core-e2",
+      "commit": "527e854"
     },
     {
       "id": "mig-renumber",
@@ -166,6 +168,40 @@
       "status": "done",
       "branch": "core-c3ab",
       "commit": "1baff20"
+    },
+    {
+      "id": "B1U2",
+      "goal": "core-04 fh_buffs caps (612/613) + remaining (610)",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-t1",
+      "commit": "47e78ba"
+    },
+    {
+      "id": "T1",
+      "goal": "core-04 run-specs load errors in TOTAL (611) + venv re-exec (699)",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-t1",
+      "commit": "e991426"
+    },
+    {
+      "id": "U1",
+      "goal": "core-04 fh_death bags mine/remaining per player (609)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-u1"
+    },
+    {
+      "id": "E2",
+      "goal": "core-04 fh_economy credit via fh_pending_credit queue (700), tierA",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-e2"
     }
   ]
 }
