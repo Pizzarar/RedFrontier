@@ -39,22 +39,25 @@ end
 
 -- Sources. Trade `supplies`: scan defensively (item->price map, or list of { item = .. } / { name = .. } / strings).
 local sources = {}
-local function addSupplies(s, depth)
+-- A string key that is a known input is an item whatever its value (item -> price | item -> { price = .. });
+-- other string keys with table values are region/post nesting and are recursed into.
+local function addSupplies(s, known, out, depth)
     depth = depth or 0
     if type(s) ~= 'table' or depth > 4 then return end
     for k, v in pairs(s) do
-        if type(k) == 'string' and type(v) == 'table' then addSupplies(v, depth + 1) -- region/post-nested supplies
-        elseif type(k) == 'string' then sources[k] = 'trade supplies'
-        elseif type(v) == 'string' then sources[v] = 'trade supplies'
-        elseif type(v) == 'table' and (v.item or v.name) then sources[v.item or v.name] = 'trade supplies'
-        elseif type(v) == 'table' then addSupplies(v, depth + 1) end
+        if type(k) == 'string' and known[k] then out[k] = 'trade supplies'
+        elseif type(k) == 'string' and type(v) == 'table' then addSupplies(v, known, out, depth + 1)
+        elseif type(k) == 'string' then out[k] = 'trade supplies'
+        elseif type(v) == 'string' then out[v] = 'trade supplies'
+        elseif type(v) == 'table' and (v.item or v.name) then out[v.item or v.name] = 'trade supplies'
+        elseif type(v) == 'table' then addSupplies(v, known, out, depth + 1) end
     end
 end
 local function scan(t, depth, seen)
     if type(t) ~= 'table' or depth > 5 or seen[t] then return end
     seen[t] = true
     for k, v in pairs(t) do
-        if k == 'supplies' then addSupplies(v) else scan(v, depth + 1, seen) end
+        if k == 'supplies' then addSupplies(v, inputs, sources) else scan(v, depth + 1, seen) end
     end
 end
 scan(FhTradeConfig, 0, {})
@@ -62,6 +65,18 @@ for _, camp in pairs(FhZonesConfig.camps or {}) do
     for _, e in ipairs(((camp.loot or {}).table) or {}) do sources[e.name or e.item] = 'zone loot' end
 end
 for item in pairs(EXTERNAL) do sources[item] = sources[item] or 'external' end
+
+it('addSupplies handles item->{price=} and region->{item=price} shapes (fake config)', function()
+    local known = { lumber = true, nails = true, lead = true }
+    local o1 = {}
+    addSupplies({ lumber = { price = 5 }, nails = { price = 1 } }, known, o1)
+    assert(o1.lumber and o1.nails, 'item -> { price = } not recorded')
+    assert(not o1.price, 'price field leaked as an item')
+    local o2 = {}
+    addSupplies({ heartlands = { lead = 3, lumber = 4 } }, known, o2)
+    assert(o2.lead and o2.lumber, 'region -> { item = price } not recorded')
+    assert(not o2.heartlands, 'region key recorded as an item')
+end)
 
 it('source configs loaded (so the PENDING checks cannot go silent)', function()
     assert(type(FhTradeConfig) == 'table', 'FhTradeConfig missing: renamed?')
