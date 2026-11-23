@@ -278,7 +278,7 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
 2. Press E at the chest (-296, 790, 118) and put 1 bread in.
    Expected: the plot chest opens and takes it.
    RESULT:
-3. Build. Prepare: `/giveitem <id> lumber 65`, move all 65 lumber into the plot chest, then `/givemoney <id> cash 500`. Note your cash (call it C).
+3. Build. Prepare: `/giveitem <id> lumber 65` (or buy 65 lumber at any trade post, $3 each, then give yourself that money back), move all 65 lumber into the plot chest, then `/givemoney <id> cash 500`. Note your cash (call it C).
    a. `/fh_build`
       Expected: `fh_build: plot heartlands_01: cabin 0/2 next: $150, 20 lumber; chest_2 0/1 next: $40, 8 lumber; chest_3 0/1 next: $60, 10 lumber; fence 0/1 next: $100, 15 lumber; station_1 0/1 next: $60, 10 lumber; station_2 0/1 next: $25, 5 lumber; station_3 0/1 next: $80, 12 lumber; trophy_wall 0/1 next: $120, 10 lumber`
    b. `/fh_build chest_2` (needs the cabin first).

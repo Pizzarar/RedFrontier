@@ -155,7 +155,7 @@ Also in H2:
   The same holds for the extra chests (`fh:chest:<plot>:2` / `:3`): their stashes stay after an unclaim too.
 - Build materials must be in the plot chest: fh_core `removeItem` works on registered world containers only, not on
   the player's own inventory, so `/fh_build` cannot take lumber/nails from the pockets.
-- Nothing in the game hands out `lumber` or `nails` yet; only an admin `/giveitem` does (needs a gathering/vendor lane).
+- `lumber` ($3) and `nails` ($2) are bought at any trade post (fh_trade supplies, idea-716/719); admins can still `/giveitem` them.
 - Plots 2-4 coordinates (`heartlands_02..04`) are placeholders: TODO-verify in game. Slot prop offsets and the `p_chest01x` fallback model are also TODO-verify.
 - `fh_hunting:getTrophyComfort` is guarded (`GetResourceState` plus `pcall`): until Hunting merges, `placeTrophy` returns `fh_hunting_unavailable`.
 - `placeTrophy` needs fh_core `removeItem` (core B7): until it exists it returns `fh_removeitem_unavailable`.
