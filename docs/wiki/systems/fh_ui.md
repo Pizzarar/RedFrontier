@@ -1,13 +1,28 @@
 # UI
 
-fh_ui is the shared screen layer other systems use to show panels. It has no game logic of its own.
+fh_ui is the shared screen layer other systems use to show panels. It has no game logic of its own: it shows what a system sends and passes your clicks back.
 
-## What you see today
-- Only a test panel (`placeholder`) is built.
-- Screens for buffs and heat (HUD, never take your mouse), insurance, contracts, station and fence are reserved names, not built yet.
-- Interactive screens take the mouse. **Esc** closes them and gives control back.
+## Screens you can see
+- **Jobs board** (`/jobs`): the offers on the board, with an Accept button. Accepted offers say "Accepted". See [Quests](quests.md).
+- **Journal** (`/journal`): your quests. Active ones have an Abandon button, and a second click confirms.
+- **Buffs:** a HUD list of your active buffs with their time left. See [Buffs](fh_buffs.md).
+- **Bags:** a HUD list of your own dropped bags, with direction, distance and time left. See [Death](fh_death.md).
+- **Insurance:** a confirm dialog.
+
+Other screens are made but their systems aren't wired in yet (unverified): heat, workbench (station) and fence.
+
+## Mouse and keys
+- HUD widgets (buffs, heat, bags) never take your mouse.
+- Every other screen takes the mouse. **Esc** closes it and gives control back.
+- On the jobs board and journal, Enter does nothing, so you can't accept something by accident.
+- Clicking too fast gets ignored (5 actions a second).
+
+## Test panel
+A `placeholder` panel exists for testing, and admins have `/fh_ui_demo`.
 
 See also: [Wiki index](../README.md)
 
 Sources:
 - `server/resources/[fh]/fh_ui/README.md`
+- `server/resources/[fh]/fh_ui/shared/relay.lua`
+- `server/resources/[fh]/fh_quests/README.md`
