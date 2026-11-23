@@ -1,6 +1,6 @@
 # Public events (developer reference)
 
-`fh:*` events that exist in code on main today. Convention: one table argument, server events carry `src` first, client-to-server events are requests the server revalidates (`server/resources/[fh]/fh_core/docs/events.md`). Payloads below are read from the emitting code. Planned events (for example `fh:hunting:*`) are not listed: fh_hunting emits none yet.
+`fh:*` events that exist in code on main today. Convention: one table argument, server events carry `src` first, client-to-server events are requests the server revalidates (`server/resources/[fh]/fh_core/docs/events.md`). Payloads below are read from the emitting code. Lane events from the other playtest-ready lanes are in the last section, read from each lane's README (not re-checked line by line).
 
 ## Server-local notifications (`TriggerEvent`)
 
@@ -59,6 +59,42 @@ The client listens to `fh:ui:open`, `fh:ui:update` and `fh:ui:close` (`server/re
 |---|---|---|
 | `fh:spawn:adopted` | `server/resources/[fh]/fh_core/client/spawn.lua:101` | `{ requestId, tag, owner, kind, netId, entity }` |
 
+## Lane events from READMEs (server, `TriggerEvent`)
+
+Payloads are as each README states them. One table unless noted "positional".
+
+| Lane | Event | Payload | Source |
+|---|---|---|---|
+| hunting | `fh:hunting:pelt_skinned` | `{ src, citizenid, item_id, animal, quality, size_class }` | `server/resources/[fh]/fh_hunting/README.md` |
+| hunting | `fh:hunting:pelt_sold` | `{ citizenid, item_id, animal, size_class, quality, price, region_id }` | same |
+| hunting | `fh:hunting:clue_found` | `{ citizenid, chain_id, step }` (step 1-3) | same |
+| hunting | `fh:hunting:legendary_spawned` | `{ citizenid, chain_id }` | same |
+| hunting | `fh:hunting:chain_complete` | `{ citizenid, chain_id }` | same |
+| quests | `fh:quests:started`, `step`, `completed`, `failed`, `abandoned` | `{ citizenid, quest_id, kind, step }` | `server/resources/[fh]/fh_quests/README.md` |
+| quests | `fh:quests:board_changed` | `{ region_id }` | same |
+| quests | `fh:quests:talked` | `{ src, citizenid, npc_id }` (emit only, never advances a quest) | same |
+| economy | `fh:economy:charged` | see `fh_core/docs/events.md` | `server/resources/[fh]/fh_economy/README.md` |
+| progression | `fh:progression:tier_changed` | `{ src, citizenid, region_id, old, new }` | `server/resources/[fh]/fh_progression/README.md` |
+| homestead | `fh:homestead:slot_changed` | positional: `plot_id, slot_id, tier` | `server/resources/[fh]/fh_homestead/README.md` |
+| homestead | `fh:homestead:station_built` | positional: `citizenid, plot_id, slot_id, station_type` | same |
+| homestead | `fh:homestead:comfort_changed` | positional: `citizenid, newComfort, oldComfort` | same |
+| homestead | `fh:homestead:trophy_placed` / `trophy_removed` | `{ citizenid, trophy_id, comfort }` | same |
+| cargo | `fh:cargo:loaded` / `unloaded` | `{ src, citizenid, wagon, item, count, container }` | `server/resources/[fh]/fh_cargo/README.md` |
+| cargo | `fh:cargo:wagon_spawned` | `{ src, citizenid, wagon, tier, netId }` | same |
+| cargo | `fh:cargo:fasttravel_blocked` | `{ src, citizenid, reason, wagon }` | same |
+| cargo | `fh:cargo:wheel_broken` | `{ src, citizenid, wagon, tier, native }` | same |
+| cargo | `fh:cargo:wheel_repaired` | `{ src, citizenid, wagon, tier }` | same |
+| trade | `fh:trade:sold` | `{ src, region, post, item, amount, total }` | `server/resources/[fh]/fh_trade/README.md` |
+| trade | `fh:trade:contract_delivered` / `contract_failed` | `{ src?, citizenid, key, quest_id, from_region, to_region, item, qty, reward, reason? }` | same |
+| heat | `fh:heat:changed` | `{ src, citizenid, faction, old, value, delta, level, reason }` | `server/resources/[fh]/fh_heat/README.md` |
+| heat | `fh:heat:threshold` | `{ src, citizenid, faction, old_level, level, value }` | same |
+| heat | `fh:heat:roadblock_spawned` / `roadblock_cleared`, `ambush_spawned`, `ambush_cleared`, `chase_started`, `chase_cleared` | see the README | same |
+| survival | `fh:survival:state` (to client) | `{ level = 0..3, missing = { ... } }` | `server/resources/[fh]/fh_survival/README.md` |
+
+Client to server: `fh:survival:refill`, `fh:survival:wash` (one boolean), `fh:survival:restBed` (no payload), `fh:hunting:skin`, `fh:hunting:sell_open`, `fh:hunting:sell`, `fh:hunting:chain_status`, `fh:hunting:chain_rumour`, `fh:hunting:chain_inspect`, `fh:trade:menu`, `fh:trade:sell`, `fh:homestead:open_chest` (now also `chest`). The server revalidates every one of them.
+
+Quest step intake (what a quest step can listen to): `fh:zones:camp_cleared` (with `participants`), `fh:hunting:pelt_skinned`, `fh:hunting:pelt_sold`, `fh:hunting:chain_complete`, `fh:homestead:claimed`, `fh:economy:paid`, `fh:economy:rep_changed`, `fh:death:dropped`, `fh:death:recovered`, `fh:death:expired`. Events with a client source are dropped. See `server/resources/[fh]/fh_quests/README.md`.
+
 See also: [Wiki index](../README.md)
 
 Sources:
@@ -76,3 +112,12 @@ Sources:
 - `server/resources/[fh]/fh_ui/server/main.lua`
 - `server/resources/[fh]/fh_ui/client/main.lua`
 - `server/resources/[fh]/fh_ui/shared/relay.lua`
+- `server/resources/[fh]/fh_hunting/README.md`
+- `server/resources/[fh]/fh_quests/README.md`
+- `server/resources/[fh]/fh_progression/README.md`
+- `server/resources/[fh]/fh_economy/README.md`
+- `server/resources/[fh]/fh_homestead/README.md`
+- `server/resources/[fh]/fh_cargo/README.md`
+- `server/resources/[fh]/fh_trade/README.md`
+- `server/resources/[fh]/fh_heat/README.md`
+- `server/resources/[fh]/fh_survival/README.md`
