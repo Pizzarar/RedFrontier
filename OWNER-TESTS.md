@@ -179,3 +179,63 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 7. Transfer path: open the plot chest (E) with bread inside, stand with your horse within 3.5 m of you and the chest, run `/saddlebag in <slot>` for the bread, then `/saddlebag out <slot>` for it again. Try `/saddlebag in <slot>` with no container open, and with the horse 6+ m away.
    Expected: moved both ways with no duplicate or lost bread (count it before/after; if the open pane looks stale, reopen the chest with E and note it); with nothing open `saddlebag: fh_nothing_open`; far horse `saddlebag: fh_out_of_reach`. Spamming the command faster than twice a second is silently ignored.
    RESULT:
+
+## UI (fh_ui shell, buff/bag HUD, screens)
+
+Covers U1 shell, U2 passive HUD, U3 screens. Setup: `server.cfg` already has `ensure fh_ui`, `add_ace group.admin command allow`
+(covers `command.fh_ui_demo`) and `set fh_spike_gated true` (leave it true). Also ensure `fh_buffs`, `fh_death` and `fh_heat`
+if they exist in your cfg; screens whose lane is absent simply stay empty. Join as a `group.admin` account. Open the F8
+console and keep it visible for steps that say "check F8". Server console lines start with `[fh_ui]`. Fixture button
+actions relay to lanes that may not exist yet; "unhandled" is expected.
+
+1. Start the server and join. Run `/fh_ui_demo insurance`.
+   Expected: the Tracker Insurance dialog appears, the mouse cursor works, no `[fh_ui]` errors in the server console.
+   RESULT:
+2. Press Esc.
+   Expected: the dialog closes, the cursor goes away and you can walk and move the camera again (NUI focus released).
+   RESULT:
+3. Run `/fh_ui_demo insurance`, then `/fh_ui_demo close`. Then open it again and click the dialog's Cancel button.
+   Expected: both ways close it and release the mouse; movement works after each.
+   RESULT:
+4. Run `/fh_ui_demo bogus` and, if you can, as a non-admin account `/fh_ui_demo heat`.
+   Expected: a chat line `fh_ui_demo: ...` (usage or `not allowed`); nothing opens, no focus taken.
+   RESULT:
+5. Buff HUD: get a buff (consume a buff item, or whatever fh_buffs gives you). Watch the widget for ~15 s.
+   Expected: it lists the active buff with its remaining time counting down. Until fh_buffs sends `remaining` on
+   `fh:buffs:sync` (core ideas 609/610 pending), the row shows `--` instead of a time: that is the expected degradation,
+   note which you saw. With no buffs the widget is hidden.
+   RESULT:
+6. Drop-bag countdown: die and respawn (see B6c), then watch the bag widget for 20 s.
+   Expected: your own bag shows a time that counts DOWN every second and does NOT jump back up every 5 s. Until
+   fh_death sends `mine`/`remaining` per owner (core ideas 609/610), the widget shows nothing: expected degradation, note it.
+   RESULT:
+7. Walk and drive/ride around while the bag widget is up (if it showed in step 6).
+   Expected: direction (N..NW, `here` when on it) and distance in metres update as you move.
+   RESULT:
+8. Run `/fh_ui_demo heat`.
+   Expected: a heat indicator with factions, levels, tiers and a lay-low note appears; the mouse is NOT captured and you
+   can keep moving. Run `/fh_ui_demo close heat` to remove it.
+   KNOWN GAP (idea-648): the heat indicator and buff panel may overlap top-right. Note it under RESULT; do not FAIL for it.
+   RESULT:
+9. Run `/fh_ui_demo insurance`. Press Enter.
+   Expected: Enter confirms (server console shows a relayed/unhandled `confirm`, no crash). After closing the dialog,
+   press Enter again: nothing happens (Enter only works while the dialog is open).
+   RESULT:
+10. Run `/fh_ui_demo jobs`.
+    Expected: Jobs Board lists three rows: one contract, one bounty, one hunt, each with region, payout and risk. No
+    button is auto-focused and pressing Enter does nothing. Click Accept on a row: unhandled relay, no error. Esc closes.
+    RESULT:
+11. Run `/fh_ui_demo station`, then Esc; then `/fh_ui_demo fence`, then Esc.
+    Expected: station shows craft options (Craft disabled where `can_craft` is false); fence shows buy and sell lists
+    with qty controls (clamped to 1..listed qty). No autofocus, Enter does nothing, Esc closes and releases focus each time.
+    RESULT:
+12. Long and empty lists (only if you can push custom data, e.g. a test client script sending `fh:ui:open`; otherwise SKIP).
+    Open `jobs` or `fence` with 30+ rows: the list scrolls inside the panel and the panel stays on screen. Open it with an
+    empty list: panel shows an empty state, and F8 shows no JS or Lua error.
+    RESULT:
+13. Check F8 after steps 1-11.
+    Expected: no red errors from fh_ui.
+    RESULT:
+14. `restart fh_ui` while a screen is open.
+    Expected: the screen disappears, the mouse is released, movement works.
+    RESULT:
