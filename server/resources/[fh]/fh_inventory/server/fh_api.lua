@@ -221,5 +221,71 @@ function Fh.TransferAll(fromRef, toRef)
     return true, moved, leftovers
 end
 
+-- carried ref -> player container, src, view | nil, reason. World refs are refused: they go through AddItem /
+-- RemoveItem on the stash id (fh_core checks they are registered).
+local function Carried(ref)
+    if type(ref) ~= 'table' or not FhContainers.CARRIED[ref.type] then return nil, 'fh_unknown_container' end
+    return Resolve(ref)
+end
+
+--- FhAddItem(ref, name, amount, info?, reason?) -> true | false, reason   (carried refs only)
+--- Adds into that one section of the player inventory (equipped = hotbar, backpack = the rest), never the other:
+--- the FhRules veto runs against that section only (bulky never enters the backpack). Nothing is added on refusal.
+function Fh.AddItem(ref, name, amount, info, reason)
+    if not FromCore() then return false, 'not_fh_core' end
+    local c, src = Carried(ref)
+    if not c then return false, src end
+    amount = type(amount) == 'number' and math.tointeger(amount) or nil
+    if not amount or amount < 1 then return false, 'fh_bad_amount' end
+    if not InvCore.SharedItem(name) then return false, 'fh_unknown_item' end
+    local ok, why = InvCore.AddTo(c, name, amount, info, nil, ref.type)
+    if not ok then return false, why end
+    InvCore.Commit(c)
+    InvCore.Refresh(src)
+    TriggerClientEvent('rsg-inventory:client:ItemBox', src, InvCore.SharedItem(name), 'add', amount)
+    InvCore.Log('AddItem', ('%s received %sx %s in %s (%s) [fh_core]'):format(GetPlayerName(src), amount, name,
+        ref.type, tostring(reason or 'unknown')))
+    return true
+end
+
+--- FhRemoveItem(ref, name, amount, reason?) -> true | false, reason   (carried refs only)
+--- Takes exactly `amount` of `name` from that one section, lowest slot first, all-or-nothing: the section is counted
+--- and emptied with no yield in between, so a short section is never partly emptied (fh_not_enough).
+function Fh.RemoveItem(ref, name, amount, reason)
+    if not FromCore() then return false, 'not_fh_core' end
+    local c, src, view = Carried(ref)
+    if not c then return false, src end
+    amount = type(amount) == 'number' and math.tointeger(amount) or nil
+    if not amount or amount < 1 then return false, 'fh_bad_amount' end
+    if type(name) ~= 'string' or name == '' then return false, 'fh_bad_item_name' end
+    name = name:lower()
+    local first, last = view.slotRange[1], view.slotRange[2]
+    local have = 0
+    for slot = first, last do
+        local it = c.items[slot]
+        if it and it.name == name then have = have + it.amount end
+    end
+    if have < amount then return false, 'fh_not_enough' end
+    local left, taken = amount, nil
+    for slot = first, last do
+        local it = c.items[slot]
+        if left <= 0 then break end
+        if it and it.name == name then
+            local take = math.min(it.amount, left)
+            it.amount = it.amount - take
+            if it.amount <= 0 then c.items[slot] = nil end
+            left = left - take
+            taken = taken or it
+        end
+    end
+    InvCore.Commit(c)
+    InvCore.Refresh(src)
+    if InvCore.CountIn(c, name) == 0 then InvCore.CheckWeapon(src, taken) end
+    TriggerClientEvent('rsg-inventory:client:ItemBox', src, InvCore.SharedItem(name), 'remove', amount)
+    InvCore.Log('RemoveItem', ('%s lost %sx %s from %s (%s) [fh_core]'):format(GetPlayerName(src), amount, name,
+        ref.type, tostring(reason or 'unknown')))
+    return true
+end
+
 for name, fn in pairs(Fh) do exports('Fh' .. name, fn) end
 InvCore.Fh = Fh

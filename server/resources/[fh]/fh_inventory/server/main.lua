@@ -378,9 +378,17 @@ end
 
 -- Which section of c may take `amount` of probe? -> first, last | nil, reason.
 -- Order: the section holding `slot`, then a section with a stack to merge into, then the others in slot order.
-local function FhPickRange(c, probe, amount, slot)
+-- onlyType (fh_core carried refs): only the section of that fh type is tried; no other section is a fallback.
+local function FhPickRange(c, probe, amount, slot, onlyType)
     local views = FhViews(c)
     if not views then return 1, c.slots end
+    if onlyType ~= nil then
+        local only
+        for _, v in ipairs(views) do if v.type == onlyType then only = v end end
+        if not only then return nil, 'fh_unknown_container' end
+        views = { only }
+        if slot and not FhViewOfSlot(views, slot) then slot = nil end
+    end
     local tries = {}
     local home = slot and FhViewOfSlot(views, slot)
     if home then
@@ -407,7 +415,8 @@ local function FhPickRange(c, probe, amount, slot)
 end
 
 -- Every add into a container goes through here: the fh_core veto picks the section, AddToRaw fills it.
-local function AddTo(c, name, amount, info, slot)
+-- onlyType: see FhPickRange (the add must land in that one section).
+local function AddTo(c, name, amount, info, slot, onlyType)
     local s = SharedItem(name)
     amount = math.tointeger(tonumber(amount)) or 1
     if not s or amount < 1 then return false, 'invalid_item' end
@@ -417,7 +426,7 @@ local function AddTo(c, name, amount, info, slot)
         info.quality = 100 -- same as AddToRaw, so the veto sees the stack the item will join
     end
     slot = math.tointeger(tonumber(slot))
-    local first, last = FhPickRange(c, FhProbe(s, amount, info), amount, slot)
+    local first, last = FhPickRange(c, FhProbe(s, amount, info), amount, slot, onlyType)
     if not first then return false, last end
     return AddToRaw(c, name, amount, info, slot, first, last)
 end

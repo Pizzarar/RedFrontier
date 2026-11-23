@@ -1,7 +1,8 @@
 -- fh_core server container API (spec §4.2). The one inventory API other lanes use:
 --   exports.fh_core:move / canFit / getWeight / snapshot / transferAll
 --   exports.fh_core:registerContainer / setContainerCoords / open / createDropBag / deleteContainer / registerItems
---   exports.fh_core:addItem / removeItem / clearContainer (registered world containers only)
+--   exports.fh_core:addItem / removeItem (registered world containers and carried refs of an online player)
+--   exports.fh_core:clearContainer (registered world containers only)
 -- fh_core never reads or writes inventory tables. Everything goes through fh_inventory's Fh* exports, which re-check
 -- with FhRules under their own state before mutating anything.
 --
@@ -60,6 +61,24 @@ local function citizenidOf(src)
     local c = type(src) == 'number' and core()
     local p = c and c.Functions.GetPlayer(src)
     return p and p.PlayerData.citizenid or nil
+end
+
+-- An online player with a loaded character (rsg-core only has a Player once a character is selected).
+local function onlinePlayer(src)
+    return type(src) == 'number' and GetPlayerPed(src) ~= 0 and citizenidOf(src) ~= nil
+end
+
+-- amount argument -> integer >= 1 | nil. nil means 1; 2.0 is fine; 2.5, NaN, inf, '2', 0, -1 are refused.
+local function countOf(amount)
+    if amount == nil then return 1 end
+    amount = type(amount) == 'number' and math.tointeger(amount) or nil
+    if not amount or amount < 1 then return nil end
+    return amount
+end
+
+-- fh_inventory's log line for an add/remove: which resource asked, through which export
+local function callerTag(fn)
+    return ('%s via fh_core.%s'):format(GetInvokingResource() or GetCurrentResourceName(), fn)
 end
 
 local function actorOf(fromRef, toRef, src)
@@ -225,35 +244,61 @@ local function open(src, ref)
     return inv('FhOpen', src, ref)
 end
 
----Put `amount` of an item (with optional info) into a registered world container, through fh_inventory's AddItem
----(the container rules veto still applies). For server-side loot (camps). @return boolean ok, string|nil reason
+---Put `amount` (default 1) of an item (with optional info) into a registered world container, or into one section
+---of an online player's inventory (carried ref { type = 'equipped'|'backpack', id = src }). All or nothing: the
+---container rules veto runs first and nothing is added on a refusal. A carried add lands in that section only
+---(bulky never enters the backpack). For server-side loot (camps), rewards, crafting output.
+---@return boolean ok, string|nil reason  fh_player_offline: carried ref whose src has no loaded character
 local function addItem(ref, name, amount, info)
     local ok, reason = validRef(ref)
     if not ok then return false, reason end
-    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
-    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
-    local done, err = inv('AddItem', ref.id, name, amount or 1, info)
+    local carried = FhContainers.CARRIED[ref.type]
+    if carried then
+        if not onlinePlayer(ref.id) then return false, 'fh_player_offline' end
+    elseif not registered[refKey(ref)] then
+        return false, 'fh_unknown_container'
+    end
+    if type(name) ~= 'string' or name == '' then return false, 'fh_bad_item_name' end
+    amount = countOf(amount)
+    if not amount then return false, 'fh_bad_amount' end
+    if info ~= nil and type(info) ~= 'table' then return false, 'fh_bad_info' end
+    local done, err
+    if carried then
+        done, err = inv('FhAddItem', ref, name, amount, info, callerTag('addItem'))
+    else
+        done, err = inv('AddItem', ref.id, name, amount, info, nil, callerTag('addItem'))
+    end
     if done == true then return true end
     return false, type(err) == 'string' and err or 'fh_refused'
 end
 
----Take exactly `amount` (default 1) of item `name` out of a registered world container, all-or-nothing (B7).
----fh_inventory's RemoveItem without a slot counts the whole container first and removes only when it covers
+---Take exactly `amount` (default 1) of item `name` out of a registered world container (B7) or out of one section
+---of an online player's inventory (carried ref, C3a), all-or-nothing. fh_inventory's RemoveItem without a slot
+---(world) and FhRemoveItem (carried: that section only) count first and remove only when the count covers
 ---`amount`, with no yield in between, so a short container is never partly emptied.
----@return boolean ok, string|nil reason  fh_not_enough when the container holds fewer (nothing removed)
+---@return boolean ok, string|nil reason  fh_not_enough when the container holds fewer (nothing removed);
+---  fh_player_offline: carried ref whose src has no loaded character
 local function removeItem(ref, name, amount)
     local ok, reason = validRef(ref)
     if not ok then return false, reason end
-    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
-    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
+    local carried = FhContainers.CARRIED[ref.type]
+    if carried then
+        if not onlinePlayer(ref.id) then return false, 'fh_player_offline' end
+    elseif not registered[refKey(ref)] then
+        return false, 'fh_unknown_container'
+    end
     if type(name) ~= 'string' or name == '' then return false, 'fh_bad_item_name' end
-    if amount == nil then amount = 1 end
-    amount = type(amount) == 'number' and math.tointeger(amount) or nil -- 2.0 ok; 2.5, NaN, inf, '2' refused
-    if not amount or amount < 1 then return false, 'fh_bad_amount' end
+    amount = countOf(amount)
+    if not amount then return false, 'fh_bad_amount' end
+    if carried then
+        local done, err = inv('FhRemoveItem', ref, name, amount, callerTag('removeItem'))
+        if done == true then return true end
+        return false, type(err) == 'string' and err or 'fh_refused'
+    end
     local have, why = inv('GetItemCount', ref.id, name)
     if type(have) ~= 'number' then return false, type(why) == 'string' and why or 'fh_inventory_error' end
     if have < amount then return false, 'fh_not_enough' end
-    local done, err = inv('RemoveItem', ref.id, name, amount, nil, 'fh_core:removeItem')
+    local done, err = inv('RemoveItem', ref.id, name, amount, nil, callerTag('removeItem'))
     if done == true then return true end
     if err == 'fh_inventory_down' or err == 'fh_inventory_error' then return false, err end
     have = inv('GetItemCount', ref.id, name)

@@ -12,6 +12,7 @@ local shared = {
   bread = { name = 'bread', label = 'Bread', weight = 100, unique = false, type = 'item' },
   crate = { name = 'crate', label = 'Crate', weight = 9000, unique = true, type = 'item', size_class = 'cargo' },
   saddle = { name = 'saddle', label = 'Saddle', weight = 5000, unique = true, type = 'item', size_class = 'bulky' },
+  knife = { name = 'knife', label = 'Knife', weight = 500, unique = true, type = 'item' },
 }
 local Core = { Shared = { Items = shared }, Functions = stub(), Commands = stub() }
 Core.Functions.GetPlayer = function(src) return players[src] end
@@ -297,12 +298,147 @@ T.describe('fh_core.removeItem all-or-nothing (B7)', function()
   case('bad item name refused', function() return select(2, CORE.removeItem(ref, '', 1)) == 'fh_bad_item_name' end)
   case('unregistered world container refused', function()
     return select(2, CORE.removeItem({ type = 'chest', id = 'fh:chest:b7:nope' }, 'bread', 1)) == 'fh_unknown_container' end)
-  case('carried refs refused (players use rsg RemoveItem)', function()
-    mkPlayer(8, { [1] = it('bread', 5, 1) })
+  case('carried ref of an offline src refused (C3a: carried refs are served, see below)', function()
     local ok, why = CORE.removeItem({ type = 'backpack', id = 8 }, 'bread', 1)
-    return ok == false and why == 'fh_not_registrable' and players[8].PlayerData.items[1].amount == 5, why end)
+    return ok == false and why == 'fh_player_offline', why end)
   case('unknown container type refused', function()
     return select(2, CORE.removeItem({ type = 'nope', id = id }, 'bread', 1)) == 'fh_unknown_container' end)
+end)
+
+T.describe('fh_core addItem/removeItem on carried refs (C3a)', function()
+  -- slots 1-5 = equipped (8 kg own cap), 6-25 = backpack. Section counts are what the ref sees.
+  local function sec(src, name, first, last) local n = 0
+    for s, x in pairs(players[src] and players[src].PlayerData.items or {}) do
+      if x.name == name and s >= first and s <= last then n = n + x.amount end end return n end
+  local function eqN(src, name) return sec(src, name, 1, 5) end
+  local function bpN(src, name) return sec(src, name, 6, 25) end
+  local function slotsOf(src, name) local out = {}
+    for s, x in pairs(players[src].PlayerData.items) do if x.name == name then out[#out + 1] = s end end
+    table.sort(out) return table.concat(out, ',') end
+  local function snap(src) local out = {}
+    for s, x in pairs(players[src].PlayerData.items) do out[#out + 1] = s .. '=' .. x.name .. 'x' .. x.amount end
+    table.sort(out) return table.concat(out, ' ') end
+  local bp, eq = { type = 'backpack', id = 20 }, { type = 'equipped', id = 20 }
+
+  case('offline src: addItem fh_player_offline', function()
+    local ok, why = CORE.addItem({ type = 'backpack', id = 999 }, 'bread', 1)
+    return ok == false and why == 'fh_player_offline' and players[999] == nil, why end)
+  case('offline src: removeItem fh_player_offline', function()
+    local ok, why = CORE.removeItem({ type = 'equipped', id = 999 }, 'bread', 1)
+    return ok == false and why == 'fh_player_offline', why end)
+  case('connected but no character loaded (no citizenid): fh_player_offline, nothing added', function()
+    local P = mkPlayer(21, {}); P.PlayerData.citizenid = nil
+    local ok, why = CORE.addItem({ type = 'backpack', id = 21 }, 'bread', 1)
+    local ok2, why2 = CORE.removeItem({ type = 'backpack', id = 21 }, 'bread', 1)
+    return ok == false and why == 'fh_player_offline' and why2 == 'fh_player_offline' and next(P.PlayerData.items) == nil,
+      tostring(why) .. ' ' .. tostring(why2) end)
+  case('carried ref with a non-number id: fh_bad_ref', function()
+    return select(2, CORE.addItem({ type = 'backpack', id = '20' }, 'bread', 1)) == 'fh_bad_ref'
+      and select(2, CORE.removeItem({ type = 'backpack', id = '20' }, 'bread', 1)) == 'fh_bad_ref' end)
+
+  mkPlayer(20, { [1] = it('bread', 2, 1) })
+  case('add to backpack lands in the backpack, not on the equipped bread stack', function()
+    local ok, why = CORE.addItem(bp, 'bread', 3)
+    return ok == true and eqN(20, 'bread') == 2 and bpN(20, 'bread') == 3, why end)
+  case('add to equipped lands in the equipped section', function()
+    local ok, why = CORE.addItem(eq, 'bread', 4)
+    return ok == true and eqN(20, 'bread') == 6 and bpN(20, 'bread') == 3, why end)
+  case('bulky -> backpack vetoed (fh_size_class), nothing added', function()
+    local before = snap(20)
+    local ok, why = CORE.addItem(bp, 'saddle', 1)
+    return ok == false and why == 'fh_size_class' and snap(20) == before, why end)
+  case('bulky -> equipped vetoed too', function()
+    local before = snap(20)
+    local ok, why = CORE.addItem(eq, 'saddle', 1)
+    return ok == false and why == 'fh_size_class' and snap(20) == before, why end)
+  case('cargo -> backpack vetoed', function()
+    local ok, why = CORE.addItem(bp, 'crate', 1) return ok == false and why == 'fh_size_class', why end)
+  case('add over the equipped 8 kg cap: fh_too_heavy, nothing added (no partial)', function()
+    local before = snap(20)
+    local ok, why = CORE.addItem(eq, 'bread', 75) -- 0.6 kg there + 7.5 kg > 8 kg
+    return ok == false and why == 'fh_too_heavy' and snap(20) == before, why end)
+  case('short add (5 unique into the 4 free equipped slots): fh_no_slot, nothing added', function()
+    local before = snap(20) -- equipped: bread stack in 1, slots 2-5 free
+    local ok, why = CORE.addItem(eq, 'knife', 5)
+    return ok == false and why == 'fh_no_slot' and snap(20) == before, why end)
+  case('3 unique fit; then 2 more into the 1 free slot: fh_no_slot, nothing added', function()
+    local ok, why = CORE.addItem(eq, 'knife', 3)
+    local ok2, why2 = CORE.addItem(eq, 'knife', 2)
+    return ok == true and slotsOf(20, 'knife') == '2,3,4' and ok2 == false and why2 == 'fh_no_slot'
+      and eqN(20, 'knife') == 3, tostring(why) .. ' ' .. tostring(why2) end)
+  case('unique add into the backpack fills backpack slots only', function()
+    local ok, why = CORE.addItem(bp, 'knife', 2)
+    return ok == true and eqN(20, 'knife') == 3 and bpN(20, 'knife') == 2, why end)
+  case('add arguments checked before anything is added', function()
+    local before = snap(20)
+    for _, a in ipairs({ 0, -1, 1.5, 0/0, math.huge, '2' }) do
+      local ok, why = CORE.addItem(bp, 'bread', a)
+      if ok ~= false or why ~= 'fh_bad_amount' then return false, tostring(a) .. ' ' .. tostring(why) end
+    end
+    return select(2, CORE.addItem(bp, '', 1)) == 'fh_bad_item_name'
+      and select(2, CORE.addItem(bp, 'bread', 1, 'x')) == 'fh_bad_info'
+      and select(2, CORE.addItem(bp, 'no_such_item', 1)) == 'fh_unknown_item' and snap(20) == before end)
+
+  mkPlayer(22, { [1] = it('bread', 5, 1), [6] = it('bread', 3, 6), [9] = it('bread', 4, 9) })
+  local bp22, eq22 = { type = 'backpack', id = 22 }, { type = 'equipped', id = 22 }
+  case('remove short in the section: fh_not_enough, NOTHING removed (player total would cover it)', function()
+    local before = snap(22)
+    local ok, why = CORE.removeItem(bp22, 'bread', 8) -- backpack 3+4 = 7, equipped 5: total 12
+    return ok == false and why == 'fh_not_enough' and snap(22) == before, why end)
+  case('remove item not held in the section: fh_not_enough', function()
+    local ok, why = CORE.removeItem(eq22, 'knife', 1) return ok == false and why == 'fh_not_enough', why end)
+  case('remove bad amounts refused, nothing removed', function()
+    local before = snap(22)
+    for _, a in ipairs({ 0, -1, 1.5, 0/0, math.huge, '2' }) do
+      local ok, why = CORE.removeItem(bp22, 'bread', a)
+      if ok ~= false or why ~= 'fh_bad_amount' then return false, tostring(a) .. ' ' .. tostring(why) end
+    end
+    return snap(22) == before and select(2, CORE.removeItem(bp22, '', 1)) == 'fh_bad_item_name' end)
+  case('remove 5 from backpack spans its stacks lowest slot first; equipped untouched', function()
+    local ok, why = CORE.removeItem(bp22, 'bread', 5)
+    local items = players[22].PlayerData.items
+    return ok == true and items[6] == nil and items[9].amount == 2 and eqN(22, 'bread') == 5, why end)
+  case('remove exact from equipped empties it; backpack untouched', function()
+    local ok, why = CORE.removeItem(eq22, 'bread', 5)
+    return ok == true and eqN(22, 'bread') == 0 and bpN(22, 'bread') == 2, why end)
+  case('default amount is 1', function()
+    local ok, why = CORE.removeItem(bp22, 'bread') return ok == true and bpN(22, 'bread') == 1, why end)
+
+  case('fh_inventory ledger: carried add/remove log with the player and the calling resource', function()
+    local logs, real = {}, I.Log
+    I.Log = function(title, msg) logs[#logs + 1] = title .. ': ' .. msg end
+    local ok1 = CORE.addItem(bp22, 'bread', 2)
+    local ok2 = CORE.removeItem(bp22, 'bread', 1)
+    I.Log = real
+    return ok1 == true and ok2 == true and #logs == 2 and logs[1]:find('^AddItem: p received 2x bread in backpack')
+      and logs[1]:find('via fh_core.addItem', 1, true) and logs[2]:find('^RemoveItem: p lost 1x bread from backpack')
+      and logs[2]:find('via fh_core.removeItem', 1, true), table.concat(logs, ' | ') end)
+
+  case('destructive / world-only ops still refused on carried refs, inventory untouched', function()
+    local before = snap(22)
+    local c = { x = 1, y = 2, z = 3 }
+    for _, r in ipairs({ bp22, eq22 }) do
+      for _, call in ipairs({ { 'clearContainer' }, { 'deleteContainer' }, { 'registerContainer', { coords = c } },
+          { 'setContainerCoords', c } }) do
+        local ok, why = CORE[call[1]](r, call[2])
+        if ok ~= false or why ~= 'fh_not_registrable' then return false, call[1] .. ' ' .. r.type .. ' ' .. tostring(why) end
+      end
+    end
+    return snap(22) == before end)
+  case('FhAddItem / FhRemoveItem: non-core caller refused', function()
+    invoking = 'some_script'
+    local a = select(2, I.Fh.AddItem(bp22, 'bread', 1))
+    local r = select(2, I.Fh.RemoveItem(bp22, 'bread', 1))
+    invoking = nil
+    return a == 'not_fh_core' and r == 'not_fh_core', tostring(a) .. ' ' .. tostring(r) end)
+  case('FhAddItem / FhRemoveItem refuse world refs (those go through the stash id)', function()
+    invoking = 'fh_core'
+    local a = select(2, I.Fh.AddItem({ type = 'chest', id = 'fh:chest:b7:1' }, 'bread', 1))
+    local r = select(2, I.Fh.RemoveItem({ type = 'chest', id = 'fh:chest:b7:1' }, 'bread', 1))
+    invoking = nil
+    return a == 'fh_unknown_container' and r == 'fh_unknown_container', tostring(a) .. ' ' .. tostring(r) end)
+  case('world addItem: bad amount now refused (was silently 1)', function()
+    return select(2, CORE.addItem({ type = 'chest', id = 'fh:chest:b7:1' }, 'bread', 2.5)) == 'fh_bad_amount' end)
 end)
 
 T.describe('fh_core.registerItems wiring (B7)', function()

@@ -149,6 +149,11 @@ A container ref is `{ type = <container type>, id = <id> }`: `id` is the player 
 `backpack`, otherwise the fh_inventory stash/drop id (`fh:saddle:<horse>`, `fh:wagon:<wagon>`,
 `fh:chest:<homestead>:<n>`, `fh:fence:<citizenid>:<fence>`, `fh:dropbag:<n>`).
 
+A carried ref (`{ type = 'equipped', id = src }` or `{ type = 'backpack', id = src }`) is one section of an online
+player's inventory: `equipped` = the hotbar (`FhConfig.Containers.equipped`: first 5 slots, 8 kg own cap), `backpack` = the rest. `addItem`/`removeItem`
+on a carried ref act on that section only, never the other one. `src` must be an online player with a loaded
+character (rsg-core has a Player for it), else `fh_player_offline`; a non-number id is `fh_bad_ref`.
+
 | Export | Returns |
 |---|---|
 | `move(fromRef, toRef, fromSlot, toSlot, amount?, src?)` | `ok, reason` |
@@ -163,12 +168,21 @@ A container ref is `{ type = <container type>, id = <id> }`: `id` is the player 
 | `setContainerCoords(ref, coords)` | `ok, reason` |
 | `open(src, ref)` | `ok, reason` (reach checked from the server-side ped position) |
 | `createDropBag(coords, items, { owner?, label? })` | `id` or `nil, reason` |
-| `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds to a registered world container (rules veto applies) |
+| `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds `amount` (default 1, integer >= 1) to a registered world container or a carried ref (C3a), all-or-nothing: the rules veto runs first and nothing is added on a refusal (`fh_size_class`: bulky never enters the backpack; `fh_too_heavy`, `fh_no_slot`: not all of it fits) |
 | `clearContainer(ref)` | `true` or `false, reason`; empties a registered world container (only fh_core may wipe one in fh_inventory) |
 | `deleteContainer(ref)` | `true, items` (what it still held) or `false, reason`; registered world stashes only, `fh_in_use` while anyone has it open |
 | `registerItems({ [name] = def })` | `true` or `false, err, badName` (validates every entry before applying any; see Items for the duplicate rules) |
-| `removeItem(ref, name, amount?)` | `true` or `false, reason`; takes exactly `amount` (default 1, integer >= 1) from a registered world container, all-or-nothing (`fh_not_enough`: nothing removed) (B7) |
+| `removeItem(ref, name, amount?)` | `true` or `false, reason`; takes exactly `amount` (default 1, integer >= 1) from a registered world container (B7) or a carried ref's section (C3a), all-or-nothing (`fh_not_enough`: the container or section holds fewer, nothing removed) |
 
+- `addItem`/`removeItem` argument errors, checked before anything changes: `fh_bad_item_name` (not a non-empty
+  string), `fh_bad_amount` (not an integer >= 1; `2.0` is fine, `2.5` / `'2'` are not), `fh_bad_info` (info not a
+  table), `fh_unknown_item` (carried add of a name rsg-core does not know), `fh_unknown_container` (world ref not
+  registered here). Carried calls are logged by fh_inventory like any add/remove on a player (`rsg-log`
+  `AddItem` / `RemoveItem`: the player as actor, the section, and `<calling resource> via fh_core.<export>`) and show
+  the player the add/remove item box; world calls pass the same tag as fh_inventory's reason (it logs player targets
+  only). Neither world nor carried calls emit an `fh:inventory:*` event (those are for `move` / `transferAll`).
+- `clearContainer`, `deleteContainer`, `registerContainer` and `setContainerCoords` refuse carried refs
+  (`fh_not_registrable`): they are destructive or world-only.
 - `registerContainer` refuses `equipped`/`backpack` (`fh_not_registrable`) and any world container without
   valid coords (`fh_no_coords`). Registrations are kept and re-sent when fh_inventory restarts, so register once
   from your resource's start; it is fine to call before fh_inventory is up.
@@ -192,6 +206,8 @@ state before mutating.
 | `FhOpenRef(src)` | `{ type, id }` of the fh container the player has open, or `nil, reason` |
 | `FhCreateDropBag(coords, items, opts)` | `id` or `nil, reason` |
 | `FhDeleteContainer(ref)` | `true, items` or `false, reason` (deletes memory, FhMeta and the `inventories` row; refused while open) |
+| `FhAddItem(ref, name, amount, info?, reason?)` | `true` or `false, reason`; carried refs only: the veto runs against that section alone (`AddTo` with `onlyType`), nothing is added on refusal |
+| `FhRemoveItem(ref, name, amount, reason?)` | `true` or `false, reason`; carried refs only: counts that section, then removes lowest slot first with no yield in between (`fh_not_enough`: nothing removed) |
 
 ### Reason codes
 
@@ -202,6 +218,7 @@ Locale keys (fh_inventory's `en.json` carries the text): `fh_unknown_container`,
 `fh_inventory_error`. Item validation: `fh_item_not_table`, `fh_bad_item_name`, `fh_bad_label`, `fh_bad_weight`,
 `fh_bad_value_base`, `fh_bad_illicit`, `fh_bad_stackable`.
 B7: `fh_not_enough` (removeItem: container holds fewer than asked), `fh_duplicate_item` (registerItems name taken).
+C3a: `fh_player_offline` (carried ref whose src has no loaded character), `fh_bad_info` (addItem info not a table).
 
 ## Events
 
@@ -315,5 +332,6 @@ See `docs/natives.md`.
 through Python `lupa` 2.x (`pip install lupa`), one fresh Lua state per spec, exit code 0 when green.
 `python tools/run-specs.py --syntax <dir>` compile-checks every `.lua` under a folder. The specs stay
 runner-agnostic through `spec/support/fh_prelude.lua`: they also run under busted (`.busted`) or plain
-`lua spec/rules_spec.lua`. The server API is not covered by specs; it was smoke-tested against stubbed
-natives and fh_inventory exports only.
+`lua spec/rules_spec.lua`. The server API is covered by `spec/fh_inventory_smoke_spec.lua`, which loads fh_core's
+`server/inventory.lua` and fh_inventory's server scripts against stubbed natives (exports are in-process there,
+not msgpack'd): B7 removeItem, C3a carried addItem/removeItem.
