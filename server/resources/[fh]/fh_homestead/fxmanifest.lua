@@ -11,11 +11,13 @@ shared_scripts {
     'config.lua',
     'shared/plot_rules.lua',
     'shared/build_rules.lua',
+    'shared/stations.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua',
+    'server/slots.lua',
 }
 
 client_scripts {
@@ -25,4 +27,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'oxmysql', 'rsg-core', 'ox_lib' }
 
-server_exports { 'claim', 'unclaim', 'getPlot', 'isInSafeZone' }
+server_exports { 'claim', 'unclaim', 'getPlot', 'isInSafeZone', 'getStations', 'stationAt', 'isNearStation' }
