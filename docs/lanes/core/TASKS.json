@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T00:27:34.574Z",
+  "updatedAt": "2026-11-23T00:43:59.255Z",
   "units": [
     {
       "id": "B5",
@@ -77,8 +77,23 @@
       "goal": "minimal per-char saddlebag (near-horse server check), fh_death saddlebagOf, test horse cmd, fix M1 e2e steps 5/8",
       "files": [],
       "doneCheck": "",
-      "status": "running",
-      "branch": "core-b6e"
+      "status": "done",
+      "branch": "core-b6e",
+      "commit": "26eef2a"
+    },
+    {
+      "id": "B6f",
+      "goal": "follow-up: backpack/saddlebag player-pane toggle in fh_inventory fork (~6 handlers assume player pane); replaces /saddlebag in|out UX; tierA-invariant",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "B6g",
+      "goal": "nit: saddlebag_rules pickSlot matches stacks by name only, ignores info equality (rules.lua:73-78) -> picks occupied slot; no dupe",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
