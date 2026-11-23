@@ -1,5 +1,7 @@
 -- fh_hands: hire/fire hands, wage ticks, task registry. State is persisted per citizenid in fh_hands (migration 0005);
 -- timers run server-side from the stored last_tick, so offline time is caught up (capped) the next time the owner is online.
+-- Every load / tick / hire / fire for a citizenid runs under that citizenid's lock (FhHandsLogic.withLock), and each
+-- wage tick is claimed in the DB before it is charged (FhHandsLogic.runOwner), so ticks never double-charge.
 local cfg = FhHandsConfig
 local logic = FhHandsLogic
 local charger = FhHandsCharge
@@ -7,46 +9,54 @@ local charger = FhHandsCharge
 assert(logic.validateConfig(cfg))
 
 local tasks = {} -- kind -> fn(ctx) -> ok, info
-local hands = {} -- [citizenid] = { src = n, list = { [hand_kind] = { last_tick, unpaid, status } } }
+local hands = {} -- [citizenid] = { citizenid, src, list = { [hand_kind] = { last_tick, unpaid, status } } }
+local locks = {} -- [citizenid] = true while a load / tick / hire / fire for it is in flight
+local ready = false -- set once the table exists; exports refuse ('not_ready') and loads wait until then
 
--- Idempotent, same DDL as server/migrations/0005_hands.sql (belt and braces for a DB that skipped the migration).
-CreateThread(function()
-    pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_hands` (
-      `citizenid` varchar(50) NOT NULL,
-      `hand_kind` varchar(50) NOT NULL,
-      `hired_at` bigint(20) NOT NULL,
-      `last_tick` bigint(20) NOT NULL,
-      `unpaid` int(11) NOT NULL DEFAULT 0,
-      `status` varchar(16) NOT NULL DEFAULT 'working',
-      PRIMARY KEY (`citizenid`, `hand_kind`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci]])
-    -- fh_core item registry: we own 'feed'.
-    local ok, err = exports.fh_core:registerItems({
-        [cfg.feed.item] = { label = 'Feed', weight = 500, size_class = 'bulky', stackable = true, value_base = 2 },
-    })
-    if not ok then print(('^1[fh_hands] feed item register failed: %s^7'):format(tostring(err))) end
-end)
+local LOCK_WAIT = { wait = function() Wait(0) end, clock = GetGameTimer, timeoutMs = 30000 }
+local LOCK_TRY = { wait = function() Wait(0) end, clock = GetGameTimer } -- poll: skip an owner that is busy
+
+local function log(msg) print(('^3[fh_hands] %s^7'):format(msg)) end
+
+local function registerFeed()
+    local called, ok, err = pcall(function()
+        return exports.fh_core:registerItems({
+            [cfg.feed.item] = { label = 'Feed', weight = 500, size_class = 'bulky', stackable = true, value_base = 2 },
+        })
+    end)
+    if not called or not ok then log(('feed item register failed: %s'):format(tostring(called and err or ok))) end
+end
 
 local function citizenOf(src)
     local P = exports['rsg-core']:GetPlayer(src)
     return P and P.PlayerData and P.PlayerData.citizenid or nil
 end
 
-local function load(src, citizenid)
-    local rows = MySQL.query.await('SELECT hand_kind, last_tick, unpaid, status FROM fh_hands WHERE citizenid = ?', { citizenid }) or {}
-    local e = { src = src, list = {} }
-    for _, r in ipairs(rows) do
-        if cfg.hands[r.hand_kind] then
-            e.list[r.hand_kind] = { last_tick = r.last_tick, unpaid = r.unpaid, status = r.status }
-        end
-    end
-    hands[citizenid] = e
-    return e
+-- Number of affected rows from a pcall'd MySQL.update.await, or nil when the call failed.
+local function affected(okCall, n)
+    if not okCall or n == nil then return nil end
+    return tonumber(n) or 0
 end
 
-local function save(citizenid, kind, h)
-    MySQL.update('UPDATE fh_hands SET last_tick = ?, unpaid = ?, status = ? WHERE citizenid = ? AND hand_kind = ?',
-        { h.last_tick, h.unpaid, h.status, citizenid, kind })
+local function dbUpdate(sql, params) return affected(pcall(MySQL.update.await, sql, params)) end
+
+---Caller holds the citizenid's lock. Reads the rows, then re-checks that src still has this character loaded (the
+---read yields; a drop / switch during it must not leave a ghost entry bound to a src that gets reused).
+---@return table|nil entry, string? err
+local function loadOwner(src, cid)
+    local okQ, rows = pcall(MySQL.query.await,
+        'SELECT hand_kind, last_tick, unpaid, status FROM fh_hands WHERE citizenid = ?', { cid })
+    if not okQ or type(rows) ~= 'table' then return nil, 'db_failed' end
+    if citizenOf(src) ~= cid then return nil, 'no_player' end
+    local e, quitKinds = logic.entryFromRows(cid, src, rows, cfg)
+    for other, oe in pairs(hands) do -- a src carries one character: drop anything still bound to it
+        if oe.src == src and other ~= cid then hands[other] = nil end
+    end
+    hands[cid] = e
+    for _, kind in ipairs(quitKinds) do
+        dbUpdate("DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ? AND status = 'quit'", { cid, kind })
+    end
+    return e
 end
 
 ---Register a task other lanes can attach to a hand kind (cfg.hands[kind].task). fn(ctx) -> ok, info
@@ -63,7 +73,7 @@ local function runTask(kind, ctx)
     local fn = tasks[kind]
     if not fn then return false, 'no_task' end
     local called, ok, info = pcall(fn, ctx)
-    if not called then return false, 'task_error' end
+    if not called then return false, 'task_error: ' .. tostring(ok) end
     return ok, info
 end
 
@@ -90,105 +100,178 @@ registerTask('feed_topup', function(ctx)
 end)
 
 -- ---------------------------------------------------------------- ticking
-local function processOwner(citizenid, now)
-    local e = hands[citizenid]
-    if not e then return end
-    for kind, h in pairs(e.list) do
-        local def = cfg.hands[kind]
-        local n, newLast = logic.ticksDue(h.last_tick, now, cfg.tickSeconds, cfg.maxCatchupTicks)
-        if n > 0 then
-            h.last_tick = newLast
-            for _ = 1, n do
-                -- Unpaid path: 'fh_insufficient_funds' (broke owner) and 'charge_unavailable' (fh_economy has no charge yet,
-                -- idea-600) both leave the wage unpaid: the hand idles and eventually quits. Never a negative balance.
-                local paid, whyUnpaid = charger.charge(e.src, def.wage, 'wage:' .. kind, cfg.regionId)
-                if not paid then
-                    TriggerEvent('fh:hands:unpaid', { src = e.src, citizenid = citizenid, hand_kind = kind, reason = whyUnpaid })
-                end
-                local nextState, run = logic.step(h, paid == true, cfg.quitAfterUnpaid)
-                h.unpaid, h.status = nextState.unpaid, nextState.status
-                if run then runTask(def.task, { src = e.src, citizenid = citizenid, hand_kind = kind }) end
-                if h.status == 'quit' then
-                    e.list[kind] = nil
-                    MySQL.update('DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ?', { citizenid, kind })
-                    TriggerEvent('fh:hands:quit', { src = e.src, citizenid = citizenid, hand_kind = kind })
-                    break
-                end
-            end
-            if e.list[kind] then save(citizenid, kind, h) end
-        end
-    end
+local function ioFor(e)
+    local cid = e.citizenid
+    return {
+        online = function() return hands[cid] == e and citizenOf(e.src) == cid end,
+        setLast = function(kind, expect, set)
+            return (dbUpdate('UPDATE fh_hands SET last_tick = ? WHERE citizenid = ? AND hand_kind = ? AND last_tick = ?',
+                { set, cid, kind, expect }) or 0) == 1
+        end,
+        -- Only the call's success counts: an unchanged unpaid/status may report 0 changed rows.
+        saveState = function(kind, last_tick, unpaid, status)
+            return dbUpdate('UPDATE fh_hands SET unpaid = ?, status = ? WHERE citizenid = ? AND hand_kind = ? AND last_tick = ?',
+                { unpaid, status, cid, kind, last_tick }) ~= nil
+        end,
+        remove = function(kind)
+            return (dbUpdate('DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ?', { cid, kind }) or 0) >= 1
+        end,
+        -- Unpaid path: 'fh_insufficient_funds' (broke owner) and 'charge_unavailable' (no fh_economy charge export)
+        -- leave the wage unpaid: the hand idles and eventually quits. Never a negative balance.
+        charge = function(amount, reason) return charger.charge(e.src, amount, reason, cfg.regionId) end,
+        runTask = function(task, kind) return runTask(task, { src = e.src, citizenid = cid, hand_kind = kind }) end,
+        emit = function(name, p)
+            p.src, p.citizenid = e.src, cid
+            TriggerEvent(name, p)
+        end,
+        log = log,
+    }
+end
+
+-- Caller holds the lock.
+local function tickOwner(cid, now)
+    local e = hands[cid]
+    if e then logic.runOwner(e, cfg, now, ioFor(e)) end
 end
 
 CreateThread(function()
+    while not ready do Wait(500) end
     while true do
         Wait(cfg.pollSeconds * 1000)
         local now = os.time()
-        for citizenid in pairs(hands) do processOwner(citizenid, now) end
+        local cids = {}
+        for cid in pairs(hands) do cids[#cids + 1] = cid end -- snapshot: hands changes while ticks yield
+        for _, cid in ipairs(cids) do
+            local ok, why, msg = logic.withLock(locks, cid, LOCK_TRY, tickOwner, cid, now)
+            if not ok and why == 'error' then log(('tick %s errored: %s'):format(cid, tostring(msg))) end
+        end
     end
 end)
 
-AddEventHandler('RSGCore:Server:OnPlayerLoaded', function(Player)
-    local src = Player and Player.PlayerData and Player.PlayerData.source
-    local cid = Player and Player.PlayerData and Player.PlayerData.citizenid
-    if not (src and cid) then return end
-    load(src, cid)
-    processOwner(cid, os.time()) -- offline catch-up (capped by ticksDue)
+-- ---------------------------------------------------------------- lifecycle
+-- Login / resource start: load under the lock, then run the capped offline catch-up.
+local function onLoaded(src, cid)
+    while not ready do Wait(250) end
+    local ok, why, msg = logic.withLock(locks, cid, LOCK_WAIT, function()
+        if citizenOf(src) ~= cid then return end
+        local e, err = loadOwner(src, cid)
+        if not e then log(('load %s failed: %s'):format(cid, tostring(err))) return end
+        tickOwner(cid, os.time())
+    end)
+    if not ok then log(('login %s: %s %s'):format(cid, tostring(why), tostring(msg or ''))) end
+end
+
+-- Server-only event (rsg-core/server/player.lua Login); passes the Player object.
+AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
+    local pd = Player and Player.PlayerData
+    if pd and type(pd.source) == 'number' and type(pd.citizenid) == 'string' then onLoaded(pd.source, pd.citizenid) end
 end)
 
-AddEventHandler('playerDropped', function()
-    local src = source
+local function forget(src)
+    if type(src) ~= 'number' then return end
     for cid, e in pairs(hands) do if e.src == src then hands[cid] = nil end end
+end
+
+-- Logout / character switch (rsg-core/server/player.lua Logout) and disconnect: the src no longer bills that character.
+AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) forget(tonumber(src)) end)
+AddEventHandler('playerDropped', function() forget(tonumber(source)) end)
+
+-- fh_core keeps runtime-registered items in memory: re-register feed when it restarts.
+AddEventHandler('onResourceStart', function(res)
+    if res == 'fh_core' and ready then registerFeed() end
+end)
+
+CreateThread(function()
+    -- Idempotent, same DDL as server/migrations/0005_hands.sql (belt and braces for a DB that skipped the migration).
+    local okDDL, err = pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_hands` (
+      `citizenid` varchar(50) NOT NULL,
+      `hand_kind` varchar(50) NOT NULL,
+      `hired_at` bigint(20) NOT NULL,
+      `last_tick` bigint(20) NOT NULL,
+      `unpaid` int(11) NOT NULL DEFAULT 0,
+      `status` varchar(16) NOT NULL DEFAULT 'working',
+      PRIMARY KEY (`citizenid`, `hand_kind`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci]])
+    if not okDDL then log(('CREATE TABLE failed (relying on migration 0005): %s'):format(tostring(err))) end
+    ready = true
+    registerFeed() -- fh_core item registry: we own 'feed'
+    -- Resource (re)start: load everyone already online.
+    for _, id in ipairs(GetPlayers()) do
+        local src = tonumber(id)
+        local cid = src and citizenOf(src)
+        if cid then CreateThread(function() onLoaded(src, cid) end) end
+    end
 end)
 
 -- ---------------------------------------------------------------- exports
-local function entry(src)
-    if type(src) ~= 'number' then return nil end
+---Run fn(e, cid) under the owner's lock with the owner's entry loaded (loaded on demand).
+---@return any ... fn's results, or false, err
+local function withOwner(src, fn)
+    if not ready then return false, 'not_ready' end
+    if type(src) ~= 'number' then return false, 'no_player' end
     local cid = citizenOf(src)
-    if not cid then return nil end
-    local e = hands[cid] or load(src, cid)
-    e.src = src
-    return e, cid
+    if not cid then return false, 'no_player' end
+    local res = table.pack(logic.withLock(locks, cid, LOCK_WAIT, function()
+        if citizenOf(src) ~= cid then return false, 'no_player' end
+        local e = hands[cid]
+        if not e or e.src ~= src then
+            local err
+            e, err = loadOwner(src, cid)
+            if not e then return false, err end
+        end
+        return fn(e, cid)
+    end))
+    if not res[1] then
+        if res[2] == 'error' then log(('export for %s errored: %s'):format(cid, tostring(res[3]))) end
+        return false, res[2]
+    end
+    return table.unpack(res, 2, res.n)
 end
 
 ---Hire a hand of `kind`. Gated by fh_progression canUnlock('hire_hand'). Starts the wage clock now.
----@return boolean ok, string|nil err
+---@return boolean ok, string|nil err  unknown_hand | no_player | locked | already_hired | db_failed | busy | not_ready
 local function hire(src, kind)
     local def = type(kind) == 'string' and cfg.hands[kind]
     if not def then return false, 'unknown_hand' end
-    local e, cid = entry(src)
-    if not e then return false, 'no_player' end
-    local okU, allowed = pcall(function() return exports.fh_progression:canUnlock(src, cfg.unlockId) end)
-    if not okU or allowed ~= true then return false, 'locked' end
-    if e.list[kind] then return false, 'already_hired' end
-    local now = os.time()
-    local ins = pcall(MySQL.insert.await,
-        'INSERT INTO fh_hands (citizenid, hand_kind, hired_at, last_tick, unpaid, status) VALUES (?, ?, ?, ?, 0, ?)',
-        { cid, kind, now, now, 'working' })
-    if not ins then return false, 'db_failed' end
-    e.list[kind] = { last_tick = now, unpaid = 0, status = 'working' }
-    TriggerEvent('fh:hands:hired', { src = src, citizenid = cid, hand_kind = kind })
-    return true
+    return withOwner(src, function(e, cid)
+        if e.list[kind] then return false, 'already_hired' end
+        local okU, allowed = pcall(function() return exports.fh_progression:canUnlock(src, cfg.unlockId) end)
+        if not okU or allowed ~= true then return false, 'locked' end
+        if citizenOf(src) ~= cid then return false, 'no_player' end -- canUnlock can yield (rep read)
+        local now = os.time()
+        -- a 'quit' row whose delete failed would block the insert on the primary key
+        dbUpdate("DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ? AND status = 'quit'", { cid, kind })
+        local n = dbUpdate('INSERT INTO fh_hands (citizenid, hand_kind, hired_at, last_tick, unpaid, status) VALUES (?, ?, ?, ?, 0, ?)',
+            { cid, kind, now, now, 'working' })
+        if n ~= 1 then return false, 'db_failed' end
+        e.list[kind] = { last_tick = now, unpaid = 0, status = 'working' }
+        TriggerEvent('fh:hands:hired', { src = src, citizenid = cid, hand_kind = kind })
+        return true
+    end)
 end
 
----@return boolean ok, string|nil err
+---@return boolean ok, string|nil err  no_player | not_hired | db_failed | busy | not_ready
 local function fire(src, kind)
-    local e, cid = entry(src)
-    if not e then return false, 'no_player' end
-    if type(kind) ~= 'string' or not e.list[kind] then return false, 'not_hired' end
-    local ok = pcall(MySQL.update.await, 'DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ?', { cid, kind })
-    if not ok then return false, 'db_failed' end
-    e.list[kind] = nil
-    TriggerEvent('fh:hands:fired', { src = src, citizenid = cid, hand_kind = kind })
-    return true
+    if type(kind) ~= 'string' then return false, 'not_hired' end
+    return withOwner(src, function(e, cid)
+        if not e.list[kind] then return false, 'not_hired' end
+        local n = dbUpdate('DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ?', { cid, kind })
+        if n == nil then return false, 'db_failed' end
+        e.list[kind] = nil
+        if n == 0 then return false, 'not_hired' end -- row already gone (quit elsewhere): nothing was fired now
+        TriggerEvent('fh:hands:fired', { src = src, citizenid = cid, hand_kind = kind })
+        return true
+    end)
 end
 
----@return table hands kind -> { unpaid, status, last_tick } (copy)
+---@return table hands kind -> { unpaid, status, last_tick } (copy; empty when unavailable)
 local function getHands(src)
-    local e = entry(src)
-    local out = {}
-    if e then for k, h in pairs(e.list) do out[k] = { unpaid = h.unpaid, status = h.status, last_tick = h.last_tick } end end
-    return out
+    local ok, out = withOwner(src, function(e)
+        local copy = {}
+        for k, h in pairs(e.list) do copy[k] = { unpaid = h.unpaid, status = h.status, last_tick = h.last_tick } end
+        return true, copy
+    end)
+    return ok == true and out or {}
 end
 
 exports('hire', hire)
