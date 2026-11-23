@@ -273,8 +273,13 @@ Files: `shared/access_rules.lua` (`FhAccessRules`, pure, `spec/access_rules_spec
 - **Connect order:** fh_core grants synchronously in its playerConnecting handler; rsg-core yields (`Wait(0)`,
   events.lua:139) before its whitelist check, so the first joiner is admin, and therefore allowlisted, before rsg-core
   checks, whichever handler runs first.
-- **Rejected connect:** one console line `allowlist: rejected <name> license:<hash> [discord:<id>]`; the player sees
-  "This is a private server and you are not on its allowlist...".
+- **Rejected connect:** rsg-core alone rejects (its whitelist check, `deferrals.done`); fh_core never defers, it
+  only prints one console line `allowlist: rejected <name> license:<hash> [discord:<id>]`. The player sees rsg-core's
+  `error.not_whitelisted` locale text, edited in `rsg-core/locales/en.json` (server/VENDORED.md) to "You're not on
+  this private server's allowlist. Ask the owner to add you: they can see your ID in the server console."
+- **admins.cfg unreadable:** fails closed. If `admins.cfg` is missing or unreadable at resource start, auto-admin is
+  treated as locked (nobody is granted) and the console prints one `autoadmin: ERROR cannot read admins.cfg` line
+  with the path. Run `tools/start-server.ps1` / the first-run to create it, or fix its permissions, then restart.
 - **Adding a friend:** `fh_allow <license:hash | hash | discord:id>` (group.admin, or the server console). Applies
   live and appends to `allowlist.cfg` (idempotent). The friend reconnects. Revoke: delete the line and restart.
 - `tools/lib.ps1` `Initialize-AccessCfgs` creates both cfgs (comments only) when missing, so `exec` never fails.

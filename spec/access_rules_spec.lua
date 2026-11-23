@@ -172,4 +172,61 @@ case('whitelist off: nothing rejected, grant still happens', function()
     assert(r.allowed and r.granted == OWNER and st.locked)
 end)
 
+case('hasAdminLine: trailing comments still count, commented-out lines never do', function()
+    local adm = 'add_principal identifier.' .. OWNER .. ' group.admin'
+    assert(A.hasAdminLine(adm .. ' # owner, added by first-run\n'), 'trailing # comment')
+    assert(A.hasAdminLine(adm .. '# no space\n'), 'trailing # without a space')
+    assert(A.hasAdminLine('  ' .. adm .. '\t// note\r\n'), 'trailing // comment')
+    assert(not A.hasAdminLine('# ' .. adm .. '\n'), '# commented out')
+    assert(not A.hasAdminLine('  #' .. adm .. ' # x\n'), 'indented # commented out')
+    assert(not A.hasAdminLine('// ' .. adm .. '\n'), '// commented out')
+    assert(not A.hasAdminLine('add_principal identifier.' .. OWNER .. ' group.fh_allowlist # group.admin\n'),
+        'group.admin only inside the comment')
+    assert(A.hasLine(adm .. ' # note\n', A.principalLine(OWNER, A.ADMIN_GROUP)), 'hasLine agrees')
+    assert(not A.hasLine('# ' .. adm .. '\n', A.principalLine(OWNER, A.ADMIN_GROUP)))
+end)
+
+case('initialState: unreadable admins.cfg FAILS CLOSED (locked, no grant, one error); empty -> unlocked', function()
+    local st, err = A.initialState(nil)
+    assert(st.locked and st.unreadable and st.pending == nil, 'nil content -> locked')
+    assert(err and err:find('admins.cfg', 1, true) and err:find('start-server.ps1', 1, true)
+        and err:find('permissions', 1, true) and not err:find('\n'), 'one clear console line naming the fix')
+    local srv = fakeServer()
+    local r = srv.join(st, ON, FRIEND)
+    T.same({ 'check' }, srv.calls, 'no execute, no persist')
+    assert(not r.allowed and r.granted == nil and srv.acl[FRIEND] == nil and st.pending == nil)
+    local r2 = srv.join(st, ON, OWNER)
+    assert(r2.granted == nil and srv.acl[OWNER] == nil, 'not even the owner is auto-granted')
+
+    local st2, err2 = A.initialState('')
+    assert(not st2.locked and err2 == nil, "'' -> unlocked")
+    local st3 = A.initialState('# Admins (first joiner is added here)\n')
+    assert(not st3.locked, 'comments only -> unlocked')
+    local st4, err4 = A.initialState('add_principal identifier.' .. OWNER .. ' group.admin # owner\n')
+    assert(st4.locked and not st4.unreadable and err4 == nil, 'admin line -> locked')
+    local srv2 = fakeServer()
+    assert(srv2.join(st2, ON, OWNER).granted == OWNER and st2.locked, 'empty file: first joiner granted')
+end)
+
+case('persistVerified: a nil re-read is a failed persist (no lock, nobody else granted)', function()
+    local line = A.principalLine(OWNER, A.ADMIN_GROUP)
+    assert(not A.persistVerified(nil, line), 'nil re-read')
+    assert(not A.persistVerified('', line), 'line missing')
+    assert(A.persistVerified('# h\n' .. line .. '\n', line))
+    local st, acl, logs = { locked = false }, {}, {}
+    local function join(license)
+        return A.onConnect(st, ON, { license = license, name = 'p', whitelistOn = true }, {
+            execute = function(cmd) acl[cmd:match('identifier%.(%S+)')] = true end,
+            persist = function(l) return A.persistVerified(nil, l) end, -- write ok, read-back fails
+            isAllowed = function() return acl[license] == true end,
+            log = function(m) logs[#logs + 1] = m end,
+        })
+    end
+    local r = join(OWNER)
+    assert(r.allowed and not st.locked and st.pending == OWNER)
+    local r2 = join(FRIEND)
+    assert(not r2.allowed and r2.granted == nil and acl[FRIEND] == nil and not st.locked and st.pending == OWNER)
+    T.eq(0, count(logs, 'granted group.admin'))
+end)
+
 T.finish()

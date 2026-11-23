@@ -10,7 +10,6 @@ local M = {}
 M.ADMIN_GROUP = 'group.admin'
 M.ALLOW_GROUP = 'group.fh_allowlist'
 M.ALLOW_ACE = 'fh.allowlist'
-M.REJECT_MESSAGE = 'This is a private server and you are not on its allowlist. Ask the owner to add you: they can see your ID in the server console.'
 
 -- Convar truthiness: '1' or 'true' (case-insensitive). Anything else, including nil, is off.
 function M.flag(v)
@@ -45,22 +44,34 @@ local function lines(text)
     return out
 end
 
--- Is this exact principal line present as an active (non-comment) line? Whitespace-insensitive.
+-- The active part of a cfg line: a `#` or `//` comment (whole-line or trailing) is dropped, whitespace collapsed.
+-- Identifiers here are hex/digits only, so neither marker can occur inside a principal line.
+local function active(l)
+    l = l:gsub('#.*$', ''):gsub('//.*$', '')
+    return (l:match('^%s*(.-)%s*$'):gsub('%s+', ' '))
+end
+
+-- Is this exact principal line present as an active (non-comment) line? Whitespace- and trailing-comment-insensitive.
 function M.hasLine(text, line)
-    local want = line:gsub('%s+', ' ')
+    local want = active(line)
     for _, l in ipairs(lines(text)) do
-        local norm = l:match('^%s*(.-)%s*$'):gsub('%s+', ' ')
-        if norm == want then return true end
+        if active(l) == want then return true end
     end
     return false
 end
 
--- Does an admins.cfg text grant group.admin to anyone? Comments (# or //) do not count.
+-- Does an admins.cfg text grant group.admin to anyone? Comments (# or //, whole-line or trailing) do not count.
 function M.hasAdminLine(text)
     for _, l in ipairs(lines(text)) do
-        if l:match('^%s*add_principal%s+identifier%.%S+%s+group%.admin%s*$') then return true end
+        if active(l):match('^add_principal identifier%.%S+ group%.admin$') then return true end
     end
     return false
+end
+
+-- Post-write verification: `after` is the file re-read after the append (nil = could not read it back). Only a
+-- successful re-read that contains the line counts as persisted.
+function M.persistVerified(after, line)
+    return after ~= nil and M.hasLine(after, line)
 end
 
 -- What to write to append `line` to a file whose current text is `text` (idempotent: nil when already present).
@@ -88,6 +99,18 @@ end
 
 function M.grantLine(license)
     return 'granted group.admin to ' .. license
+end
+
+-- Boot state from admins.cfg's content (nil = missing or unreadable). FAILS CLOSED: an unreadable file is treated
+-- as locked (an admin may already exist), so nobody is auto-granted. '' or comments only -> unlocked.
+-- Returns state, error console line|nil.
+function M.initialState(content)
+    if content == nil then
+        return { locked = true, pending = nil, unreadable = true },
+            'autoadmin: ERROR cannot read admins.cfg; auto-admin is OFF, nobody will be granted group.admin. '
+            .. "Run tools/start-server.ps1 (or the first-run) to create it, or fix the file's permissions, then restart the server."
+    end
+    return { locked = M.hasAdminLine(content), pending = nil }, nil
 end
 
 -- Auto-admin state: { locked = bool (an admin line is persisted), pending = 'license:..' or nil (granted live,

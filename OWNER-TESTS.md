@@ -12,7 +12,7 @@ file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need 
    RESULT:
 3. Restart the server (close its window, run `first-run.cmd`), rejoin: still admin (step 2 works), and no new `granted` line in fxserver.log.
    RESULT:
-4. Friend (optional, needs a second account): a not-yet-allowlisted connect is rejected with the private-server message, and the server console prints one `allowlist: rejected <name> license:<hash>` line.
+4. Friend (optional, needs a second account): a not-yet-allowlisted connect is rejected with "You're not on this private server's allowlist. Ask the owner to add you..." (rsg-core's message; no `[RSGCORE]` prefix, shown once), and the server console prints one `allowlist: rejected <name> license:<hash>` line.
    RESULT:
 5. Run `fh_allow license:<hash>` with that license; the friend reconnects and gets in, and `fh_dump backpack <theirId>` from THEIR client says no permission (they are not admin).
    RESULT:
