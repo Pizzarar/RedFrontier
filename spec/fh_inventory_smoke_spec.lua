@@ -222,4 +222,35 @@ T.describe('Fh.Open / Fh.SetCoords on drop bags (L4) and OpenFor reach', functio
     return ok == false and why == 'fh_no_coords', why end)
 end)
 
+T.describe('fh_death hookup (B6c): backpack -> registered drop_bag stash, then deleteContainer', function()
+  -- slot 1 = equipped (hotbar), 6+ = backpack. Count bread everywhere before and after: no dupe, no loss.
+  local P = mkPlayer(7, { [1] = it('bread', 2, 1), [6] = it('bread', 5, 6), [9] = it('bread', 3, 9) })
+  pedCoords[7] = vec(300, 300, 10)
+  local function count(items) local n = 0 for _, x in pairs(items or {}) do if x.name == 'bread' then n = n + x.amount end end return n end
+  local bagId = 'fh:dropbag:C7:1-1'
+  local bag = { type = 'drop_bag', id = bagId }
+  local total = count(P.PlayerData.items)
+  case('register drop_bag stash', function()
+    return CORE.registerContainer(bag, { coords = { x = 300, y = 300, z = 10 }, slots = 30, maxWeight = 1000000 }) == true end)
+  local ok, moved, left = CORE.transferAll({ type = 'backpack', id = 7 }, bag, 7)
+  case('transferAll backpack -> bag ok, no leftovers', function() return ok == true and #moved == 2 and #left == 0 end)
+  case('equipped stays (slot 1 untouched)', function() return P.PlayerData.items[1] and P.PlayerData.items[1].amount == 2 end)
+  case('backpack empty', function() for s in pairs(P.PlayerData.items) do if s >= 6 then return false end end return true end)
+  case('no dupe, no loss', function() return count(P.PlayerData.items) + count(I.Inventories[bagId].items) == total end)
+  case('equipped is never a source for the bag', function()
+    return select(2, CORE.transferAll({ type = 'backpack', id = 7 }, bag, 7)) and P.PlayerData.items[1].amount == 2 end)
+  case('deleteContainer refused while open', function()
+    I.OpenInv[99] = bagId
+    local d, why = CORE.deleteContainer(bag); I.OpenInv[99] = nil
+    return d == false and why == 'fh_in_use' and I.Inventories[bagId] ~= nil, why end)
+  case('deleteContainer returns what it held, then the bag is gone', function()
+    local d, items = CORE.deleteContainer(bag)
+    return d == true and count(items) == 5 + 3 and I.Inventories[bagId] == nil and I.FhMeta[bagId] == nil end)
+  case('deleteContainer twice refused', function() return CORE.deleteContainer(bag) == false end)
+  case('deleteContainer refuses carried refs and ground drops', function()
+    local dropId = CORE.createDropBag({ x = 300, y = 300, z = 10 }, { { name = 'bread', amount = 1 } })
+    return CORE.deleteContainer({ type = 'backpack', id = 7 }) == false
+      and CORE.deleteContainer({ type = 'drop_bag', id = dropId }) == false and I.Inventories[dropId] ~= nil end)
+end)
+
 T.finish()

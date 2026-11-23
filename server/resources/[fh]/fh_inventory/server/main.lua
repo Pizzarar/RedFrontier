@@ -1564,7 +1564,7 @@ InvCore = {
     RemoveFrom = RemoveFrom, CountIn = CountIn, ClientInv = ClientInv, CheckWeapon = CheckWeapon,
     SavePlayer = SavePlayer, SaveStash = SaveStash, CleanupDropIfEmpty = CleanupDropIfEmpty,
     FhViews = FhViews, FhCheckLayout = FhCheckLayout, MoveBetween = MoveBetween, AddToRaw = AddToRaw,
-    Normalize = Normalize, MoveDrop = MoveDrop,
+    Normalize = Normalize, MoveDrop = MoveDrop, IsOpenByAnyone = IsOpenByAnyone,
 }
 
 --------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 -- fh_core server container API (spec §4.2). The one inventory API other lanes use:
 --   exports.fh_core:move / canFit / getWeight / snapshot / transferAll
---   exports.fh_core:registerContainer / setContainerCoords / open / createDropBag / registerItems
+--   exports.fh_core:registerContainer / setContainerCoords / open / createDropBag / deleteContainer / registerItems
 -- fh_core never reads or writes inventory tables. Everything goes through fh_inventory's Fh* exports, which re-check
 -- with FhRules under their own state before mutating anything.
 --
@@ -237,6 +237,20 @@ local function createDropBag(coords, items, opts)
     return id
 end
 
+---Delete a registered world container (death bags). Refused while anyone has it open (fh_in_use: retry later).
+---Also forgets it here so it is not re-sent when fh_inventory restarts.
+---@return boolean ok, table|string itemsOrReason items = what it still held (slot -> item), for loss logging
+local function deleteContainer(ref)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    local items
+    ok, items = inv('FhDeleteContainer', ref)
+    if not ok then return false, items or 'fh_refused' end
+    registered[refKey(ref)] = nil
+    return true, items or {}
+end
+
 -- ---------------------------------------------------------------- items
 
 -- Push fh definitions and ItemOverrides into RSGCore.Shared.Items (one SetItems broadcast).
@@ -313,4 +327,5 @@ exports('registerContainer', registerContainer)
 exports('setContainerCoords', setContainerCoords)
 exports('open', open)
 exports('createDropBag', createDropBag)
+exports('deleteContainer', deleteContainer)
 exports('registerItems', registerItems)

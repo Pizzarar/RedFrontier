@@ -126,6 +126,27 @@ function Fh.CreateDropBag(coords, items)
     return id, leftovers
 end
 
+--- FhDeleteContainer(ref) -> true, items | false, reason
+--- Deletes a registered fh stash (death bags on expiry / when emptied): memory, FhMeta and its `inventories` row.
+--- items = what it still held (slot -> item, deep copy) so the caller can log any loss. Refused while anyone has it
+--- open (fh_in_use: the caller retries later), so no open UI can move items into a container that is gone.
+--- Drops (ground piles) and carried refs are refused.
+function Fh.DeleteContainer(ref)
+    if not FromCore() then return false, 'not_fh_core' end
+    local id, kind = WorldTarget(ref)
+    if not id or kind ~= 'stash' then return false, 'fh_unknown_container' end
+    if InvCore.IsOpenByAnyone(id) then return false, 'fh_in_use' end
+    local c = InvCore.GetContainer(id) -- may load it from the database (awaits)
+    if InvCore.IsOpenByAnyone(id) then return false, 'fh_in_use' end
+    if not c or InvCore.FhMeta[id] == nil then return false, 'fh_unknown_container' end
+    local items = InvCore.DeepClone(c.items or {})
+    InvCore.Inventories[id] = nil
+    InvCore.FhMeta[id] = nil
+    MySQL.prepare('DELETE FROM inventories WHERE identifier = ?', { id })
+    InvCore.Log('DeleteContainer', ('fh_core deleted %s (%s)'):format(id, ref.type))
+    return true, items
+end
+
 --- FhView(ref) -> view | nil, reason. The FhRules view of the container (a player section for carried refs).
 function Fh.View(ref)
     if not FromCore() then return nil, 'not_fh_core' end
