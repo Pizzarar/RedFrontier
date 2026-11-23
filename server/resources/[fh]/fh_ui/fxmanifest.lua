@@ -17,6 +17,7 @@ files {
 
 shared_scripts {
     'shared/relay.lua',
+    'shared/fixtures.lua',
 }
 
 server_scripts {
