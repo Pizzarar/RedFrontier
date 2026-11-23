@@ -128,4 +128,314 @@ case('unplace: owner only, trophy must exist', function()
     assert(why({ ownerCitizenid = false }) == 'fh_plot_free')
     assert(select(2, C.canUnplace(nil)) == 'fh_no_character')
 end)
+
+-- ---- placement prechecks: anything the store would refuse is refused before the item leaves the chest ----
+case('checkTrophy: id length and whole points within storage limits', function()
+    assert(C.checkTrophy('a#1', 3) == true and select(2, C.checkTrophy('a#1', 3.9)) == 3)
+    assert(select(2, C.checkTrophy('a#1', 0.5)) == 'fh_bad_points')     -- floors to 0
+    assert(select(2, C.checkTrophy('a#1', 0)) == 'fh_bad_points')
+    assert(select(2, C.checkTrophy('a#1', 2 ^ 40)) == 'fh_bad_points')  -- over int unsigned
+    assert(select(2, C.checkTrophy(string.rep('x', 65), 3)) == 'fh_bad_trophy')
+    assert(C.checkTrophy(string.rep('x', 64), 3) == true)
+    assert(select(2, C.checkTrophy('', 3)) == 'fh_bad_trophy' and select(2, C.checkTrophy(7, 3)) == 'fh_bad_trophy')
+end)
+case('place refused: points < 1 after flooring / too big; item never taken', function()
+    assert(not refused({ lookup = function() return 0.5 end }, 'fh_bad_points'))
+    assert(not refused({ lookup = function() return 2 ^ 40 end }, 'fh_bad_points'))
+end)
+case('place refused: trophy id over 64 chars; item never taken', function()
+    assert(not refused({ itemId = string.rep('x', 65) }, 'fh_bad_trophy'))
+    assert(not refused({ itemId = string.rep('x', 63) }, 'fh_bad_trophy')) -- '<63>#1' is 65 chars
+    local ok, _, id = C.place(ctx({ itemId = string.rep('x', 62) }))
+    assert(ok and #id == 64)
+end)
+
+-- ---- server/comfort.lua under a stubbed FXServer: in-memory MySQL, exports, events. Awaits can be held (yield) so
+-- ---- a test can run a second call while the first is suspended, as FXServer would between coroutines.
+local PLOT = 'heartlands_01'
+local function server()
+    local S = { plots = { [PLOT] = 'A' }, rows = { [PLOT] = {} }, owners = { A = PLOT }, tiers = { [PLOT] = { trophy_wall = 1 } },
+        chest = { trophy_deer = 3 }, points = { trophy_deer = 4 }, hold = {}, events = {}, handlers = {}, X = {}, logs = {},
+        order = {}, calls = { addItem = 0, removeItem = 0 } }
+    local function await(tag) S.order[#S.order + 1] = tag if S.hold[tag] then S.hold[tag] = nil coroutine.yield(tag) end end
+    local players = { [1] = { PlayerData = { citizenid = 'A' } }, [2] = { PlayerData = { citizenid = 'B' } } }
+    local MySQL = {
+        query = { await = function(sql, p)
+            await('query')
+            assert(sql:find('^SELECT trophy_id'), sql)
+            local out = {}
+            for id, pts in pairs(S.rows[p[1]] or {}) do out[#out + 1] = { trophy_id = id, points = pts } end
+            return out
+        end },
+        scalar = { await = function(_, p) return S.plots[p[1]] end },
+        update = { await = function(sql, p)
+            if sql:find('^INSERT INTO fh_plot_trophies .* SELECT .* FROM fh_plots WHERE plot_id = %? AND citizenid = %?') then
+                await('insert')
+                if S.failInsert then error('db down') end
+                local id, pts, plotId, cid = p[1], p[2], p[3], p[4]
+                if S.plots[plotId] ~= cid then return 0 end
+                S.rows[plotId] = S.rows[plotId] or {}
+                if S.rows[plotId][id] then error('Duplicate entry') end
+                S.rows[plotId][id] = pts
+                return 1
+            elseif sql:find('^DELETE t FROM fh_plot_trophies t JOIN fh_plots p') then
+                await('delete')
+                local plotId, id, cid = p[1], p[2], p[3]
+                if S.plots[plotId] ~= cid or not (S.rows[plotId] or {})[id] then return 0 end
+                S.rows[plotId][id] = nil
+                return 1
+            elseif sql:find('^DELETE t FROM fh_plot_trophies t LEFT JOIN fh_plots p') then
+                await('cleanup')
+                if S.plots[p[1]] then return 0 end
+                local n = 0
+                for _ in pairs(S.rows[p[1]] or {}) do n = n + 1 end
+                S.rows[p[1]] = nil
+                return n
+            end
+            error('unexpected sql ' .. sql)
+        end },
+    }
+    local exportsT = setmetatable({
+        fh_core = {
+            removeItem = function(_, _, item, n)
+                S.calls.removeItem = S.calls.removeItem + 1
+                await('removeItem')
+                if (S.chest[item] or 0) < n then return false, 'fh_item_not_in_chest' end
+                S.chest[item] = S.chest[item] - n
+                return true
+            end,
+            addItem = function(_, _, item, n)
+                S.calls.addItem = S.calls.addItem + 1
+                await('addItem')
+                if S.addThrows then error('export gone') end
+                if S.addRefuses ~= nil then return false, S.addRefuses or nil end
+                S.chest[item] = (S.chest[item] or 0) + n
+                return true
+            end,
+        },
+        fh_hunting = { getTrophyComfort = function(_, item) return S.points[item] end },
+        ['rsg-core'] = { GetCoreObject = function() return { Functions = { GetPlayer = function(src) return players[src] end } } end },
+    }, { __call = function(_, name, fn) S.X[name] = fn end })
+    local env = setmetatable({
+        FhHomesteadConfig = cfg, FhComfort = C, FhPlotRules = dofile(dir .. 'shared/plot_rules.lua'),
+        FhHomesteadSlots = {
+            plotOf = function(cid) return S.owners[cid] end,
+            getTiers = function(plotId) if S.tiersThrow then error('tiers boom') end return S.tiers[plotId] end,
+        },
+        MySQL = MySQL, exports = exportsT, GetResourceState = function() return 'started' end,
+        AddEventHandler = function(name, fn) S.handlers[name] = fn end,
+        TriggerEvent = function(name, ...) S.events[#S.events + 1] = { name = name, args = table.pack(...) } end,
+        print = function(m) S.logs[#S.logs + 1] = tostring(m) end,
+    }, { __index = _G })
+    assert(loadfile(dir .. 'server/comfort.lua', 't', env))()
+    -- release the plot the way server/main.lua does: claims cleared, fh_plots row deleted (cascade unless told not to)
+    function S.unclaim(plotId, noCascade)
+        local cid = S.plots[plotId]
+        S.plots[plotId], S.owners[cid] = nil, nil
+        if not noCascade then S.rows[plotId] = nil end
+        S.handlers['fh:homestead:unclaimed']({ src = 0, citizenid = cid, plot_id = plotId })
+    end
+    function S.claim(plotId, cid) S.plots[plotId], S.owners[cid] = cid, plotId; S.rows[plotId] = S.rows[plotId] or {} end
+    -- start fn in a coroutine; it runs until the first held await. Returns resume(), which finishes it.
+    function S.start(fn)
+        local co = coroutine.create(fn)
+        local first = table.pack(coroutine.resume(co))
+        assert(first[1], tostring(first[2]))
+        assert(coroutine.status(co) == 'suspended', 'expected the call to suspend on a held await')
+        return function()
+            local r = table.pack(coroutine.resume(co))
+            assert(r[1], tostring(r[2]))
+            assert(coroutine.status(co) == 'dead')
+            return table.unpack(r, 2, r.n)
+        end
+    end
+    function S.count(name)
+        local n = 0
+        for _, ev in ipairs(S.events) do if ev.name == name then n = n + 1 end end
+        return n
+    end
+    function S.last(name)
+        for i = #S.events, 1, -1 do if S.events[i].name == name then return S.events[i].args end end
+    end
+    function S.logged(pat) for _, m in ipairs(S.logs) do if m:find(pat) then return true end end return false end
+    return S
+end
+local function nrows(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
+
+case('server: place moves the item onto the wall, emits trophy_placed + comfort_changed', function()
+    local S = server()
+    assert(S.X.getComfort('A') == 5) -- trophy_wall tier 1 alone
+    local ok, id = S.X.placeTrophy(1, 'trophy_deer')
+    assert(ok and id == 'trophy_deer#1', tostring(id))
+    assert(S.chest.trophy_deer == 2 and S.rows[PLOT]['trophy_deer#1'] == 4)
+    assert(S.X.getComfort('A') == 9)
+    assert(S.last('fh:homestead:trophy_placed')[1].trophy_id == 'trophy_deer#1')
+    local cc = S.last('fh:homestead:comfort_changed')
+    assert(cc[1] == 'A' and cc[2] == 9 and cc[3] == 5)
+end)
+
+-- CRITICAL 1: unclaim clears the cache and the trophies, and tells Survival the comfort dropped
+case('server: unclaim clears cache + trophies and emits comfort_changed(cid, 0, old)', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    assert(S.X.getComfort('A') == 9)
+    S.unclaim(PLOT)
+    local cc = S.last('fh:homestead:comfort_changed')
+    assert(cc[1] == 'A' and cc[2] == 0 and cc[3] == 9)
+    assert(S.X.getComfort('A') == 0)
+    -- next owner of the same plot sees no phantom trophies
+    S.claim(PLOT, 'B')
+    assert(S.X.getComfort('B') == 5)
+    assert(select(2, S.X.unplaceTrophy(2, 'trophy_deer#1')) == 'fh_no_trophy')
+end)
+case('server: unclaim with no cached comfort emits nothing; backstop deletes rows the cascade left', function()
+    local S = server()
+    S.rows[PLOT]['trophy_deer#1'] = 4
+    S.unclaim(PLOT, true) -- no cascade
+    assert(S.count('fh:homestead:comfort_changed') == 0)
+    assert(S.rows[PLOT] == nil)
+    -- a plot claimed again before the backstop runs keeps its rows
+    local S2 = server()
+    S2.rows[PLOT]['x#1'] = 2
+    S2.handlers['fh:homestead:unclaimed']({ citizenid = 'Z', plot_id = PLOT })
+    assert(S2.rows[PLOT]['x#1'] == 2)
+end)
+case('server: place suspended across unclaim aborts and refunds the item', function()
+    local S = server()
+    assert(S.X.getComfort('A') == 5)
+    S.hold.removeItem = true
+    local finish = S.start(function() return S.X.placeTrophy(1, 'trophy_deer') end)
+    S.unclaim(PLOT)
+    local ok, why = finish()
+    assert(ok == false and why == 'fh_no_plot', tostring(why))
+    assert(S.chest.trophy_deer == 3 and nrows(S.rows[PLOT]) == 0)
+    assert(S.count('fh:homestead:trophy_placed') == 0)
+end)
+case('server: trophy load suspended across unclaim does not cache the old rows', function()
+    local S = server()
+    S.rows[PLOT]['trophy_deer#1'] = 4
+    S.hold.query = true
+    local finish = S.start(function() return S.X.getComfort('A') end)
+    S.unclaim(PLOT)
+    finish()
+    S.claim(PLOT, 'A')
+    assert(S.X.getComfort('A') == 5) -- reloaded from the (cascaded) table, not the stale read
+end)
+
+-- CRITICAL 2: unplace deletes first, needs exactly one affected row, and a double-fire refunds once
+case('server: unplace deletes the row before the refund', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    S.order = {}
+    assert(S.X.unplaceTrophy(1, 'trophy_deer#1'))
+    local d, a
+    for i, tag in ipairs(S.order) do if tag == 'delete' then d = i elseif tag == 'addItem' then a = i end end
+    assert(d and a and d < a, 'delete must precede addItem')
+    assert(S.chest.trophy_deer == 3 and nrows(S.rows[PLOT]) == 0 and S.X.getComfort('A') == 5)
+    assert(S.last('fh:homestead:trophy_removed')[1].comfort == 4)
+end)
+case('server: double unplace refunds exactly once', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    S.calls.addItem = 0
+    S.hold.delete = true
+    local finish = S.start(function() return S.X.unplaceTrophy(1, 'trophy_deer#1') end)
+    local ok2, why2 = S.X.unplaceTrophy(1, 'trophy_deer#1') -- fires while the first is mid-delete
+    assert(ok2 == false and why2 == 'fh_busy', tostring(why2))
+    assert(finish() == true)
+    local ok3, why3 = S.X.unplaceTrophy(1, 'trophy_deer#1')
+    assert(ok3 == false and why3 == 'fh_no_trophy')
+    assert(S.calls.addItem == 1 and S.chest.trophy_deer == 3)
+    assert(S.count('fh:homestead:trophy_removed') == 1)
+end)
+case('server: unplace of a row already gone (0 affected) refunds nothing', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    S.calls.addItem = 0
+    S.rows[PLOT]['trophy_deer#1'] = nil -- removed outside this cache
+    local ok, why = S.X.unplaceTrophy(1, 'trophy_deer#1')
+    assert(ok == false and why == 'fh_no_trophy')
+    assert(S.calls.addItem == 0 and S.chest.trophy_deer == 2)
+    assert(S.X.getComfort('A') == 5) -- stale cache entry dropped
+end)
+
+-- MAJOR: refund result is checked; nothing is lost silently
+case('server: unplace with the chest refusing keeps the trophy on the wall', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    S.addRefuses = 'fh_chest_full'
+    local ok, why = S.X.unplaceTrophy(1, 'trophy_deer#1')
+    assert(ok == false and why == 'fh_chest_full', tostring(why))
+    assert(S.rows[PLOT]['trophy_deer#1'] == 4 and S.chest.trophy_deer == 2)
+    assert(S.X.getComfort('A') == 9 and S.count('fh:homestead:trophy_removed') == 0)
+end)
+case('server: unplace refund and restore both failing is reported and logged', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    S.addRefuses, S.failInsert = 'fh_chest_full', true -- chest refuses, then the re-insert fails too
+    local ok, why = S.X.unplaceTrophy(1, 'trophy_deer#1')
+    assert(ok == false and why == 'fh_unplace_refund_failed', tostring(why))
+    assert(S.logged('ITEM LOST'))
+end)
+case('server: place whose insert fails refunds the item', function()
+    local S = server()
+    S.failInsert = true
+    local ok, why = S.X.placeTrophy(1, 'trophy_deer')
+    assert(ok == false and why == 'fh_trophy_failed', tostring(why))
+    assert(S.chest.trophy_deer == 3 and S.calls.addItem == 1)
+end)
+case('server: place whose insert and refund both fail is reported and logged', function()
+    local S = server()
+    S.failInsert, S.addRefuses = true, 'fh_chest_full'
+    local ok, why = S.X.placeTrophy(1, 'trophy_deer')
+    assert(ok == false and why == 'fh_place_refund_failed', tostring(why))
+    assert(S.logged('ITEM LOST') and S.logged('fh_chest_full'))
+end)
+case('server: addTrophy prechecks points < 1 and id > 64 before touching the DB', function()
+    local S = server()
+    assert(select(2, S.X.addTrophy('A', 'x#1', 0.5)) == 'fh_bad_points')
+    assert(select(2, S.X.addTrophy('A', string.rep('x', 65), 3)) == 'fh_bad_trophy')
+    assert(nrows(S.rows[PLOT]) == 0)
+    assert(S.X.addTrophy('A', 'x#1', 3.7) == true and S.rows[PLOT]['x#1'] == 3)
+end)
+case('server: placeTrophy with a sub-1 trophy never takes the item', function()
+    local S = server()
+    S.points.trophy_deer = 0.5
+    assert(select(2, S.X.placeTrophy(1, 'trophy_deer')) == 'fh_bad_points')
+    assert(S.calls.removeItem == 0 and S.chest.trophy_deer == 3)
+end)
+
+-- MAJOR: capacity race. Concurrent places cannot pass the trophy_wall cap.
+case('server: concurrent place on the same plot is refused while one is in flight; cap holds', function()
+    local S = server()
+    for i = 1, 5 do S.rows[PLOT]['t#' .. i] = 1 end
+    S.hold.removeItem = true
+    local finish = S.start(function() return S.X.placeTrophy(1, 'trophy_deer') end)
+    local ok2, why2 = S.X.placeTrophy(1, 'trophy_deer')
+    assert(ok2 == false and why2 == 'fh_busy', tostring(why2))
+    assert(select(2, S.X.addTrophy('A', 'y#1', 1)) == 'fh_busy')
+    assert(finish() == true)
+    assert(select(2, S.X.placeTrophy(1, 'trophy_deer')) == 'fh_wall_full')
+    assert(nrows(S.rows[PLOT]) == 6 and S.chest.trophy_deer == 2)
+end)
+case('server: the plot lock is released when a trophy change errors', function()
+    local S = server()
+    S.tiersThrow = true
+    assert(select(2, S.X.placeTrophy(1, 'trophy_deer')) == 'fh_trophy_failed')
+    S.tiersThrow = false
+    assert(S.X.placeTrophy(1, 'trophy_deer') == true)
+end)
+
+-- MINOR: each refund failure has its own reason
+case('server: refund failure reasons are distinct', function()
+    local S = server()
+    assert(S.X.placeTrophy(1, 'trophy_deer'))
+    S.addThrows = true
+    assert(select(2, S.X.unplaceTrophy(1, 'trophy_deer#1')) == 'fh_additem_unavailable')
+    S.addThrows, S.addRefuses = false, false -- refused with no reason from fh_core
+    assert(select(2, S.X.unplaceTrophy(1, 'trophy_deer#1')) == 'fh_chest_refused')
+    S.addRefuses = 'fh_chest_full'
+    assert(select(2, S.X.unplaceTrophy(1, 'trophy_deer#1')) == 'fh_chest_full')
+    assert(S.rows[PLOT]['trophy_deer#1'] == 4) -- still on the wall after all three
+end)
 T.finish()

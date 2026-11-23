@@ -9,14 +9,26 @@
 -- Events emitted (server-local):
 --   'fh:homestead:comfort_changed' (citizenid, newComfort, oldComfort), only when the value changes
 --   'fh:homestead:trophy_placed' / 'fh:homestead:trophy_removed' ({ citizenid, trophy_id, comfort })
--- Events consumed: 'fh:homestead:slot_changed' (plot_id, slot_id, tier) from FhHomesteadSlots.setTier.
--- Trophies belong to the plot and are deleted with it on unclaim.
+-- Events consumed: 'fh:homestead:slot_changed' (plot_id, slot_id, tier) from FhHomesteadSlots.setTier;
+--   'fh:homestead:unclaimed' ({ citizenid, plot_id }) from server/main.lua.
+-- Trophies belong to the plot and are deleted with it on unclaim (FK cascade; the unclaimed handler is the backstop).
+--
+-- Concurrency: every trophy change on a plot runs under that plot's in-flight lock (busy[plotId]); a second change on the
+-- same plot while one is suspended in a MySQL/export await is refused 'fh_busy'. Trophy rows are written only by SQL that
+-- also checks the plot owner (INSERT ... SELECT / DELETE ... JOIN fh_plots), and a change counts only if it affected
+-- exactly one row. gen[plotId] moves on unclaim so work suspended across an await can tell the plot changed hands.
 local cfg = FhHomesteadConfig
 local calc = FhComfort
 local rules = FhPlotRules
 
 local cache = {}   -- citizenid -> { plotId, trophies = { [id] = points }, value }
 local byPlot = {}  -- plotId -> citizenid (only for cached entries)
+local busy = {}    -- plotId -> true while a trophy change is in flight
+local gen = {}     -- plotId -> unclaim counter
+
+local function log(level, msg) print(('%s[fh_homestead] %s^7'):format(level == 'error' and '^1' or '^3', msg)) end
+
+local function genOf(plotId) return gen[plotId] or 0 end
 
 local function plotOf(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
@@ -29,13 +41,30 @@ local function tiersOf(plotId)
     return {}
 end
 
+-- Same owner, same plot, and no unclaim since generation g was read.
+local function stillOwns(citizenid, plotId, g)
+    return genOf(plotId) == g and plotOf(citizenid) == plotId
+end
+
+---Cached entry for the citizen's plot, loading its trophies on first use.
+---@return table|nil entry, string|nil reason
 local function entryFor(citizenid, plotId)
     local e = cache[citizenid]
     if e and e.plotId == plotId then return e end
+    local g = genOf(plotId)
+    local ok, rows = pcall(MySQL.query.await, 'SELECT trophy_id, points FROM fh_plot_trophies WHERE plot_id = ?', { plotId })
+    if not ok then
+        log('warn', 'trophy load failed for ' .. tostring(plotId) .. ': ' .. tostring(rows))
+        return nil, 'fh_trophy_failed'
+    end
+    -- the plot was unclaimed while we read: these rows are not this citizen's any more
+    if not stillOwns(citizenid, plotId, g) then return nil, 'fh_no_plot' end
+    -- another caller may have loaded it while we were suspended in the query
+    e = cache[citizenid]
+    if e and e.plotId == plotId then return e end
     if e then byPlot[e.plotId] = nil end
     local trophies = {}
-    local rows = MySQL.query.await('SELECT trophy_id, points FROM fh_plot_trophies WHERE plot_id = ?', { plotId }) or {}
-    for _, r in ipairs(rows) do trophies[r.trophy_id] = tonumber(r.points) or 0 end
+    for _, r in ipairs(rows or {}) do trophies[r.trophy_id] = tonumber(r.points) or 0 end
     e = { plotId = plotId, trophies = trophies, value = nil }
     cache[citizenid], byPlot[plotId] = e, citizenid
     return e
@@ -57,6 +86,11 @@ local function refresh(citizenid)
         return 0
     end
     local e = entryFor(citizenid, plotId)
+    if not e then
+        -- could not load (DB error / unclaimed meanwhile): report the last known value, emit nothing
+        local c = cache[citizenid]
+        return c and c.value or 0
+    end
     local new = calc.compute(cfg.plots[plotId], tiersOf(plotId), e.trophies, cfg)
     local old = e.value or 0
     e.value = new
@@ -68,33 +102,80 @@ local function getComfort(citizenid)
     return refresh(citizenid)
 end
 
+---Run fn holding plotId's in-flight lock. The lock is released on every path, including an error in fn.
+local function withPlotLock(plotId, fn)
+    if busy[plotId] then return false, 'fh_busy' end
+    busy[plotId] = true
+    local r = table.pack(pcall(fn))
+    busy[plotId] = nil
+    if not r[1] then
+        log('error', ('trophy change on %s errored: %s'):format(tostring(plotId), tostring(r[2])))
+        return false, 'fh_trophy_failed'
+    end
+    return table.unpack(r, 2, r.n)
+end
+
+-- Row writers. Caller holds the plot lock. Each succeeds only if it affected exactly one row AND the citizen still owns
+-- the plot at that moment in the DB, so a write can never land on a plot that changed hands.
+local function insertTrophy(e, citizenid, plotId, trophyId, points)
+    local ok, affected = pcall(MySQL.update.await,
+        'INSERT INTO fh_plot_trophies (plot_id, trophy_id, points) SELECT plot_id, ?, ? FROM fh_plots WHERE plot_id = ? AND citizenid = ?',
+        { trophyId, points, plotId, citizenid })
+    if not ok then
+        log('warn', ('trophy insert %s/%s failed: %s'):format(plotId, trophyId, tostring(affected)))
+        return false, 'fh_trophy_failed'
+    end
+    if (tonumber(affected) or 0) ~= 1 then return false, 'fh_no_plot' end
+    e.trophies[trophyId] = points
+    return true
+end
+
+local function deleteTrophy(e, citizenid, plotId, trophyId)
+    local ok, affected = pcall(MySQL.update.await,
+        'DELETE t FROM fh_plot_trophies t JOIN fh_plots p ON p.plot_id = t.plot_id WHERE t.plot_id = ? AND t.trophy_id = ? AND p.citizenid = ?',
+        { plotId, trophyId, citizenid })
+    if not ok then
+        log('warn', ('trophy delete %s/%s failed: %s'):format(plotId, trophyId, tostring(affected)))
+        return false, 'fh_trophy_failed'
+    end
+    if (tonumber(affected) or 0) ~= 1 then
+        -- already gone (cascade on unclaim, or removed elsewhere): the cache was stale, nothing was taken off the wall here
+        e.trophies[trophyId] = nil
+        return false, 'fh_no_trophy'
+    end
+    e.trophies[trophyId] = nil
+    return true
+end
+
 local function addTrophy(citizenid, trophyId, points)
-    if type(trophyId) ~= 'string' or trophyId == '' or #trophyId > 64 then return false, 'fh_bad_trophy' end
-    if not calc.validPoints(points) then return false, 'fh_bad_points' end
-    points = math.floor(points)
-    if points < 1 then return false, 'fh_bad_points' end
+    local valid, res = calc.checkTrophy(trophyId, points)
+    if not valid then return false, res end
+    points = res
     local plotId = plotOf(citizenid)
     if not plotId then return false, 'fh_no_plot' end
-    local e = entryFor(citizenid, plotId)
-    if e.trophies[trophyId] then return false, 'fh_trophy_duplicate' end
-    local ok = pcall(MySQL.insert.await,
-        'INSERT INTO fh_plot_trophies (plot_id, trophy_id, points) VALUES (?, ?, ?)', { plotId, trophyId, points })
-    if not ok then return false, 'fh_trophy_failed' end
-    e.trophies[trophyId] = points
-    refresh(citizenid)
-    return true
+    return withPlotLock(plotId, function()
+        local e, why = entryFor(citizenid, plotId)
+        if not e then return false, why end
+        if e.trophies[trophyId] then return false, 'fh_trophy_duplicate' end
+        local ok, iwhy = insertTrophy(e, citizenid, plotId, trophyId, points)
+        if not ok then return false, iwhy end
+        refresh(citizenid)
+        return true
+    end)
 end
 
 local function removeTrophy(citizenid, trophyId)
     local plotId = plotOf(citizenid)
     if not plotId then return false, 'fh_no_plot' end
-    local e = entryFor(citizenid, plotId)
-    if type(trophyId) ~= 'string' or not e.trophies[trophyId] then return false, 'fh_no_trophy' end
-    local ok = pcall(MySQL.update.await, 'DELETE FROM fh_plot_trophies WHERE plot_id = ? AND trophy_id = ?', { plotId, trophyId })
-    if not ok then return false, 'fh_trophy_failed' end
-    e.trophies[trophyId] = nil
-    refresh(citizenid)
-    return true
+    return withPlotLock(plotId, function()
+        local e, why = entryFor(citizenid, plotId)
+        if not e then return false, why end
+        if type(trophyId) ~= 'string' or not e.trophies[trophyId] then return false, 'fh_no_trophy' end
+        local ok, dwhy = deleteTrophy(e, citizenid, plotId, trophyId)
+        refresh(citizenid)
+        if not ok then return false, dwhy end
+        return true
+    end)
 end
 
 AddEventHandler('fh:homestead:slot_changed', function(plotId)
@@ -106,15 +187,41 @@ AddEventHandler('fh:homestead:slot_changed', function(plotId)
     if owner then refresh(owner) end
 end)
 
+-- Plot released: its trophies are gone with it. Clear the cache for whoever had it cached, tell Survival the comfort
+-- is now 0, and bump the generation so any trophy change suspended mid-await aborts instead of writing.
+AddEventHandler('fh:homestead:unclaimed', function(data)
+    if type(data) ~= 'table' or type(data.plot_id) ~= 'string' then return end
+    local plotId = data.plot_id
+    gen[plotId] = genOf(plotId) + 1
+    local holders = {}
+    if type(data.citizenid) == 'string' then holders[data.citizenid] = true end
+    if byPlot[plotId] then holders[byPlot[plotId]] = true end
+    for cid in pairs(holders) do
+        local e = cache[cid]
+        if e and e.plotId == plotId then
+            local old = e.value or 0
+            drop(cid)
+            if old ~= 0 then TriggerEvent('fh:homestead:comfort_changed', cid, 0, old) end
+        end
+    end
+    byPlot[plotId] = nil
+    -- FK ON DELETE CASCADE (0006) already removed the rows with fh_plots; this only fires if that did not happen, and
+    -- never touches a plot someone has claimed again since.
+    local ok, err = pcall(MySQL.update.await,
+        'DELETE t FROM fh_plot_trophies t LEFT JOIN fh_plots p ON p.plot_id = t.plot_id WHERE t.plot_id = ? AND p.plot_id IS NULL',
+        { plotId })
+    if not ok then log('warn', ('trophy cleanup for unclaimed %s failed: %s'):format(plotId, tostring(err))) end
+end)
+
 -- Small wrappers so specs/other code can stub the cross-resource calls.
 local function trophyComfortOf(itemId)
     if GetResourceState('fh_hunting') ~= 'started' then
-        print('^3[fh_homestead] fh_hunting not started; trophy placement refused^7')
+        log('warn', 'fh_hunting not started; trophy placement refused')
         return nil, 'fh_hunting_unavailable'
     end
     local ok, res = pcall(function() return exports.fh_hunting:getTrophyComfort(itemId) end)
     if not ok then
-        print('^3[fh_homestead] fh_hunting:getTrophyComfort failed: ' .. tostring(res) .. '^7')
+        log('warn', 'fh_hunting:getTrophyComfort failed: ' .. tostring(res))
         return nil, 'fh_hunting_unavailable'
     end
     return tonumber(res)
@@ -125,10 +232,22 @@ local function chestRef(plotId) return { type = 'chest', id = rules.chestStashId
 local function removeFromChest(plotId, itemId)
     local ok, res, why = pcall(function() return exports.fh_core:removeItem(chestRef(plotId), itemId, 1) end)
     if not ok then
-        print('^3[fh_homestead] fh_core:removeItem unavailable (core B7): ' .. tostring(res) .. '^7')
+        log('warn', 'fh_core:removeItem unavailable (core B7): ' .. tostring(res))
         return false, 'fh_removeitem_unavailable'
     end
     if not res then return false, why or 'fh_item_not_in_chest' end
+    return true
+end
+
+---Put one item into the plot chest. @return boolean ok, string|nil reason ('fh_additem_unavailable' when the export
+---threw; otherwise fh_core's own refusal reason, e.g. a full chest)
+local function giveToChest(plotId, itemId)
+    local ok, res, why = pcall(function() return exports.fh_core:addItem(chestRef(plotId), itemId, 1) end)
+    if not ok then
+        log('warn', 'fh_core:addItem failed: ' .. tostring(res))
+        return false, 'fh_additem_unavailable'
+    end
+    if res ~= true then return false, type(why) == 'string' and why or 'fh_chest_refused' end
     return true
 end
 
@@ -141,37 +260,74 @@ local function placeTrophy(src, itemId)
     local cid = citizenidOf(src)
     local plotId = plotOf(cid)
     if not plotId then return false, 'fh_no_plot' end
-    local e = entryFor(cid, plotId)
-    local ok, res, trophyId = calc.place({
-        citizenid = cid, ownerCitizenid = cid, tiers = tiersOf(plotId), trophies = e.trophies, cfg = cfg, itemId = itemId,
-        lookup = trophyComfortOf,
-        removeItem = function(id) return removeFromChest(plotId, id) end,
-    })
-    if not ok then return false, res end
-    local added, why = addTrophy(cid, trophyId, res)
-    if not added then
-        pcall(function() return exports.fh_core:addItem(chestRef(plotId), itemId, 1) end) -- refund the item taken above
-        return false, why
-    end
-    TriggerEvent('fh:homestead:trophy_placed', { citizenid = cid, trophy_id = trophyId, comfort = res })
-    return true, trophyId
+    return withPlotLock(plotId, function()
+        local g = genOf(plotId)
+        local e, ewhy = entryFor(cid, plotId)
+        if not e then return false, ewhy end
+        local ok, res, trophyId = calc.place({
+            citizenid = cid, ownerCitizenid = cid, tiers = tiersOf(plotId), trophies = e.trophies, cfg = cfg, itemId = itemId,
+            lookup = trophyComfortOf,
+            removeItem = function(id) return removeFromChest(plotId, id) end,
+        })
+        if not ok then return false, res end
+        -- The item is out of the chest. From here every failure puts it back.
+        local why
+        if not stillOwns(cid, plotId, g) then
+            why = 'fh_no_plot'
+        else
+            local added, iwhy = insertTrophy(e, cid, plotId, trophyId, res)
+            if not added then why = iwhy end
+        end
+        if why then
+            local back, bwhy = giveToChest(plotId, itemId)
+            if not back then
+                log('error', ('ITEM LOST: trophy place on %s for %s failed (%s) and the refund of %s to %s failed (%s)')
+                    :format(plotId, cid, why, itemId, rules.chestStashId(plotId, 1), tostring(bwhy)))
+                return false, 'fh_place_refund_failed'
+            end
+            return false, why
+        end
+        refresh(cid)
+        TriggerEvent('fh:homestead:trophy_placed', { citizenid = cid, trophy_id = trophyId, comfort = res })
+        return true, trophyId
+    end)
 end
 
 local function unplaceTrophy(src, trophyId)
     local cid = citizenidOf(src)
     local plotId = plotOf(cid)
     if not plotId then return false, 'fh_no_plot' end
-    local e = entryFor(cid, plotId)
-    local ok, why = calc.canUnplace({ citizenid = cid, ownerCitizenid = cid, trophyId = trophyId, trophies = e.trophies })
-    if not ok then return false, why end
-    local points = e.trophies[trophyId]
-    local itemId = calc.itemOf(trophyId)
-    local added, res = pcall(function() return exports.fh_core:addItem(chestRef(plotId), itemId, 1) end)
-    if not added or not res then return false, 'fh_chest_full' end -- keep the trophy rather than lose the item
-    local removed, rwhy = removeTrophy(cid, trophyId)
-    if not removed then return false, rwhy end
-    TriggerEvent('fh:homestead:trophy_removed', { citizenid = cid, trophy_id = trophyId, comfort = points })
-    return true
+    return withPlotLock(plotId, function()
+        local g = genOf(plotId)
+        local e, ewhy = entryFor(cid, plotId)
+        if not e then return false, ewhy end
+        local ok, why = calc.canUnplace({ citizenid = cid, ownerCitizenid = cid, trophyId = trophyId, trophies = e.trophies })
+        if not ok then return false, why end
+        local points = e.trophies[trophyId]
+        local itemId = calc.itemOf(trophyId)
+        -- Delete first: only a call whose DELETE removed exactly one row may hand the item back, so a repeat can't mint
+        -- a second one.
+        local removed, dwhy = deleteTrophy(e, cid, plotId, trophyId)
+        if not removed then
+            refresh(cid)
+            return false, dwhy
+        end
+        local back, bwhy = giveToChest(plotId, itemId)
+        if not back then
+            -- Chest refused the item: put the trophy back on the wall rather than lose it.
+            local restored = stillOwns(cid, plotId, g) and insertTrophy(e, cid, plotId, trophyId, points)
+            refresh(cid)
+            if not restored then
+                log('error', ('ITEM LOST: trophy unplace %s/%s for %s: refund failed (%s) and the wall row could not be restored')
+                    :format(plotId, trophyId, cid, tostring(bwhy)))
+                return false, 'fh_unplace_refund_failed'
+            end
+            return false, bwhy -- trophy is back on the wall; the reason is fh_core's (e.g. chest full)
+        end
+        refresh(cid)
+        TriggerEvent('fh:homestead:trophy_removed', { citizenid = cid, trophy_id = trophyId, comfort = points })
+        return true
+    end)
 end
 
 exports('getComfort', getComfort)
