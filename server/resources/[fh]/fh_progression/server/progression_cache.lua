@@ -1,5 +1,5 @@
 -- Per-player rep cache for fh_progression. Pure Lua: the rep read, player lookup and event emit are injected, so
--- specs drive it with coroutines. deps.read may yield (MySQL await), so every write after a read is guarded:
+-- specs drive it with coroutines. deps.read may yield (the getRep export awaits the DB), so every write after a read is guarded:
 --  * loadAll commits only if no newer load, rep_changed, unload or drop for that src happened while it read
 --    (loadGen[src] still holds its token) and src still has the same character.
 --  * a rep_changed re-read (value = nil) applies only if its entry is still the cached one and no newer rep_changed

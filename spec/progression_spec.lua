@@ -92,7 +92,7 @@ case('repExportResult follows getRep(who, region_id) -> integer|nil, err', funct
     T.eq('value', kind); T.eq(120, v)
     kind, v = logic.repExportResult(true, 0)
     T.eq('value', kind); T.eq(0, v)
-    -- nil + err is an error passed through, never 0 and never the fallback
+    -- nil + err is an error passed through, never 0
     for _, err in ipairs({ 'unknown_region', 'no_player', 'ledger_failed' }) do
         kind, v = logic.repExportResult(true, nil, err)
         T.eq('error', kind); T.eq(err, v)
@@ -103,9 +103,9 @@ case('repExportResult follows getRep(who, region_id) -> integer|nil, err', funct
         kind, v = logic.repExportResult(true, bad)
         T.eq('error', kind); T.eq('bad_value', v)
     end
-    -- the call itself failed (no getRep export yet): only then the read-only fallback
+    -- the call itself threw (fh_economy stopped / restarting): an error too, never 0 (no DB fallback any more)
     kind, v = logic.repExportResult(false, 'No such export getRep in resource fh_economy')
-    T.eq('fallback', kind); T.eq(nil, v)
+    T.eq('error', kind); T.eq('economy_unavailable', v)
 end)
 
 case('parseRepCmd: valid args and every refusal code', function()

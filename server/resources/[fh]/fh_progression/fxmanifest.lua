@@ -13,12 +13,11 @@ shared_scripts {
 }
 
 server_scripts {
-    '@oxmysql/lib/MySQL.lua',
-    'server/compat_rep.lua',
+    'server/rep.lua',
     'server/progression_cache.lua',
     'server/main.lua',
 }
 
-dependencies { 'fh_core', 'fh_economy', 'oxmysql', 'rsg-core' }
+dependencies { 'fh_core', 'fh_economy', 'rsg-core' }
 
 server_exports { 'getTier', 'canUnlock', 'getRep' }

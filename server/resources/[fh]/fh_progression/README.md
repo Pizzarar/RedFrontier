@@ -26,8 +26,8 @@ no newer load / `rep_changed` / unload / drop for that `src` happened meanwhile 
 A read error keeps the old value, emits nothing and marks the entry for reload on next access.
 
 ## Rep read
-`server/compat_rep.lua` is the only reader: `exports.fh_economy:getRep(citizenid, region_id)` -> `integer|nil, err`
-(@core B7). A nil+err from the export stays an error (never 0). Only when the call itself fails (no export yet) it falls
-back to a read-only `SELECT` on `fh_rep`. Workaround: remove the fallback when fh_economy exports getRep (idea-600).
+`server/rep.lua` is the only reader: `exports.fh_economy:getRep(citizenid, region_id)` -> `integer|nil, err`
+(@core B7). Every failure stays an error, never 0: a nil+err from the export is passed through; a throw (fh_economy
+stopped or restarting) is `economy_unavailable`. No direct DB access (the P1 oxmysql read-only shim is gone).
 
 Logic is pure (`shared/progression_logic.lua`) and covered by `spec/progression_spec.lua`.

@@ -39,11 +39,11 @@ end
 
 ---Interprets `pcall(exports.fh_economy.getRep, citizenid, region_id)`. Contract (@core B7):
 ---`getRep(who, region_id) -> integer|nil, err` with err in unknown_region / no_player / ledger_failed.
----A nil from the export is an error and is passed through as-is, never read as 0. Only a failed call (export not
----there yet: idea-600) asks for the read-only fallback.
----@return string kind 'value'|'error'|'fallback', number|string|nil v
+---Every failure is an error, never read as 0: a nil from the export passes its err through; a failed call (the
+---export threw: fh_economy stopped or restarting) is 'economy_unavailable'.
+---@return string kind 'value'|'error', number|string v
 function logic.repExportResult(callOk, v, err)
-    if not callOk then return 'fallback' end
+    if not callOk then return 'error', 'economy_unavailable' end
     if v == nil then return 'error', type(err) == 'string' and err or 'read_failed' end
     if type(v) ~= 'number' or v ~= v or v == math.huge or v == -math.huge then return 'error', 'bad_value' end
     return 'value', v
