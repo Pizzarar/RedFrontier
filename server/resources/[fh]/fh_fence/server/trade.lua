@@ -6,6 +6,9 @@
 --     (the body runs under pcall); a second trade gets 'fence_busy' at once. A dropped player's lock is revoked: the
 --     trade stops at its next alive check (before each mutation) and its exit releases the lock. A lock whose trade
 --     never resumes is reclaimed after cfg.lockStaleSeconds; an old token's late release never frees a newer lock.
+--     After EVERY yielding call a trade re-checks that it still owns the lock before touching the stash or money:
+--     a reclaimed trade does no further stash/money side effect (it only logs what it leaves behind). Residual
+--     window: one fh_core call that itself blocks >= lockStaleSeconds and lands after the new trade's checks.
 --  2. The player's fence_stash (fh:fence:<citizenid>:<fence_id>, docs/decisions/inventory.md) must be EMPTY before a
 --     trade stages anything, so it only ever holds the current trade's items. Leftovers from a crash or a failed
 --     restore are never mixed in, given out or wiped: the trade is refused ('fence_pending') and a WARNING logged.
@@ -62,7 +65,12 @@ function M.newLocks(now, staleSeconds, onReclaim)
     function L.release(tok)
         if tok and held[tok.cid] == tok then held[tok.cid] = nil end
     end
-    function L.alive(tok) return tok ~= nil and held[tok.cid] == tok and not tok.revoked end
+    ---owned: the lock is still this token's (not reclaimed). Required before EVERY stash / money side effect: a
+    ---reclaimed trade must not touch a stash that a newer trade may be using.
+    function L.owned(tok) return tok ~= nil and held[tok.cid] == tok end
+    ---alive: owned and not revoked by a drop. Required before every FORWARD step (stage, charge, take goods).
+    ---A revoked-but-owned trade may still roll back its own stash; nobody else can use it yet.
+    function L.alive(tok) return L.owned(tok) and not tok.revoked end
     function L.held(cid) return held[cid] ~= nil end
     ---Player left mid-trade: revoke. The trade stops at its next alive check and its pcall exit releases the lock.
     ---Not released here: a reconnect (same citizenid, new src) would otherwise interleave with the trade still
@@ -88,8 +96,11 @@ function M.new(cfg, logic, deps)
     local locks = M.newLocks(deps.now, cfg.lockStaleSeconds, function(tok)
         log('WARNING reclaimed a stale trade lock: citizenid=%s src=%s', tostring(tok.cid), tostring(tok.src))
     end)
-    local sweep = {}      -- stash id -> true: leftovers there are known to be the fence's (safe to wipe)
+    -- stash id -> true: what is in that stash is known to be the fence's (safe to wipe). Cleared whenever the stash
+    -- is seen empty or player-owned / paid-for goods are left in it (pin).
+    local sweep = {}
     local T = { locks = locks }
+    local owned, alive = locks.owned, locks.alive
 
     local function run(op, src, fn, ...)
         local cid = deps.citizenOf(src)
@@ -105,28 +116,49 @@ function M.new(cfg, logic, deps)
         return table.unpack(res, 2, res.n)
     end
 
-    ---Wipe the stash. sweepable = what is in it is the fence's, so a later trade may finish the wipe.
+    ---Player goods or paid-for goods stay in the stash: never sweep them.
+    local function pin(stash) sweep[stash.id] = nil end
+
+    ---A reclaimed trade stops here: no stash / money side effect, just say what it leaves behind.
+    local function reclaimed(tok, op, what)
+        log('WARNING %s reclaimed mid-trade (%s): citizenid=%s, stash not touched', op, what, tostring(tok.cid))
+        return false, 'fence_busy'
+    end
+
+    ---Wipe the stash (caller checked owned). sweepable = what is in it is the fence's, so a later trade may finish.
     local function discard(stash, sweepable, why)
         local ok, err = deps.clear(stash)
         if ok then
             sweep[stash.id] = nil
             return true
         end
-        if sweepable then sweep[stash.id] = true end
+        sweep[stash.id] = sweepable and true or nil
         log('WARNING %s: clear %s failed (%s)%s', why, stash.id, tostring(err),
             sweepable and ', retried on the next trade' or ', left for an admin')
         return false
     end
 
+    ---Owner-only cleanup of an unpaid stage: discard when still owned, else leave it (logged).
+    local function dropStage(tok, stash, why)
+        if owned(tok) then return discard(stash, true, why) end
+        reclaimed(tok, 'buy', why .. ', unpaid stage may remain')
+        return false
+    end
+
     ---Register the stash and make sure it is empty (invariant 2). @return boolean ok, string|nil reason
-    local function begin(stash, stop, cid)
+    local function begin(tok, stash, stop, cid)
         local ok, err = deps.ensureStash(stash, stop)
         if not ok then return false, err or 'fh_unavailable' end
         local items = deps.snapshot(stash)
+        if not owned(tok) then return false, 'fence_busy' end
         if not items then return false, 'fh_unavailable' end
-        if next(items) == nil then return true end
+        if next(items) == nil then
+            pin(stash) -- emptied elsewhere: an old sweep flag must not outlive what it was about
+            return true
+        end
         if sweep[stash.id] and discard(stash, true, 'sweep') then
             items = deps.snapshot(stash)
+            if not owned(tok) then return false, 'fence_busy' end
             if items and next(items) == nil then return true end
         end
         local parts = {}
@@ -148,31 +180,40 @@ function M.new(cfg, logic, deps)
 
         local fits, fitWhy = deps.canFit(backpack, item, qty)
         if not fits then return false, fitWhy or 'no_room' end
-        local ok, err = begin(stash, stop, cid)
+        local ok, err = begin(tok, stash, stop, cid)
         if not ok then return false, err end
-        if not locks.alive(tok) then return false, 'fence_busy' end
+        if not alive(tok) then return false, 'fence_busy' end
 
         -- 1. stage (nothing reaches the player yet)
         ok, err = deps.addItem(stash, item, qty, logic.leadInfo(quote.entry))
         if not ok then
-            discard(stash, true, 'buy stage refused')
-            return false, err or 'fh_refused'
+            dropStage(tok, stash, 'buy stage refused')
+            return false, owned(tok) and (err or 'fh_refused') or 'fence_busy'
         end
+        if not owned(tok) then dropStage(tok, stash, 'after stage'); return false, 'fence_busy' end
         -- charge only for what is really staged (and only that is in the stash)
         local staged = deps.snapshot(stash)
-        if not staged or not onlyOf(staged, item) or countOf(staged, item) ~= qty or not locks.alive(tok) then
-            discard(stash, true, 'buy stage check')
-            return false, locks.alive(tok) and 'stage_failed' or 'fence_busy'
+        if not staged or not onlyOf(staged, item) or countOf(staged, item) ~= qty or not alive(tok) then
+            dropStage(tok, stash, 'buy stage check')
+            return false, alive(tok) and 'stage_failed' or 'fence_busy'
         end
 
         -- 2. charge: any failure = the stage is the fence's again, nothing delivered, no money moved
         ok, err = deps.charge(src, quote.total, 'fence_buy:' .. item, stop.region_id)
         if not ok then
-            discard(stash, true, 'buy charge refused')
-            return false, err or 'charge_refused'
+            dropStage(tok, stash, 'buy charge refused')
+            return false, owned(tok) and (err or 'charge_refused') or 'fence_busy'
+        end
+        if not owned(tok) then
+            -- paid, but the stash may be someone else's now: deliver nothing, refund nothing, flag it
+            pin(stash)
+            log('WARNING buy paid then reclaimed, owed delivery or refund: citizenid=%s item=%s qty=%d paid=%d',
+                tostring(cid), item, qty, quote.total)
+            return false, 'fence_busy'
         end
 
-        -- 3. deliver; the stash holds only this trade's items, so what is left in it is exactly what was not delivered
+        -- 3. deliver (revoked-but-owned still delivers: the money is taken). The stash holds only this trade's
+        --    items, so what is left in it is exactly what was not delivered.
         local tok2, moved = deps.transferAll(stash, backpack, src)
         local left = deps.snapshot(stash)
         local undelivered
@@ -181,6 +222,7 @@ function M.new(cfg, logic, deps)
         elseif tok2 and type(moved) == 'table' then
             undelivered = qty - countOf(moved, item)
         else
+            pin(stash)
             log('WARNING buy delivery unknown, no refund: citizenid=%s item=%s qty=%d paid=%d (items stay in %s)',
                 tostring(cid), item, qty, quote.total, stash.id)
             return false, 'delivery_unknown'
@@ -188,12 +230,14 @@ function M.new(cfg, logic, deps)
         undelivered = math.max(0, math.min(qty, undelivered))
         if undelivered == 0 then return true, qty, 0 end
 
-        -- 4. partial: remove the undelivered units first, then refund only those
+        -- 4. partial: remove the undelivered units first (owner only), then refund only those
         local refund = undelivered * quote.entry.price
-        if not discard(stash, false, 'buy undelivered') then
+        if not owned(tok) or not discard(stash, false, 'buy undelivered') then
+            pin(stash)
             log('WARNING buy refund owed: citizenid=%s item=%s undelivered=%d refund=%d', tostring(cid), item, undelivered, refund)
             return false, 'delivery_incomplete'
         end
+        -- the units are gone: the refund is ours to finish even if the lock was reclaimed meanwhile (money only)
         local rok, rerr = deps.pay(src, refund, 'fence_refund', stop.region_id)
         if not rok then
             -- the undelivered units are already gone, so this is money owed (the charge ledger row proves it)
@@ -213,7 +257,7 @@ function M.new(cfg, logic, deps)
         local price, why = logic.quoteSell(cfg, item, qty)
         if not price then return false, why end
         local backpack, stash = { type = 'backpack', id = src }, M.stashRef(cid, cfg.fenceId)
-        local ok, err = begin(stash, stop, cid)
+        local ok, err = begin(tok, stash, stop, cid)
         if not ok then return false, err end
 
         local items = deps.snapshot(backpack)
@@ -225,46 +269,58 @@ function M.new(cfg, logic, deps)
         for slot in pairs(items) do slots[#slots + 1] = slot end
         table.sort(slots)
 
-        -- 1. goods -> stash
+        -- 1. goods -> stash (alive before each move: a revoked or reclaimed trade takes nothing more)
         local need = qty
         for _, slot in ipairs(slots) do
             local it = items[slot]
             if need > 0 and it.name == item and free[1] then
-                if not locks.alive(tok) then break end
+                if not alive(tok) then break end
                 local take = math.min(need, tonumber(it.amount) or 1)
                 if deps.move(backpack, stash, slot, table.remove(free, 1), take, src) then need = need - take end
             end
         end
 
+        ---Give the goods back. Owner only: a reclaimed trade must not empty a stash a newer trade may be using.
         local function restore()
+            if not owned(tok) then pin(stash); return false, 'reclaimed' end
             deps.transferAll(stash, backpack, src)
             local left = deps.snapshot(stash)
             if left and next(left) == nil then return true end
+            pin(stash) -- the player's goods: never swept
             return false, left and 'restore_incomplete' or 'restore_unknown'
         end
 
         -- 2. the stash is the truth: the backpack may have changed while we moved (slot reused by another item)
         local staged = deps.snapshot(stash)
+        if not owned(tok) then
+            pin(stash)
+            return reclaimed(tok, 'sell', ('before pay, goods of %s may be in %s'):format(item, stash.id))
+        end
         local sold = staged and countOf(staged, item) or 0
-        if not staged or not onlyOf(staged, item) or sold > qty or sold == 0 or not locks.alive(tok) then
+        if not staged or not onlyOf(staged, item) or sold > qty or sold == 0 or not alive(tok) then
             local rok, rerr = restore()
             if not rok then
                 log('WARNING sell aborted and restore failed (%s): citizenid=%s item=%s (goods stay in %s)',
                     tostring(rerr), tostring(cid), item, stash.id)
             end
             if staged and onlyOf(staged, item) and sold == 0 then return false, 'not_enough_items' end
-            return false, locks.alive(tok) and 'inventory_changed' or 'fence_busy'
+            return false, alive(tok) and 'inventory_changed' or 'fence_busy'
         end
 
-        -- 3. pay; on failure give the goods back (sellOutcome)
+        -- 3. pay; on failure give the goods back (sellOutcome; restore is owner-only)
         local total = cfg.buys[item] * sold
         local paid, payWhy = deps.pay(src, total, 'fence_sell:' .. item, stop.region_id)
         local out = logic.sellOutcome(paid, payWhy, restore, { citizenid = cid, item = item, qty = sold })
         if out.log then deps.log(out.log) end
         if out.action ~= 'complete' then return false, out.reason end
 
-        -- 4. paid: the goods are the fence's
-        discard(stash, true, 'sell clear')
+        -- 4. paid: the goods are the fence's. Clear only while owned; a reclaimed trade leaves them (logged).
+        if owned(tok) then
+            discard(stash, true, 'sell clear')
+        else
+            log('WARNING sell paid then reclaimed: citizenid=%s item=%s qty=%d sold goods left in %s', tostring(cid),
+                item, sold, stash.id)
+        end
         return true, sold, total
     end
 

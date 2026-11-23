@@ -28,7 +28,10 @@ local function buy(e)
     if not qty then return end
     local ok, a, b = lib.callback.await('fh:fence:buy', false, e.item, qty)
     if not ok then return notify(why(a)) end
-    if b and b > 0 then return notify(('Bought %d. No room for the rest: $%d refunded.'):format(a, b)) end
+    if a and a < qty then
+        if b and b > 0 then return notify(('Bought %d of %d. No room for the rest: $%d refunded.'):format(a, qty, b)) end
+        return notify(('Bought %d of %d. The refund for the rest failed: ask an admin.'):format(a, qty))
+    end
     notify('Bought.')
 end
 
