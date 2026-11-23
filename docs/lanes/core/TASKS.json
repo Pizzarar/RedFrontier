@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T21:45:00.186Z",
+  "updatedAt": "2026-11-23T21:48:44.330Z",
   "units": [
     {
       "id": "B5",
@@ -139,6 +139,32 @@
       "files": [],
       "doneCheck": "",
       "status": "todo"
+    },
+    {
+      "id": "mig-renumber",
+      "goal": "renumber B7 migration 0005_fh_ledger_charge -> 0006 (dup with H1)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-mig",
+      "commit": "2e953d8"
+    },
+    {
+      "id": "C3c",
+      "goal": "core-03 requestOfNetId(netId) export",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-c3c",
+      "commit": "a3cd996"
+    },
+    {
+      "id": "C3ab",
+      "goal": "core-03 carried add/remove + setItemInfo",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-c3ab"
     }
   ]
 }

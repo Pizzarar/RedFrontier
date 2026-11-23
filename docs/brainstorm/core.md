@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: Core lead · B7 fix + merge
-- Workers: 0
+- Workers: 2
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -22,11 +22,10 @@
 - M1 order: B4c spawn contract → (B6b T1 camp fh_zones ∥ B6c soft death fh_death) → B6d stash home + end-to-end card. Wagons/chases out of scope. M1 small_safe = bulky (saddlebag carry); cargo reserved for M4 wagon loot. B6e: minimal per-character saddlebag, opens only mounted/near a horse; admin test-horse via B4c. Bulky stays out of backpack. Bulky to/from chest: `/saddlebag in|out <slot> [amt]` (workaround; pane stays backpack). Follow-up B6f pane toggle (todo).
 - Player count: owner + up to 5 friends (sv_maxclients 6, unlisted, allowlist, Tailscale), up from spec §2's 1-4. B-access: first joiner = admin (only while none exists), friends never admin; allowlist via rsg-core ACE whitelist + gitignored allowlist.cfg; fh_allow <license> admin cmd + rejected-connect log line.
 - No GitHub push without owner OK (Pizzarar/RedFrontier not pre-approved).
-
+- 2026-11-23 idea-616(2) closed: covered by @roads fh_cargo nearestWagon+getWagon (roads-r1 32817e7); roads briefed hunting.
+- 2026-11-23 core-03 carried-inventory API (docs/brainstorm/plans/core-03-carried-api.md): extend addItem/removeItem to carried refs {backpack|equipped,id=src}, new setItemInfo(ref,slot,info,expectName?), requestOfNetId(netId) for existing despawn. Checked fh_core exports + fh_inventory fh_api.lua first. Covers roads gap, idea-615/643/687/689/616(1); 600/692 covered by B7.
 ## Open
-- B-admin+B-access: rebased core-badmin 20e4b5e (was 694ca7a, Gemini PASS), conflict-free (range-diff: server.cfg context shift only), PASS stands, merge-ready; held because forge has no lupa so specs cannot run (owner sudo, Overlord flagged). Lead rn-f602a24ed9c2.
-- idea-614 (Q0a, @quests): add `participants = {citizenid,...}` to fh:zones:camp_cleared (fh_zones/server/main.lua:137) = players within camp activationRadius of cfg.center when clear() fires; no damage tracking. Additive, optional for quests. Dispatched 11-23 rn-a527caf4add5 branch core-i614 (fh_zones only, no clash).
-- B7 fix dispatched (11-23) to Cor1 rn-d0832267ea2f; brief docs/brainstorm/plans/core-02-b7-fix.md (review transcript lost: crit known, 2 lows untitled).
+- B7-nit: fh_economy README Tests list (lead queue).
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
 - Aub: Cfx key + first join (OWNER-STEPS.md), then run OWNER-TESTS.md; flip fh_spike_gated after S1/S2.
 - RSG + fh_inventory (fork, unwrapped) client errors still need Aub to send CitizenFX log from Main.
@@ -35,7 +34,6 @@
 
 ## In flight
 - 11-23 post-thaw PASS+merged local main (unpushed): B-access 495621d, B7 334642c (Gemini tierA PASS 0/0/1; fix brief plans/core-02-b7-fix.md), idea-614 b63a340 (Sonnet PASS 0/0/0). 23 specs/431 tests green. Siblings notified. Nit B7-nit (README Tests list) queued.
-- FORGE FREEZE (2026-11-23, owner via Hub15): PARKED, start nothing. B-access core-badmin 694ca7a (re-review pending), B7 core-b7 9bad7c4 (review pending); neither merged. Branches unpushed (Overlord pushes). Resume after cutover reported done: finish both reviews, merge, notify @progression/@homestead/@roads.
 - B7 contracts batch (plan core-02): charge/getRep/removeItem/wagon spawn kind/heat delegate/registerItems for @progression/@homestead/@roads (idea-600/602/603 merged).
 - Plan: docs/brainstorm/plans/core-01-boot-to-m1.md (+ amendments: machine split, autonomy). Lead Cor2 rn-428940b6f1c5.
 - Main 6307f28 = B1 boot, B2 boot-check+run-specs, B3 inventory fork, B4a container API+fh_inventory, B4b ledger/buffs/regions/events, B5 admin cmds+natives.md, B6a plot+chest, B-dev split+FH.safe. 179 specs green, Gemini PASS each. Nothing runtime-tested (no key yet). Unpushed.
@@ -46,4 +44,5 @@
 - B6e PASS (124f06c, Gemini tierA re-review 0/0/1) merged main 26eef2a: per-char saddlebag, server horse check, /saddlebag in|out transfer. 263 specs, [fh] syntax 51 clean. M1 CODE COMPLETE; unverified in-game. Follow-ups B6f (pane toggle), B6g (pickSlot info nit).
 - B6g PASS (842050a, Gemini 0/0/1 comment nit) merged main 06f2d3b; 267 specs. Lane idle pending owner in-game test; B6f (pane toggle) held for test RESULTs.
 - B-run PASS (c8f1b22 Gemini 0/0/2, lows fixed db83664) merged main de086db: tools/first-run.cmd/.ps1 (UAC firewall, hidden key prompt, start + connect line), OWNER-STEPS 4 steps. test-firstrun ALL PASS, 267 specs. Owner: install RDR2+RedM, key, double-click first-run.cmd.
-- FORGE FREEZE (Hub15, 11-23): PARKED, no merges. B-access core-badmin 694ca7a (fixes for Gemini FAIL 1/1/1; re-review rn-d95b4d9294cc pending). B7 core-b7 9bad7c4 (316 specs; Gemini review rn-823b275a1998 pending). Branches NOT pushed (RedFrontier no-push rule).
+- 11-23 merged to local main (unpushed): B-access 495621d, B7 334642c, idea-614 b63a340; 23 spec files / 431 green. Siblings notified.
+- core-03 handed to lead rn-f602a24ed9c2 (C3a+b one worker, C3c parallel).
