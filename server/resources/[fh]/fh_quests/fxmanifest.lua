@@ -6,16 +6,29 @@ lua54 'yes'
 
 description 'RedFrontier quests: data-driven quest engine, jobs board, family questlines (plan quests-01)'
 
--- Q1: pure shared modules only. Q2 adds server/*.lua (intake, exports, persistence, payouts).
+-- Pure modules (specced by tools/run-specs.py). Order matters: later modules use the earlier globals.
 shared_scripts {
+    '@fh_core/shared/regions.lua', -- FhRegions global (region ids for validate)
     'shared/match.lua',
     'shared/engine.lua',
     'shared/board.lua',
+    'shared/jobs.lua',
+    'shared/intake.lua',
+    'shared/journal.lua',
+    'shared/rewards.lua',
+    'shared/store.lua',
 }
 
-dependencies { 'fh_core', 'fh_economy' }
+-- Thin server glue: state cache/lock, persistence, payouts, sync (main.lua); exports + event intake (api.lua).
+server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    'server/main.lua',
+    'server/api.lua',
+}
 
--- The contract other lanes build against (README.md "Exports"). Implemented in Q2/Q3; declared now.
+dependencies { 'fh_core', 'fh_economy', 'oxmysql', 'rsg-core' }
+
+-- The contract other lanes build against (README.md "Server exports").
 server_exports {
     'registerQuest',
     'registerJobType',
