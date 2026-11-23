@@ -106,6 +106,7 @@ Hashes are copied from the Spikes section below (same native); `not looked up` =
 | `CreatePed` (isNetwork=true) | `0xD49F9B0955C367DE` | `fh_core/client/spawn.lua` (ped, horse) | client |
 | `_SET_RANDOM_OUTFIT_VARIATION` | `0x283978A15512B2FE` | `fh_core/client/spawn.lua` (else peds can be invisible) | client |
 | `CreateObject` (isNetwork=true) | `0x509D5878EB39E842` | `fh_core/client/spawn.lua` (object) | client |
+| `CreateVehicle` (isNetwork=true, bScriptHostVeh=true, bDontAutoCreateDraftAnimals=false) | `0xAF35D0D2583051B0` (not re-looked up) | `fh_core/client/spawn.lua` (wagon, B7) | client; **unverified in-game** (arg order and draft-horse auto-create untested) |
 | `SetEntityHeading` | not looked up | `fh_core/client/spawn.lua` (object) | client |
 | `NetworkGetEntityIsNetworked` | not looked up | `fh_core/client/spawn.lua` | client |
 | `NetworkGetNetworkIdFromEntity` | `0xA11700682F3AD45C` | `fh_core/client/spawn.lua` | client |

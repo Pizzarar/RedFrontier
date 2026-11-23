@@ -44,13 +44,21 @@ lib.addCommand('fh_give', {
 end)
 
 lib.addCommand('fh_heat', {
-    help = 'Set heat (stub, 0-100): fh_heat <id> <value>',
+    help = 'Set heat (0-100): fh_heat <id> <faction> <value> (fh_heat <id> <value> = stub when fh_heat is not running)',
     restricted = 'group.admin',
 }, function(src, args, raw)
     local p, err = FhAdminArgs.parseHeat(split(raw))
     if not p then return reply(src, 'fh_heat: ' .. err) end
-    -- TODO(fh_zones): apply heat for real; no DB yet.
-    reply(src, ('fh_heat: heat stub, would set %d to %s'):format(p.target, p.value))
+    if GetResourceState('fh_heat') == 'started' then
+        -- Delegate to fh_heat (roads lane): set(src, faction, value) -> true, new | false, err.
+        if not p.faction then return reply(src, 'fh_heat: fh_bad_faction (usage: fh_heat <id> <faction> <value>)') end
+        local okCall, ok, res = pcall(function() return exports.fh_heat:set(p.target, p.faction, p.value) end)
+        if not okCall then return reply(src, 'fh_heat: fh_heat_unavailable') end
+        if not ok then return reply(src, 'fh_heat: ' .. tostring(res)) end
+        return reply(src, ('fh_heat: set %d %s to %s'):format(p.target, p.faction, tostring(res)))
+    end
+    reply(src, ('fh_heat: heat stub (fh_heat not started), would set %d%s to %s'):format(p.target,
+        p.faction and (' ' .. p.faction) or '', p.value))
 end)
 
 lib.addCommand('fh_tp', {

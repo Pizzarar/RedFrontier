@@ -25,11 +25,20 @@ function M.parseGive(args, hasItem)
     return { target = target, item = item, count = count }
 end
 
+---`fh_heat <id> <value>` or `fh_heat <id> <faction> <value>`. The faction is only shape-checked here
+---(letters, digits, underscore); fh_heat itself rejects unknown factions (fh_unknown_faction).
 function M.parseHeat(args)
-    local target, value = int(args[1]), tonumber(args[2])
+    local target = int(args[1])
     if not target or target <= 0 then return nil, 'fh_bad_target' end
+    local faction, rawValue = nil, args[2]
+    if args[3] ~= nil then
+        faction, rawValue = args[2], args[3]
+        if type(faction) ~= 'string' or not faction:match('^[%w_]+$') then return nil, 'fh_bad_faction' end
+        if args[4] ~= nil then return nil, 'fh_bad_value' end
+    end
+    local value = tonumber(rawValue)
     if not finite(value) or value < 0 or value > 100 then return nil, 'fh_bad_value' end
-    return { target = target, value = value }
+    return { target = target, faction = faction, value = value }
 end
 
 ---`fh_tp <x> <y> <z>` or `fh_tp <id>`
