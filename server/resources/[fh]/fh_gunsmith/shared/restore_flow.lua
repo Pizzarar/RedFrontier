@@ -25,11 +25,12 @@ end
 ---condition write is rolled back, so parts are never consumed without a successful write and vice versa.
 ---@return boolean ok
 ---@return string|table reason_or_result
+---@return table|nil meta { rollbackFailed, slot, wanted, reason } when the rollback write also failed
 function M.run(deps, src, slot)
     local okNear, why = deps.near(src, 'gunsmith')
     if not okNear then return false, why or 'no_station' end
     slot = tonumber(slot)
-    if not slot or slot ~= math.floor(slot) or slot < 1 then return false, 'bad_slot' end
+    if not slot or slot ~= slot or slot == math.huge or slot == -math.huge or slot ~= math.floor(slot) or slot < 1 then return false, 'bad_slot' end
     local item = deps.slot(src, slot)
     local plan, reason = M.plan(item, deps.count(src, 'gun_parts'), deps.rules)
     if not plan then return false, reason end
@@ -42,9 +43,10 @@ function M.run(deps, src, slot)
 
     local okTake, takeWhy = deps.take(src, 'gun_parts', plan.parts)
     if not okTake then
-        deps.setInfo(src, slot, item.info) -- rollback
-        if takeWhy == 'not_implemented' or takeWhy == 'no_remove' then return false, 'no_remove' end
-        return false, takeWhy or 'take_failed'
+        local okRb, rbWhy = deps.setInfo(src, slot, item.info) -- rollback
+        local meta = (not okRb) and { rollbackFailed = true, slot = slot, wanted = item.info.condition, reason = rbWhy } or nil
+        if takeWhy == 'not_implemented' or takeWhy == 'no_remove' then return false, 'no_remove', meta end
+        return false, takeWhy or 'take_failed', meta
     end
     return true, plan
 end

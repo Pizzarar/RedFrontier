@@ -28,8 +28,14 @@ end
 
 RegisterCommand('fh_restore', function(src, args)
     if src == 0 then print('[fh_gunsmith] fh_restore is a player command'); return end
-    local ok, res = flow.run(deps(), src, args[1])
+    local ok, res, meta = flow.run(deps(), src, args[1])
+    if meta and meta.rollbackFailed then
+        print(('^1[fh_gunsmith] ERROR rollback failed src=%s slot=%s wanted_condition=%s reason=%s (condition raised, parts not taken)^7')
+            :format(tostring(src), tostring(meta.slot), tostring(meta.wanted), tostring(meta.reason)))
+    end
     if not ok then tell(src, MESSAGES[res] or ('Restore failed: ' .. tostring(res))); return end
     tell(src, ('Restored to %d%% condition using %d gun parts.'):format(res.to, res.parts))
-    TriggerClientEvent('fh_gunsmith:conditionChanged', src, args[1] and tonumber(args[1]), res.to)
+    -- fh_spike_gated is server-only (`set`), so pass it down.
+    local gated = GetConvar('fh_spike_gated', 'true') ~= 'false'
+    TriggerClientEvent('fh_gunsmith:conditionChanged', src, tonumber(args[1]), res.to, gated)
 end, false)

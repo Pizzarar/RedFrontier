@@ -78,6 +78,25 @@ describe('gunsmith flow', function()
         eq('set80,set30', table.concat(d.log, ','))
     end)
     it('bad slot', function()
-        eq('bad_slot', select(2, F.run(mkDeps(), 1, 'x')))
+        for _, v in ipairs({ 'x', 0, -1, 1.5, 'inf', '-inf', 'nan', 1e999 }) do
+            eq('bad_slot', select(2, F.run(mkDeps(), 1, v)), tostring(v))
+        end
+        eq('bad_slot', select(2, F.run(mkDeps(), 1, nil)))
+    end)
+    it('passes a take refusal through and rolls back', function()
+        local d = mkDeps({ takeWhy = 'fh_not_registrable' })
+        local ok, why = F.run(d, 1, 1)
+        eq(false, ok); eq('fh_not_registrable', why)
+        eq('set80,set30', table.concat(d.log, ','))
+    end)
+    it('reports a failed rollback', function()
+        local d = mkDeps({ takeWhy = 'fh_not_registrable' })
+        local n = 0
+        local set = d.setInfo
+        d.setInfo = function(...) n = n + 1; if n == 2 then return false, 'gone' end return set(...) end
+        local ok, why, meta = F.run(d, 1, 1)
+        eq(false, ok); eq('fh_not_registrable', why); eq(true, meta.rollbackFailed); eq('gone', meta.reason)
     end)
 end)
+
+T.finish()
