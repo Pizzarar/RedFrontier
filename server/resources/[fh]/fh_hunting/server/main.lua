@@ -118,7 +118,16 @@ RegisterNetEvent('fh:hunting:skin', function(payload)
     if ok then
         local stars = res.stars and (' (' .. res.stars .. ' star' .. (res.stars == 1 and '' or 's') .. ')') or ''
         local where = res.container == 'wagon' and 'your wagon' or 'your saddlebag'
-        notify(src, 'success', ('Pelt skinned%s, stowed in %s.'):format(stars, where))
+        local msg = ('Pelt skinned%s, stowed in %s.'):format(stars, where)
+        if res.trophy then
+            if res.trophy.container then
+                local tw = res.trophy.container == 'wagon' and 'your wagon' or 'your saddlebag'
+                msg = msg .. (' Trophy stowed in %s.'):format(tw)
+            else
+                msg = msg .. ' The trophy could not be stowed.'
+            end
+        end
+        notify(src, 'success', msg)
     else
         notify(src, 'error', FhHuntingSkin.message(res, cfg))
     end
@@ -205,4 +214,127 @@ RegisterNetEvent('fh:hunting:sell', function(payload)
     else
         notify(src, 'error', FhHuntingSell.message(res))
     end
+end)
+
+-- ---------------------------------------------------------------- H4 legendary bear chain
+
+local chain
+---Adapter: fh_core requestSpawn for the legendary bear. onReady marks the adopted entity legendary (so the skin flow
+---sees legendary = true) and advances the chain; onFailed only logs (the chain keeps its persisted spawn_request).
+local function requestLegendary(cid, chainCfg)
+    local c = chainCfg.spawn.coords
+    local ok, id = pcall(function()
+        return exports.fh_core:requestSpawn({
+            kind = 'ped', model = chainCfg.model,
+            coords = vector4(c.x, c.y, c.z, c.heading or 0.0),
+            owner = { kind = 'legendary_bear', id = cid },
+            tag = 'fh_hunting:legendary_bear:' .. cid,
+        }, {
+            near = { x = c.x, y = c.y, z = c.z },
+            onReady = function(netId)
+                local ent = NetworkGetEntityFromNetworkId(netId)
+                if ent and ent ~= 0 and DoesEntityExist(ent) then legendaryEntities[ent] = true end
+                chain.onAdopted(cid)
+            end,
+            onFailed = function(reason)
+                print(('^1[fh_hunting] legendary bear spawn for %s failed: %s^7'):format(cid, tostring(reason)))
+            end,
+        })
+    end)
+    if not ok or not id then return nil end
+    return id
+end
+
+chain = FhHuntingChain.new({
+    cfg = cfg,
+    deps = {
+        load = function(cid)
+            local ok, rows = pcall(MySQL.query.await,
+                'SELECT step, spawn_request, spawned, completed FROM fh_hunting_chains WHERE citizenid = ? AND chain_id = ? LIMIT 1',
+                { cid, FhHuntingChain.CHAIN_ID })
+            if not ok or type(rows) ~= 'table' or #rows == 0 then return nil end
+            local r = rows[1]
+            return { chain_id = FhHuntingChain.CHAIN_ID, step = tonumber(r.step),
+                spawn_request = tonumber(r.spawn_request), spawned = r.spawned == 1 or r.spawned == true,
+                completed = r.completed == 1 or r.completed == true }
+        end,
+        save = function(cid, s)
+            local ok = pcall(MySQL.update.await, [[
+                INSERT INTO fh_hunting_chains (citizenid, chain_id, step, spawn_request, spawned, completed)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE step = VALUES(step), spawn_request = VALUES(spawn_request),
+                    spawned = VALUES(spawned), completed = VALUES(completed)
+            ]], { cid, s.chain_id, s.step, s.spawn_request or 0, s.spawned and 1 or 0, s.completed and 1 or 0 })
+            return ok
+        end,
+        pay = function(src, cid, amount, reason, region)
+            local ok, done = pcall(function() return exports.fh_economy:pay(src, amount, reason, region) end)
+            return ok and done == true
+        end,
+        spawn = function(cid, chainCfg) return requestLegendary(cid, chainCfg) end,
+        despawn = function(requestId) pcall(function() exports.fh_core:despawn(requestId) end) end,
+        emit = function(name, payload) TriggerEvent(name, payload) end,
+    },
+})
+
+local function chainNotify(src, kind, msg)
+    TriggerClientEvent('ox_lib:notify', src, { title = 'Legendary Hunt', description = msg, type = kind })
+end
+
+local function pushChainState(src, cid)
+    local s = chain.state(cid)
+    TriggerClientEvent('fh:hunting:chain_state', src, { step = s.step, spawned = s.spawned, completed = s.completed })
+end
+
+RegisterNetEvent('fh:hunting:chain_status', function()
+    local src = source
+    local cid = citizenidOf(src)
+    if not cid then return end
+    pushChainState(src, cid)
+end)
+
+RegisterNetEvent('fh:hunting:chain_rumour', function()
+    local src = source
+    local cid = citizenidOf(src)
+    if not cid then return end
+    local ok, res = chain.buyRumour(src, cid, playerCoords(src))
+    if ok then
+        chainNotify(src, 'success', 'The trapper pockets your money and points you toward fresh bear tracks to the east.')
+        pushChainState(src, cid)
+    else
+        chainNotify(src, 'error', FhHuntingChain.message(res))
+    end
+end)
+
+RegisterNetEvent('fh:hunting:chain_inspect', function(payload)
+    local src = source
+    local cid = citizenidOf(src)
+    if not cid then return end
+    local marker = type(payload) == 'table' and payload.marker or nil
+    local ok, res = chain.inspect(cid, marker, playerCoords(src))
+    if ok then
+        if res.step == FhHuntingChain.STEP_SPAWNED then
+            chainNotify(src, 'success', 'The trail ends at a clearing. Something huge is watching you.')
+        else
+            chainNotify(src, 'success', 'The trail leads on. Follow it.')
+        end
+        pushChainState(src, cid)
+    else
+        chainNotify(src, 'error', FhHuntingChain.message(res))
+    end
+end)
+
+-- A legendary skin was granted (pelt_skinned with animal == legendary_bear): mark the chain complete.
+AddEventHandler('fh:hunting:pelt_skinned', function(payload)
+    if type(payload) ~= 'table' or payload.animal ~= 'legendary_bear' then return end
+    if type(payload.citizenid) ~= 'string' then return end
+    local ok, why = chain.onSkinned(payload.citizenid)
+    if not ok and why ~= 'fh_chain_not_spawned' then
+        print(('^3[fh_hunting] chain complete refused for %s: %s^7'):format(payload.citizenid, tostring(why)))
+    end
+end)
+
+AddEventHandler('playerDropped', function()
+    local cid = citizenidOf(source)
+    if cid then chain.drop(cid) end
 end)

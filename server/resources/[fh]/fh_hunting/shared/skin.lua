@@ -195,24 +195,45 @@ function M.new(opts)
         return ok, s, detail
     end
 
-    -- Runs while holding the claim. Returns ok, result|reason, granted (true once an addItem succeeded).
-    local function grant(src, req, animal, pc)
-        local ok, s, detail = stars(req, animal)
-        if not ok then return false, s, false end
+    -- Grant one item into the player's containers for `sizeClass` (the same targetsFor path for every pelt).
+    -- Returns ok, { item, container }|reason, granted. `not any` distinguishes "no such container" (fh_no_wagon /
+    -- fh_no_container) from "every container refused" (lastErr).
+    local function grantItem(src, sizeClass, itemName, info, pc)
         local lastErr, any = nil, false
-        for _, t in ipairs(M.targetsFor(animal.size_class, cfg, deps.accepts)) do
+        for _, t in ipairs(M.targetsFor(sizeClass, cfg, deps.accepts)) do
             local ref = refOf(t, src, pc)
             if ref then
                 any = true
-                local added, err = deps.addItem(ref, animal.pelt, 1, { stars = s })
-                if added == true then
-                    return true, { item = animal.pelt, stars = s, container = t, zone = detail and detail.zone }, true
-                end
+                local added, err = deps.addItem(ref, itemName, 1, info)
+                if added == true then return true, { item = itemName, container = t }, true end
                 lastErr = err or 'fh_refused'
             end
         end
-        if not any then return false, animal.size_class == 'cargo' and 'fh_no_wagon' or 'fh_no_container', false end
+        if not any then return false, sizeClass == 'cargo' and 'fh_no_wagon' or 'fh_no_container', false end
         return false, lastErr, false
+    end
+
+    -- Runs while holding the claim. Returns ok, result|reason, granted (true once the pelt addItem succeeded).
+    local function grant(src, req, animal, pc)
+        local ok, s, detail = stars(req, animal)
+        if not ok then return false, s, false end
+        local pok, pres = grantItem(src, animal.size_class, animal.pelt, { stars = s }, pc)
+        if not pok then return false, pres, false end
+        local res = { item = pres.item, stars = s, container = pres.container, zone = detail and detail.zone }
+        -- H4: a legendary skin also yields the trophy (bulky, saddlebag then wagon). It is best-effort: the pelt is
+        -- the primary grant and the skin never fails (or double-pays) because of a full saddlebag. A throw here must
+        -- not abort the grant after the pelt was added, so the trophy path is pcalled.
+        if animal.trophy then
+            local tok, tgrant, tres = pcall(grantItem, src, 'bulky', animal.trophy, {}, pc)
+            if tok and tgrant then
+                res.trophy = { item = tres.item, container = tres.container }
+            elseif tok then
+                res.trophy = { item = animal.trophy, container = nil, reason = tres }
+            else
+                res.trophy = { item = animal.trophy, container = nil, reason = 'fh_skin_error' }
+            end
+        end
+        return true, res, true
     end
 
     ---@return boolean ok, table|string resultOrReason  result = { item, stars, container, zone? }

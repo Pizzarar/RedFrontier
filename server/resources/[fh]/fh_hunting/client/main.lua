@@ -155,6 +155,41 @@ end)
 local CONTEXT_KEY = 0xCEFD9220 -- INPUT_CONTEXT (E). UNVERIFIED
 local tp = cfg.Trapper
 
+-- ---------------------------------------------------------------- H4 legendary bear chain
+
+local lb = cfg.LegendaryBear
+local chainStep = 0 -- 1 rumour -> 2 track -> 3 carcass -> 4 spawned -> 5 complete (server tells us)
+
+FH.onNet('fh:hunting:chain_state', function(state)
+    if type(state) == 'table' and type(state.step) == 'number' then chainStep = state.step end
+end)
+
+-- Ask the server for the current step once the character is loaded (the server needs a citizenid), and again on every
+-- load/reload. Every action pushes a fresh state back too.
+FH.thread(function() TriggerServerEvent('fh:hunting:chain_status') end)
+AddEventHandler('RSGCore:Client:OnPlayerLoaded', function() TriggerServerEvent('fh:hunting:chain_status') end)
+
+-- Inspectable clue markers (steps 2 and 3). The server gates which step is allowed; the prompt only shows on the
+-- marker that belongs to the current step.
+if lb then
+    for step, m in pairs(lb.markers) do
+        FH.thread(function()
+            local point = lib.points.new({
+                coords = vec3(m.coords.x, m.coords.y, m.coords.z), distance = m.radius,
+            })
+            function point:onEnter()
+                if chainStep == step then lib.showTextUI('[E] Inspect ' .. m.label) end
+            end
+            function point:onExit() lib.hideTextUI() end
+            function point:nearby()
+                if chainStep == step and IsControlJustReleased(0, CONTEXT_KEY) then
+                    TriggerServerEvent('fh:hunting:chain_inspect', { marker = m.id })
+                end
+            end
+        end)
+    end
+end
+
 local function stars(n) return string.rep('*', n) end
 
 FH.onNet('fh:hunting:sell_rows', function(rows)
@@ -185,10 +220,16 @@ FH.thread(function()
     trapperPoint = lib.points.new({
         coords = vec3(tp.coords.x, tp.coords.y, tp.coords.z), distance = tp.PromptDistance,
     })
-    function trapperPoint:onEnter() textShown = true; lib.showTextUI('[E] Sell pelts') end
+    function trapperPoint:onEnter()
+        textShown = true
+        -- Step 1: the trapper has a rumour to sell. Afterwards (and for everyone past step 1) E sells pelts.
+        if chainStep == 1 then lib.showTextUI('[E] Ask about the legendary bear') else lib.showTextUI('[E] Sell pelts') end
+    end
     function trapperPoint:onExit() hideText() end
     function trapperPoint:nearby()
-        if IsControlJustReleased(0, CONTEXT_KEY) then TriggerServerEvent('fh:hunting:sell_open') end
+        if IsControlJustReleased(0, CONTEXT_KEY) then
+            if chainStep == 1 then TriggerServerEvent('fh:hunting:chain_rumour') else TriggerServerEvent('fh:hunting:sell_open') end
+        end
     end
 end)
 

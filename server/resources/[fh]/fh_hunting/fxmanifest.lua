@@ -20,6 +20,7 @@ server_scripts {
     'shared/wagon.lua',
     'shared/sell.lua',
     'shared/trophies.lua',
+    'shared/chain.lua',
     'server/main.lua',
 }
 

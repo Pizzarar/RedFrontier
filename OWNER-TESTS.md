@@ -422,3 +422,18 @@ All unverified in-game. Needs `fh_economy` and the database running. Trapper coo
 ### H5 trophy comfort
 
 Hunting only exposes `exports.fh_hunting:getTrophyComfort(item)` (`trophy_legendary_bear` = 25, nil otherwise); what Homestead shows when a trophy is placed (comfort gain, trophy_wall slot) is checked in the Homestead section.
+
+### H4 legendary bear chain (fh_hunting)
+
+All unverified in-game. One hunt per character. Marker/trapper coordinates are approximate: if a prompt does not show, stand where it should be, read your coordinates and adjust `LegendaryBear` in `fh_hunting/config.lua`.
+
+1. New character (step 1): walk to the trapper. Expected: the prompt reads `[E] Ask about the legendary bear` (not `[E] Sell pelts`). Press E. Expected: cash -$25, a `fh_ledger` row `kind=pay, reason=hunting:rumour, region=heartlands`, and the server emits `fh:hunting:clue_found { step = 1 }`.
+2. Go to the track marker (`markers[2]`, roughly -260, 800, 116). Expected: `[E] Inspect Bear tracks` shows; E emits `clue_found { step = 2 }`. A marker you are not on (or the carcass marker out of order) shows no prompt and is refused server-side.
+3. **Relog mid-chain.** After step 2, leave and rejoin. Expected: the chain resumes at step 3 — the carcass marker (not the track) now shows its prompt, and the rumour is not re-buyable (the trapper prompt is back to `Sell pelts`).
+4. Inspect the carcass marker (`markers[3]`, roughly -215, 812, 115). Expected: `clue_found { step = 3 }`, then the bear spawns at the final area and `fh:hunting:legendary_spawned` fires once. Inspecting the marker again changes nothing (one spawn per chain).
+5. Kill the bear. Stand over it **without a wagon nearby** and use "Skin". Expected: refused with a notification (no wagon), no pelt, no trophy, the carcass stays and is still skinnable (the legendary pelt is cargo).
+6. Bring a wagon within 8 m and skin again. Expected: `pelt_legendary_bear` (3 stars, cargo) lands in the wagon, `trophy_legendary_bear` (bulky) lands in your saddlebag, and `fh:hunting:chain_complete` fires once. Skinning again (or rebuying the rumour) is refused.
+
+   RESULT:
+
+

@@ -1,8 +1,9 @@
 # fh_hunting: pelts and hunting (spec L8)
 
-H1 (data and rules), H2 (skin flow) and H3 (trapper sell point) are built: animal table, pelt items, quality rules, price
-rules, skinning, selling. The trophy comfort contract (H5) is done; the Legendary Bear (H4) comes in a later block. Pure logic lives in `shared/`
-and is specced with `python tools/run-specs.py` (`spec/hunting_*_spec.lua`); nothing here is runtime-tested yet.
+H1 (data and rules), H2 (skin flow), H3 (trapper sell point), H4 (legendary bear chain) and H5 (trophy comfort contract)
+are built: animal table, pelt items, quality rules, price rules, skinning, selling, the three-clue legendary bear hunt and
+the trophy comfort lookup. Pure logic lives in `shared/` and is specced with `python tools/run-specs.py`
+(`spec/hunting_*_spec.lua`); nothing here is runtime-tested yet.
 
 ## Config flag
 
@@ -28,6 +29,7 @@ H2 keys:
 - `DeadCacheSeconds` (900): keep a dead animal's shot data this long, by netId.
 - `SellCooldownMs` (500): server, per-player per-event throttle for the sell menu and sale requests.
 - `Trapper` (H3): `{ region_id = 'heartlands', label, coords, SellRange = 4.0, PromptDistance = 2.0 }`. Coordinates are approximate and unverified; `region_id` is the fh_economy ledger region.
+- `LegendaryBear` (H4): `{ chain_id, model, rumourPrice, region_id, RumourRange, markers[2|3] { id, label, coords, radius }, spawn.coords }`. Clue 1 is the trapper; clues 2 and 3 are inspectable world markers; the spawn area is where the bear appears. Coordinates approximate and unverified.
 - `ExplosiveWeapons`: cause-of-death weapons that count as explosive (1 star). Unverified names.
 - `NativeQualityStars`, `NativeCleanlinessStars`: result maps for the `'native'` source.
 
@@ -49,6 +51,9 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 - `FhHuntingQuality`: `resolve(input, cfg)` returns `ok, stars, detail`; `plausibility(check, cfg)` returns `ok, reason`
   (`fh_already_claimed`, `fh_not_dead`, `fh_too_far`).
 - `FhHuntingPrice`: `price(itemBase, stars, isLegendary, cfg)`; the amount for `fh_economy.pay`.
+- `FhHuntingChain`: the H4 legendary-bear state machine (below): `new({cfg, deps})` -> a chain object with
+  `buyRumour`, `inspect`, `onAdopted`, `onSkinned`, `state`, `drop`, plus `normalise`, `markerFor`, `distance`,
+  `message` and the `STEP_*` / event-name constants.
 
 ## Exports (server)
 
@@ -77,6 +82,31 @@ Wagon lookup (`shared/wagon.lua`): `exports.fh_cargo:nearestWagon(src, coords, C
 wagon": big-game skins are refused and the carcass stays claimable. The adapter reports the player's position as the
 wagon position because `fh_cargo` already applied the range.
 
+## Legendary bear (H4)
+
+One Legendary Bear hunt per character, a three-clue chain inside the Heartlands. The state machine is pure
+(`shared/chain.lua`, `FhHuntingChain`); `server/main.lua` injects the DB, `fh_economy:pay` and `fh_core:requestSpawn`
+sides. Chain state persists in `fh_hunting_chains` (one row per `(citizenid, chain_id)`), so a relog resumes where the
+character left off.
+
+1. **Clue 1 (rumour):** at the trapper, the client prompt becomes "[E] Ask about the legendary bear" while the
+   character is at step 1. The server charges `LegendaryBear.rumourPrice` through `fh_economy:pay(..., 'hunting:rumour', ...)`
+   and advances to step 2. Refused if already bought, paid-for, complete, or out of range.
+2. **Clue 2 (track):** a track marker appears; inspecting it (in range, current step only) advances to step 3.
+3. **Clue 3 (carcass):** a carcass marker appears; inspecting it requests the bear through
+   `fh_core:requestSpawn` (server decides, a client creates, the server adopts). `spawn_request` is persisted once, so
+   the bear is spawned exactly once per chain.
+4. **Spawn:** on adoption the entity is marked legendary (so the H2 skin flow reads it as legendary) and
+   `fh:hunting:legendary_spawned` fires once.
+5. **Kill and skin:** the skin flow grants `pelt_legendary_bear` (cargo, always 3 stars, wagon path) and the bulky
+   `trophy_legendary_bear`, then `fh:hunting:chain_complete` fires once and the request is despawned (no post-skin
+   re-spawn).
+
+Server-side validation for every step: the player must be in range of the right marker for the current step only; wrong
+marker, skipped steps and repeated steps are refused (`fh_chain_wrong_marker`, `fh_chain_spawned`, ...). The rumour is
+paid exactly once (a busy guard covers the `fh_economy` yield). The trophy grant is best-effort: the pelt is the primary
+grant, so a full saddlebag never fails or double-pays the skin.
+
 ## Skin approach
 
 Skinning is our own rsg-target "Skin" prompt on a dead, networked animal; we do not intercept the game's built-in
@@ -102,6 +132,10 @@ Consumed (requests, client to server):
 
 - `fh:hunting:sell_open` (no payload) and `fh:hunting:sell` `{ container, slot, item }` (H3, see Trapper). Server replies with `fh:hunting:sell_rows` (client event, display only).
 
+- `fh:hunting:chain_status` (no payload) — the client asks for the current legendary-chain step; the server replies with `fh:hunting:chain_state` `{ step, spawned, completed }` (client event, display only).
+- `fh:hunting:chain_rumour` (no payload) — buy the rumour from the trapper (clue 1).
+- `fh:hunting:chain_inspect` `{ marker = 'track'|'carcass' }` — inspect a marker (clues 2 and 3). The server re-reads the player position and the marker for the current step.
+
 Consumed (engine): `onResourceStart` (own resource and `fh_core`, to register the items), `playerDropped`.
 
 Emitted (server-only, for @quests and @guide; never sent to clients):
@@ -109,14 +143,16 @@ Emitted (server-only, for @quests and @guide; never sent to clients):
 - `fh:hunting:pelt_skinned` `{ src, citizenid, item_id, animal, quality, size_class }`: now, after a grant only.
   Never fired on a refusal.
 - `fh:hunting:pelt_sold` `{ citizenid, item_id, animal, size_class, quality, price, region_id }`: H3, after a payout succeeded only. `price` is what `fh_economy:pay` was given.
-- Planned, H4: `fh:hunting:clue_found` `{ citizenid, chain_id, step }`, `fh:hunting:legendary_spawned`
-  `{ citizenid, chain_id }`, `fh:hunting:chain_complete` `{ citizenid, chain_id }`.
+- `fh:hunting:clue_found` `{ citizenid, chain_id = 'legendary_bear', step = 1|2|3 }`: H4, each clue of the legendary
+  bear chain, when it is found (rumour bought, track inspected, carcass inspected).
+- `fh:hunting:legendary_spawned` `{ citizenid, chain_id }`: H4, when the bear's spawn is adopted. Fires once per chain.
+- `fh:hunting:chain_complete` `{ citizenid, chain_id }`: H4, after the legendary pelt is skinned. Fires once per chain.
 
 No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_hunting:getTrophyComfort(itemId)`
 (number, or nil for a non-trophy), see Exports.
 
 Consumes from other resources: `fh_core:registerItems`, `fh_core:saddlebagOf`, `fh_core:addItem` and the container
-rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay` and `fh_core:snapshot` (H3); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
+rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay` and `fh_core:snapshot` (H3); `fh_core:requestSpawn` / `fh_core:despawn` (H4); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
 
 ## Known gaps
 
@@ -131,6 +167,12 @@ rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_econo
   (`removeItem` in `server/main.lua`, unverified in game). Requested from @core: `removeItem(ref, name, n, slot)`.
 - `removeItem` workaround (rsg-inventory compat call) stays until @core ships a `removeItem` export; request queued.
 - Pelts in the backpack are not sold (bulky and cargo pelts cannot be there); only the saddlebag and a nearby wagon.
+- Legendary trophy is best-effort: if the saddlebag and the wagon are both full, the pelt is still granted and the chain
+  completes, but the trophy is not stowed (the skin notification says so).
+- A legendary bear killed but never skinned, whose carcass is later cleaned up, is re-requested by fh_core (the general
+  "adopted carcass respawns" gap above); the chain still counts one spawn, and the post-skin `despawn` prevents the
+  common "skin it and another bear appears" case. `legendaryEntities` is only cleared by a resource restart (one entry
+  per character, negligible).
 
 ## In-game test card
 
