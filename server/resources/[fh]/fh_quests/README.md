@@ -15,7 +15,7 @@ type) build against now. Every export and event lives here; anything not listed 
 | This contract (exports, events, sync schema, table) | Q1 | **published** (signatures frozen; additive changes only) |
 | Server: migration, event intake, all 8 exports, payouts via fh_economy, `fh:quests:*` events, `fh:quests:sync` | Q2 | **built**, pure parts specced |
 | Jobs board plumbing: generic `registerJobType` registry, `getBoard`, `acceptOffer`, board sync, rotation timer | Q2 | **built** |
-| Built-in job types `hunt_request`, `camp_clear`, `bounty`; ox_lib `/jobs` fallback menu (**workaround**) | Q3 | **built**, pure parts specced; in-game unverified |
+| Built-in job types `hunt_request`, `camp_clear`, `bounty`; `/jobs` jobs board and `/journal` on the fh_ui screens (the ox_lib fallback menu is removed) | Q3 | **built**, pure parts specced; in-game unverified |
 | 3 family questlines (data files, giver NPCs, ox_lib text dialogue **workaround**) | Q4 | **built**, defs and walk-throughs specced; in-game unverified |
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
 

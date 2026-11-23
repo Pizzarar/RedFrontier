@@ -247,14 +247,16 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 
 15. Live jobs board (needs `ensure fh_quests`): run `/jobs`, then walk to the board spot (about -297, 795, 118) and use the target zone.
     Expected: both open the fh_ui Jobs Board (no ox_lib menu), the mouse works, no autofocus, Enter does nothing. Click Accept on an
-    offer: the row flips to `Accepted` (no Accept button) and an inline notice confirms; the other offers stay. Accept the same
-    offer again or one that already left the board: an inline refusal notice shows and the list refreshes. When the board rotates
-    while the screen is open (or `expired` is sent), the panel shows only `The board is being restocked.` with no old rows. Esc closes.
+    offer: the row flips to `Accepted` (no Accept button) and an inline notice confirms; the other offers stay. Try an offer
+    that already left the board (e.g. a second client accepted it, or the board rotated under you): an inline refusal notice shows and
+    the list refreshes. Expired state (a sync arriving after the board's expiry time, hard to force): the panel shows only `The board
+    is being restocked.` with no old rows; `SKIP` if you cannot reach it. Esc closes.
     RESULT:
 16. Journal: run `/journal` with two or more active jobs (accept some from step 15), one of which you started earlier.
     Expected: the journal screen opens with active entries first, then history. Click Abandon on an entry: the button changes to a
-    confirm state and nothing is abandoned yet; click it again: the job is abandoned and leaves the active list. Click away or
-    wait without a second click: it reverts and the job stays active.
+    confirm state and nothing is abandoned yet; click it again: the job is abandoned and leaves the active list. There is no click-away or timeout: an armed
+    `Confirm abandon?` only reverts when you arm Abandon on another row (the first button goes back to `Abandon`, that job stays active),
+    when an update/sync arrives, or when the screen closes (Esc, then `/journal` again: nothing was abandoned).
     RESULT:
 17. Journal while the character is not loaded (e.g. `/journal` at the character-select screen, or right after login before spawn).
     Expected: the journal opens empty with an error notice, no Lua error in F8.
