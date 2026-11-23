@@ -4,7 +4,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times New Roman', serif; color: var(--ink); }
 .screen[hidden] { display: none; }
-.panel { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); min-width: 360px; max-width: 70vw;
+.panel { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); min-width: 360px; max-width: 70vw; max-height: 76vh; overflow-y: auto;
   background: var(--paper); border: 2px solid var(--edge); box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
 .title { margin: 0; padding: 8px 14px; font-size: 18px; color: #fff8e8; text-shadow: 0 1px 0 #000;
   background: linear-gradient(100deg, var(--sepia-a), var(--sepia-b), var(--sepia-a)); background-size: 300% 100%;
@@ -29,3 +29,22 @@ html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times
   color: var(--ink); text-shadow: 0 0 2px rgba(255,255,255,.8); }
 .hud-time { font-variant-numeric: tabular-nums; font-weight: bold; }
 @media (prefers-reduced-motion: reduce) { .hud-title { animation: none; } }
+/* U3 screens (heat, insurance, jobs, station, fence). Accent stays on .title only. */
+.panel.wide { min-width: 520px; }
+.title.small { font-size: 14px; padding: 4px 10px; }
+.hud:not(.hud-buffs):not(.hud-bags) { position: fixed; top: 12px; right: 12px; width: 240px; background: var(--paper); border: 2px solid var(--edge); }
+.hud:not(.hud-buffs):not(.hud-bags) .body { padding: 8px 10px; font-size: 14px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0; }
+.row.card { padding: 8px; border: 1px solid var(--edge); }
+.row.card.disabled { opacity: .75; }
+.row .btn { margin: 0; }
+.grow { flex: 1 1 auto; }
+.tier { font-weight: bold; font-size: 14px; }
+.bar { flex: 0 0 100%; height: 8px; background: #d8c8a0; border: 1px solid var(--edge); }
+.fill { height: 100%; background: #6b2d12; } /* static: no transitions on numbers */
+.note { font-style: italic; }
+.rare { font-weight: bold; color: #7a1f1f; }
+.sub { margin: 10px 0 4px; font-size: 16px; }
+.qty { width: 60px; font: inherit; font-size: 14px; padding: 4px; color: var(--ink); background: #fffaf0; border: 2px solid var(--edge); }
+.btn:disabled { cursor: not-allowed; background: #cfc3a6; }
+.panel > .btn { margin: 0 0 12px 14px; }
