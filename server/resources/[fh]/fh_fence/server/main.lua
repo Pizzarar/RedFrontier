@@ -1,6 +1,7 @@
 -- fh_fence server: the roving fence follows a deterministic schedule (FhFenceLogic.schedule). The server owns all
--- decisions; the client only shows a menu. Money: buy = FhFenceCharge (compat_charge.lua), sell = exports.fh_economy:pay.
--- Items move through fh_core's container API: a per-player `fence_stash` stages what is bought / sold (server/trade.lua).
+-- decisions; the client only shows a menu. Money: buy = FhFenceCharge (charge.lua, B7 charge), sell = exports.fh_economy:pay.
+-- Items move through fh_core's container API: a per-player `fence_stash` stages what is bought / sold (server/trade.lua);
+-- known counts leave it via fh_core removeItem (all-or-nothing, B7).
 -- Natives: GetPlayerPed, GetEntityCoords, GetConvar (fh_core/docs/natives.md). NOT runtime-tested (no Cfx key yet).
 local cfg = FhFenceConfig
 local logic = FhFenceLogic
@@ -144,6 +145,7 @@ local trader = FhFenceTrade.new(cfg, logic, {
     canFit = core('canFit'),
     addItem = core('addItem'),
     clear = core('clearContainer'),
+    removeItem = core('removeItem'),
     transferAll = core('transferAll'),
     move = core('move'),
     charge = FhFenceCharge.charge, -- pcall-wrapped itself; refusals -> false, err

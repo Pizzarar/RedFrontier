@@ -136,4 +136,11 @@ case('admin: secondsToNext lands exactly on the next stop', function()
     assert(logic.secondsToNext({}, now) == nil)
 end)
 
+case('messages: every core B7 charge/pay refusal has player text (no raw code in the menu)', function()
+    for _, code in ipairs({ 'fh_insufficient_funds', 'fh_charge_busy', 'ledger_failed', 'removemoney_refused',
+        'addmoney_refused', 'no_player', 'player_changed', 'charge_unavailable' }) do
+        assert(type(logic.messages[code]) == 'string' and #logic.messages[code] > 0, code)
+    end
+end)
+
 T.finish()

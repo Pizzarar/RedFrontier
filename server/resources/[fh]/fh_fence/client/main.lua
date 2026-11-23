@@ -5,15 +5,7 @@ local INPUT_CONTEXT = 0xCEFD9220 -- E (unverified)
 local point = nil
 local stopId = nil
 
-local MESSAGES = {
-    fh_insufficient_funds = "You can't afford that.",
-    charge_unavailable = 'The fence is not taking payment right now.',
-    out_of_range = 'Step closer to the fence.',
-    no_room = 'You have no room to carry that.',
-    fence_busy = 'The fence is still handling your last deal.',
-    fence_pending = 'The fence is holding goods from an earlier deal. Ask an admin.',
-    not_enough_items = "You don't have that to sell.",
-}
+local MESSAGES = FhFenceLogic.messages -- shared/fence_logic.lua (every B7 charge/pay code covered)
 local function why(code) return MESSAGES[code] or ('Refused: ' .. tostring(code)) end
 
 local function notify(msg) lib.notify({ description = msg, type = 'inform' }) end

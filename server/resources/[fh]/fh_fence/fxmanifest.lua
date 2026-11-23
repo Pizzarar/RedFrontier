@@ -14,7 +14,7 @@ shared_scripts {
 }
 
 server_scripts {
-    'server/compat_charge.lua',
+    'server/charge.lua',
     'server/trade.lua',
     'server/main.lua',
 }

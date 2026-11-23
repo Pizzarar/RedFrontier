@@ -106,6 +106,24 @@ local function world(o)
             for k in pairs(b) do b[k] = nil end
             return true
         end,
+        removeItem = function(ref, name, qty) -- fh_core B7: exactly qty or nothing (fh_not_enough)
+            step('removeItem')
+            if W.fail.removeItem then return false, W.fail.removeItem end
+            local b = box(ref)
+            if count(b, name) < qty then return false, 'fh_not_enough' end
+            local slots = {}
+            for s in pairs(b) do slots[#slots + 1] = s end
+            table.sort(slots)
+            for _, s in ipairs(slots) do
+                local it = b[s]
+                if qty > 0 and it.name == name then
+                    local n = math.min(qty, it.amount)
+                    it.amount, qty = it.amount - n, qty - n
+                    if it.amount == 0 then b[s] = nil end
+                end
+            end
+            return true
+        end,
         transferAll = function(from, to)
             step('transferAll')
             if W.fail.transferAll then return false, W.fail.transferAll end
@@ -341,7 +359,7 @@ case('reclaim: stale BUY charged after reclaim -> no delivery, no refund, no wip
     T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- B reclaims, sees A's stage
     T.same({ false, 'fence_busy', n = 2 }, drain(a)) -- charge lands, A no longer owns the stash
     T.eq(1000 - 2 * PRICE, W.C1.money); T.eq(0, count(W.C1.bag, GUN)); T.eq(2, count(W.stash(), GUN))
-    T.eq(nil, W.calls.transferAll); T.eq(nil, W.calls.clear); T.eq(0, #W.refunds)
+    T.eq(nil, W.calls.transferAll); T.eq(nil, W.calls.clear); T.eq(nil, W.calls.removeItem); T.eq(0, #W.refunds)
     assert(logged(W, 'WARNING buy paid then reclaimed'))
     T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
 end)
@@ -364,8 +382,22 @@ case('reclaim: stale SELL paid after reclaim -> keeps the sale, does not clear; 
     W.clock = cfg.lockStaleSeconds
     T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
     T.same({ true, 2, 2 * SELL, n = 3 }, drain(a))
-    T.eq(nil, W.calls.clear); T.eq(2, count(W.stash(), GUN)); T.eq(1000 + 2 * SELL, W.C1.money)
+    T.eq(nil, W.calls.clear); T.eq(nil, W.calls.removeItem); T.eq(2, count(W.stash(), GUN))
+    T.eq(1000 + 2 * SELL, W.C1.money)
     assert(logged(W, 'WARNING sell paid then reclaimed'))
+end)
+
+case('reclaim: stale partial BUY reclaimed during delivery -> no removeItem, no refund; owed amount logged', function()
+    local W = world()
+    W.hooks.charge = function() W.C1.room = 1 end
+    local a = start(function() return W.T.buy(1, GUN, 3) end, 'transferAll') -- paid, delivery in flight
+    W.clock = cfg.lockStaleSeconds
+    W.C1.room = 10 -- let B reach the stash check
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- B reclaims, sees A's paid units
+    W.C1.room = 1
+    T.same({ false, 'delivery_incomplete', n = 2 }, drain(a))
+    T.eq(nil, W.calls.removeItem); T.eq(0, #W.refunds); T.eq(1000 - 3 * PRICE, W.C1.money)
+    T.eq(1, count(W.C1.bag, GUN)); T.eq(2, count(W.stash(), GUN)); assert(logged(W, 'refund owed'))
 end)
 
 case('reclaim: stale SELL whose pay fails after reclaim -> no restore into a stash it lost; goods kept', function()
@@ -385,9 +417,9 @@ end)
 
 case('sweep flag does not outlive an emptied stash: later player goods are never swept', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 3 } } } } })
-    W.hooks.pay = function() W.fail.clear = 'fh_inventory_down' end
-    T.same({ true, 1, SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 1))) -- clear failed: sold goods flagged sweepable
-    W.hooks.pay, W.fail.clear = nil, nil
+    W.hooks.pay = function() W.fail.removeItem = 'fh_inventory_down' end
+    T.same({ true, 1, SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 1))) -- removal failed: sold goods flagged sweepable
+    W.hooks.pay, W.fail.removeItem = nil, nil
     W.stashes[STASH] = {} -- emptied elsewhere (admin / fh_inventory restart)
     T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(1, GUN, 1))) -- begin sees it empty: flag dropped
     W.fail.pay = { reason = 'fence_sell', err = 'ledger_failed' }
@@ -419,7 +451,8 @@ case('buy: success stages, charges, delivers', function()
 end)
 
 case('buy: every charge refusal (B7 contract) -> same code, no item moved, no money moved', function()
-    for _, err in ipairs({ 'fh_charge_busy', 'fh_insufficient_funds', 'charge_unavailable', 'no_player' }) do
+    for _, err in ipairs({ 'fh_insufficient_funds', 'fh_charge_busy', 'ledger_failed', 'removemoney_refused',
+        'no_player', 'player_changed', 'charge_unavailable', 'amount_too_large' }) do
         local W = world()
         W.fail.charge = err
         T.same({ false, err, n = 2 }, table.pack(W.T.buy(1, GUN, 2)), err)
@@ -441,6 +474,16 @@ case('buy: charge refused and stash clear fails -> stage swept by the next trade
     T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money); T.eq(0, size(W.stash()))
 end)
 
+case('buy: fh_charge_busy fails fast, the retry is charged exactly once', function()
+    local W = world()
+    W.fail.charge = 'fh_charge_busy'
+    T.same({ false, 'fh_charge_busy', n = 2 }, table.pack(W.T.buy(1, GUN, 2)))
+    T.eq(1, W.calls.charge); T.eq(1000, W.C1.money); T.eq(0, size(W.stash())); assert(not W.T.locks.held('C1'))
+    W.fail.charge = nil
+    T.same({ true, 2, 0, n = 3 }, table.pack(W.T.buy(1, GUN, 2))) -- the player's retry
+    T.eq(2, W.calls.charge); T.eq(1000 - 2 * PRICE, W.C1.money); T.eq(2, count(W.C1.bag, GUN))
+end)
+
 case('buy: stage refused or short -> no charge, stash empty', function()
     local W = world()
     W.fail.addItem = 'fh_refused'
@@ -458,6 +501,7 @@ case('buy: backpack shrinks during charge -> partial delivery, refund ONLY the u
     T.same({ true, 1, 2 * PRICE, n = 3 }, table.pack(W.T.buy(1, GUN, 3)))
     T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money); T.eq(0, size(W.stash()))
     T.same({ 2 * PRICE }, W.refunds)
+    T.eq(1, W.calls.removeItem); T.eq(nil, W.calls.clear) -- exactly the undelivered units, no wipe
 end)
 
 case('buy: nothing fits after charge -> full refund, no item', function()
@@ -491,16 +535,27 @@ case('buy: delivery unknown (transfer AND snapshot fail) -> no refund, stash kep
     T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1))) -- not swept: those were paid for
 end)
 
-case('buy: partial delivery and clear fails -> no refund (no free items), owed amount logged', function()
+case('buy: partial delivery and removeItem fails -> no refund (no free items), owed amount logged', function()
     local W = world()
-    W.hooks.charge = function() W.C1.room = 1; W.fail.clear = 'fh_inventory_down' end
+    W.hooks.charge = function() W.C1.room = 1; W.fail.removeItem = 'fh_inventory_down' end
     T.same({ false, 'delivery_incomplete', n = 2 }, table.pack(W.T.buy(1, GUN, 3)))
     T.eq(1, count(W.C1.bag, GUN)); T.eq(2, count(W.stash(), GUN)); T.eq(1000 - 3 * PRICE, W.C1.money)
     T.eq(0, #W.refunds); assert(logged(W, 'refund owed'))
     -- next trade: give the backpack room again so it reaches the stash check (canFit runs first)
-    W.hooks.charge, W.fail.clear, W.C1.room = nil, nil, 10
+    W.hooks.charge, W.fail.removeItem, W.C1.room = nil, nil, 10
     T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1)))
     T.eq(2, count(W.stash(), GUN)); T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - 3 * PRICE, W.C1.money)
+end)
+
+case('buy: stash holds fewer than the undelivered count -> removeItem fh_not_enough removes nothing, no refund', function()
+    local W = world()
+    -- stash unreadable after delivery: moved list says 1 of 3 delivered -> 2 undelivered; one unit vanishes from the
+    -- stash before the removal, so all-or-nothing removeItem takes none and nothing is refunded
+    W.hooks.charge = function() W.C1.room = 1; W.fail.snapshotStash = true end
+    W.hooks.removeItem = function() local b = W.stash(); for _, it in pairs(b) do it.amount = it.amount - 1 end end
+    T.same({ false, 'delivery_incomplete', n = 2 }, table.pack(W.T.buy(1, GUN, 3)))
+    T.eq(0, #W.refunds); T.eq(1000 - 3 * PRICE, W.C1.money); T.eq(1, count(W.stash(), GUN)) -- nothing removed
+    assert(logged(W, 'fh_not_enough'))
 end)
 
 case('buy: refund pay fails -> logged as owed, reported refund 0', function()
@@ -513,11 +568,11 @@ end)
 
 -- ---------------------------------------------------------------- sell rollback
 
-case('sell: goods -> stash -> pay -> clear', function()
+case('sell: goods -> stash -> pay -> removeItem(sold)', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 3 }, [2] = { name = 'bread', amount = 1 } } } } })
     T.same({ true, 2, 2 * SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 2)))
     T.eq(1, count(W.C1.bag, GUN)); T.eq(1, count(W.C1.bag, 'bread')); T.eq(1000 + 2 * SELL, W.C1.money)
-    T.eq(0, size(W.stash()))
+    T.eq(0, size(W.stash())); T.eq(1, W.calls.removeItem); T.eq(nil, W.calls.clear)
 end)
 
 case('sell: pay fails -> goods given back, no money', function()
@@ -540,11 +595,12 @@ case('sell: pay AND restore fail -> goods kept in the stash for an admin, next t
     T.eq(2, count(W.stash(), GUN)) -- not swept: they are still the player's
 end)
 
-case('sell: paid but clear fails -> sold goods swept by the next trade', function()
+case('sell: paid but removeItem fails -> sold goods swept by the next trade, paid once', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 3 } } } } })
-    W.hooks.pay = function() W.fail.clear = 'fh_inventory_down' end
+    W.hooks.pay = function() W.fail.removeItem = 'fh_not_enough' end
     T.same({ true, 2, 2 * SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 2)))
-    W.hooks.pay, W.fail.clear = nil, nil
+    T.eq(2, count(W.stash(), GUN)); assert(logged(W, 'retried on the next trade'))
+    W.hooks.pay, W.fail.removeItem = nil, nil
     T.same({ true, 1, SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 1)))
     T.eq(0, count(W.C1.bag, GUN)); T.eq(1000 + 3 * SELL, W.C1.money); T.eq(0, size(W.stash()))
 end)

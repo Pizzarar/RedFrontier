@@ -108,5 +108,25 @@ function M.sellOutcome(payOk, payErr, restore, who)
             reason, tostring(err or 'restore_failed'), tostring(who.citizenid), tostring(who.item), tostring(who.qty)) }
 end
 
+---Player-facing text per refusal code (client menu). Covers every core B7 charge / pay error so none shows as a raw
+---code; a code not listed shows as "Refused: <code>". Nothing was taken for any buy refusal listed here.
+M.messages = {
+    -- charge (buy) / pay (sell), core B7
+    fh_insufficient_funds = "You can't afford that.",
+    fh_charge_busy = 'Your last payment is still going through. Try again in a moment.',
+    ledger_failed = 'The fence could not write the deal down. Nothing was taken; try again later.',
+    removemoney_refused = 'Your payment was refused. Nothing was taken.',
+    addmoney_refused = 'The fence could not pay you. Your goods were given back.',
+    no_player = 'Your character is not loaded.',
+    player_changed = 'Your character changed during the deal. Nothing was taken.',
+    charge_unavailable = 'The fence is not taking payment right now.',
+    -- trade
+    out_of_range = 'Step closer to the fence.',
+    no_room = 'You have no room to carry that.',
+    fence_busy = 'The fence is still handling your last deal.',
+    fence_pending = 'The fence is holding goods from an earlier deal. Ask an admin.',
+    not_enough_items = "You don't have that to sell.",
+}
+
 if _G.GetCurrentResourceName then _G.FhFenceLogic = M end
 return M

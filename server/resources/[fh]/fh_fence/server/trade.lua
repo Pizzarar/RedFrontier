@@ -13,11 +13,15 @@
 --     trade stages anything, so it only ever holds the current trade's items. Leftovers from a crash or a failed
 --     restore are never mixed in, given out or wiped: the trade is refused ('fence_pending') and a WARNING logged.
 --     Only leftovers this module knows are the fence's own (unpaid buy stage, goods already paid for) are swept.
---  3. Buy: stage -> charge -> deliver. Charge failure (fh_charge_busy, fh_insufficient_funds, charge_unavailable,
---     anything) discards the stage: no item reaches the player, no money moves. Partial delivery refunds ONLY the
---     undelivered units, and only after they are removed from the stash. Unknown delivery = no refund, keep stash.
---  4. Sell: goods -> stash (verified by snapshot) -> pay -> clear. Pay failure gives the goods back; if that fails
---     the goods stay in the stash (still the player's, flagged for an admin), never lost and never paid twice.
+--  3. Buy: stage -> charge -> deliver. Charge failure (B7: fh_insufficient_funds, fh_charge_busy, ledger_failed,
+--     removemoney_refused, no_player, player_changed; charge_unavailable; anything) discards the stage: no item
+--     reaches the player, no money moves (B7 takes nothing on any refusal). It is never retried inside the trade:
+--     the player retries (fh_charge_busy fails fast), so one buy is charged at most once. Partial delivery refunds
+--     ONLY the undelivered units, and only after fh_core removeItem took exactly those units out of the stash
+--     (all-or-nothing: fh_not_enough removes nothing, then no refund). Unknown delivery = no refund, keep stash.
+--  4. Sell: goods -> stash (verified by snapshot) -> pay -> removeItem(sold). Pay failure gives the goods back; if
+--     that fails the goods stay in the stash (still the player's, flagged for an admin), never lost, never paid twice.
+--     A failed removeItem after pay leaves the sold (fence's) goods flagged for the next trade's sweep.
 local M = {}
 
 local function countOf(items, name)
@@ -87,7 +91,8 @@ end
 
 ---deps (all may yield): citizenOf(src), stopFor(src) -> stop, stopId|reason, visibleStock(src, stopId),
 ---ensureStash(ref, stop), snapshot(ref), view(ref), canFit(ref, item, qty), addItem(ref, item, qty, info),
----clear(ref), transferAll(from, to, src) -> ok, moved, leftovers, move(from, to, fromSlot, toSlot, amount, src),
+---clear(ref), removeItem(ref, item, qty) (all-or-nothing, fh_not_enough), transferAll(from, to, src) -> ok, moved,
+---leftovers, move(from, to, fromSlot, toSlot, amount, src),
 ---charge(src, amount, reason, region_id), pay(src, amount, reason, region_id), log(msg), now() -> seconds.
 ---citizenOf must not yield (the lock is taken right after it). Failures are returned (false/nil, reason), not thrown;
 ---a throw is still caught, logged and releases the lock.
@@ -230,11 +235,14 @@ function M.new(cfg, logic, deps)
         undelivered = math.max(0, math.min(qty, undelivered))
         if undelivered == 0 then return true, qty, 0 end
 
-        -- 4. partial: remove the undelivered units first (owner only), then refund only those
+        -- 4. partial: remove exactly the undelivered units first (owner only, all-or-nothing), then refund only those
         local refund = undelivered * quote.entry.price
-        if not owned(tok) or not discard(stash, false, 'buy undelivered') then
-            pin(stash)
-            log('WARNING buy refund owed: citizenid=%s item=%s undelivered=%d refund=%d', tostring(cid), item, undelivered, refund)
+        local rmOk, rmErr = false, 'reclaimed'
+        if owned(tok) then rmOk, rmErr = deps.removeItem(stash, item, undelivered) end
+        pin(stash) -- removed: the stash held only these units; not removed: they were paid for, never swept
+        if not rmOk then
+            log('WARNING buy refund owed: citizenid=%s item=%s undelivered=%d refund=%d (remove: %s)', tostring(cid),
+                item, undelivered, refund, tostring(rmErr))
             return false, 'delivery_incomplete'
         end
         -- the units are gone: the refund is ours to finish even if the lock was reclaimed meanwhile (money only)
@@ -314,9 +322,17 @@ function M.new(cfg, logic, deps)
         if out.log then deps.log(out.log) end
         if out.action ~= 'complete' then return false, out.reason end
 
-        -- 4. paid: the goods are the fence's. Clear only while owned; a reclaimed trade leaves them (logged).
+        -- 4. paid: the goods are the fence's. Remove exactly the sold units only while owned (all-or-nothing); a failure
+        --    flags them for the next trade's sweep. A reclaimed trade leaves them (logged).
         if owned(tok) then
-            discard(stash, true, 'sell clear')
+            local rok, rerr = deps.removeItem(stash, item, sold)
+            if rok then
+                pin(stash)
+            else
+                sweep[stash.id] = true
+                log('WARNING sell: removing %dx %s from %s failed (%s), retried on the next trade', sold, item,
+                    stash.id, tostring(rerr))
+            end
         else
             log('WARNING sell paid then reclaimed: citizenid=%s item=%s qty=%d sold goods left in %s', tostring(cid),
                 item, sold, stash.id)
