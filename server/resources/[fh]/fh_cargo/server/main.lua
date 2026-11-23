@@ -41,7 +41,9 @@ local function wagonCoords(w)
     return GetEntityCoords(ent)
 end
 
+---nil when the container could not be read (callers must fail closed).
 local function cargoCount(items)
+    if type(items) ~= 'table' then return nil end
     local n = 0
     for _, it in pairs(items or {}) do
         if sizeClassOf(it.name, it) == 'cargo' then n = n + (tonumber(it.amount) or 1) end
@@ -65,8 +67,6 @@ local function spawnWagon(src, tierKey, coords)
     local citizenid = citizenidOf(src)
     if not citizenid then return nil, 'fh_no_character' end
     local id = rules.wagonId(citizenid, tierKey)
-    local old = wagons[id]
-    if old and old.requestId then exports.fh_core:despawn(old.requestId) end
     local w = { id = id, owner = citizenid, tier = tierKey }
     -- TODO(R0 @core idea-602): fh_core requestSpawn has no kind 'wagon' yet (spawn_rules.KINDS = ped/object/horse), so
     -- this returns nil, 'fh_spawn_kind_unsupported'/'fh_spawn_bad_kind' until R0 merges. Written against the intended
@@ -76,6 +76,7 @@ local function spawnWagon(src, tierKey, coords)
         owner = { kind = 'wagon', id = id }, tag = 'wagon:' .. id,
     }, {
         onReady = function(netId)
+            if wagons[id] ~= w then return end -- replaced by a newer request
             w.netId = netId
             local c = wagonCoords(w) or coords
             register(w, c)
@@ -83,9 +84,11 @@ local function spawnWagon(src, tierKey, coords)
         end,
         onFailed = function(reason) reply(src, 'fh_wagon: spawn failed: ' .. tostring(reason)) end,
     })
-    if not reqId then return nil, err end
+    if not reqId then return nil, err end -- the old wagon (if any) is untouched
+    local old = wagons[id]
     w.requestId = reqId
     wagons[id] = w
+    if old and old.requestId then exports.fh_core:despawn(old.requestId) end
     return id
 end
 
@@ -182,16 +185,21 @@ local function canFastTravel(src)
     if not citizenid then return false, 'fh_no_character' end
     local ped = GetPlayerPed(src)
     if ped == 0 then return false, 'fh_no_player' end
-    local carried = 0
+    local carried, unknown = 0, nil
     for _, t in ipairs({ 'equipped', 'backpack' }) do
-        carried = carried + cargoCount(exports.fh_core:snapshot({ type = t, id = src }))
+        local snap, serr = exports.fh_core:snapshot({ type = t, id = src })
+        local n = cargoCount(snap)
+        if n == nil then unknown = unknown or tostring(serr or 'fh_cargo_unknown') else carried = carried + n end
     end
     local list = {}
     for _, e in ipairs(ownWagons(citizenid)) do
-        list[#list + 1] = { id = e.w.id, coords = e.coords, cargoCount = cargoCount(exports.fh_core:snapshot(ref(e.w))) }
+        local snap, serr = exports.fh_core:snapshot(ref(e.w))
+        local n = cargoCount(snap)
+        if n == nil then unknown = unknown or tostring(serr or 'fh_cargo_unknown') end
+        list[#list + 1] = { id = e.w.id, coords = e.coords, cargoCount = n or 0 }
     end
     local ok, reason, blocker = rules.fastTravelVerdict({
-        carriedCargo = carried, wagons = list, playerCoords = GetEntityCoords(ped), reach = cfg.FastTravelReach,
+        unknown = unknown, carriedCargo = carried, wagons = list, playerCoords = GetEntityCoords(ped), reach = cfg.FastTravelReach,
     })
     if not ok then
         TriggerEvent('fh:cargo:fasttravel_blocked', { src = src, citizenid = citizenid, reason = reason, wagon = blocker and blocker.id })

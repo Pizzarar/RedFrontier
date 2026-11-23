@@ -7,6 +7,17 @@ Lane L6 (spec §5, M4), block R1: wagon tiers, cargo loading, fast-travel veto. 
 - `server/main.lua`: thin wiring (gathers positions and container views, calls the rules, then ONE `fh_core:move`).
 - `config.lua`: wagon models per tier (**unverified in game**), reach, spawn offset.
 
+## Config keys (`config.lua`, `FhCargoConfig`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Models` | `t1 cart01`, `t2 wagon02x`, `t3 supplywagon` | Model per tier (unverified in game) |
+| `Reach` | `5.0` m | Player to own wagon for load/unload |
+| `FastTravelReach` | `30.0` m | A wagon with cargo this close blocks fast travel |
+| `SpawnAheadMetres` | `4.0` | `/fh_wagon` spawn offset in front of the admin |
+
+Tier numbers are not config: they live in `shared/cargo_rules.lua` (`TIERS`).
+
 ## Tiers
 
 | Tier | Slots | Max weight (g) | Speed cap (m/s, empty) |
@@ -43,6 +54,16 @@ Only `cargo` items move (spec §4.1). Cargo cannot live in a backpack, so loadin
 | `fh:cargo:fasttravel_blocked` | `{ src, citizenid, reason, wagon }` |
 | `fh:cargo:loaded` / `fh:cargo:unloaded` | `{ src, citizenid, wagon, item, count, container }` |
 | `fh:cargo:wagon_spawned` | `{ src, citizenid, wagon, tier, netId }` |
+
+## In-game check list (spec §9; needs R0 merged for step 1)
+
+1. As admin: `/fh_wagon t2`. A wagon appears 4 m ahead; chat confirms. Before R0: chat says it cannot spawn wagons yet.
+2. Open a homestead chest holding a cargo item (`/fh_give <id> test_cargo_crate`, drop it in the chest). Stand by the wagon, `/fh_cargo load 1`: the crate moves to the wagon.
+3. Walk 20 m away, `/fh_cargo load 1` again: refused `fh_out_of_reach`. A second character cannot load into your wagon (`fh_not_owner`).
+4. Try a non-cargo item (`bread`): refused `fh_not_cargo`. Fill a `t1` past 120 kg: refused `fh_too_heavy`.
+5. Fast-travel check from the server console or another resource: `exports.fh_cargo:canFastTravel(src)` returns `false, fh_cargo_wagon_near` while loaded wagon is within 30 m, `true` once unloaded or far away; `fh:cargo:fasttravel_blocked` fires on each block.
+6. Stop `fh_inventory`, call `canFastTravel` again: `false, fh_cargo_unknown` (fails closed).
+7. `/fh_wagon t2` twice: the old wagon is replaced and its cargo is still there.
 
 ## Known gaps / TODO
 
