@@ -99,7 +99,12 @@ local function processOwner(citizenid, now)
         if n > 0 then
             h.last_tick = newLast
             for _ = 1, n do
-                local paid = charger.charge(e.src, def.wage, 'wage:' .. kind, cfg.regionId)
+                -- Unpaid path: 'fh_insufficient_funds' (broke owner) and 'charge_unavailable' (fh_economy has no charge yet,
+                -- idea-600) both leave the wage unpaid: the hand idles and eventually quits. Never a negative balance.
+                local paid, whyUnpaid = charger.charge(e.src, def.wage, 'wage:' .. kind, cfg.regionId)
+                if not paid then
+                    TriggerEvent('fh:hands:unpaid', { src = e.src, citizenid = citizenid, hand_kind = kind, reason = whyUnpaid })
+                end
                 local nextState, run = logic.step(h, paid == true, cfg.quitAfterUnpaid)
                 h.unpaid, h.status = nextState.unpaid, nextState.status
                 if run then runTask(def.task, { src = e.src, citizenid = citizenid, hand_kind = kind }) end
