@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T00:49:08.043Z",
+  "updatedAt": "2026-11-23T01:17:04.989Z",
   "units": [
     {
       "id": "B5",
@@ -96,6 +96,15 @@
       "status": "done",
       "branch": "core-b6g",
       "commit": "06f2d3b"
+    },
+    {
+      "id": "B-run",
+      "goal": "tools/first-run.cmd/.ps1: UAC firewall 30120 TCP+UDP idempotent, cfxk_ key -> secrets.cfg (never echoed), start-server + connect line; OWNER-STEPS collapsed to 4 steps",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-brun",
+      "commit": "de086db"
     }
   ]
 }
