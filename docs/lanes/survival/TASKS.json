@@ -1,0 +1,16 @@
+{
+  "laneId": "survival",
+  "updatedAt": "2026-11-23T16:33:08.532Z",
+  "units": [
+    {
+      "id": "S3-low",
+      "goal": "fh_survival server/actions.lua:59-65: pcall results of RemoveItem/SetItemInfo discarded, so a buff is granted even if the inventory update fails. Check them, and log + refund/refuse (Gemini low on 34c9fcc)",
+      "files": [
+        "server/resources/[fh]/fh_survival/server/actions.lua"
+      ],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "68ab3ef"
+    }
+  ]
+}

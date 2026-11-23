@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Survival
-- Lead: none
-- Workers: 0
+- Lead: Survival lead · S1 review + merge
+- Workers: 1
 
 ## Done when
 - S1-S5 of plan survival-01 merged on local main (specs green), `## Survival` card in OWNER-TESTS.md, `survival playtest-ready <hash>` logged. S3b/S4b (remove the stubs) done once @core B7 and @homestead H3/H4 are on main.
@@ -21,6 +21,8 @@
 - ColdRegions ids. Lean: use the high-elevation/snow §4.4 region ids if the registry has them, otherwise an empty list (warm is then only a bonus). The lead decides at S3 from the registry, no owner input needed.
 
 ## In flight
+- MERGED S1 on main @ 9730266 (range-diff '=' vs 1d21178, venv specs 36/697/0).
+- PASS (lead, Gemini review, vs verdict exit 0), not merged yet: S2 8b9ffd3 (pre-rebased 263a7ad), S3 a850f98 (= a5093bc on survival-s3b), S4 8c5a032, S5 a4d6309 (S3/S4/S5 stacked on S2; ## Survival card on survival-s5). S3b 4a513b6 on survival-s3b under Gemini review rn-a65e8a266c76. S2 migration: 0009 or main highest+1, whichever is higher (0008 reserved roads A). Pre-merge: rebase + range-diff vs reviewed range shows "=" (identity rule retired; commit normally), S2 migration = main highest+1 at merge time (0006 core, 0007 quests reserved; never pre-claim), dup check `ls server/migrations | cut -c1-4 | sort | uniq -d` empty, specs green, merge-slot.
 - FORGE FREEZE (Overlord, from the owner via Hub15): nothing new starts and there are no merges or pushes. The Overlord pushes all branches. Parked:
   - S1 is built on `survival-s1` @ 533fba9 (22 specs/355 tests green), NOT merged. Its review Sur2 rn-ba97d44e5597 was in progress.
   - Resume after the cutover: re-run the S1 review → merge → S2 review (rebase, fix server.cfg) → merge → S3||S4||S5.
