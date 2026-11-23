@@ -1,7 +1,7 @@
 # fh_heat: faction heat (spec L7, roads R5)
 
 Per-character, per-faction heat 0-100 (factions from fh_core `shared/regions.lua`). Server-authoritative, persisted in
-`fh_heat` (`server/migrations/0005_fh_heat.sql`). NOT runtime-tested yet (no Cfx key).
+`fh_heat` (`server/migrations/0008_fh_heat.sql`). NOT runtime-tested yet (no Cfx key).
 
 ## Rules (`shared/heat_rules.lua`, specced in `spec/heat_rules_spec.lua`)
 
@@ -114,4 +114,4 @@ chokepoint_id, reason }` (`heat_dropped` / `expired` / `player_dropped` / `resou
 
 ## Install
 
-Apply migration 0005, `ensure fh_heat` (already in `server/server.cfg`, after fh_zones).
+Apply migration 0008, `ensure fh_heat` (already in `server/server.cfg`, after fh_zones).
