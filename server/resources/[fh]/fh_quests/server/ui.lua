@@ -36,7 +36,7 @@ RegisterNetEvent('fh:quests:ui_journal_open', function()
     local src = source
     local _, err = exports.fh_quests:getActive(src)
     local data = { entries = {} }
-    if err then data.notice, data.notice_kind = T.TEXT[err] or T.ABANDON_DEFAULT, 'error' end
+    if err then data.notice, data.notice_kind = T.journalOpenText(err), 'error' end
     TriggerClientEvent('fh:ui:open', src, { screen = 'journal', data = data })
 end)
 

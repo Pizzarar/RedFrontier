@@ -23,12 +23,18 @@ M.TEXT.fh_unknown_quest = 'That quest is unknown.'
 M.DEFAULT = 'Could not take that job.'
 M.ACCEPTED = 'Job accepted.'
 M.ABANDON_DEFAULT = 'Could not abandon that.'
+M.JOURNAL_OPEN_DEFAULT = 'Could not open your journal.'
 M.ABANDONED = 'Quest abandoned.'
 
 ---accept result -> { notice, notice_kind }
 function M.acceptNotice(ok, err)
     if ok == true then return { notice = M.ACCEPTED, notice_kind = 'ok' } end
     return { notice = M.TEXT[err] or M.DEFAULT, notice_kind = 'error' }
+end
+
+---journal-open failure -> notice text (own fallback, not the abandon one)
+function M.journalOpenText(err)
+    return M.TEXT[err] or M.JOURNAL_OPEN_DEFAULT
 end
 
 ---abandon result -> { notice, notice_kind } (unknown codes get the abandon default, not the accept one)

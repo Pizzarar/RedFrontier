@@ -73,6 +73,18 @@ function M.journal(snap)
     return { entries = entries }
 end
 
+---Data to seed a freshly opened screen from the cached sync, or nil to leave the open payload alone. Only the journal is
+---seeded (jobs opens with its own board). An open payload carrying a notice (server error) or real entries is never
+---overwritten; a missing snapshot (e.g. after a character unload) seeds nothing.
+function M.seedFor(screen, openData, snap)
+    if screen ~= 'journal' or type(snap) ~= 'table' then return nil end
+    if type(openData) == 'table' then
+        if openData.notice ~= nil then return nil end
+        if type(openData.entries) == 'table' and next(openData.entries) ~= nil then return nil end
+    end
+    return M.journal(snap)
+end
+
 -- screen -> feed(snapshot, now) -> data | nil
 M.feeds = { jobs = M.jobs, journal = M.journal }
 

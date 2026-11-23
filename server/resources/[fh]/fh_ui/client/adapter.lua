@@ -4,14 +4,14 @@ local view = FhUiQuestsView
 local ui = FhUiClient -- set by client/main.lua
 
 local lastSnap = nil -- latest sync, so a screen that opens between syncs (journal) can show history at once
-local seedOnOpen = { journal = true } -- jobs opens with its own board data; do not overwrite it with a cached one
 
-ui.onOpen = function(screen)
-    if not seedOnOpen[screen] or not lastSnap then return end
-    local feed = view.feeds[screen]
-    local ok, data = pcall(feed, lastSnap, nil)
+ui.onOpen = function(screen, openData)
+    local ok, data = pcall(view.seedFor, screen, openData, lastSnap)
     if ok and data ~= nil then ui.update(screen, data) end
 end
+
+-- A character switch must not show the previous character's quests until the next sync.
+RegisterNetEvent('RSGCore:Client:OnPlayerUnload', function() lastSnap = nil end)
 
 FH.onNet('fh:quests:sync', function(snap)
     if type(snap) ~= 'table' then return end

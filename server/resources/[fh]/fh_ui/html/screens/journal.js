@@ -4,6 +4,7 @@
 FH_UI.register('journal', {
   last: null,
   confirm: null, // quest_id awaiting the second click
+  armed: null, // the button showing 'Confirm abandon?'
   open: function (el, data) { this.last = null; this.confirm = null; this.update(el, data); },
   update: function (el, data) {
     const D = FH_DOM, self = this; data = data || {};
@@ -12,7 +13,7 @@ FH_UI.register('journal', {
     } else {
       this.last = data;
     }
-    this.confirm = null;
+    this.confirm = null; this.armed = null;
     D.clear(el);
     const p = D.h('div', 'panel wide');
     p.appendChild(D.h('h1', 'title', 'Journal'));
@@ -33,11 +34,13 @@ FH_UI.register('journal', {
       if (e.status === 'active') {
         const b = D.btn('Abandon', function () {
           if (self.confirm !== e.quest_id) {
+            if (self.armed) self.armed.textContent = 'Abandon'; // only one row is armed at a time
             self.confirm = e.quest_id;
+            self.armed = b;
             b.textContent = 'Confirm abandon?';
             return;
           }
-          self.confirm = null;
+          self.confirm = null; self.armed = null;
           FH_UI.action('journal', 'abandon', { id: String(e.quest_id) });
         });
         row.appendChild(b);
@@ -48,7 +51,7 @@ FH_UI.register('journal', {
     p.appendChild(D.btn('Close', function () { FH_UI.close('journal'); }));
     el.appendChild(p);
   },
-  close: function (el) { this.last = null; this.confirm = null; FH_DOM.clear(el); },
+  close: function (el) { this.last = null; this.confirm = null; this.armed = null; FH_DOM.clear(el); },
 });
 
 function journalStatus(s) {
