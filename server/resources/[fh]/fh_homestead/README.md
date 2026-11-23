@@ -118,11 +118,15 @@ Order (tier A: no dupes, no free builds, no lost items):
 4. `FhHomesteadSlots.setTier` (writes only while `fh_plots` still says this character owns the plot).
 
 Refunds: any failure after step 2 puts back exactly what was taken. Items go back into the same chest with
-`fh_core.addItem`; money goes back with `fh_economy.pay(src, amount, 'homestead build refund', region)`, and only while
-the same character is still loaded on `src`. Each refund runs at most once and is checked. A failed refund is logged
-on the server console as `ITEM LOST: build refund failed: citizenid=... plot=... slot=... item=... amount=...` or
-`MONEY LOST: build refund of $<n> to citizenid=...`, and the build returns `fh_build_refund_failed`
-(`tell an admin`). These two are the only credit paths and `charge` the only debit path.
+`fh_core.addItem`; money goes back with `fh_economy.credit(citizenid, amount, 'homestead build refund', region)` to
+the citizenid captured when the build started (never by `src`). If that character is online it is paid at once (mode
+`paid`); if the player logged off or switched character since the charge, the money is queued in `fh_pending_credit`
+and paid on that character's next load (mode `pending`, logged at info level). Each refund runs at most once and is
+checked. A failed refund is logged on the server console as
+`ITEM LOST: build refund failed: citizenid=... plot=... slot=... item=... amount=...` or
+`MONEY LOST: build refund of $<n> to citizenid=... failed: <err>` (only when `credit` refuses or errors), and the build
+returns `fh_build_refund_failed` (`tell an admin`). These two are the only credit paths and `charge` the only debit
+path.
 
 Lock: one build per plot and per character at a time (a second gets `fh_build_busy`), held across every await and
 released on every path, Lua errors included (`pcall`; the error path is guarded too). A Lua error before the tier is
@@ -151,9 +155,6 @@ Also in H2:
   The same holds for the extra chests (`fh:chest:<plot>:2` / `:3`): their stashes stay after an unclaim too.
 - Build materials must be in the plot chest: fh_core `removeItem` works on registered world containers only, not on
   the player's own inventory, so `/fh_build` cannot take lumber/nails from the pockets.
-- No offline or by-citizenid money credit in fh_economy (`pay` needs the character loaded on `src`): if the player logs
-  off or switches character between the charge and a failed `setTier`, the money refund cannot be paid and is logged
-  as `MONEY LOST` for an admin to pay back by hand.
 - Nothing in the game hands out `lumber` or `nails` yet; only an admin `/giveitem` does (needs a gathering/vendor lane).
 - Plots 2-4 coordinates (`heartlands_02..04`) are placeholders: TODO-verify in game. Slot prop offsets and the `p_chest01x` fallback model are also TODO-verify.
 - `fh_hunting:getTrophyComfort` is guarded (`GetResourceState` plus `pcall`): until Hunting merges, `placeTrophy` returns `fh_hunting_unavailable`.

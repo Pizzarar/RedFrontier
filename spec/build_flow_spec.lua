@@ -72,7 +72,8 @@ local function newWorld()
     local W = { db = { plots = {}, slots = {} }, events = {}, handlers = {}, threads = {}, ex = {}, logs = {}, client = {},
         commands = {}, callbacks = {}, players = { [1] = 'A', [2] = 'B' }, peds = {}, hold = {}, order = {},
         chest = {}, cash = { A = 1000, B = 1000 }, containers = {}, opened = {}, registeredItems = {},
-        calls = { removeItem = 0, addItem = 0, charge = 0, pay = 0, registerItems = 0 } }
+        pending = {}, known = { A = true, B = true },
+        calls = { removeItem = 0, addItem = 0, charge = 0, pay = 0, credit = 0, registerItems = 0 } }
     W.peds[1], W.peds[2] = at(p1), at(cfg.plots[P2])
     local function await(tag)
         W.order[#W.order + 1] = tag
@@ -188,6 +189,25 @@ local function newWorld()
                 W.cash[cid] = (W.cash[cid] or 0) + amount
                 return true, nil, 2
             end,
+            -- core-04 E2 contract: by citizenid; online -> 'paid', offline -> queued 'pending'
+            credit = function(_, cid, amount, reason, region)
+                W.calls.credit = W.calls.credit + 1
+                W.lastCredit = { cid = cid, amount = amount, reason = reason, region = region }
+                await('credit')
+                if W.creditThrows then error('fh_economy gone') end
+                if W.creditFails then return false, W.creditFails end
+                if not W.known[cid] then return false, 'unknown_citizenid' end
+                local online = false
+                for _, c in pairs(W.players) do if c == cid then online = true end end
+                if online then
+                    W.cash[cid] = (W.cash[cid] or 0) + amount
+                    W.lastCredit.mode = 'paid'
+                else
+                    W.pending[cid] = (W.pending[cid] or 0) + amount
+                    W.lastCredit.mode = 'pending'
+                end
+                return true, nil, W.lastCredit.mode
+            end,
         },
     }
     local exportsT = setmetatable({}, {
@@ -290,7 +310,7 @@ T.describe('server/build.lua', function()
             local ok, why = W.build(1, 'cabin') -- tier 2: lumber 40 + nails 20
             assert(ok == false and why == code, tostring(why))
             T.same(before, snapshot(W))
-            T.eq(2, W.calls.removeItem); T.eq(2, W.calls.addItem); T.eq(0, W.calls.pay)
+            T.eq(2, W.calls.removeItem); T.eq(2, W.calls.addItem); T.eq(0, W.calls.pay); T.eq(0, W.calls.credit)
             T.eq(1, W.slots.getTiers(P1).cabin)
             T.eq(0, #W.named('fh:homestead:slot_changed'))
         end)
@@ -334,9 +354,12 @@ T.describe('server/build.lua', function()
         local ok, why = W.build(1, 'cabin')
         assert(ok == false and why == 'fh_slot_save_failed', tostring(why))
         T.same(before, snapshot(W))
-        T.eq(1, W.calls.charge); T.eq(1, W.calls.pay); T.eq(2, W.calls.addItem)
-        T.eq(400, W.lastPay.amount); T.eq('homestead build refund', W.lastPay.reason); T.eq(1, W.lastPay.src)
+        T.eq(1, W.calls.charge); T.eq(1, W.calls.credit); T.eq(0, W.calls.pay); T.eq(2, W.calls.addItem)
+        T.eq('A', W.lastCredit.cid); T.eq(400, W.lastCredit.amount); T.eq('homestead build refund', W.lastCredit.reason)
+        T.eq('heartlands', W.lastCredit.region); T.eq('paid', W.lastCredit.mode)
+        T.eq(nil, W.pending.A)
         assert(W.logged('setTier heartlands_01/cabin %-> 2 failed'), 'setTier failure logged')
+        assert(not W.logged('MONEY LOST') and not W.logged('pending credit'), 'paid online: no loss, no queue log')
         T.eq(1, W.slots.getTiers(P1).cabin)
     end)
     case('Lua error inside the flow (setTier throws): refunds, lock released', function()
@@ -345,7 +368,7 @@ T.describe('server/build.lua', function()
         W.slots.setTier = function() error('boom') end
         local ok, why = W.build(1, 'cabin')
         assert(ok == false and why == 'fh_build_failed', tostring(why))
-        T.eq(100, W.chest1().lumber); T.eq(1000, W.cash.A); T.eq(1, W.calls.pay)
+        T.eq(100, W.chest1().lumber); T.eq(1000, W.cash.A); T.eq(1, W.calls.credit); T.eq(0, W.calls.pay)
         assert(W.logged('errored'))
         W.slots.setTier = real
         assert(W.build(1, 'cabin'), 'lock released after the error')
@@ -473,23 +496,68 @@ T.describe('server/build.lua', function()
         assert(W.logged('ITEM LOST: build refund failed: citizenid=A plot=heartlands_01 slot=cabin item=nails amount=20'))
         assert(W.logged('ITEM LOST: build refund failed: citizenid=A plot=heartlands_01 slot=cabin item=lumber amount=40'))
         T.eq(2, W.calls.addItem) -- tried once each, never retried
-        -- money: the character switched on src before the refund -> never paid to the other character
-        local W2 = world()
-        W2.failSlotWrite = true
-        W2.hold.slot_write = true
-        local h = W2.start(function() return W2.build(1, 'cabin') end)
-        W2.players[1] = 'B' -- logged out and into another character
-        local ok2, why2 = W2.finish(h)
-        assert(ok2 == false and why2 == 'fh_build_refund_failed', tostring(why2))
-        T.eq(0, W2.calls.pay); T.eq(1000, W2.cash.B)
-        assert(W2.logged('MONEY LOST: build refund of %$150 to citizenid=A'))
-        T.eq(100, W2.chest1().lumber) -- the items still went back
-        -- pay refused
+        -- credit refused (c): MONEY LOST with citizenid / amount / err / plot / slot / build_error
         local W3 = world()
-        W3.failSlotWrite, W3.payFails = true, 'ledger_failed'
+        W3.failSlotWrite, W3.creditFails = true, 'ledger_failed'
         assert(select(2, W3.build(1, 'cabin')) == 'fh_build_refund_failed')
-        assert(W3.logged('MONEY LOST: build refund of %$150 to citizenid=A failed: ledger_failed'))
-        T.eq(1, W3.calls.pay)
+        assert(W3.logged('MONEY LOST: build refund of %$150 to citizenid=A failed: ledger_failed; plot=heartlands_01 slot=cabin build_error=fh_slot_save_failed'))
+        T.eq(1, W3.calls.credit); T.eq(0, W3.calls.pay); T.eq(850, W3.cash.A)
+        T.eq(100, W3.chest1().lumber) -- the items still went back
+        -- unknown citizenid (contract refusal) is a failed refund too
+        local W4 = world()
+        W4.failSlotWrite, W4.known.A = true, nil
+        assert(select(2, W4.build(1, 'cabin')) == 'fh_build_refund_failed')
+        assert(W4.logged('MONEY LOST: build refund of %$150 to citizenid=A failed: unknown_citizenid'))
+        -- credit export throws: failed refund, logged with the error
+        local W5 = world()
+        W5.failSlotWrite, W5.creditThrows = true, true
+        assert(select(2, W5.build(1, 'cabin')) == 'fh_build_refund_failed')
+        assert(W5.logged('MONEY LOST: build refund of %$150 to citizenid=A failed: .*fh_economy gone'))
+        T.eq(1, W5.calls.credit)
+    end)
+    for _, swap in ipairs({ { 'switched to another character', 'B' }, { 'logged out', nil } }) do
+        case('player ' .. swap[1] .. ' before the refund (b): credited to the original citizenid as pending, not lost', function()
+            local W = world()
+            W.failSlotWrite = true
+            W.hold.slot_write = true
+            local h = W.start(function() return W.build(1, 'cabin') end)
+            T.eq(850, W.cash.A)
+            W.players[1] = swap[2]
+            local ok, why = W.finish(h)
+            assert(ok == false and why == 'fh_slot_save_failed', tostring(why))
+            T.eq(1, W.calls.credit); T.eq(0, W.calls.pay)
+            T.eq('A', W.lastCredit.cid); T.eq(150, W.lastCredit.amount); T.eq('pending', W.lastCredit.mode)
+            T.eq(150, W.pending.A); T.eq(nil, W.pending.B)
+            T.eq(1000, W.cash.B) -- never paid to whoever is on src now
+            assert(not W.logged('MONEY LOST'), 'a queued credit is not a loss')
+            assert(W.logged('build refund of %$150 to citizenid=A queued as a pending credit'), 'pending logged at info')
+            T.eq(100, W.chest1().lumber)
+        end)
+    end
+    case('refund-once (d): the error path after an in-flow refund does not credit again', function()
+        -- the in-flow abort credits (pending), then its info log throws -> buildLocked errors -> the error path aborts
+        -- again with st.charged already 0: no second credit, no second item refund
+        local W = world({ cabin = 1 })
+        W.failSlotWrite = true
+        W.hold.slot_write = true
+        local h = W.start(function() return W.build(1, 'cabin') end)
+        W.players[1] = nil
+        local realPrint = W.env.print
+        W.env.print = function(m)
+            if tostring(m):find('queued as a pending credit') then error('console gone') end
+            return realPrint(m)
+        end
+        local ok, why = W.finish(h)
+        W.env.print = realPrint
+        assert(ok == false and why == 'fh_build_failed', tostring(why))
+        assert(W.logged('errored'), 'went through the error path')
+        T.eq(1, W.calls.credit); T.eq(400, W.pending.A); T.eq(2, W.calls.addItem)
+        T.eq(100, W.chest1().lumber); T.eq(50, W.chest1().nails)
+        W.players[1] = 'A'
+        W.failSlotWrite = false
+        local ok2, tier2 = W.build(1, 'cabin')
+        assert(ok2 == true and tier2 == 2, 'lock released: ' .. tostring(tier2))
+        T.eq(1, W.calls.credit)
     end)
     case('character switched before the charge: not charged to the new character', function()
         local W = world()

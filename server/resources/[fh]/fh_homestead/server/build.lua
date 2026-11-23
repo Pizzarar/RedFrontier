@@ -1,7 +1,7 @@
 -- fh_homestead H2: build flow (server). `/fh_build <slot>` -> FhHomesteadBuild.build(src, slotId).
 -- Contract (core B7): fh_core.removeItem(ref, item, n) all-or-nothing (fh_not_enough); fh_economy.charge(src, amount,
 -- reason, region) debit (fh_insufficient_funds, ledger_failed, removemoney_refused, no_player, player_changed,
--- fh_charge_busy); credits ONLY through fh_core.addItem (items) and fh_economy.pay (money). No other debit path.
+-- fh_charge_busy); credits ONLY through fh_core.addItem (items) and fh_economy.credit (money). No other debit path.
 --
 -- Order (tier A: no dupes, no free builds, no lost items):
 --   0. ready gate (fh_not_ready), character, own plot, standing inside it, H1 rules (owner-only, next tier, prereqs)
@@ -9,8 +9,10 @@
 --   2. charge the money (skipped when the tier costs $0)
 --   3. FhHomesteadSlots.setTier (writes only while fh_plots still says we own it)
 --   Any failure after step 1 refunds exactly what was taken: items back into the same chest (addItem), money through
---   fh_economy.pay to the same character. Each refund runs at most once and is checked; a failed refund is logged as
---   `ITEM LOST` / `MONEY LOST` with citizenid, item/amount and the reason, and the call returns fh_build_refund_failed.
+--   fh_economy.credit to the citizenid captured at build start (online -> paid now; offline or switched character ->
+--   queued in fh_pending_credit and paid on that character's next load). Each refund runs at most once and is checked;
+--   a failed refund is logged as `ITEM LOST` / `MONEY LOST` with citizenid, item/amount and the reason, and the call
+--   returns fh_build_refund_failed.
 -- Lock: one build per plot AND per character at a time (busyPlot/busyCid), held across every await and released on
 --   every path, including a Lua error (pcall; the error path refunds what the flow state says was taken, unless our
 --   tier is already in the slot cache: setTier saved it and then threw in an event handler, so the build stands).
@@ -32,7 +34,8 @@ local gen = {}                   -- plotId -> unclaim counter
 local REASON = 'homestead build'
 local REFUND_REASON = 'homestead build refund'
 
-local function log(level, msg) print(('%s[fh_homestead] %s^7'):format(level == 'error' and '^1' or '^3', msg)) end
+local LOG_COLOR = { error = '^1', info = '^2' }
+local function log(level, msg) print(('%s[fh_homestead] %s^7'):format(LOG_COLOR[level] or '^3', msg)) end
 
 local function slots() return FhHomesteadSlots end
 local function claims() return FhHomesteadClaims end
@@ -77,23 +80,23 @@ local function refundItems(st, why)
     return all
 end
 
----Pay back a successful charge to the SAME character. If that character is no longer loaded on src, pay() would credit
----someone else (or nobody): log it instead. st.charged is cleared first so it is never paid twice.
+---Pay back a successful charge to the SAME character, by the citizenid captured at build start (never by src: the
+---player may have logged out or switched character since the charge). fh_economy.credit pays an online character at
+---once (mode 'paid') and queues the money for an offline one (mode 'pending', paid on their next load).
+---st.charged is cleared first so it is never paid twice.
 local function refundMoney(st, why)
     local amount = st.charged
     st.charged = 0
     if amount <= 0 then return true end
-    local now = citizenidOf(st.src)
-    if now ~= st.cid then
-        log('error', ('MONEY LOST: build refund of $%d to citizenid=%s not paid: character not loaded on src %s (now %s); plot=%s slot=%s build_error=%s')
-            :format(amount, st.cid, tostring(st.src), tostring(now), st.plotId, st.slotId, tostring(why)))
+    local ok, credited, cerr, mode = pcall(function() return exports.fh_economy:credit(st.cid, amount, REFUND_REASON, st.region) end)
+    if not ok or credited ~= true then
+        log('error', ('MONEY LOST: build refund of $%d to citizenid=%s failed: %s; plot=%s slot=%s build_error=%s')
+            :format(amount, st.cid, tostring(ok and cerr or credited), st.plotId, st.slotId, tostring(why)))
         return false
     end
-    local ok, paid, perr = pcall(function() return exports.fh_economy:pay(st.src, amount, REFUND_REASON, st.region) end)
-    if not ok or paid ~= true then
-        log('error', ('MONEY LOST: build refund of $%d to citizenid=%s failed: %s; plot=%s slot=%s build_error=%s')
-            :format(amount, st.cid, tostring(ok and perr or paid), st.plotId, st.slotId, tostring(why)))
-        return false
+    if mode == 'pending' then
+        log('info', ('build refund of $%d to citizenid=%s queued as a pending credit (character offline or switched); plot=%s slot=%s build_error=%s')
+            :format(amount, st.cid, st.plotId, st.slotId, tostring(why)))
     end
     return true
 end
