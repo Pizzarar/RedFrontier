@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Survival
-- Lead: Survival lead · S1 review + merge
+- Lead: ★ Sur2
 - Workers: 1
 
 ## Done when
@@ -22,7 +22,8 @@
 
 ## In flight
 - MERGED S1 on main @ 9730266 (range-diff '=' vs 1d21178, venv specs 36/697/0).
-- PASS (lead, Gemini review, vs verdict exit 0), not merged yet: S2 8b9ffd3 (pre-rebased 263a7ad), S3 a850f98 (= a5093bc on survival-s3b), S4 8c5a032, S5 a4d6309 (S3/S4/S5 stacked on S2; ## Survival card on survival-s5). S3b 4a513b6 on survival-s3b under Gemini review rn-a65e8a266c76. S2 migration: 0009 or main highest+1, whichever is higher (0008 reserved roads A). Pre-merge: rebase + range-diff vs reviewed range shows "=" (identity rule retired; commit normally), S2 migration = main highest+1 at merge time (0006 core, 0007 quests reserved; never pre-claim), dup check `ls server/migrations | cut -c1-4 | sort | uniq -d` empty, specs green, merge-slot.
+- MERGED S2 on main @ 1408a01 (101d57d 1c40722 a2986fd 1408a01; mig 0012_survival_needs.sql; range-diff 1 '!' server.cfg ctx only, 2/3 '='; venv 57/1159/0).
+- PASS (Gemini, vs verdict exit 0), not merged yet: S3 a850f98 (= a5093bc on survival-s3b), S4 8c5a032, S5 a4d6309 (stacked on old S2 8b9ffd3; ## Survival card on survival-s5). S3b 4a513b6 on survival-s3b, Gemini review rn-a65e8a266c76 still queued (do not rebase s3b until verdict). After S2 merges: rebase s3b `--onto main 8bdca5a`, then S4, S5 (config.lua/fxmanifest append conflicts, keep all blocks).
 - FORGE FREEZE (Overlord, from the owner via Hub15): nothing new starts and there are no merges or pushes. The Overlord pushes all branches. Parked:
   - S1 is built on `survival-s1` @ 533fba9 (22 specs/355 tests green), NOT merged. Its review Sur2 rn-ba97d44e5597 was in progress.
   - Resume after the cutover: re-run the S1 review → merge → S2 review (rebase, fix server.cfg) → merge → S3||S4||S5.
