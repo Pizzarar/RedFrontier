@@ -39,6 +39,7 @@
 - Does Aub have a 2nd RedM account? (adds true 2-client S1 check)
 
 ## In flight
+- PARKED forge freeze 2026-11-23: no unit running; spikes in main (4d11954), cards held for keyed boot; worktree spikes-probes clean. Resume = relay TEST-CARDS.md to Aub after Cor2 boot ping.
 - PASS S1-S5 build+review: spikes/probes 4d11954 (on core/b1-boot ee8eef5), Gemini PASS-WITH-NITS, 3 fixed, 2 nits skipped; Core lead merges to main; in-game RESULTs pending Aub.
 - Next: Gemini review of all 5 (after machine restart) → test cards to Aub once Core server boots.
 - Workaround: orphan branch spikes/probes; lead rebases onto main once Core lands it. VS bug idea-561.

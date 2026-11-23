@@ -16,7 +16,7 @@ A private, small-group (1–4 players) **PvE extraction sandbox** on RedM. No st
 4. **Soft consequences** — death and neglect hurt, never ruin a session.
 5. **No XP bars** — progression = capital + regional reputation.
 
-**Non-goals:** story missions, PvP, 32+ player scaling, lethal hunger/thirst meters, a full player-driven economy, a custom map.
+**Non-goals:** story missions (amended 2026-11-23, Aub: optional one-time family questlines and an intro tutorial are in scope; text dialogue only, no cutscenes or voice acting), PvP, 32+ player scaling, lethal hunger/thirst meters, a full player-driven economy, a custom map.
 
 ---
 

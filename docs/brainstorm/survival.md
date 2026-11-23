@@ -1,0 +1,27 @@
+# Brainstorm Summary · SURVIVAL (`survival`)
+
+> Rolling team brief (< ~5k tokens). Updated on every decision.
+
+## Who's here
+- Brainstorm: Survival
+- Lead: Survival Lead
+- Workers: 1
+
+## Done when
+- S1-S5 of plan survival-01 merged on local main (specs green), `## Survival` card in OWNER-TESTS.md, `survival playtest-ready <hash>` logged. S3b/S4b (remove the stubs) done once @core B7 and @homestead H3/H4 are on main.
+
+## Decided
+- Overlord integration rules (2026-11-22), which every plan and lead must follow: work only in `vs worktree create` units, never the primary checkout. Merge to local main only after the review PASSes: rebase on current main, `python tools/run-specs.py` all green, merge, log the hash. One lane merges at a time; rebase again if main moved. No pushes. In-game checks go in a `## Survival` section of `OWNER-TESTS.md` (no separate test doc). When ready, log `decision survival playtest-ready <hash>`; Overlord gates the combined playtest.
+- `fh_homestead` belongs to @homestead (core B6b-g are on main at 06f2d3b). Correction: Well-Rested from comfort is done HERE (homestead-01 says @survival reads getComfort and applies the buff).
+- Shape (Buddy lean, acted on per the Overlord's "finish now"): needs are positive timed buffs (well_fed/hydrated/rested/warm/clean). Sluggish is worked out from what's missing (0-3), never lethal, behind the `SluggishEffect` flag (default `notify`). warm only counts in cold regions. Relog uses the lane table `fh_survival_needs` plus a 10-min grace for new characters. rsg-core hunger/thirst metadata is unused. Alt (`fh_buffs.remove` + debuff ids) is deferred.
+- Plan: `docs/brainstorm/plans/survival-01-needs.md`. S1 → S2 → (S3||S4||S5); S3b/S4b remove the stubs for @core registerItems (B7) and @homestead isNearStation/getComfort (H3/H4).
+
+## Open
+- @core idea-613: add caps `hydrated`/`clean` to fh_buffs config. Not blocking: apply refuses cleanly until then.
+
+## In flight
+- FORGE FREEZE (Overlord, from the owner via Hub15): nothing new starts and there are no merges or pushes. The Overlord pushes all branches. Parked:
+  - S1 is built on `survival-s1` @ 533fba9 (22 specs/355 tests green), NOT merged. Its review Sur2 rn-ba97d44e5597 was in progress.
+  - S2 Sur3 rn-3a7a0d93aa0f had just started. The lead was told to commit WIP ('WIP: parked for forge freeze') on its branch and stop it.
+  - Resume after the cutover: S1 review → merge → S2.
+- Survival Lead rn-d2edee3242e0 was told to drain and to confirm the parked hashes.

@@ -1,0 +1,39 @@
+{
+  "laneId": "homestead",
+  "updatedAt": "2026-11-23T03:45:24.989Z",
+  "units": [
+    {
+      "id": "H2",
+      "goal": "build flow+props; held until core B7 (H0) on main. API: fh_economy.charge(src,amt,reason,region) fails fh_insufficient_funds, never below 0; fh_core.removeItem all-or-nothing; build materials registered via exports.fh_core:registerItems from fh_homestead only",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked"
+    },
+    {
+      "id": "H1",
+      "goal": "",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "a2deba7"
+    },
+    {
+      "id": "H3",
+      "goal": "parked forge freeze; review FAIL 0/2/2 rn-250ee6892de0",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked",
+      "branch": "homestead-h3",
+      "commit": "c3d0dd2"
+    },
+    {
+      "id": "H4",
+      "goal": "parked forge freeze; review FAIL 2/2/1 rn-66d146354004",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked",
+      "branch": "homestead-h4",
+      "commit": "52eef2f"
+    }
+  ]
+}
