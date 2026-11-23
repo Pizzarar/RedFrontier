@@ -49,7 +49,7 @@ end
 -- fh_economy charge errors (core B7). Nothing was debited for any of them.
 local RETRY = { fh_charge_busy = true, ledger_failed = true } -- transient on the economy side: try the tick again later
 local GONE = { no_player = true, player_changed = true }      -- owner left / switched character: stop, no strike
--- The export call threw (fh_economy stopped / restarting): the outcome is unknown, so the tick is NOT handed back
+-- The export call threw (Lua error inside fh_economy, or fh_economy mid-restart): the outcome is unknown, so the tick is NOT handed back
 -- (never charged twice) and it is no strike either (not the owner's fault): that wage is skipped, owner's favour.
 local SKIP = { charge_unavailable = true }
 

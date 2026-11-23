@@ -3,8 +3,8 @@
 -- tick handed back, no strike), no_player / player_changed (owner gone, tick handed back), fh_insufficient_funds,
 -- removemoney_refused and anything else (unpaid strike). The tick is claimed in the DB before this call, so a retry is
 -- a new claim of a tick nobody was charged for: never a double charge.
--- 'charge_unavailable' = the export call threw: kept because fh_economy can be stopped/restarted at runtime; its outcome
--- is unknown, so chargeOutcome keeps the claim (never retried) and gives no strike ('skip').
+-- 'charge_unavailable' = the export call threw: kept because it can at runtime (a Lua error inside fh_economy, or
+-- fh_economy mid-restart); its outcome is unknown, so chargeOutcome keeps the claim (never retried), no strike ('skip').
 FhHandsCharge = {}
 
 function FhHandsCharge.charge(src, amount, reason, region_id)

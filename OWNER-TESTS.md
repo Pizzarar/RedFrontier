@@ -440,22 +440,22 @@ Needs `ensure fh_progression`, `ensure fh_fence`, `ensure fh_hands` (shipped in 
 7. Buy a treasure lead at 400+ rep.
    Expected: `Bought.`, backpack holds 1 `Treasure Lead` ($250 or $300 less cash). The item info carries the target hint text (inspect the item if your UI shows it; otherwise check the `fh_dump backpack <id>` console output).
    RESULT:
-8. Sell: with parts in your backpack choose `Sell Gunsmith Parts` (pays $30 each) or saddlery ($35 each). Try selling more than you carry.
-   Expected: `Sold N for $X.` with your cash up by exactly X and the parts gone. Selling more than you hold says `You don't have that to sell.` and nothing moves. The menu works again straight away.
+8. Sell: with parts in your backpack choose `Sell fh_part_gunsmith - $30` (the menu shows the raw item id; $30 each) or `Sell fh_part_saddlery - $35` ($35 each). Try selling more than you carry.
+   Expected: `Sold N for $X.` with your cash up by exactly X and the parts gone (the fence stash is emptied with fh_core `removeItem`: no `[fh_fence] WARNING sell: removing` line in the console). Selling more than you hold says `You don't have that to sell.` and nothing moves. The menu works again straight away.
    RESULT:
 9. Insufficient funds: with less cash than a part costs (spend it or start at $0) try to buy 1 gunsmith part.
    Expected: `You can't afford that.` No item arrives, cash unchanged, and an immediate second attempt behaves the same (no stuck `The fence is still handling your last deal.`).
    RESULT:
-10. charge_unavailable: only if core B7 (`fh_economy` `charge` export) is NOT merged on this server. Have cash and try to buy.
-    Expected: `The fence is not taking payment right now.` No item, no cash change. Selling still works (it uses `pay`). If B7 IS merged, write `SKIP B7 merged` (the buy works as in step 6).
+10. Buy debit ledger (core B7 `charge`): after step 6, look at the `fh_ledger` table in the DB (newest rows).
+    Expected: one row `kind = charge`, `amount` = 2 x the gunsmith price, `reason = fence_buy:fh_part_gunsmith`, `region_id = heartlands`; no extra charge rows for the failed attempts of step 9. (`charge_unavailable` / `The fence is not taking payment right now.` only shows if fh_economy's `charge` export throws; the specs cover it, nothing to do here.)
     RESULT:
 11. One hand hired: at 100+ rep, with a homestead plot and its chest, run `fh_hand_hire <id> ranch_hand` (a test wrapper over the hire export, same admin restriction). Put $50 in cash (`fh_pay <id> 50`), keep feed under 40 in the plot chest (open with E), then run `fh_hand_tick <id>`. Below 100 rep the hire is refused with `locked`.
     Expected: console `fh_hand_tick: ticked <id>`. The ranch hand is paid $5 (`wage:ranch_hand` ledger row) and the chest feed went up by 10 (cap 40). Run it again: +10 more, until the chest holds 40, then the tick adds 0. The timer also runs on its own every 10 minutes (do not wait for it; this is the same code path).
     RESULT:
 12. Unpaid wage: spend your cash to $0, then run `fh_hand_tick <id>` once.
-    Expected: `fh_hand_tick: ticked <id>`, cash stays $0 (never negative), the chest feed does NOT rise (hand idles), `fh:hands:unpaid` appears in the server log if verbose. After 3 unpaid ticks in a row the hand quits; one paid tick before that resets the count. With B7 not merged the same happens with reason `charge_unavailable` even with cash (nothing is debited).
+    Expected: `fh_hand_tick: ticked <id>`, cash stays $0 (never negative), the chest feed does NOT rise (hand idles), and the server console shows `[fh_hands] unpaid <citizenid>/ranch_hand: fh_insufficient_funds`. After 3 unpaid ticks in a row the hand quits; one paid tick before that resets the count.
     RESULT:
-13. Offline catch-up: with the hand hired and $50+ cash, note cash and the chest feed. Disconnect. In the server DB run `UPDATE fh_hands SET last_tick = last_tick - 3600;` (simulates an hour offline, 6 ticks, the cap). Rejoin and open the chest.
+13. Offline catch-up: wait 30 s after your last `fh_hand_tick` before starting this step. With the hand hired and $50+ cash, note cash and the chest feed. Disconnect. In the server DB run `UPDATE fh_hands SET last_tick = last_tick - 3600;` (simulates an hour offline, 6 ticks, the cap). Rejoin and open the chest.
     Expected: on login the missed ticks run once each, capped at 6: at most $30 wages taken and feed topped up to the cap of 40. Wait 30 s: no extra ticks beyond that (no double charge).
     RESULT:
 14. Fire: run `fh_hand_fire <id> ranch_hand`. Then `fh_hand_tick <id>`.
