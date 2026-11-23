@@ -98,25 +98,35 @@ case('rollLoot: condition is clamped into 0-100', function()
     local got = R.rollLoot({ { name = 'r', chance = 1, condition = { 90, 150 } } }, seq(0, 150))
     eq(100, got[1].info.condition)
 end)
-case('config loot: worn rifle carries a condition in range, safe is cargo', function()
+case('config loot: worn rifle carries a condition in range, safe is bulky', function()
     local got = R.rollLoot(camp.loot.table, math.random)
     local rifle, safe
     for _, it in ipairs(got) do if it.name == 'worn_rifle' then rifle = it elseif it.name == 'small_safe' then safe = it end end
     assert(rifle and safe, 'both entries drop at chance 1.0')
     local c = Items.condition(rifle)
     assert(c and c >= 20 and c <= 45, 'condition ' .. tostring(c))
-    eq('cargo', cfg.items.small_safe.size_class)
+    eq('bulky', cfg.items.small_safe.size_class)
     assert(Items.validate(cfg.items.worn_rifle)); assert(Items.validate(cfg.items.small_safe))
 end)
-case('container rules: the safe fits the camp chest but never a backpack/equipped/saddlebag/drop bag', function()
+case('container rules: the bulky safe fits chest/saddlebag, not backpack/equipped/drop bag; cargo only wagon/chest', function()
     local safe = cfg.items.small_safe.size_class
-    assert(Containers.accepts('chest', safe))
-    for _, t in ipairs({ 'backpack', 'equipped', 'saddlebag', 'drop_bag' }) do
+    for _, t in ipairs({ 'chest', 'saddlebag', 'wagon' }) do assert(Containers.accepts(t, safe), t) end
+    for _, t in ipairs({ 'backpack', 'equipped' }) do
         local ok, why = Containers.accepts(t, safe)
         assert(not ok and why == 'fh_size_class', t)
     end
     assert(Containers.accepts('backpack', cfg.items.worn_rifle.size_class) == false, 'bulky rifle: not in a backpack either')
     assert(Containers.accepts('saddlebag', cfg.items.worn_rifle.size_class))
+    assert(Items.FAST_TRAVEL.bulky == true and Items.FAST_TRAVEL.cargo == false)
+end)
+case('cargo test item: refused by backpack and saddlebag, accepted by chest', function()
+    local fc = require('config')
+    local def = fc.Items.test_cargo_crate
+    assert(def and Items.validate(def)); eq('cargo', def.size_class)
+    for _, t in ipairs({ 'backpack', 'saddlebag', 'equipped', 'drop_bag' }) do
+        local ok, why = Containers.accepts(t, 'cargo'); assert(not ok and why == 'fh_size_class', t)
+    end
+    assert(Containers.accepts('chest', 'cargo'))
 end)
 case('tags: round trip and junk', function()
     local tag = R.tagFor('heartlands_t1_01', 3)

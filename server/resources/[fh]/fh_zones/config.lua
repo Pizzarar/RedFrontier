@@ -33,6 +33,6 @@ FhZonesConfig = {
     -- registered through fh_core's item registry at start (shared/items.lua shape)
     items = {
         worn_rifle = { label = 'Worn Rifle', weight = 4000, size_class = 'bulky', stackable = false, value_base = 25 },
-        small_safe = { label = 'Small Safe', weight = 25000, size_class = 'cargo', stackable = false, value_base = 60, illicit = true },
+        small_safe = { label = 'Small Safe', weight = 25000, size_class = 'bulky', stackable = false, value_base = 60, illicit = true },
     },
 }

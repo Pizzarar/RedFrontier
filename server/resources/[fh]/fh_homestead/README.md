@@ -13,3 +13,13 @@ Seed of lane L1 (spec L87, L107, L138-139): fixed homestead plots, one claim per
 - Known gaps: unclaiming leaves chest contents in the stash (TODO: spill to a drop bag); nothing stops another
   resource from opening the stash id directly (owner-only is enforced on this resource's open path).
 - Not runtime-tested (no Cfx key yet).
+
+## M1 loop (B6d)
+
+Claim plot -> chest -> camp loot -> die once -> recover bag -> stash in the chest. No new code was needed for the stash:
+the plot chest is an fh_core `chest` (accepts pocket, bulky, cargo), persisted by fh_inventory in `inventories`, and
+`condition` / `stars` live in `item.info`, which every move keeps. The Small Safe and Worn Rifle are `bulky`: they fit the
+saddlebag, wagon and chest but not the backpack (spec 4.1). **Gap:** no horse/saddlebag exists yet, so carrying them home
+needs the horse lane (`FhDeathConfig.saddlebagOf`, `fh:saddle:<horse_id>`). Cross-resource names checked: `worn_rifle`,
+`small_safe` (fh_zones registers them), `drop_bag` accepts what the backpack holds (pocket), `chest` for camp and plot.
+See OWNER-TESTS.md "B6d" and "M1 end-to-end".
