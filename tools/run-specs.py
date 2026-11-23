@@ -14,10 +14,17 @@ import os
 import re
 import sys
 
+VENV_PY = os.path.expanduser('~/.venvs/rf/bin/python')
+
 try:
     from lupa import lua54 as lupa_mod
 except ImportError:
-    sys.exit('run-specs: needs lupa 2.x (pip install lupa)')
+    # Re-exec under the RF venv (has lupa) unless we already are it (loop guard).
+    if (os.path.exists(VENV_PY) and not os.environ.get('RF_SPECS_REEXEC')
+            and os.path.abspath(sys.prefix) != os.path.dirname(os.path.dirname(VENV_PY))):
+        os.environ['RF_SPECS_REEXEC'] = '1'
+        os.execv(VENV_PY, [VENV_PY] + sys.argv)
+    sys.exit(f'run-specs: needs lupa 2.x (pip install lupa, or use {VENV_PY})')
 
 BACKTICK_HASH = re.compile(rb'`[^`\r\n]*`')
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -53,16 +60,19 @@ def run_specs(paths):
     paths = paths or sorted(glob.glob(os.path.join(ROOT, 'spec', '*_spec.lua')))
     total = failed = 0
     worst = 0
+    load_errors = 0
     for p in paths:
         code, tests, fails, text = run_spec(os.path.abspath(p))
         total += tests
         failed += fails
         worst = max(worst, code)
+        if code == 2:
+            load_errors += 1
         status = 'ok  ' if code == 0 else 'FAIL'
         print(f'{status} {os.path.relpath(p, ROOT)}: {tests} tests, {fails} failures')
         if code != 0:
             print('    ' + text.replace('\n', '\n    '))
-    print(f'TOTAL {len(paths)} specs, {total} tests, {failed} failures')
+    print(f'TOTAL {len(paths)} specs, {total} tests, {failed} failures, {load_errors} load errors')
     return 0 if worst == 0 and failed == 0 else 1
 
 
