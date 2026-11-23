@@ -2,6 +2,7 @@
 --   exports.fh_core:move / canFit / getWeight / snapshot / transferAll
 --   exports.fh_core:registerContainer / setContainerCoords / open / createDropBag / deleteContainer / registerItems
 --   exports.fh_core:addItem / removeItem (registered world containers and carried refs of an online player)
+--   exports.fh_core:setItemInfo (registered world containers and carried refs of an online player)
 --   exports.fh_core:clearContainer (registered world containers only)
 -- fh_core never reads or writes inventory tables. Everything goes through fh_inventory's Fh* exports, which re-check
 -- with FhRules under their own state before mutating anything.
@@ -306,6 +307,30 @@ local function removeItem(ref, name, amount)
     return false, 'fh_refused'
 end
 
+---Replace the info table of the item in `slot` of a registered world container or a carried ref (C3b). The caller
+---merges: read the item (snapshot / view), build the whole new info, pass it here. `slot` is the container's own
+---slot number and must lie in ref's section (carried: equipped = the hotbar slots, backpack = the rest). With
+---expectName the write is refused unless that slot still holds an item of that name (closes a swap race between the
+---caller's read and this write). @return boolean ok, string|nil reason  fh_empty_slot (nothing in the slot),
+---fh_wrong_item (expectName mismatch), fh_bad_slot, fh_bad_info, fh_player_offline, fh_unknown_container
+local function setItemInfo(ref, slot, info, expectName)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then
+        if not onlinePlayer(ref.id) then return false, 'fh_player_offline' end
+    elseif not registered[refKey(ref)] then
+        return false, 'fh_unknown_container'
+    end
+    if type(slot) ~= 'number' or not math.tointeger(slot) then return false, 'fh_bad_slot' end
+    if type(info) ~= 'table' then return false, 'fh_bad_info' end
+    if expectName ~= nil and (type(expectName) ~= 'string' or expectName == '') then
+        return false, 'fh_bad_item_name'
+    end
+    local done, err = inv('FhSetItemInfo', ref, math.tointeger(slot), info, expectName)
+    if done == true then return true end
+    return false, type(err) == 'string' and err or 'fh_refused'
+end
+
 ---Empty a registered world container (fh_inventory only lets fh_core wipe an fh_core container).
 ---@return boolean ok, string|nil reason
 local function clearContainer(ref)
@@ -436,6 +461,7 @@ exports('open', open)
 exports('createDropBag', createDropBag)
 exports('addItem', addItem)
 exports('removeItem', removeItem)
+exports('setItemInfo', setItemInfo)
 exports('clearContainer', clearContainer)
 exports('deleteContainer', deleteContainer)
 exports('registerItems', registerItems)

@@ -169,6 +169,7 @@ character (rsg-core has a Player for it), else `fh_player_offline`; a non-number
 | `open(src, ref)` | `ok, reason` (reach checked from the server-side ped position) |
 | `createDropBag(coords, items, { owner?, label? })` | `id` or `nil, reason` |
 | `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds `amount` (default 1, integer >= 1) to a registered world container or a carried ref (C3a), all-or-nothing: the rules veto runs first and nothing is added on a refusal (`fh_size_class`: bulky never enters the backpack; `fh_too_heavy`, `fh_no_slot`: not all of it fits) |
+| `setItemInfo(ref, slot, info, expectName?)` | `true` or `false, reason`; replaces the `info` table of the item in `slot` of a registered world container or a carried ref (C3b). The caller merges: read the item (`snapshot`/`view`), build the whole new table, pass it. `slot` is the container's own slot number and must be inside the ref's section (`fh_bad_slot`). `fh_empty_slot`: nothing there. `expectName`: refused with `fh_wrong_item` unless the slot still holds that item (closes a swap between your read and this write). Name, amount, weight and the other item fields are never changed |
 | `clearContainer(ref)` | `true` or `false, reason`; empties a registered world container (only fh_core may wipe one in fh_inventory) |
 | `deleteContainer(ref)` | `true, items` (what it still held) or `false, reason`; registered world stashes only, `fh_in_use` while anyone has it open |
 | `registerItems({ [name] = def })` | `true` or `false, err, badName` (validates every entry before applying any; see Items for the duplicate rules) |
@@ -181,6 +182,10 @@ character (rsg-core has a Player for it), else `fh_player_offline`; a non-number
   `AddItem` / `RemoveItem`: the player as actor, the section, and `<calling resource> via fh_core.<export>`) and show
   the player the add/remove item box; world calls pass the same tag as fh_inventory's reason (it logs player targets
   only). Neither world nor carried calls emit an `fh:inventory:*` event (those are for `move` / `transferAll`).
+- `setItemInfo` checks, in order: the ref (`fh_unknown_container`, `fh_bad_ref`, `fh_player_offline`), `slot` an
+  integer (`fh_bad_slot`), `info` a table (`fh_bad_info`), `expectName` nil or a non-empty string
+  (`fh_bad_item_name`); then fh_inventory reads, checks and writes the slot with no yield in between (`fh_bad_slot`,
+  `fh_empty_slot`, `fh_wrong_item`). It emits no event.
 - `clearContainer`, `deleteContainer`, `registerContainer` and `setContainerCoords` refuse carried refs
   (`fh_not_registrable`): they are destructive or world-only.
 - `registerContainer` refuses `equipped`/`backpack` (`fh_not_registrable`) and any world container without
@@ -207,6 +212,7 @@ state before mutating.
 | `FhCreateDropBag(coords, items, opts)` | `id` or `nil, reason` |
 | `FhDeleteContainer(ref)` | `true, items` or `false, reason` (deletes memory, FhMeta and the `inventories` row; refused while open) |
 | `FhAddItem(ref, name, amount, info?, reason?)` | `true` or `false, reason`; carried refs only: the veto runs against that section alone (`AddTo` with `onlyType`), nothing is added on refusal |
+| `FhSetItemInfo(ref, slot, info, expectName?)` | `true` or `false, reason`; any ref `Resolve` accepts: slot inside the ref's section, item present, name check, then `info` (deep copy) replaces the slot's info and the container is committed and refreshed. fh_inventory's `SetItemInfo(target, slot, info)` / `SetItemData(src, name, key, val)` are not used: they are not section-scoped and have no name check |
 | `FhRemoveItem(ref, name, amount, reason?)` | `true` or `false, reason`; carried refs only: counts that section, then removes lowest slot first with no yield in between (`fh_not_enough`: nothing removed) |
 
 ### Reason codes
@@ -218,7 +224,9 @@ Locale keys (fh_inventory's `en.json` carries the text): `fh_unknown_container`,
 `fh_inventory_error`. Item validation: `fh_item_not_table`, `fh_bad_item_name`, `fh_bad_label`, `fh_bad_weight`,
 `fh_bad_value_base`, `fh_bad_illicit`, `fh_bad_stackable`.
 B7: `fh_not_enough` (removeItem: container holds fewer than asked), `fh_duplicate_item` (registerItems name taken).
-C3a: `fh_player_offline` (carried ref whose src has no loaded character), `fh_bad_info` (addItem info not a table).
+C3a: `fh_player_offline` (carried ref whose src has no loaded character), `fh_bad_info` (addItem / setItemInfo info
+not a table). C3b: `fh_empty_slot` (setItemInfo: nothing in the slot), `fh_wrong_item` (setItemInfo: expectName
+does not match the slot).
 
 ## Events
 
@@ -334,4 +342,4 @@ through Python `lupa` 2.x (`pip install lupa`), one fresh Lua state per spec, ex
 runner-agnostic through `spec/support/fh_prelude.lua`: they also run under busted (`.busted`) or plain
 `lua spec/rules_spec.lua`. The server API is covered by `spec/fh_inventory_smoke_spec.lua`, which loads fh_core's
 `server/inventory.lua` and fh_inventory's server scripts against stubbed natives (exports are in-process there,
-not msgpack'd): B7 removeItem, C3a carried addItem/removeItem.
+not msgpack'd): B7 removeItem, C3a carried addItem/removeItem, C3b setItemInfo.

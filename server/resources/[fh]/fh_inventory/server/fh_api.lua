@@ -287,5 +287,28 @@ function Fh.RemoveItem(ref, name, amount, reason)
     return true
 end
 
+--- FhSetItemInfo(ref, slot, info, expectName?) -> true | false, reason   (any ref Resolve accepts)
+--- Replaces the info table of the item in ref's own slot `slot` (the caller merges). Read, check and write happen with
+--- no yield in between, so expectName (fh_wrong_item) closes a slot-swap race between the caller's read and this write.
+--- Structural fields (name, amount, weight, ...) are not info and are never touched here.
+function Fh.SetItemInfo(ref, slot, info, expectName)
+    if not FromCore() then return false, 'not_fh_core' end
+    if type(info) ~= 'table' then return false, 'fh_bad_info' end
+    if expectName ~= nil and (type(expectName) ~= 'string' or expectName == '') then
+        return false, 'fh_bad_item_name'
+    end
+    local c, id, view = Resolve(ref)
+    if not c then return false, id end
+    slot = type(slot) == 'number' and math.tointeger(slot) or nil
+    if not InView(view, slot) then return false, 'fh_bad_slot' end
+    local item = c.items[slot]
+    if not item then return false, 'fh_empty_slot' end
+    if expectName ~= nil and item.name ~= expectName:lower() then return false, 'fh_wrong_item' end
+    item.info = InvCore.DeepClone(info)
+    InvCore.Commit(c)
+    InvCore.Refresh(id)
+    return true
+end
+
 for name, fn in pairs(Fh) do exports('Fh' .. name, fn) end
 InvCore.Fh = Fh

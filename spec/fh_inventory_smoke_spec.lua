@@ -441,6 +441,70 @@ T.describe('fh_core addItem/removeItem on carried refs (C3a)', function()
     return select(2, CORE.addItem({ type = 'chest', id = 'fh:chest:b7:1' }, 'bread', 2.5)) == 'fh_bad_amount' end)
 end)
 
+T.describe('fh_core.setItemInfo (C3b)', function()
+  local P = mkPlayer(30, { [1] = it('bread', 2, 1), [7] = it('knife', 1, 7) })
+  players[30].PlayerData.items[7].info = { quality = 40, serie = 'K1' }
+  local bp, eq = { type = 'backpack', id = 30 }, { type = 'equipped', id = 30 }
+  local chestId = 'fh:chest:c3b:1'
+  local chest = { type = 'chest', id = chestId }
+  local function item(src, slot) return players[src].PlayerData.items[slot] end
+  case('carried backpack slot: info replaced (caller merges: old keys not kept)', function()
+    local ok, why = CORE.setItemInfo(bp, 7, { quality = 100, restored = true })
+    local info = item(30, 7).info
+    return ok == true and info.quality == 100 and info.restored == true and info.serie == nil
+      and item(30, 7).name == 'knife' and item(30, 7).amount == 1, why end)
+  case('expectName match ok; info is a copy (caller edits after the call do not leak in)', function()
+    local mine = { quality = 90, serie = 'K1' }
+    local ok, why = CORE.setItemInfo(bp, 7, mine, 'knife')
+    mine.quality = 1
+    return ok == true and item(30, 7).info.quality == 90, why end)
+  case('carried equipped slot ok', function()
+    local ok, why = CORE.setItemInfo(eq, 1, { baked = 'today' }, 'bread')
+    return ok == true and item(30, 1).info.baked == 'today' and item(30, 1).amount == 2, why end)
+  case('empty slot: fh_empty_slot', function()
+    local ok, why = CORE.setItemInfo(bp, 8, { x = 1 }) return ok == false and why == 'fh_empty_slot', why end)
+  case('expectName mismatch: fh_wrong_item, info untouched', function()
+    local ok, why = CORE.setItemInfo(bp, 7, { quality = 5 }, 'bread')
+    return ok == false and why == 'fh_wrong_item' and item(30, 7).info.quality == 90, why end)
+  case('slot outside the ref section: fh_bad_slot (equipped slot via a backpack ref, and past the end)', function()
+    local a = select(2, CORE.setItemInfo(bp, 1, { x = 1 }))
+    local b = select(2, CORE.setItemInfo(eq, 7, { x = 1 }))
+    local c = select(2, CORE.setItemInfo(bp, 26, { x = 1 }))
+    local d = select(2, CORE.setItemInfo(bp, 7.5, { x = 1 }))
+    return a == 'fh_bad_slot' and b == 'fh_bad_slot' and c == 'fh_bad_slot' and d == 'fh_bad_slot'
+      and item(30, 1).info.x == nil, table.concat({ tostring(a), tostring(b), tostring(c), tostring(d) }, ' ') end)
+  case('bad info / bad expectName refused, nothing changed', function()
+    local a = select(2, CORE.setItemInfo(bp, 7, 'x'))
+    local b = select(2, CORE.setItemInfo(bp, 7, { quality = 5 }, ''))
+    return a == 'fh_bad_info' and b == 'fh_bad_item_name' and item(30, 7).info.quality == 90 end)
+  case('invalid refs refused', function()
+    local r = {
+      select(2, CORE.setItemInfo({ type = 'nope', id = chestId }, 1, {})),
+      select(2, CORE.setItemInfo({ type = 'backpack', id = '30' }, 7, {})),
+      select(2, CORE.setItemInfo({ type = 'backpack', id = 999 }, 7, {})),
+      select(2, CORE.setItemInfo({ type = 'chest', id = 'fh:chest:c3b:nope' }, 1, {})),
+      select(2, CORE.setItemInfo(nil, 1, {})),
+    }
+    local want = { 'fh_unknown_container', 'fh_bad_ref', 'fh_player_offline', 'fh_unknown_container',
+      'fh_unknown_container' }
+    for i = 1, #want do if r[i] ~= want[i] then return false, i .. ' ' .. tostring(r[i]) end end
+    return true end)
+  case('registered world container: ok, empty, wrong name', function()
+    if CORE.registerContainer(chest, { coords = { x = 500, y = 500, z = 10 } }) ~= true then return false, 'register' end
+    if CORE.addItem(chest, 'saddle', 1) ~= true then return false, 'seed' end
+    local slot = next(I.Inventories[chestId].items)
+    local ok, why = CORE.setItemInfo(chest, slot, { brand = 'X' }, 'saddle')
+    local e = select(2, CORE.setItemInfo(chest, slot + 1, { brand = 'Y' }))
+    local w = select(2, CORE.setItemInfo(chest, slot, { brand = 'Z' }, 'knife'))
+    return ok == true and I.Inventories[chestId].items[slot].info.brand == 'X' and e == 'fh_empty_slot'
+      and w == 'fh_wrong_item', tostring(why) .. ' ' .. tostring(e) .. ' ' .. tostring(w) end)
+  case('FhSetItemInfo: non-core caller refused', function()
+    invoking = 'some_script'
+    local why = select(2, I.Fh.SetItemInfo(bp, 7, { quality = 1 }))
+    invoking = nil
+    return why == 'not_fh_core' and item(30, 7).info.quality == 90, why end)
+end)
+
 T.describe('fh_core.registerItems wiring (B7)', function()
   case('base rsg item name refused as duplicate (read from RSGCore.Shared.Items)', function()
     local ok, err, bad = CORE.registerItems({ bread = { label = 'B', weight = 1 } })
