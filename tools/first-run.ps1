@@ -114,12 +114,17 @@ $logFile = Join-Path $LogDir 'fxserver.log'
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 Remove-Item $logFile -ErrorAction SilentlyContinue
 Write-Host '[start] launching server in its own window (close it or run tools/stop-server.ps1 to stop)...'
-Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $PSScriptRoot 'start-server.ps1')`"")
+$srv = Start-Process powershell -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $PSScriptRoot 'start-server.ps1')`"")
 $expected = @(Get-Content $cfg | ForEach-Object { if ($_ -match '^\s*(?:ensure|start)\s+(\S+)') { $Matches[1] } } | Select-Object -Unique)
 $state = 'pending'
 $deadline = (Get-Date).AddSeconds($TimeoutSec)
 while ((Get-Date) -lt $deadline -and $state -eq 'pending') {
     Start-Sleep -Seconds 2
+    if ($srv.HasExited) {
+        Write-Host "Server window exited early (exit code $($srv.ExitCode)) before the server was ready." -ForegroundColor Red
+        Write-Host 'Run tools/setup-server.ps1 if this is a fresh machine, or run tools/start-server.ps1 directly to see the error; also check server/logs/.' -ForegroundColor Red
+        $state = 'exited'; break
+    }
     if (Test-Path $logFile) {
         $fs = [IO.File]::Open($logFile, 'Open', 'Read', 'ReadWrite,Delete')
         try { $text = (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() }
@@ -129,6 +134,7 @@ while ((Get-Date) -lt $deadline -and $state -eq 'pending') {
 switch ($state) {
     'license' { Write-Host 'Licence key rejected by Cfx. Check the key/IP at portal.cfx.re and run first-run.cmd again.' -ForegroundColor Red }
     'error'   { Write-Host 'Server booted with errors; see server/logs/fxserver.log.' -ForegroundColor Red }
+    'exited'  { }
     'pending' { Write-Host "Server not ready after ${TimeoutSec}s; see server/logs/fxserver.log." -ForegroundColor Yellow }
 }
 Show-Connect $state

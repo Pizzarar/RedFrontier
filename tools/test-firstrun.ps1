@@ -26,10 +26,16 @@ try {
     [IO.File]::WriteAllText($t, "set a b`n")
     Set-SecretsKey $t 'cfxk_CCCCCCCCCCCCCCCCCCCC'
     Check 'append' ((Get-SecretsKey $t) -eq 'cfxk_CCCCCCCCCCCCCCCCCCCC' -and ([IO.File]::ReadAllLines($t) -contains 'set a b'))
+    [IO.File]::WriteAllText($t, "set a b`r`nsv_licenseKey `"OLD`"`r`n# n`r`n")
+    Set-SecretsKey $t 'cfxk_DDDDDDDDDDDDDDDDDDDD'
+    $cl = [IO.File]::ReadAllLines($t)
+    Check 'CRLF merge' ((Get-SecretsKey $t) -eq 'cfxk_DDDDDDDDDDDDDDDDDDDD' -and ($cl -contains 'set a b') -and ($cl -contains '# n') -and $cl.Count -eq 3)
     # first-run end to end against the temp file: no elevation, no server start
     $env:FH_CFX_KEY = 'cfxk_TESTTESTTESTTESTTEST'
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'first-run.ps1') -NoElevate -KeyFromEnv -NoStart -SecretsPath $t | Out-Null
-    Check 'first-run -KeyFromEnv' ($LASTEXITCODE -eq 0 -and (Get-SecretsKey $t) -eq 'cfxk_TESTTESTTESTTESTTEST')
+    $frOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'first-run.ps1') -NoElevate -KeyFromEnv -NoStart -SecretsPath $t *>&1 | Out-String
+    $code = $LASTEXITCODE
+    Check 'no key in output' (-not $frOut.Contains('cfxk_TESTTESTTESTTESTTEST'))
+    Check 'first-run -KeyFromEnv' ($code -eq 0 -and (Get-SecretsKey $t) -eq 'cfxk_TESTTESTTESTTESTTEST')
     $env:FH_CFX_KEY = $null
 } finally { Remove-Item $t -ErrorAction SilentlyContinue }
 
