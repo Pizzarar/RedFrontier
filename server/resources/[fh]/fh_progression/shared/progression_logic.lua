@@ -49,7 +49,7 @@ function logic.repExportResult(callOk, v, err)
     return 'value', v
 end
 
----Admin `fh_rep <serverId> <region> <delta>` argument parsing. Whole numbers only, region must be known,
+---Admin `fh_rep_region <serverId> <region> <delta>` argument parsing. Whole numbers only, region must be known,
 ---|delta| <= maxDelta (fh_economy re-validates against its own cap). @return table|nil { target, region_id, delta }, string? err
 function logic.parseRepCmd(args, isKnownRegion, maxDelta)
     args = type(args) == 'table' and args or {}

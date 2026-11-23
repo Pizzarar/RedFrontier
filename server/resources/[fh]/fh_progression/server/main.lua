@@ -46,20 +46,21 @@ exports('getTier', store.getTier)
 exports('canUnlock', store.canUnlock)
 
 -- ---------------------------------------------------------------- admin test command
--- `fh_rep <serverId> <region> <delta>`: same exports.fh_economy:rep path as normal play (atomic upsert + ledger row).
--- Restricted: console, or ACE `command.fh_rep` (server.cfg: add_ace group.admin command allow).
-RegisterCommand('fh_rep', function(source, args)
-    if not (source == 0 or IsPlayerAceAllowed(source, 'command.fh_rep')) then return end
+-- `fh_rep_region <serverId> <region> <delta>`: same exports.fh_economy:rep path as normal play (atomic upsert + ledger row).
+-- Named fh_rep_region, not fh_rep: fh_economy registers its own console `fh_rep <id> <delta>` and the last to load
+-- would win. Restricted: console, or ACE `command.fh_rep_region` (server.cfg: add_ace group.admin command allow).
+RegisterCommand('fh_rep_region', function(source, args)
+    if not (source == 0 or IsPlayerAceAllowed(source, 'command.fh_rep_region')) then return end
     local function say(msg)
         if source == 0 then print('[fh_progression] ' .. msg)
         else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end
     end
     local p, err = FhProgressionLogic.parseRepCmd(args, FhRegions.isKnownRegion, 1000)
-    if not p then return say('fh_rep: ' .. err) end
+    if not p then return say('fh_rep_region: ' .. err) end
     local called, ok, rerr = pcall(function()
         return exports.fh_economy:rep(p.target, p.region_id, p.delta, 'console_test')
     end)
-    if not called then return say('fh_rep: economy export failed: ' .. tostring(ok)) end
-    say(ok and ('fh_rep: ok (%s %+d for %d)'):format(p.region_id, p.delta, p.target)
-        or 'fh_rep: ' .. tostring(rerr))
+    if not called then return say('fh_rep_region: economy export failed: ' .. tostring(ok)) end
+    say(ok and ('fh_rep_region: ok (%s %+d for %d)'):format(p.region_id, p.delta, p.target)
+        or 'fh_rep_region: ' .. tostring(rerr))
 end, true)

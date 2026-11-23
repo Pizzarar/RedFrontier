@@ -108,6 +108,29 @@ case('repExportResult follows getRep(who, region_id) -> integer|nil, err', funct
     T.eq('error', kind); T.eq('economy_unavailable', v)
 end)
 
+case('admin command is fh_rep_region (ACE command.fh_rep_region): no clash with fh_economy console fh_rep', function()
+    local function commands(rel)
+        local fh = assert(io.open(here .. '../server/resources/[fh]/' .. rel, 'rb'))
+        local src = fh:read('a'); fh:close()
+        local names = {}
+        for name in src:gmatch("RegisterCommand%('([%w_]+)'") do names[#names + 1] = name end
+        return names, src
+    end
+    local prog, src = commands('fh_progression/server/main.lua')
+    T.same({ 'fh_rep_region' }, prog)
+    assert(src:find("IsPlayerAceAllowed(source, 'command.fh_rep_region')", 1, true), 'ACE name')
+    -- every command name across these resources is unique (FXServer keeps whichever registers last)
+    local seen = {}
+    for _, rel in ipairs({ 'fh_economy/server/main.lua', 'fh_progression/server/main.lua', 'fh_fence/server/main.lua',
+        'fh_hands/server/main.lua' }) do
+        for _, name in ipairs((commands(rel))) do
+            assert(not seen[name], ('%s registered by both %s and %s'):format(name, tostring(seen[name]), rel))
+            seen[name] = rel
+        end
+    end
+    T.eq('fh_economy/server/main.lua', seen.fh_rep) -- core's console fh_rep <id> <delta> stays the only fh_rep
+end)
+
 case('parseRepCmd: valid args and every refusal code', function()
     local p = logic.parseRepCmd({ '3', 'heartlands', '-25' }, regions.isKnownRegion, 1000)
     assert(p.target == 3 and p.region_id == 'heartlands' and p.delta == -25)
