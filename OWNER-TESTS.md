@@ -128,8 +128,8 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 4. Press E at the camp stash.
    Expected: Worn Rifle (condition 20-45) and Small Safe (both bulky).
    RESULT:
-5. Try to drag the Worn Rifle and the Small Safe into your backpack (refused: bulky). Then, still on or next to the horse, run `/saddlebag` and move both into the saddlebag.
-   Expected: backpack refuses both; the saddlebag accepts both.
+5. Try to drag the Worn Rifle and the Small Safe into your backpack (refused: bulky). Then, with the camp stash still open and your horse within 3.5 m of you AND of the stash, run `/saddlebag in <slot>` for each (`<slot>` = the item's slot in the camp stash).
+   Expected: the backpack refuses both; each `/saddlebag in` replies `saddlebag: moved (in)`. Open the saddlebag (`/saddlebag`) and confirm both are inside. (A horse farther than 3.5 m, or a non-horse ped: `saddlebag: fh_out_of_reach` / `fh_not_a_horse`.)
    RESULT:
 6. Die once (fall or NPC) and respawn.
    Expected: `[fh_death] ... bag fh:dropbag:... moved`; revolver still in the hotbar; backpack empty.
@@ -137,8 +137,8 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 7. Walk to the bag, press E, take everything back.
    Expected: bread returns to the backpack; the bag empties and is swept.
    RESULT:
-8. Ride the horse home. Open the plot chest (E) and move the bread in. Then run `/saddlebag` beside the horse and move the rifle/safe from the saddlebag into the chest.
-   Expected: all accepted (the chest takes bulky). If you spawned a fresh horse after dying, `/saddlebag` still shows the same bag (any horse works for now).
+8. Ride the horse home. Open the plot chest (E) and move the bread in. With the chest open and the horse within 3.5 m of you and the chest, run `/saddlebag out <slot>` for the rifle and the safe (`<slot>` = their slots in the saddlebag; run `/saddlebag` first to read them, then press E at the chest again).
+   Expected: `saddlebag: moved (out)` for both; the chest now holds the rifle (condition intact) and the safe.
    RESULT:
 9. Restart persistence: put an item in the chest, stop the server, start it, rejoin, open the chest.
    Expected: the item is still there with its condition intact (check a rifle if you got one home).
@@ -149,9 +149,8 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 1. Spawn a horse (`fh_spawn_horse`), stand beside it, run `/saddlebag`. Put 1 bread in it.
    Expected: the saddlebag opens (20 slots); bread accepted.
    RESULT:
-2. Try to put `test_cargo_crate` in the saddlebag (get one with `fh_give <yourId> test_cargo_crate 1`).
-   Expected: refused (cargo).
-   RESULT:
+2. Cargo refusal is SPEC-ONLY for the saddlebag (`spec/containers_spec.lua`): no in-game path puts `test_cargo_crate` anywhere the saddlebag can pull it from (`fh_give` goes through a drop bag and the backpack, which refuse cargo). Nothing to test by hand; skip.
+   RESULT: n/a
 3. Walk 10+ m from the horse and run `/saddlebag`.
    Expected: `saddlebag: no horse in reach` (client) and nothing opens. Also stand next to a non-horse ped: same.
    RESULT:
@@ -163,4 +162,7 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    RESULT:
 6. Put an item in the saddlebag, restart the server, rejoin, spawn a horse, `/saddlebag`.
    Expected: the item is still there.
+   RESULT:
+7. Transfer path: open the plot chest (E) with bread inside, stand with your horse within 3.5 m of you and the chest, run `/saddlebag in <slot>` for the bread, then `/saddlebag out <slot>` for it again. Try `/saddlebag in <slot>` with no container open, and with the horse 6+ m away.
+   Expected: moved both ways with no duplicate or lost bread (count it before/after); with nothing open `saddlebag: fh_nothing_open`; far horse `saddlebag: fh_out_of_reach`. Spamming the command faster than twice a second is silently ignored.
    RESULT:
