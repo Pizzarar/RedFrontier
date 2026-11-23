@@ -7,14 +7,14 @@ local cfg = dofile(base .. 'config.lua')
 local R = dofile(base .. 'shared/craft_rules.lua')
 local A = dofile(base .. 'server/apothecary.lua')
 
--- Builds deps with call logs. opts: applyOk, applyThrows, removeOk, noRemove, held
+-- Builds deps with call logs and an event order. opts: applyOk, applyThrows, removeOk, giveOk, noRemove, noGive, held
 local function mk(o)
     o = o or {}
-    local log = { apply = {}, remove = {} }
+    local log = { apply = {}, remove = {}, give = {}, order = {} }
     local d = {
         tonicFor = function(item) return R.tonicFor(item, cfg) end,
         apply = function(src, id, mag, dur)
-            log.apply[#log.apply + 1] = { src, id, mag, dur }
+            log.apply[#log.apply + 1] = { src, id, mag, dur }; log.order[#log.order + 1] = 'apply'
             if o.applyThrows then error('boom') end
             if o.applyOk == false then return false, 'unknown_buff' end
             return true, { magnitude = mag, expires_at = 99 }
@@ -23,8 +23,15 @@ local function mk(o)
     }
     if not o.noRemove then
         d.remove = function(src, item, amount)
-            log.remove[#log.remove + 1] = { src, item, amount }
+            log.remove[#log.remove + 1] = { src, item, amount }; log.order[#log.order + 1] = 'remove'
             if o.removeOk == false then return false, 'fh_not_registrable' end
+            return true
+        end
+    end
+    if not o.noGive then
+        d.give = function(src, item, amount)
+            log.give[#log.give + 1] = { src, item, amount }; log.order[#log.order + 1] = 'give'
+            if o.giveOk == false then return false, 'fh_not_registrable' end
             return true
         end
     end
@@ -32,12 +39,13 @@ local function mk(o)
 end
 
 describe('apothecary: success', function()
-    it('applies the buff then consumes one tonic', function()
+    it('removes one tonic first, then applies the buff, no refund', function()
         local d, log = mk()
         local r = A.use(d, 7, 'tonic_vigor')
         eq(true, r.ok); eq(true, r.consumed)
         same({ { 7, 'tonic_vigor', 1.15, 600 } }, log.apply)
         same({ { 7, 'tonic_vigor', 1 } }, log.remove)
+        same({ 'remove', 'apply' }, log.order)
     end)
     it('tonic_steady uses its own magnitude and duration', function()
         local d, log = mk()
@@ -46,58 +54,74 @@ describe('apothecary: success', function()
     end)
 end)
 
-describe('apothecary: apply error keeps the tonic', function()
-    it('apply returns false -> not consumed, remove never called', function()
+describe('apothecary: remove fails -> no buff', function()
+    it('remove returns false: remove_failed, apply and give never called', function()
+        local d, log = mk({ removeOk = false })
+        local r = A.use(d, 7, 'tonic_vigor')
+        eq(false, r.ok); eq(false, r.consumed); eq('remove_failed', r.reason); eq('fh_not_registrable', r.detail)
+        eq(0, #log.apply); eq(0, #log.give)
+    end)
+    it('a throwing remover is contained and applies nothing', function()
+        local d, log = mk()
+        d.remove = function() error('x') end
+        local r = A.use(d, 7, 'tonic_vigor')
+        eq('remove_failed', r.reason); eq(0, #log.apply); eq(0, #log.give)
+    end)
+end)
+
+describe('apothecary: apply error -> refunded', function()
+    it('apply returns false: tonic given back, buff_failed', function()
         local d, log = mk({ applyOk = false })
         local r = A.use(d, 7, 'tonic_vigor')
         eq(false, r.ok); eq(false, r.consumed); eq('buff_failed', r.reason); eq('unknown_buff', r.detail)
-        eq(0, #log.remove)
+        same({ { 7, 'tonic_vigor', 1 } }, log.give)
+        same({ 'remove', 'apply', 'give' }, log.order)
     end)
-    it('apply throws -> same, no crash', function()
+    it('apply throws: same, refunded, no crash', function()
         local d, log = mk({ applyThrows = true })
         local r = A.use(d, 7, 'tonic_vigor')
-        eq('buff_failed', r.reason); eq(false, r.consumed); eq(0, #log.remove)
+        eq('buff_failed', r.reason); eq(false, r.consumed); eq(1, #log.give)
     end)
-    it('message tells the player they keep it', function()
+    it('message tells the player it was returned', function()
         local d = mk({ applyOk = false })
         local msg, kind = A.message(A.use(d, 7, 'tonic_vigor'))
         eq(A.MESSAGES.buff_failed, msg); eq('error', kind)
     end)
 end)
 
-describe('apothecary: remove fails after apply', function()
-    it('buff stays (no revoke), ok=true, consumed=false, reason remove_failed', function()
-        local d, log = mk({ removeOk = false })
+describe('apothecary: refund fails -> logged, no buff', function()
+    it('apply error + give fails: refund_failed, consumed=true, detail carries both, one apply only', function()
+        local d, log = mk({ applyOk = false, giveOk = false })
         local r = A.use(d, 7, 'tonic_vigor')
-        eq(true, r.ok); eq(false, r.consumed); eq('remove_failed', r.reason); eq('fh_not_registrable', r.detail)
+        eq(false, r.ok); eq(true, r.consumed); eq('refund_failed', r.reason)
+        assert(r.detail:find('unknown_buff', 1, true) and r.detail:find('fh_not_registrable', 1, true), r.detail)
         eq(1, #log.apply)
-        local _, kind = A.message(r)
-        eq('warning', kind)
     end)
-    it('a throwing remover is contained', function()
-        local d = mk()
-        d.remove = function() error('x') end
-        local r = A.use(d, 7, 'tonic_vigor')
-        eq('remove_failed', r.reason); eq(false, r.consumed)
+    it('a throwing giver is contained', function()
+        local d = mk({ applyThrows = true })
+        d.give = function() error('g') end
+        eq('refund_failed', A.use(d, 7, 'tonic_vigor').reason)
     end)
 end)
 
-describe('apothecary: refusals before apply', function()
+describe('apothecary: refusals touch nothing', function()
     it('unknown tonic / non-string', function()
         local d, log = mk()
         eq('unknown_tonic', A.use(d, 7, 'bread').reason)
         eq('unknown_tonic', A.use(d, 7, nil).reason)
-        eq(0, #log.apply)
+        eq(0, #log.order)
     end)
     it('missing item', function()
         local d, log = mk({ held = 0 })
-        local r = A.use(d, 7, 'tonic_vigor')
-        eq('missing_item', r.reason); eq(false, r.ok); eq(0, #log.apply); eq(0, #log.remove)
+        eq('missing_item', A.use(d, 7, 'tonic_vigor').reason); eq(0, #log.order)
     end)
-    it('no remover -> no_remove and NO free buff', function()
+    it('no remover -> no_remove', function()
         local d, log = mk({ noRemove = true })
-        local r = A.use(d, 7, 'tonic_vigor')
-        eq('no_remove', r.reason); eq(false, r.ok); eq(0, #log.apply)
+        eq('no_remove', A.use(d, 7, 'tonic_vigor').reason); eq(0, #log.order)
+    end)
+    it('no giver -> no_remove (cannot refund, so never remove)', function()
+        local d, log = mk({ noGive = true })
+        eq('no_remove', A.use(d, 7, 'tonic_vigor').reason); eq(0, #log.order)
     end)
     it('count check is optional', function()
         local d, log = mk()
