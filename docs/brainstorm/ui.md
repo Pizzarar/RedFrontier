@@ -29,12 +29,6 @@
 - (orig ask) L10 fh_ui: one shared NUI shell (vanilla JS): buff HUD, heat indicator, insurance dialog, contract board, station menus, fence shop. Lanes ship data/events, UI ships screens. Hypnospace-light surrealism but readability first. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
 ## In flight
-- idea-715 PASS (rn-c3cea2029d1b 0/0/1) merged 60ec4aa: heat card top 3 + "+K more"; 720p note clip accepted.
-- Shell plan done: U1 b0ac78a, U2 535ce8d, U3 693372d, U4 1ccf7b5 on local main. `ui playtest-ready` not yet logged (asked lead).
-- Plan 2: docs/plans/ui-wiring-fence-quests.md (W1 fence/idea-601 ∥ W2 jobs board -> W3 journal -> W4 drop fallbacks + test card). Handed to UI lead rn-f62d43216817 2026-11-23.
-- fh_fence on main (P2 f60805c, tip ed2cb1e); @progression P1b in flight touches fence debits (event names stable) -> W1 rebases after it.
-- W2 jobs board PASS (Gemini 1378d9a), merged main 47a1761.
-- idea-648 heat HUD PASS (Gemini 6287c71; forecast overlap lead-accepted), merged main bd06000.
-- W3 quest journal PASS (Gemini delta 9a2689c), merged main 6eb752e.
-- W1 fence screen (idea-601) PASS (Gemini b960bca + ca50443, rebase on P1b verified), merged main d726418 incl. Progression OWNER-TESTS reword (agreed).
-- W4 drop ox_lib fallbacks + test card PASS (docs fixes lead-verified), merged main db06ed0 incl. Q5 OWNER-TESTS reword (agreed). PLAN ui-wiring-fence-quests COMPLETE; ui playtest-ready db06ed0.
+- Shell plan + plan 2 (ui-wiring-fence-quests) complete; idea-715 merged 60ec4aa.
+- Plan 3: docs/plans/ui-giver-dialogue.md (idea-722: fh_ui `dialogue` screen replaces fh_quests ox_lib giver dialogue; D1 ∥ D2 -> D3). Handed to UI2 rn-8c7a9bce2671 2026-11-23; D2 coordinates with Que2.
+- idea-722 D1 PASS (0/0/1) + D2 PASS (delta 0/0/0) + D3 PASS (0/0/0), merged main 53bf1c7 (3ec82df, e26f028, 83e2903, 53bf1c7). PLAN ui-giver-dialogue COMPLETE.

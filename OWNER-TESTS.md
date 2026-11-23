@@ -6,7 +6,7 @@ file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need 
 
 ## Playtest order (start here)
 
-One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 305 minutes total.
+One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 315 minutes total.
 
 | # | Section | ~min | Notes |
 |---|---|---|---|
@@ -23,8 +23,8 @@ One in-game session, in this order (it groups sections so state carries over: ge
 | 11 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
 | 12 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
 | 13 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
-| 14 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7 |
-| 15 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 30 | solo; do last, live fence/jobs steps need those resources already exercised |
+| 14 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7; giver talk/accept now opens the fh_ui dialogue screen (reach steps need walking >5 m away) |
+| 15 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 40 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away) |
 
 Needs another person (table rows): 1 (B-access steps 4-5), 4 (death, two characters), 8 (Homestead second player), 12 (step 15 permission check as non-admin), 13 (`fh_not_owner` from a second character). Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
 
