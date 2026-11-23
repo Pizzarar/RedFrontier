@@ -135,6 +135,39 @@ case('admin: secondsToNext lands exactly on the next stop', function()
     T.eq(s.nextStop, logic.schedule(cfg, now + jump).stop)
     assert(logic.secondsToNext({}, now) == nil)
 end)
+case('screenData: tiers, leads row, labels, held qty, empty lists', function()
+    local menu = { label = 'Roadside Fence', stock = {
+        { item = 'bread', price = 3, category = 'common' },
+        { item = 'fh_part_gunsmith', price = 90, category = 'rare' },
+        { item = 'fh_treasure_lead', price = 250, category = 'leads', lead = { hint = 'x' } } },
+        sells = { { item = 'fh_part_gunsmith', price = 30 }, { item = 'fh_part_saddlery', price = 35 } } }
+    local d = logic.screenData(menu, { maxQty = 20, labels = { fh_part_gunsmith = 'Gunsmith Parts' },
+        held = { fh_part_gunsmith = 50 } })
+    T.eq('Roadside Fence', d.title)
+    T.eq(3, #d.stock)
+    T.eq('bread', d.stock[1].label); T.eq(20, d.stock[1].qty); T.eq('common', d.stock[1].category)
+    T.eq('Gunsmith Parts', d.stock[2].label); T.eq('rare', d.stock[2].category)
+    T.eq('leads', d.stock[3].category); T.eq(1, d.stock[3].qty); T.eq(250, d.stock[3].price)
+    T.eq('fh_part_gunsmith', d.sell[1].id); T.eq(20, d.sell[1].qty) -- held 50 capped at maxQty
+    T.eq(0, d.sell[2].qty) -- none held: Sell disabled
+    -- tier gating happens in visibleStock: a common-only menu has no rare/leads rows
+    local low = logic.screenData({ label = 'L', stock = logic.filterStock(cfg.stock.heartlands_road, false, false), sells = {} },
+        { maxQty = cfg.maxQty })
+    T.eq(2, #low.stock); T.eq(0, #low.sell)
+    local empty = logic.screenData({}, {}); T.eq(0, #empty.stock); T.eq(0, #empty.sell)
+    local nilm = logic.screenData(nil); T.eq(0, #nilm.stock)
+end)
+
+case('notice: refusals, unknown codes, partial buys, sells', function()
+    T.eq("You can't afford that.", logic.notice('buy', 1, false, 'fh_insufficient_funds'))
+    T.eq('Step closer to the fence.', logic.notice('sell', 1, false, 'out_of_range'))
+    T.eq('Refused: weird_code', logic.notice('buy', 1, false, 'weird_code'))
+    T.eq('Refused: nil', logic.notice('buy', 1, false, nil))
+    T.eq('Bought.', logic.notice('buy', 2, true, 2, 0))
+    T.eq('Bought 1 of 3. No room for the rest: $6 refunded.', logic.notice('buy', 3, true, 1, 6))
+    assert(logic.notice('buy', 3, true, 1, 0):find('refund for the rest failed'))
+    T.eq('Sold 2 for $60.', logic.notice('sell', 2, true, 2, 60))
+end)
 
 case('messages: every core B7 charge/pay refusal has player text (no raw code in the menu)', function()
     for _, code in ipairs({ 'fh_insufficient_funds', 'fh_charge_busy', 'ledger_failed', 'removemoney_refused',

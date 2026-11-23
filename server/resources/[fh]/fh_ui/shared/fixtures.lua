@@ -52,8 +52,8 @@ M.fixtures = {
     fence = {
         title = 'Roving Fence',
         stock = {
-            { id = 'lockpick', label = 'Lockpick', price = 12, qty = 6, rare = false },
-            { id = 'old_map', label = 'Torn treasure map', price = 220, qty = 1, rare = true },
+            { id = 'lockpick', label = 'Lockpick', price = 12, qty = 20, category = 'common' },
+            { id = 'old_map', label = 'Torn treasure map', price = 220, qty = 1, category = 'leads' },
         },
         sell = {
             { id = 'pocket_watch', label = 'Pocket watch', price = 30, qty = 2 },
@@ -88,7 +88,7 @@ S.station = {
 }
 S.fence = {
     title = 'string?',
-    stock = { list = { id = 'string', label = 'string', price = 'number', qty = 'number', rare = 'boolean?' } },
+    stock = { list = { id = 'string', label = 'string', price = 'number', qty = 'number', category = 'string' } },
     sell = { list = { id = 'string', label = 'string', price = 'number', qty = 'number' } },
 }
 M.schemas = S

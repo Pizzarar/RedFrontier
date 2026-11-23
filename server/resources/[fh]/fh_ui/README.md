@@ -111,8 +111,14 @@ Opened by `/journal` -> `fh:quests:ui_journal_open`; the client adapter fills it
 Actions: `craft` `{ id }` (button disabled when `can_craft` is false; the lane rechecks), `close` `{}`.
 
 ### fence (owner `fence`)
-`open/update` data `{ title?, stock = { { id, label, price, qty, rare? } }, sell = { { id, label, price, qty } } }`.
-Actions: `buy` `{ id, qty }`, `sell` `{ id, qty }` (qty clamped client-side to 1..listed qty; lane revalidates), `close` `{}`.
+`open/update` data `{ title?, notice?, stock = { { id, label, price, qty, category } }, sell = { { id, label, price, qty } } }`.
+`category` is `common|rare|leads`; a `leads` row has `qty` fixed at 1. Buy `qty` is the per-deal cap (1..qty input),
+sell `qty` is the units the player holds (0 disables Sell). `notice` is a lane message (trade result or refusal text)
+shown inline above the lists; an update carrying only `notice` keeps the previous lists. The qty input is never
+autofocused and Enter does not buy/sell. Actions: `buy` `{ id, qty }`, `sell` `{ id, qty }`, `close` `{}`; the lane
+revalidates everything. fh_fence maps its menu with `FhFenceLogic.screenData`, serves it via callback
+`fh:fence:screen`, handles the actions as server events `fh:fence:ui_buy` / `fh:fence:ui_sell`, and answers each with
+`fh:ui:update` `{ screen = 'fence', data = { ...fresh lists, notice } }`.
 
 ### Dev demo (fixtures)
 `/fh_ui_demo <heat|insurance|jobs|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;

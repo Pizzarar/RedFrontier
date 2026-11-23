@@ -183,6 +183,44 @@ end)
 lib.callback.register('fh:fence:buy', function(src, item, qty) return trader.buy(src, item, qty) end)
 lib.callback.register('fh:fence:sell', function(src, item, qty) return trader.sell(src, item, qty) end)
 
+-- fh_ui `fence` screen. The client opens it with the data from `fh:fence:screen`; its buy/sell actions arrive as the
+-- server events fh_ui relays (`fh:fence:ui_buy` / `fh:fence:ui_sell`, one table { src, screen, action, payload }) and
+-- run the same trader calls as the callbacks above. The result goes back as `fh:ui:update` with an inline `notice`.
+local snapshot = core('snapshot')
+local function screenFor(src)
+    local stop, id = stopFor(src)
+    if not stop then return nil, id end
+    local sells = {}
+    for item, price in pairs(cfg.buys) do sells[#sells + 1] = { item = item, price = price } end
+    table.sort(sells, function(a, b) return a.item < b.item end)
+    local menu = { label = stop.label, stock = visibleStock(src, id), sells = sells }
+    local labels, held = {}, {}
+    for name, def in pairs(cfg.items) do labels[name] = def.label end
+    local items = snapshot({ type = 'backpack', id = src })
+    for _, it in pairs(items or {}) do held[it.name] = (held[it.name] or 0) + (tonumber(it.amount) or 1) end
+    return logic.screenData(menu, { maxQty = cfg.maxQty, labels = labels, held = held })
+end
+
+lib.callback.register('fh:fence:screen', function(src)
+    local data, err = screenFor(src)
+    if not data then return nil, err end
+    return data
+end)
+
+local function uiTrade(kind)
+    return function(ev)
+        if type(ev) ~= 'table' or type(ev.src) ~= 'number' or type(ev.payload) ~= 'table' then return end
+        local item, qty = ev.payload.id, ev.payload.qty
+        local r = table.pack((kind == 'buy' and trader.buy or trader.sell)(ev.src, item, qty))
+        local data = screenFor(ev.src) -- nil when the player walked out of range: notice only
+        data = data or {}
+        data.notice = logic.notice(kind, qty, r[1], r[2], r[3])
+        TriggerClientEvent('fh:ui:update', ev.src, { screen = 'fence', data = data })
+    end
+end
+AddEventHandler('fh:fence:ui_buy', uiTrade('buy'))
+AddEventHandler('fh:fence:ui_sell', uiTrade('sell'))
+
 -- ---------------------------------------------------------------- admin test command
 -- `fh_fence_next`: jump the fence to its next stop now. It only skews the clock schedule() reads, so the NPC move,
 -- stock and every trade (stopFor -> schedule, under trader's per-citizen lock) behave exactly as at a normal rotation:

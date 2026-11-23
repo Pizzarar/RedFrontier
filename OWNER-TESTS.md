@@ -229,6 +229,13 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
     Expected: station shows craft options (Craft disabled where `can_craft` is false); fence shows buy and sell lists
     with qty controls (clamped to 1..listed qty). No autofocus, Enter does nothing, Esc closes and releases focus each time.
     RESULT:
+11b. Live fence (needs `ensure fh_fence`): stand at the current fence stop and press E. Elsewhere, press E and stay out of range.
+    Expected: the fh_ui fence screen opens (no ox_lib menu): buy rows show item, price, category and a qty box (treasure lead fixed
+    at 1), sell rows show what you hold. No autofocus, Enter does nothing. Buy 1 bread: an inline notice `Bought.` appears and the
+    lists refresh. Try an unaffordable buy or a sell with 0 held (Sell is disabled): the refusal text shows inline on the screen.
+    Walk out of range and click Buy: `Step closer to the fence.` shows inline. Esc closes and releases the mouse. Out of range with
+    the screen closed, E shows the toast `Step closer to the fence.`.
+    RESULT:
 12. Long and empty lists (only if you can push custom data, e.g. a test client script sending `fh:ui:open`; otherwise SKIP).
     Open `jobs` or `fence` with 30+ rows: the list scrolls inside the panel and the panel stays on screen. Open it with an
     empty list: panel shows an empty state, and F8 shows no JS or Lua error.

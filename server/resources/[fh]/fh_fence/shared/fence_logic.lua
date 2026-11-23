@@ -52,6 +52,45 @@ function M.filterStock(stopStock, canRare, canLeads)
     return out
 end
 
+---Maps the `fh:fence:menu` payload to the fh_ui `fence` screen data (display only: the server re-prices and re-checks
+---every trade). opts = { maxQty, labels = item->label, held = item->count }. Buy rows: qty = per-deal cap (1 for a
+---`leads` row, a unique item). Sell rows: qty = units held, capped at maxQty (0 disables the button). Tier gating was
+---already done server-side by visibleStock.
+function M.screenData(menu, opts)
+    menu = type(menu) == 'table' and menu or {}
+    opts = opts or {}
+    local cap = tonumber(opts.maxQty) or 20
+    local labels, held = opts.labels or {}, opts.held or {}
+    local stock, sell = {}, {}
+    for _, e in ipairs(type(menu.stock) == 'table' and menu.stock or {}) do
+        stock[#stock + 1] = { id = e.item, label = labels[e.item] or e.item, price = e.price,
+            qty = (e.lead or e.category == 'leads') and 1 or cap, category = e.category }
+    end
+    for _, s in ipairs(type(menu.sells) == 'table' and menu.sells or {}) do
+        sell[#sell + 1] = { id = s.item, label = labels[s.item] or s.item, price = s.price,
+            qty = math.min(cap, math.max(0, math.floor(tonumber(held[s.item]) or 0))) }
+    end
+    return { title = menu.label, stock = stock, sell = sell }
+end
+
+---Unknown codes fall back to 'Refused: <code>'.
+function M.why(code) return M.messages[code] or ('Refused: ' .. tostring(code)) end
+
+---Inline notice text for a finished trade. kind 'buy'|'sell'; ok/a/b = the trader's return values
+---(buy -> delivered, refunded | sell -> sold, total | refusal -> code).
+function M.notice(kind, qty, ok, a, b)
+    if not ok then return M.why(a) end
+    if kind == 'sell' then return ('Sold %d for $%d.'):format(tonumber(a) or 0, tonumber(b) or 0) end
+    a = tonumber(a) or 0
+    if qty and a < qty then
+        if (tonumber(b) or 0) > 0 then
+            return ('Bought %d of %d. No room for the rest: $%d refunded.'):format(a, qty, b)
+        end
+        return ('Bought %d of %d. The refund for the rest failed: ask an admin.'):format(a, qty)
+    end
+    return 'Bought.'
+end
+
 ---Validates a buy against the visible stock. Returns { total, entry, qty } or nil, reason.
 function M.quoteBuy(visible, item, qty, maxQty)
     if type(item) ~= 'string' then return nil, 'bad_item' end
