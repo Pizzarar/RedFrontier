@@ -209,4 +209,23 @@ case('pickSnapshot prefers live, falls back to cache, saved entries stay filtere
     assert(saved.rest == nil and saved.clean.remaining == 30)
 end)
 
+case('loadIsCurrent: stale token, drop or character switch discards the load', function()
+    assert(N.loadIsCurrent(3, 3, 'C1', 'C1') == true)
+    assert(N.loadIsCurrent(3, 4, 'C1', 'C1') == false, 'newer load for the same src')
+    assert(N.loadIsCurrent(3, nil, 'C1', 'C1') == false, 'dropped mid-load (slot cleared)')
+    assert(N.loadIsCurrent(3, 3, nil, 'C1') == false, 'player gone from rsg-core')
+    assert(N.loadIsCurrent(3, 3, 'C2', 'C1') == false, 'character switched on the same src')
+    assert(N.loadIsCurrent(nil, nil, 'C1', 'C1') == false and N.loadIsCurrent(3, 3, nil, nil) == false)
+end)
+
+case('shouldSave: failed load never writes an empty snapshot', function()
+    local some = N.saveRemaining(snap({ well_fed = 30 }), NOW)
+    assert(N.shouldSave(false, {}) == true, 'loaded fine: empty row is the truth (ends grace next login)')
+    assert(N.shouldSave(false, some) == true)
+    assert(N.shouldSave(true, {}) == false, 'load failed: do not wipe the stored row')
+    assert(N.shouldSave(true, N.saveRemaining({}, NOW)) == false)
+    assert(N.shouldSave(true, some) == true, 'load failed but real buffs since login are kept')
+    assert(N.shouldSave(false, nil) == false and N.shouldSave(nil, 'x') == false)
+end)
+
 T.finish()

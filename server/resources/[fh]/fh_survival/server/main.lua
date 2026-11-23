@@ -7,7 +7,10 @@ local regions = FhRegions
 
 local function now() return GetGameTimer() / 1000.0 end -- same clock as fh_buffs
 
-local players = {} -- [src] = { citizenid, loginAt, hasRow, state = {level, missing}, snap = last buff snapshot }
+local players = {} -- [src] = { citizenid, loginAt, hasRow, loadFailed, state = {level, missing}, snap = last buff snapshot }
+-- [src] = token of the load allowed to finish. Each load takes a fresh token from a server-wide counter (never
+-- reused, so a token from before a drop can never match a later load); drop() clears the slot.
+local loadToken, lastToken = {}, 0
 
 -- ---- DB / rsg glue (kept small; decisions live in shared/needs.lua) ----
 
@@ -24,11 +27,13 @@ local function loadRow(citizenid)
     return (dok and type(saved) == 'table') and saved or {}, true
 end
 
-local function saveRow(citizenid, saved)
-    local ok, err = pcall(MySQL.update.await,
-        'INSERT INTO fh_survival_needs (citizenid, needs, updated_at) VALUES (?, ?, ?) ' ..
-        'ON DUPLICATE KEY UPDATE needs = VALUES(needs), updated_at = VALUES(updated_at)',
-        { citizenid, json.encode(saved), os.time() })
+local SAVE_SQL = 'INSERT INTO fh_survival_needs (citizenid, needs, updated_at) VALUES (?, ?, ?) ' ..
+    'ON DUPLICATE KEY UPDATE needs = VALUES(needs), updated_at = VALUES(updated_at)'
+
+---`noWait`: dispatch without yielding (resource stop / shutdown: FXServer does not resume yielded handlers there).
+local function saveRow(citizenid, saved, noWait)
+    local params = { citizenid, json.encode(saved), os.time() }
+    local ok, err = pcall(noWait and MySQL.update or MySQL.update.await, SAVE_SQL, params)
     if not ok then print(('[fh_survival] db_error save %s: %s'):format(citizenid, tostring(err))) end
     return ok
 end
@@ -49,23 +54,49 @@ end
 
 -- ---- save / restore ----
 
-local function savePlayer(src)
+---Synchronously pop a player's record and build the row to write (never yields). Removing the record before any
+---DB call means a second drop for the same src (OnPlayerUnload then playerDropped) finds nothing and never writes
+---twice. Clearing the load token cancels any restore still waiting on the DB for this src.
+---@return string? citizenid, table? saved  (nil when there is nothing that may be written)
+local function takeRow(src)
+    loadToken[src] = nil
     local p = players[src]
-    if not p then return end
-    local snap = N.pickSnapshot(snapshotOf(src), p.snap)
-    saveRow(p.citizenid, N.saveRemaining(snap, now()))
-    p.hasRow = true
+    if not p then return nil end
+    players[src] = nil
+    local saved = N.saveRemaining(N.pickSnapshot(snapshotOf(src), p.snap), now())
+    if not N.shouldSave(p.loadFailed, saved) then
+        print(('[fh_survival] skip save %s: login load failed and nothing to save (stored row kept)'):format(p.citizenid))
+        return nil
+    end
+    return p.citizenid, saved
+end
+
+local function drop(src, noWait)
+    local cid, saved = takeRow(src)
+    if cid then saveRow(cid, saved, noWait) end
 end
 
 local function restorePlayer(src, citizenid)
-    local saved, dbOk = loadRow(citizenid)
-    local p = { citizenid = citizenid, loginAt = now(), hasRow = saved ~= nil, snap = {} }
+    local cur = players[src]
+    if cur and cur.citizenid == citizenid then return end -- already live (resource-start sweep vs PlayerLoaded)
+    local oldCid, oldSaved = takeRow(src) -- another character still registered on this src (sync pop)
+    lastToken = lastToken + 1
+    local token = lastToken
+    loadToken[src] = token -- taken before any yield, so a later load or drop always supersedes this one
+    if oldCid then saveRow(oldCid, oldSaved) end -- yields
+    local saved, dbOk = loadRow(citizenid) -- yields
+    -- The player may have dropped, switched character, or started a newer load while we waited.
+    if not N.loadIsCurrent(token, loadToken[src], citizenOf(src), citizenid) then return end
+    local p = { citizenid = citizenid, loginAt = now(), hasRow = saved ~= nil, loadFailed = not dbOk, snap = {} }
     players[src] = p
-    if not dbOk or not saved then return end -- no row (or DB down): login grace applies / ticks continue
-    for _, r in ipairs(N.restore(saved, cfg.Durations)) do
-        local ok, res = pcall(function() return exports.fh_buffs:apply(src, r.buff_id, r.magnitude, r.duration) end)
-        if not ok or res == false then print(('[fh_survival] restore %s for %s refused'):format(r.buff_id, citizenid)) end
+    if dbOk and saved then -- no row (or DB down): login grace applies / ticks continue
+        for _, r in ipairs(N.restore(saved, cfg.Durations)) do
+            local ok, res = pcall(function() return exports.fh_buffs:apply(src, r.buff_id, r.magnitude, r.duration) end)
+            if not ok or res == false then print(('[fh_survival] restore %s for %s refused'):format(r.buff_id, citizenid)) end
+        end
     end
+    -- Cache right away: a drop before the first tick must save the restored buffs, not an empty snapshot.
+    p.snap = snapshotOf(src)
 end
 
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
@@ -74,13 +105,16 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     if src and cid then restorePlayer(src, cid) end
 end)
 
-local function drop(src)
-    if not players[src] then return end
-    savePlayer(src)
-    players[src] = nil
-end
-AddEventHandler('RSGCore:Server:OnPlayerUnload', drop)
+AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) drop(src) end)
 AddEventHandler('playerDropped', function() drop(source) end)
+
+-- Keep the drop cache fresh between ticks: fh_buffs clears its state on playerDropped, possibly before ours runs,
+-- so a buff applied after the last tick would otherwise be lost on a quick disconnect.
+AddEventHandler('fh:buffs:applied', function(e)
+    local src = type(e) == 'table' and e.src or nil
+    local p = src and players[src]
+    if p then p.snap = snapshotOf(src) end
+end)
 
 -- ---- boot check ----
 
@@ -118,7 +152,7 @@ CreateThread(function()
     while true do
         Wait(math.max(1, cfg.TickSeconds) * 1000)
         for src, p in pairs(players) do
-            if not GetPlayerName(src) then players[src] = nil else evaluatePlayer(src, p) end
+            if not GetPlayerName(src) then players[src] = nil; loadToken[src] = nil else evaluatePlayer(src, p) end
         end
     end
 end)
@@ -137,7 +171,15 @@ AddEventHandler('onResourceStart', function(res)
     end)
 end)
 
+---Save everyone without yielding: snapshots are read synchronously and every write is dispatched before this
+---handler returns (FXServer would not resume a yielded onResourceStop, so players 2..N would never be saved).
+local function saveAllNow()
+    local srcs = {}
+    for src in pairs(players) do srcs[#srcs + 1] = src end
+    for _, src in ipairs(srcs) do drop(src, true) end
+end
+
 AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for src in pairs(players) do savePlayer(src) end
+    if res == GetCurrentResourceName() then saveAllNow() end
 end)
+AddEventHandler('txAdmin:events:serverShuttingDown', saveAllNow)

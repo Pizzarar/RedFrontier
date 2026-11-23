@@ -167,6 +167,21 @@ function N.pickSnapshot(live, cached)
     return type(cached) == 'table' and cached or {}
 end
 
+---Is an async needs load still the one to apply? Every load takes a fresh token and every drop clears the
+---slot, so a load is current only if its token is still the slot's token AND the player is still loaded as the
+---same character (`liveCitizenId` read after the DB call resumed). Anything else is a stale load to discard.
+function N.loadIsCurrent(token, currentToken, liveCitizenId, citizenId)
+    return token ~= nil and token == currentToken and citizenId ~= nil and liveCitizenId == citizenId
+end
+
+---Should `saved` (saveRemaining output) be written for a player record? If the login load failed we never saw
+---the stored row, so an empty snapshot must not overwrite it (it could still hold needs we failed to restore).
+---A non-empty snapshot is real in-game state since login and is written.
+function N.shouldSave(loadFailed, saved)
+    if type(saved) ~= 'table' then return false end
+    return not (loadFailed and next(saved) == nil)
+end
+
 -- FXServer loads shared scripts as plain chunks; expose a global there, module under specs.
 if _G.GetCurrentResourceName then _G.FhSurvivalNeeds = N end
 return N

@@ -26,7 +26,8 @@ None yet (S3/S4 add the apply paths). Logic lives in `shared/needs.lua` (`FhSurv
   (`missing` = need names, in that fixed order, `warmth` only when in a cold region). Sent on the first tick after load and
   whenever level or missing changes (not every tick). For @ui: level 0 = fine, 3 = worst.
 - Consumes: `RSGCore:Server:PlayerLoaded` (restore), `RSGCore:Server:OnPlayerUnload` and `playerDropped` (save),
-  `onResourceStart` (boot check, pick up online players), `onResourceStop` (save everyone).
+  `onResourceStart` (boot check, pick up online players), `onResourceStop` and `txAdmin:events:serverShuttingDown`
+  (save everyone, non-yielding), `fh:buffs:applied` (refresh the cached snapshot used on drop).
 - Reads (not events): `exports.fh_buffs:get(src)`; writes: `exports.fh_buffs:apply(src, id, magnitude, duration)` on restore only.
 - Buffs show in the U2 HUD via `fh:buffs:sync` already.
 
@@ -34,7 +35,17 @@ None yet (S3/S4 add the apply paths). Logic lives in `shared/needs.lua` (`FhSurv
 On drop/unload/resource stop, remaining seconds and magnitude per active need are saved to `fh_survival_needs`. On load
 they are re-applied (duration = min(saved remaining, configured max), never extended; offline time does not count down).
 A character with **no row** gets `LoginGraceSeconds` before sluggish can start. A row (even empty) means no grace.
-fh_buffs may clear its state before our `playerDropped` handler runs, so each tick caches the last snapshot and the save falls back to it.
+fh_buffs may clear its state before our `playerDropped` handler runs, so the save falls back to a cached snapshot. The cache
+is filled right after restore, on every tick and on every `fh:buffs:applied`, so a drop before the first tick keeps restored buffs.
+
+Lifecycle rules (Tier A):
+- Each load takes a fresh token; a drop clears it. After the DB read resumes, the load is applied only if its token is still
+  current and the player is still loaded as the same citizenid (`FhSurvivalNeeds.loadIsCurrent`). Otherwise it is discarded:
+  no record, no buffs (covers drop mid-load and character switch on the same src).
+- A drop pops the record before the DB write yields, so OnPlayerUnload + playerDropped write once.
+- Resource stop / server shutdown reads every snapshot synchronously and dispatches non-yielding `MySQL.update` calls.
+- If the login DB read failed, an empty snapshot is never written over the stored row (`FhSurvivalNeeds.shouldSave`);
+  buffs gained since login are still written.
 
 ## Config keys (`config.lua`, `FhSurvivalConfig`)
 `TickSeconds` (15), `LoginGraceSeconds` (600), `Durations`, `ColdRegions` (`{ region_id = true }`, empty: no cold region exists yet),
