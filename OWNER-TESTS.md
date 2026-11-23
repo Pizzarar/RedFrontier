@@ -587,3 +587,92 @@ yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what yo
     Expected: both `no_station` messages (`You need to be at a gunsmith station.` / `You need to be at the right
     station.`); the station types do not substitute for each other.
     RESULT:
+
+## Roads
+
+Wagons, cargo, freight, shortages, heat (M4 + M5). Not runtime-tested (no Cfx key); every natives side is unverified, so report what you see.
+Console prefixes: `[fh_cargo]`, `[fh_trade]`, `[fh_heat]`.
+
+Prereqs (all must be merged before this card is meaningful):
+- Branches: roads-r1 + roads-r2 (fh_cargo), roads-r4 (fh_trade freight), roads-r6 (fh_heat roadblocks); core B7 (`removeItem`, `registerItems`, `fh_economy:charge`) and fh_core R0 (`requestSpawn` kind `wagon`); quests Q1+ (fh_quests with `registerJobType`).
+- server.cfg: `ensure fh_core`, `fh_economy`, `fh_inventory`, `fh_quests`, `fh_cargo`, `fh_trade`, `fh_heat` (fh_quests BEFORE fh_trade, or restart fh_trade after it). Apply the fh_trade and fh_heat migrations (`0005`/`0006`).
+- Convars: `set fh_spike_gated true` (default) for the gated passes; `set fh_spike_gated false` for the ungated passes. To test freight with one region, set `FhTradeConfig.freight.allowSameRegion = true` (only heartlands exists), and `deadlineSeconds = 60` for step 14.
+- You are an admin and have a claimed plot with a chest (see `## M1 end-to-end` step 1).
+
+### M4: wagon, cargo, fast travel, wheel, freight, shortage
+
+1. `ensure fh_cargo` (and `fh_core` B7+R0). As admin run `/fh_wagon t2`.
+   Expected: a wagon appears about 4 m ahead; chat confirms. If chat says `fh_core cannot spawn wagons yet`, R0 is not merged: stop and report.
+   RESULT:
+2. Run `fh_give <yourId> test_cargo_crate 1`, drop the crate into your plot chest, open the chest (E), stand beside the wagon and run `/fh_cargo load 1`.
+   Expected: the crate leaves the chest and is in the wagon (reopen the chest to see the pane update if stale).
+   RESULT:
+3. Walk 20 m away with the chest open (or reopen it) and run `/fh_cargo load 1` again. Try `/fh_cargo load` with `bread` in the chest.
+   Expected: far: `fh_out_of_reach`; bread: `fh_not_cargo`. A second character gets `fh_not_owner` on your wagon.
+   RESULT:
+4. Fast travel veto. With the loaded wagon within 30 m, in the server console run `exports.fh_cargo:canFastTravel(<yourId>)` (e.g. via a test resource or `/fh_ft` if present); then move the wagon 30+ m away or unload it (`/fh_cargo unload 1`) and call again.
+   Expected: `false, fh_cargo_wagon_near` and a `fh:cargo:fasttravel_blocked` event on each block; `true` after unloading or going far. With `fh_inventory` stopped: `false, fh_cargo_unknown` (fails closed; restart it afterwards). No fast-travel system exists yet, so this is an export check only.
+   RESULT:
+5. Weight/tier: fill a `t1` (`/fh_wagon t1`) past 120 kg of cargo.
+   Expected: `fh_too_heavy`. `/fh_wagon t2` again later: the old wagon is replaced and its cargo is still inside.
+   RESULT:
+6. Wheel break, GATED (`fh_spike_gated true`). Mount the wagon, drive fast (off-road is not detected, all wagons count as on-road, so use full speed and a loaded wagon), or force it with `/fh_wheelbreak`.
+   Expected: `fh:cargo:wheel_broken` fires with `native=false`; the wagon is capped to 40% of its normal speed but no wheel visibly breaks. `exports.fh_cargo:isWheelBroken(<wagonId>)` is true.
+   RESULT:
+7. Wheel break, UNGATED (`set fh_spike_gated false`, S3 `spk_wheel` RESULT must be GO; if not, report what happens). Spawn a fresh wagon and `/fh_wheelbreak`.
+   Expected: `native=true` in the event; the client also breaks the wheel natively. Speed is still capped.
+   RESULT:
+8. Repair, both modes. `fh_give <yourId> hammer 1` and `fh_give <yourId> wagon_wheel 1`; stand within reach of the broken wagon and run `/fh_repair`; stand still 8 s. (Also try walking >3 m away mid-repair, and repairing with no wheel.)
+   Expected: moving away cancels it; no wheel = refused; finished: one `wagon_wheel` is consumed (hammer stays), `fh:cargo:wheel_repaired` fires. Needs core B7 `removeItem`; before it `/fh_repair` ends with `fh_core_no_removeitem`.
+   RESULT:
+9. REQUIRED: Break a wheel (gated and ungated), repair with hammer + wagon_wheel: wagon returns to full top speed (MODIFY_VEHICLE_TOP_SPEED 0.0 reset = no modifier). Drive the repaired wagon flat out and compare with a never-broken wagon of the same tier.
+   Expected: same top speed in both modes (note any residual slowdown in RESULT).
+   RESULT:
+10. nearestWagon for @hunting: `/fh_wagon t2`, kill an animal and take its pelt, stand within 25 m of your wagon and load the pelt (the hunting flow calls `exports.fh_cargo:nearestWagon`). Try again from 40 m, and with another player's wagon.
+   Expected: pelt goes into YOUR wagon within 25 m; beyond 25 m or someone else's wagon it returns nil and the pelt stays on you/the carcass.
+   RESULT:
+11. Shortage route. In the server console: `fh_trade_shortage heartlands trade_salt 0.8`, then `/tradequote` at the trade post.
+   Expected: the salt quote is higher; `exports.fh_trade:getShortages('heartlands')` lists it first.
+   RESULT:
+12. Freight needs fh_quests + core B7 started. `ensure fh_quests`, then `restart fh_trade`.
+   Expected: log `registered job type freight with fh_quests`. Without fh_quests: no error and no registration.
+   RESULT:
+13. With `allowSameRegion = true`, open the quest board.
+   Expected: an offer `Freight: Nx Salt Sack to heartlands`. Stand next to your wagon (within 8 m) and accept: N salt appear in the wagon. Accepting again is refused; with no wagon near: `fh_freight_no_wagon`.
+   RESULT:
+14. Drive the wagon into the destination radius.
+   Expected: the cargo leaves the wagon, the journal completes, ONE `fh_ledger` row `quest:job:freight:<key>`, rep up. Variants: unload the cargo to a chest and wait `graceChecks x checkMs` -> fails `cargo_missing`, no payout; with `deadlineSeconds = 60` -> fails `timeout`, also if you log out first; abandon from the journal -> cargo removed, no payout.
+   RESULT:
+15. Trade-post sell: `fh_give <yourId> trade_salt 10`, at the post `/tradesell trade_salt 10`, repeat, then `/tradesell trade_salt 999`.
+   Expected: items gone, cash up, one `fh_ledger` row; the second sale pays less (saturation); 999 refused, nothing taken.
+   RESULT:
+
+### M5: faction heat, roadblock, decay, bounty (ambush/chase gated)
+
+16. Give heat: `exports.fh_heat:set(<yourId>, "outlaws", 30)` (or the fh_core admin `fh_heat`), then `/paybounty`.
+   Expected: the list shows outlaws 30 (level `watched`) and its cost. Clearing the heartlands camp should also add `camp_clear` heat (25) to every player standing in that territory.
+   RESULT:
+17. Roadblock (always on). Set outlaws heat to 55 near heartlands.
+   Expected: one roadblock of about 4 outlaw peds at the nearest chokepoint, hostile; `fh:heat:roadblock_spawned` fires. Heat 30 -> 55 again: no second one. Set 20: peds vanish, `roadblock_cleared` reason `heat_dropped`. Re-raise within the cooldown: nothing spawns, log says `cooldown`. Chokepoint coords are unverified: note the real position/heading.
+   RESULT:
+18. Lay-low decay. Set heat 40 and stand OUTSIDE any outlaw territory for 3 minutes (2.0 per minute).
+   Expected: heat drops by about 6 (`fh:heat:changed` reason `decay`); standing inside an outlaw territory does not decay.
+   RESULT:
+19. Bounty payoff. With heat 40 and cash on hand run `/paybounty outlaws 10`, then `/paybounty outlaws`.
+   Expected: 10 points then the rest are cleared, money charged = points x `bountyPerPoint` (one `fh_ledger` charge row each); `0`, `-5`, `abc` or more than your heat: refused, nothing charged. With too little cash: `fh_insufficient_funds`, nothing changes. Needs core B7 `charge`; before it: `fh_economy_unavailable`.
+   RESULT:
+20. Payoff refund check. Make the heat write fail after the charge (stop oxmysql just before `/paybounty outlaws`, or force it in a dev build).
+   Expected: the message says you were not charged / refunded (`fh_payoff_refunded`), cash back to the exact amount, heat unchanged, retry works. If it instead reports `fh_payoff_refund_failed`, you were charged and there is an `[fh_heat] ERROR payoff ...` log line: do not retry, report it.
+   RESULT:
+21. Double submit: run `/paybounty outlaws` twice in quick succession.
+   Expected: the second gets `fh_payoff_busy` and is never charged.
+   RESULT:
+22. Night ambush + mounted chase, GATED (default `fh_spike_gated true`). Set heat 80, ride a horse, at night.
+   Expected: nothing spawns; logs `night ambush skipped: fh_spike_gated=true (waiting on S2 spk_chase RESULT)` and `mounted chase skipped: ...`. Roadblocks still work.
+   RESULT:
+23. Ambush + chase, UNGATED (`set fh_spike_gated false`; only after S2 `spk_chase` RESULT is GO, else report). Heat 80 at night, mounted.
+   Expected: peds ring you (`fh:heat:ambush_spawned`), then riders spawn behind you and attack (`fh:heat:chase_started`); both clear when heat drops. No wagon pursuit (not implemented).
+   RESULT:
+24. `restart fh_heat`; then spawn roadblocks as 5 different players.
+   Expected: restart: all roadblock peds gone; the 5th simultaneous roadblock is refused (`max_concurrent`). Heat values survive the restart (decayed).
+   RESULT:
