@@ -20,10 +20,25 @@ RegisterNetEvent('fh:trade:menu', function(data)
             end,
         }
     end
+    for _, e in ipairs(data.supplies or {}) do
+        options[#options + 1] = {
+            title = ('Buy %s  $%d'):format(e.label, e.price),
+            onSelect = function()
+                local input = lib.inputDialog('Buy ' .. e.label, {
+                    { type = 'number', label = 'Amount to buy', default = 1, min = 1, max = data.maxBuy, required = true },
+                })
+                if input and input[1] then TriggerServerEvent('fh:trade:buy', e.item, math.floor(input[1])) end
+            end,
+        }
+    end
     lib.registerContext({ id = 'fh_trade_post', title = data.label or 'Trade Post', options = options })
     lib.showContext('fh_trade_post')
 end)
 
 RegisterNetEvent('fh:trade:sold', function(r)
     if type(r) == 'table' then lib.notify({ title = 'Trade post', description = ('Sold for $%d'):format(tonumber(r.total) or 0), type = 'success' }) end
+end)
+
+RegisterNetEvent('fh:trade:bought', function(r)
+    if type(r) == 'table' then lib.notify({ title = 'Trade post', description = ('Bought for $%d'):format(tonumber(r.total) or 0), type = 'success' }) end
 end)

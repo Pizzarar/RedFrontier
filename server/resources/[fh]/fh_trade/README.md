@@ -1,6 +1,6 @@
 # fh_trade
 
-Regional trade prices, shortages and trade-post selling (spec L6). R3 of `roads-01`. Depends on fh_core, fh_economy, oxmysql, ox_lib.
+Regional trade prices, shortages, trade-post selling and supplies buying (spec L6; buying: idea-716/719). R3 of `roads-01`. Depends on fh_core, fh_economy, oxmysql, ox_lib.
 
 ## Price model (`shared/trade_prices.lua`, pure, specced)
 `unit = base x regionFactor x (1 + gain*shortage) x (1 + wobble) x (1 - maxDrop*saturation)`
@@ -18,22 +18,32 @@ Regional trade prices, shortages and trade-post selling (spec L6). R3 of `roads-
 - `exports.fh_trade:listGoods()` -> `{ [item] = { label, base } }`
 
 ## Events
-- Emits (server): `fh:trade:sold` `{ src, region, post, item, amount, total }` after a paid sale. Emits (to the client): `fh:trade:menu`, `fh:trade:sold`.
-- Consumes (from clients, server re-validates everything): `fh:trade:menu`, `fh:trade:sell(item, amount)`.
+- Emits (server): `fh:trade:sold` `{ src, region, post, item, amount, total }` after a paid sale; `fh:trade:bought` (same shape) after a paid and granted buy. Emits (to the client): `fh:trade:menu` (now also `supplies = { { item, label, price } }`, `maxBuy`), `fh:trade:sold`, `fh:trade:bought`.
+- Consumes (from clients, server re-validates everything): `fh:trade:menu`, `fh:trade:sell(item, amount)`, `fh:trade:buy(item, amount)`.
 
 ## Selling
 Server checks the player stands within a post's `radius`, validates item/amount, `fh_core.removeItem({type='backpack', id=src}, item, amount)` (all-or-nothing), commits the sale to the price state, then `fh_economy:pay(src, total, 'trade_sell:<item>', region)`. Money only comes from `pay`.
 Goods are registered by this resource with `fh_core.registerItems` at start (and when fh_core restarts).
 
+## Buying supplies (`shared/supplies.lua`, pure, `spec/trade_supplies_spec.lua`)
+Every post sells `FhTradeConfig.supplies` (item -> flat whole-dollar price per unit, unlimited stock, max `maxBuyPerTx` per request). Buying never reads or writes the price model (no shortage, saturation or wobble). Today: lumber $3, nails $2, lead $2, casings $2, resource_gunpowder $3, herb_american_ginseng / herb_oregano / herb_red_sage / herb_wild_mint $3 (just above each item's `value_base`).
+
+Sequence (all-or-nothing, one trade per player at a time; the busy lock is shared with selling and released on every path, pcall-guarded):
+1. Server checks the post radius (as selling), the item is in `supplies`, amount is a whole number 1..`maxBuyPerTx`.
+2. citizenid of `src` read with no yield before the charge (= the character `charge` charges).
+3. `fh_economy:charge(src, total, 'trade_buy:<item>', post.region)`. Not `true` -> refused, no item, no refund; the code is passed through (`fh_insufficient_funds`, `fh_charge_busy`, `no_player`, `player_changed`, ...). A throw -> `charge_error` (ALERT log, no item).
+4. `fh_core:addItem({ type = 'backpack', id = src }, item, amount)`: all-or-nothing (fh_core README, addItem row: nothing is added on a refusal), so a refusal (`fh_too_heavy`, `fh_no_slot`, `fh_player_offline`, ...) or a throw means nothing was granted.
+5. Grant failed -> `fh_economy:credit(citizenid, total, 'trade_buy_refund:<item>', post.region)` (online pay or queued for next load). OK -> `grant_failed_refunded`; refund refused/threw -> `refund_failed` and console `ALERT refund FAILED for <cid> ... owed $N` (fix by hand).
+
 ## Commands
-- Player: `/tradepost` (ox_lib menu + amount dialog), `/tradequote`, `/tradesell <item> <amount>` (chat fallback).
+- Player: `/tradepost` (ox_lib menu + amount dialog; sell goods and buy supplies), `/tradequote` (also lists supplies), `/tradesell <item> <amount>`, `/tradebuy <item> <amount>` (chat fallback).
 - Server console: `fh_trade_shortage <region> <item> <level 0..1>`; `tradequote` dumps the price rows as JSON.
 
 ## DB
 `server/migrations/0013_fh_trade.sql`: `fh_trade_prices (region_id, item, shortage, saturation, updated_at)`, PK (region_id, item). Dirty rows flush every `saveMs` and on resource stop; load decays to "now".
 
 ## Tests
-`python tools/run-specs.py spec/trade_prices_spec.lua spec/freight_spec.lua spec/freight_server_spec.lua` (SPECS NOT RUN yet for freight: python3-lupa / lua / luac missing on the build host)
+`~/.venvs/rf/bin/python tools/run-specs.py spec/trade_prices_spec.lua spec/trade_supplies_spec.lua spec/freight_spec.lua spec/freight_server_spec.lua` (SPECS NOT RUN yet for freight: python3-lupa / lua / luac missing on the build host)
 
 ## TODO(B7 @core)
 `fh_core:removeItem` and `fh_core:registerItems` ship with @core B7. Until then the resource logs "not available yet", goods are not registered, and every sale is refused (`Trading is not available yet.`). If `pay` fails after the items were removed there is no player refund export: it logs `ALERT ... owed $N`.
@@ -43,6 +53,7 @@ Goods are registered by this resource with `fh_core.registerItems` at start (and
 - [ ] Give goods (`fh_give <id> trade_salt 10`), `/tradesell trade_salt 10`: items gone, cash up, one `fh_ledger` pay row.
 - [ ] Sell 10 again: pays less; wait/restart: price recovers; `/tradesell trade_salt 999` and 0: refused, nothing taken.
 - [ ] `fh_trade_shortage heartlands trade_salt 0.8` raises the quote; restart server: shortage survives (decayed).
+- [ ] `/tradebuy lumber 5` with >= $15: cash -$15, 5 lumber in the backpack, one `fh_ledger` charge row `trade_buy:lumber`. With too little cash: refused, nothing changes. With a full/too-heavy backpack: charge row, then a `credit` row `trade_buy_refund:lumber` for the same amount, no lumber.
 
 ## Freight contracts (R4)
 A **job type for fh_quests** (no board of its own); contract per `README registerJobType` on `quests-q5` `0adc9aa`. `shared/freight.lua` (pure, `spec/freight_spec.lua`) + `server/freight.lua` (wiring, `spec/freight_server_spec.lua` with stubbed fh_core/fh_cargo/fh_quests).

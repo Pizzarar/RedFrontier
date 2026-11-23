@@ -766,6 +766,15 @@ Prereqs (all must be merged before this card is meaningful):
 15. Trade-post sell: `fh_give <yourId> trade_salt 10`, at the post `/tradesell trade_salt 10`, repeat, then `/tradesell trade_salt 999`.
    Expected: items gone, cash up, one `fh_ledger` row; the second sale pays less (saturation); 999 refused, nothing taken.
    RESULT:
+15a. Trade-post buy (needs fh_economy migration `0015` for refunds): note your cash, at the post `/tradequote` (lists 9 supplies), then `/tradebuy lumber 5` (or `/tradepost` -> Buy Lumber).
+   Expected: cash -$15, 5 Lumber in the backpack, ONE `fh_ledger` row kind=charge amount=15 reason `trade_buy:lumber` region heartlands; `/tradequote` trade-good prices unchanged by the buy.
+   RESULT:
+15b. Buy with too little money: drop your cash below $6 (e.g. `fh_charge <yourId> <cash - 5>` from the console), then `/tradebuy nails 3`.
+   Expected: "You cannot afford that.", no nails, no new `fh_ledger` row, cash unchanged.
+   RESULT:
+15c. Buy into a full backpack -> refund: fill the backpack (all slots, or near its weight cap), then `/tradebuy lumber 100`.
+   Expected: "...your money was refunded (fh_no_slot|fh_too_heavy)", no lumber added, cash back to where it was; `fh_ledger` has a charge row `trade_buy:lumber` amount 300 AND a credit row `trade_buy_refund:lumber` amount 300. No `ALERT refund FAILED` in the console.
+   RESULT:
 
 ### M5: faction heat, roadblock, decay, bounty (ambush/chase gated)
 

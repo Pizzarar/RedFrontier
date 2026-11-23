@@ -17,6 +17,16 @@ FhTradeConfig = {
         trade_whiskey = { label = 'Whiskey Crate', base = 40, weight = 15000, size_class = 'cargo',  stackable = true, value_base = 40 },
     },
 
+    -- Supplies the post SELLS to players (idea-716/719): flat whole-dollar price per unit, unlimited stock, every post.
+    -- Never touches the price model above (no shortage/saturation/wobble). Priced just above the items' value_base
+    -- (lumber 2, nails/lead/casings 1, herbs/gunpowder 0) so buying-to-sell never profits; trade goods sell at 6-40.
+    maxBuyPerTx = 100,            -- units per buy request
+    supplies = {
+        lumber = 3, nails = 2,                                  -- homestead builds (fh_homestead)
+        lead = 2, casings = 2, resource_gunpowder = 3,          -- reload bench ammo (fh_crafting)
+        herb_american_ginseng = 3, herb_oregano = 3, herb_red_sage = 3, herb_wild_mint = 3, -- apothecary tonics
+    },
+
     -- Regional baseline factor on top of goods[item].base. Unlisted = 1.0. Region ids from fh_core shared/regions.lua.
     regionFactor = {
         heartlands = { trade_salt = 1.0, trade_cloth = 1.1, trade_whiskey = 0.9 },

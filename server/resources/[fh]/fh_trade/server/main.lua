@@ -1,13 +1,16 @@
 -- fh_trade server (spec L6). The server owns all price state; the pure model is shared/trade_prices.lua.
 -- Selling: validate -> quote (dry run) -> fh_core.removeItem (all-or-nothing) -> commit the sale into the price
--- state -> fh_economy:pay. Natives: GetPlayerPed, GetEntityCoords, GetGameTimer. NOT runtime-tested (no Cfx key).
+-- state -> fh_economy:pay. Buying (supplies, idea-716/719): shared/supplies.lua -> fh_economy:charge -> fh_core.addItem
+-- (backpack) -> fh_economy:credit refund if the grant fails. Natives: GetPlayerPed, GetEntityCoords, GetGameTimer.
+-- NOT runtime-tested (no Cfx key).
 local cfg = FhTradeConfig
 local P = FhTradePrices
+local S = FhTradeSupplies
 P.isKnownRegion = FhRegions.isKnownRegion
 
 local state = P.newState()
 local dirty = {}      -- "region|item" -> { region, item } rows to flush
-local busy = {}       -- src -> true while a sale is in flight (removeItem/pay may yield)
+local busy = {}       -- src -> true while a sale or buy is in flight (exports may yield); one trade at a time
 local lastReq = {}    -- src -> GetGameTimer() of the last menu/sell request
 local ready = false
 
@@ -138,6 +141,29 @@ local function sell(src, post, item, amount)
     return res, extra
 end
 
+-- ---------------------------------------------------------------- buy (supplies)
+
+local function citizenidOf(src)
+    local ok, p = pcall(function() return exports['rsg-core']:GetCoreObject().Functions.GetPlayer(src) end)
+    return ok and p and p.PlayerData and p.PlayerData.citizenid or nil
+end
+
+local function labelOf(item)
+    local ok, l = pcall(function() return exports['rsg-core']:GetCoreObject().Shared.Items[item].label end)
+    return ok and type(l) == 'string' and l or item
+end
+
+local buyDeps = {
+    citizenid = citizenidOf,
+    -- fh_economy README: charge(src, amount, reason, region_id) -> ok, err, ledgerId (B7)
+    charge = function(src, total, why, region) return exports.fh_economy:charge(src, total, why, region) end,
+    -- fh_core README: addItem(ref, name, amount) -> true | false, reason; all-or-nothing (nothing added on a refusal)
+    grant = function(src, item, amount) return exports.fh_core:addItem({ type = 'backpack', id = src }, item, amount) end,
+    -- fh_economy README: credit(citizenid, amount, reason, region_id) -> ok, err, mode; online or queued, never lost
+    refund = function(cid, total, why, region) return exports.fh_economy:credit(cid, total, why, region) end,
+    log = log,
+}
+
 local function reason(code)
     local m = {
         fh_not_enough = 'You do not have that many.', unknown_item = 'The post does not buy that.',
@@ -145,6 +171,11 @@ local function reason(code)
         worthless = 'That is not worth anything at the moment.', busy = 'One sale at a time.',
         pay_failed = 'The trade post could not pay you; an admin has been told (logged).',
         fh_removeitem_missing = 'Trading is not available yet.', not_ready = 'Trading is starting up.',
+        -- buy side
+        fh_insufficient_funds = 'You cannot afford that.', fh_charge_busy = 'A payment is already going through; try again.',
+        charge_error = 'The trade post could not take payment; nothing was bought.', no_player = 'Your character is not loaded.',
+        grant_failed_refunded = 'It could not go into your backpack (full or too heavy?); your money was refunded.',
+        refund_failed = 'It could not go into your backpack and the refund failed; an admin has been told (logged).',
     }
     return m[code] or ('Sale refused (' .. tostring(code) .. ').')
 end
@@ -160,6 +191,23 @@ local function doSell(src, item, amount)
         TriggerClientEvent('fh:trade:sold', src, { item = item, amount = amount, total = res })
     else
         reply(src, reason(res))
+    end
+end
+
+local function doBuy(src, item, amount)
+    if throttled(src) then return end
+    local post = nearestPost(src)
+    if not post then return reply(src, 'You are not at a trade post.') end
+    amount = tonumber(amount)
+    local ok, res, extra = S.buy(cfg, buyDeps, busy, src, post, tostring(item), amount)
+    if ok then
+        reply(src, ('Bought %dx %s for $%d at %s.'):format(amount, labelOf(item), res, post.label))
+        TriggerClientEvent('fh:trade:bought', src, { item = item, amount = amount, total = res })
+        TriggerEvent('fh:trade:bought', { src = src, region = post.region, post = post.id, item = item, amount = amount, total = res })
+    else
+        if res == 'invalid_amount' then return reply(src, ('Amount must be a whole number from 1 to %d.'):format(cfg.maxBuyPerTx or 100)) end
+        if res == 'unknown_item' then return reply(src, 'The post does not sell that.') end
+        reply(src, reason(res) .. (extra and res ~= 'refund_failed' and (' (' .. tostring(extra) .. ')') or ''))
     end
 end
 
@@ -203,7 +251,10 @@ local function menuData(src)
         goods[#goods + 1] = { item = name, label = g.label, price = price, shortage = d.shortage, saturation = d.saturation }
     end
     table.sort(goods, function(a, b) return a.item < b.item end)
-    return { post = post.id, label = post.label, region = post.region, goods = goods, maxAmount = cfg.maxSellPerTx }
+    local supplies = {}
+    for _, e in ipairs(S.list(cfg)) do supplies[#supplies + 1] = { item = e.item, label = labelOf(e.item), price = e.price } end
+    return { post = post.id, label = post.label, region = post.region, goods = goods, maxAmount = cfg.maxSellPerTx,
+        supplies = supplies, maxBuy = cfg.maxBuyPerTx or 100 }
 end
 
 RegisterNetEvent('fh:trade:menu', function()
@@ -220,12 +271,24 @@ RegisterNetEvent('fh:trade:sell', function(item, amount)
     doSell(src, item, amount)
 end)
 
--- Chat fallback: /tradequote  and  /tradesell <item> <amount>
+RegisterNetEvent('fh:trade:buy', function(item, amount)
+    local src = source
+    if type(item) ~= 'string' or #item > 64 then return end
+    doBuy(src, item, amount)
+end)
+
+-- Chat fallback: /tradequote  and  /tradesell <item> <amount>  and  /tradebuy <item> <amount>
 RegisterCommand('tradequote', function(src)
     if src == 0 then return print(json.encode(P.toRows(state))) end
     local data = menuData(src)
     if not data then return reply(src, 'You are not at a trade post.') end
     for _, g in ipairs(data.goods) do reply(src, ('%s: $%.2f each%s'):format(g.label, g.price, g.shortage >= cfg.shortage.threshold and ' (in demand)' or '')) end
+    for _, e in ipairs(data.supplies) do reply(src, ('For sale: %s (%s) $%d each'):format(e.label, e.item, e.price)) end
+end, false)
+
+RegisterCommand('tradebuy', function(src, args)
+    if src == 0 then return print('[fh_trade] tradebuy is a player command') end
+    doBuy(src, args[1] or '', args[2])
 end, false)
 
 RegisterCommand('tradesell', function(src, args)

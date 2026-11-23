@@ -11,12 +11,9 @@ vector3 = vector3 or function(x, y, z) return { x = x, y = y, z = z } end -- fh_
 dofile(fh .. 'fh_zones/config.lua')
 
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
-local PENDING = {
-    lumber   = 'idea-716', nails = 'idea-716', lead = 'idea-716', casings = 'idea-716', -- trade post `supplies`
-    -- bought via the same trade post `supplies` list (idea-718 ruling); herb gathering is a parked later spike
-    resource_gunpowder = 'idea-716', herb_american_ginseng = 'idea-716', herb_oregano = 'idea-716',
-    herb_red_sage = 'idea-716', herb_wild_mint = 'idea-716',
-}
+-- idea-716/719 landed: lumber, nails, lead, casings, resource_gunpowder and the 4 herbs are FhTradeConfig.supplies;
+-- gun_parts (idea-717) is zone loot (core-05 K1). Every input is sourced: keep it empty.
+local PENDING = {}
 
 -- External sources (outside [fh]). An entry needs a CONFIRMED in-game way to obtain the item (a gatherer, shop or
 -- drop you can point at); an item definition alone is not a source. Empty today.

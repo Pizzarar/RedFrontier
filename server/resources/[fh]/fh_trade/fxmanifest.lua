@@ -4,7 +4,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 
 lua54 'yes'
 
-description 'RedFrontier regional trade prices, shortages and trade-post selling (spec L6)'
+description 'RedFrontier regional trade prices, shortages and trade-post selling and supplies buying (spec L6)'
 
 shared_scripts {
     '@ox_lib/init.lua',
@@ -12,6 +12,7 @@ shared_scripts {
     'config.lua',
     'shared/trade_prices.lua',
     'shared/freight.lua',
+    'shared/supplies.lua',
 }
 
 server_scripts {
