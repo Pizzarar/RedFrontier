@@ -87,7 +87,7 @@ advances anything.
 
 | Event | Owner | Payload used |
 |---|---|---|
-| `fh:zones:camp_cleared` | @core (fh_zones) | `{ camp_id, region_id, loot }` today, **no player**: credits nobody until Q0a adds `participants = { citizenid... }` |
+| `fh:zones:camp_cleared` | @core (fh_zones) | `{ camp_id, region_id, loot, participants }`: `participants` = citizenids of the players within `activationRadius` at clear (empty table if none, or if the lookup failed) |
 | `fh:hunting:pelt_skinned` | @hunting (H2) | `{ citizenid, item_id, animal, quality, size_class }` |
 | `fh:hunting:pelt_sold` | @hunting (H3) | `{ citizenid, item_id, animal, size_class, quality, price, region_id }` |
 | `fh:hunting:chain_complete` | @hunting (H4) | `{ citizenid, chain_id }` |
@@ -243,8 +243,9 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 
 - **`hunt_request`:** `animal` is optional on purpose: until Hunting H3 (Q0b) puts `animal` in the `pelt_sold`
   payload it matches on quality only, afterwards on animal too, with no change here.
-- **`camp_clear`:** credit comes only from the `participants` list (core idea-614, Q0a, not landed): until then the
-  event carries no player and credits nobody, as specified. Not a bug.
+- **`camp_clear`:** credit comes from the `participants` list (core idea-614, landed): fh_zones sends the citizenids
+  of the players within `activationRadius` when the camp clears (an empty table when there are none), and each of them
+  is credited. An empty list credits nobody.
 - **`bounty`:** `accept` asks fh_core for a ped (`exports.fh_core:requestSpawn`, `kind = 'ped'`, tag
   `fh_quests:bounty:<region_id>:<offer key>`). The server polls the adopted netId's health
   (`GetEntityHealth(NetworkGetEntityFromNetworkId(netId)) <= 0`, the same check fh_zones uses for camp peds) and then
@@ -479,8 +480,6 @@ rewards stay owed until core idea-643 lands). The giver NPC id is the def's `giv
 **Depends on other lanes (the lines park on that step until then):**
 - `family_whitlock` step 2 depends on **@hunting** (H4, plan hunting-01-l8): `fh:hunting:chain_complete` with
   `chain_id = 'legendary_bear'`. It is already in the intake whitelist; fh_hunting needs no code from this lane.
-- `family_marrow` step 1: `fh:zones:camp_cleared` carries no player today, so it credits nobody until the zones lane
-  adds `participants` (Q0a).
 
 ### Giver dialogue (WORKAROUND)
 

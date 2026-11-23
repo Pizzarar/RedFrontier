@@ -284,9 +284,10 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    without an NPC (console `not re-armed`); abandon it from My active jobs, which is the designed outcome. If they already
    finished or abandoned it, your NPC re-arms instead and the job plays normally.
    RESULT:
-7. camp_clear (expected no-op). Accept "Clear out: Heartlands outlaw camp" and clear the camp (about -145, 845, 117).
-   Expected: console `camp heartlands_t1_01 cleared`, but the job stays active at 0/1 and pays nothing: it credits only
-   `payload.participants`, which fh_zones does not send yet (core idea-614). Specified, not a bug. Abandon the job afterwards.
+7. camp_clear. Accept "Clear out: Heartlands outlaw camp" and clear the camp (about -145, 845, 117) while standing inside it.
+   Expected: console `camp heartlands_t1_01 cleared` and the job completes: you are within `activationRadius`, so you are in
+   `payload.participants`; paid once, ledger reason `quest:job:camp_clear:camp_heartlands_t1_01`. No 0/1 no-op. Clearing it from
+   outside the radius credits nobody (empty `participants`), which is specified.
    RESULT:
 8. Board rotation. Note the current offer titles, keep the server up across the next hour boundary (rotation is a fixed 60 min
    board epoch) and run `/jobs` again.
@@ -308,9 +309,9 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
     RESULT:
 11. Givers, Marrow. Sheriff Dell Marrow (`u_m_m_valsheriff_01`) at about -280, 805, 118. Same talk flow; the line starts on
     "Clear an outlaw camp."
-    Expected: step 1 is EXPECTED-BLOCKED until core idea-614 lands: clear a camp and the step does not advance. If idea-614 has
-    landed, clear a camp, sell 2 pelts (@hunting H3), report back: $60, +8 rep, reason `quest:family_marrow` once. Otherwise
-    `RESULT: SKIP expected-blocked on idea-614` after confirming the dialogue/start part.
+    Expected: clear a camp from inside it (you must be in `payload.participants`) -> step 1 advances; sell 2 pelts, report back:
+    $60, +8 rep, reason `quest:family_marrow` once. If this build has no trapper sell point yet (@hunting H3 not landed), mark
+    the pelt half `SKIP expected-blocked on @hunting H3` and keep the step 1 result.
     RESULT:
 12. Givers, Whitlock. Eli Whitlock (`cs_mp_oldtimer`) at about -315, 780, 118. Same talk flow (start the line now: step 9 only
     proved the far refusal); step 1 (sell a 2+ star pelt, @hunting H3) advances.
