@@ -522,22 +522,27 @@ yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what yo
    Expected: the printed result keeps magnitude 1.15 (same-buff refresh uses `max(old, new)`), proving the drink applied
    it; the printed active list shows `tonic_vigor` with an expiry about 600 s out. Without idea-612 the list is empty.
    RESULT:
-10. Failure path, no station. Walk 10+ m away from every station with the container still open, then run
+10. Failure path, no station. Have the open container (chest/wagon/saddlebag) itself 10+ m from every station, then run
     `/fh_craft ammo_rifle` and `/fh_restore <slot>`.
     Expected: `You need to be at the right station.` and `You need to be at a gunsmith station.` (the container is too
     far from the bench); no items move.
     RESULT:
-11. Failure path, missing input and unknown recipe. With no lead in the pack run `/fh_craft ammo_rifle`; then run
+11. Failure path, out of reach. Open the chest (or wagon/saddlebag) at the bench, then walk 10+ m away from it and run
+    `/fh_restore <slot>`.
+    Expected: `You are too far from that container.`; no items move. (The container stays open server-side after you
+    walk away, so reach is re-checked.)
+    RESULT:
+12. Failure path, missing input and unknown recipe. With no lead in the pack run `/fh_craft ammo_rifle`; then run
     `/fh_craft nonsense`.
     Expected: `Missing: 2x resource_gunpowder (have 0), 2x lead (have 0), 2x casings (have 0)` (only short lines are
     listed, in recipe order) and `Unknown recipe.`; nothing is consumed. With no parts run `/fh_restore <slot>`: `You
     need gun parts.`
     RESULT:
-12. Failure path, wrong slot. Run `/fh_restore 99` (empty), `/fh_restore x`, and `/fh_restore <slot>` on a container
+13. Failure path, wrong slot. Run `/fh_restore 99` (empty), `/fh_restore x`, and `/fh_restore <slot>` on a container
     slot holding an item without condition.
     Expected: `Nothing in that slot.`, `Usage: /fh_restore <slot>`, and `That item has no condition to restore.`
     RESULT:
-13. Failure path, wrong station type. With the open container near the reload station (not the gunsmith), run
+14. Failure path, wrong station type. With the open container near the reload station (not the gunsmith), run
     `/fh_restore <slot>`; at the gunsmith run `/fh_craft ammo_rifle`.
     Expected: both `no_station` messages (`You need to be at a gunsmith station.` / `You need to be at the right
     station.`); the station types do not substitute for each other.

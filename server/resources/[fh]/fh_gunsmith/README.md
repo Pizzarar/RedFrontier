@@ -11,10 +11,11 @@ that lands it refuses with `no_remove` (Workaround, replaced by C5b). Visual wea
 
 | Command | Who | Behaviour |
 |---|---|---|
-| `/fh_restore <slot>` | player | Restore the item in that slot of the OPEN container if it has a condition. The container must accept bulky (chest / wagon / saddlebag) and sit near a gunsmith station. Success: `Restored to <n>% condition using <k> gun parts.` The server console is refused. |
+| `/fh_restore <slot>` | player | Restore the item in that slot of the OPEN container if it has a condition. The container must accept bulky (chest / wagon / saddlebag), the player must be within reach of it, and it must sit near a gunsmith station. Success: `Restored to <n>% condition using <k> gun parts.` The server console is refused. |
 
 Refusals (code strings): `fh_nothing_open` (`Open a chest, wagon or saddlebag first.`), `fh_size_class` (`That
-container cannot hold a rifle.`), `no_station` (`You need to be at a gunsmith station.`), `bad_slot` (`Usage:
+container cannot hold a rifle.`), `fh_out_of_reach` (`You are too far from that container.`), `fh_no_coords` (`That
+container has no location.`), `no_station` (`You need to be at a gunsmith station.`), `bad_slot` (`Usage:
 /fh_restore <slot>`), `no_weapon` (`Nothing in that slot.`), `no_condition` (`That item has no condition to restore.`),
 `at_cap` (`That weapon is already at its best condition.`), `no_parts` (`You need gun parts.`), `no_set_info` (`Writing
 item condition is not available yet.`), `no_remove` (`Removing items is not available yet.`). Other reasons
@@ -27,8 +28,9 @@ carried inventory (`fh_crafting` `invCount` / `invTake`); block C5b swaps that t
 ## Exports
 
 None. It consumes `fh_core` exports (`openRef`, `view`, `setItemInfo`), `fh_crafting` exports (`stationAt`,
-`invCount`, `invTake`), and loads `'@fh_crafting/shared/craft_rules.lua'` (restore math) and
-`'@fh_core/shared/containers.lua'` (the bulky gate, read from `FhContainers.accepts`).
+`invCount`, `invTake`), and loads `'@fh_crafting/shared/craft_rules.lua'` (restore math), `'@fh_core/config.lua'`
+(`FhConfig`, for reach distances) and `'@fh_core/shared/containers.lua'` (the bulky + reach gates, read from
+`FhContainers.accepts` / `FhContainers.canReach`).
 
 ## Events
 
@@ -57,10 +59,10 @@ reserved for future recipes). Tonics belong to `fh_crafting`.
 
 - Cap: 1 star 60, 2 stars 80, 3 stars 100; worn loot has no `stars`, so it is capped at 60.
 - Parts: `ceil((cap - condition) / 20)`, limited by the parts held; the new condition never passes the cap.
-- Refusals before any write: no open container, non-bulky container type, container not near a gunsmith station, bad
-  slot, no item, no condition, already at/above cap, no parts, no `setItemInfo` contract. On a failed part removal the
-  condition write is rolled back; a failed rollback is logged at error level
-  (`ERROR rollback failed ... condition raised, parts not taken`).
+- Refusals before any write: no open container, non-bulky container type, player out of reach / no container coords,
+  container not near a gunsmith station, bad slot, no item, no condition, already at/above cap, no parts, no
+  `setItemInfo` contract. On a failed part removal the condition write is rolled back; a failed rollback is logged at
+  error level (`ERROR rollback failed ... condition raised, parts not taken`).
 
 ## Pending contracts
 

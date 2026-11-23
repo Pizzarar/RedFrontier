@@ -8,6 +8,7 @@ description 'RedFrontier gunsmith (spec L5): /fh_restore raises weapon condition
 
 shared_scripts {
     '@fh_crafting/shared/craft_rules.lua',
+    '@fh_core/config.lua',
     '@fh_core/shared/containers.lua',
     'shared/restore_flow.lua',
 }

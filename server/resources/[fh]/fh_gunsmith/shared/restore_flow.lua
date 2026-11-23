@@ -18,14 +18,16 @@ end
 
 ---deps (all injectable):
 ---  open(src) -> ref, view | nil, reason         the container the player has open (fh_core openRef + view)
----  containers                                    fh_core FhContainers (accepts), for the bulky gate
+---  containers                                    fh_core FhContainers (accepts, canReach)
+---  playerCoords(src) -> coords | nil             server-side ped coords, for the reach check
 ---  nearStation(coords) -> ok, reason             gunsmith station reach for the container's coords
 ---  count(src, item) -> n                         fh_crafting invCount (gun_parts held)
 ---  setInfo(ref, slot, info) -> ok, reason        @core setItemInfo write (idea-689; 'no_set_info' until it lands)
 ---  take(src, item, amount) -> ok, reason         part removal (fh_crafting invTake; B7-backed)
 ---  rules                                         optional, defaults to FhCraftRules
----Order: open container -> bulky type -> station reach -> slot -> plan -> write condition -> consume parts. If the
----consume fails the condition write is rolled back, so parts are never consumed without a successful write and vice versa.
+---Order: open container -> bulky type -> player reach -> station reach -> slot -> plan -> write condition -> consume
+---parts. If the consume fails the condition write is rolled back, so parts are never consumed without a successful
+---write and vice versa.
 ---@return boolean ok
 ---@return string|table reason_or_result
 ---@return table|nil meta { rollbackFailed, slot, wanted, reason } when the rollback write also failed
@@ -36,6 +38,10 @@ function M.run(deps, src, slot)
     -- The open container's type must accept bulky (a rifle is bulky). Read from fh_core FhContainers, not a list.
     local okBulk, bulkWhy = deps.containers.accepts(ref.type, 'bulky')
     if not okBulk then return false, bulkWhy or 'fh_size_class' end
+
+    -- openRef stays set after the player walks away (fh_inventory FhOpenRef), so reach is re-checked server-side.
+    local okReach, reachWhy = deps.containers.canReach(ref.type, view.coords, deps.playerCoords(src))
+    if not okReach then return false, reachWhy or 'fh_out_of_reach' end
 
     local okNear, nearWhy = deps.nearStation(view.coords)
     if not okNear then return false, nearWhy or 'no_station' end

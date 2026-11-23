@@ -42,10 +42,12 @@ local function mkDeps(o)
     local d = { log = {}, item = o.item or w(30, 2), parts = o.parts or 10 }
     d.rules = R
     d.containers = Containers
+    d.playerCoords = function() return o.playerCoords or { x = 0, y = 0, z = 0 } end
     d.open = function()
         if o.nothingOpen then return nil, nil, 'fh_nothing_open' end
         local ref = { type = o.type or 'chest', id = o.id or 'fh:chest:test:1' }
-        local view = { coords = o.coords or { x = 0, y = 0, z = 0 }, slots = o.slots or 20, items = {} }
+        local coords = o.noCoords and nil or (o.coords or { x = 0, y = 0, z = 0 })
+        local view = { coords = coords, slots = o.slots or 20, items = {} }
         view.items[o.slot or 1] = d.item
         return ref, view
     end
@@ -82,6 +84,16 @@ describe('gunsmith flow', function()
         local d = mkDeps({ type = 'backpack' })
         local ok, why = F.run(d, 1, 1)
         eq(false, ok); eq('fh_size_class', why); eq(0, #d.log)
+    end)
+    it('refuses when the player is out of reach of the container', function()
+        local d = mkDeps({ coords = { x = 10, y = 0, z = 0 } })
+        local ok, why = F.run(d, 1, 1)
+        eq(false, ok); eq('fh_out_of_reach', why); eq(0, #d.log)
+    end)
+    it('refuses a container with no coords', function()
+        local d = mkDeps({ noCoords = true })
+        local ok, why = F.run(d, 1, 1)
+        eq(false, ok); eq('fh_no_coords', why); eq(0, #d.log)
     end)
     it('refuses a container too far from the bench without touching anything', function()
         local d = mkDeps({ tooFar = true })
