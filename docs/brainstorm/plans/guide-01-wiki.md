@@ -35,6 +35,12 @@ Done-check: no stubs left once all feature lanes are playtest-ready; checker gre
 
 Order: W1 → W2 → merge → W3 rolling.
 
+## Resume after forge freeze (2026-11-23)
+State: W1 origin/guide-w1 cfcc4e1 (21 pages), W2 origin/guide-w2 5d80476 (check-wiki.py). Both 1 ahead / 9 behind main fa94127; the 9 main commits touch no docs/wiki or tools paths, so the rebase should be clean. Review never ran.
+R1 Review W1+W2 (one reviewer): 10+ wiki facts checked against code on main (file:line), leak check (no owner name, no emails), check-wiki green on W1 tree, rename-fails demo (rename one Sources path -> red, restore -> green). FAIL -> fix worker on the same branch, re-review.
+R2 Rebase both on main, run specs, merge W1 then W2 (one lane merges at a time: take the merge slot, no push). Log `decision guide wiki-merged <hash>`.
+R3 = W3 as above; no lane is playtest-ready yet (0 in log), so the lead idles after R2 until one is.
+
 ## Open
 - In-game journal screen: ask @ui once the wiki settles (their NUI, our content).
 - guide-02 fh_tutorial: written after @quests publishes the fh_quests API; lands last.
