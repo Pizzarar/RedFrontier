@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor2
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -50,3 +50,4 @@
 - 11-23 core-03 COMPLETE: C3c 07449f7 + C3a 2b7587d / C3b 1baff20 merged main (Gemini tierA PASS 0/0/0 57161cd, range-diff '='; venv 51/1057/0). Siblings to swap adapters for fh_core addItem/removeItem carried refs + setItemInfo.
 - core-03 COMPLETE main 9beb4c0 (614/615/616/643/687/689 archived). core-04 handed to Cor2 rn-d9e827279687.
 - 11-23 core-04: B1+U2 (fh_buffs caps + remaining) and T1 (run-specs load errors, venv re-exec) merged main e991426 stack (Gemini PASS; venv 65/1292/0). U1 low fix + E2 FAIL fix (float compare) in flight.
+- 11-23 core-04 U1 (fh:death:bags per player, mine/remaining, idea-609) merged main (c3b0fa3 + b5c7e70; Gemini PASS, venv 70/1358/0). E2 tierA re-review of fix 74cbbc1 pending.

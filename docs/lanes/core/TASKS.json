@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T22:42:57.670Z",
+  "updatedAt": "2026-11-23T23:06:45.110Z",
   "units": [
     {
       "id": "B5",
@@ -192,8 +192,9 @@
       "goal": "core-04 fh_death bags mine/remaining per player (609)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
-      "branch": "core-u1"
+      "status": "done",
+      "branch": "core-u1",
+      "commit": "b5c7e70"
     },
     {
       "id": "E2",
@@ -202,6 +203,13 @@
       "doneCheck": "",
       "status": "running",
       "branch": "core-e2"
+    },
+    {
+      "id": "idea-717",
+      "goal": "gun_parts source (outlaw loot). Same branch MUST remove gun parts from crafting C8 sources-spec pending list, else that spec fails",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
