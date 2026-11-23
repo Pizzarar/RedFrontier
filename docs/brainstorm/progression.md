@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Progression
-- Lead: Prg Lead · L9 progression
+- Lead: none
 - Workers: 0
 
 ## Done when
@@ -18,7 +18,7 @@
 - Hand's first task = chest feed top-up (troughs unowned).
 
 ## Open
-- Trough task for fh_hands once a lane owns troughs.
+- Trough task for fh_hands once a lane owns troughs. (2026-11-23: still unowned, only an rsg-core item def. Out of the M7 slice; keep parked.)
 - (orig ask) L9 fh_fence + fh_hands + rep-tier unlocks on top of @core's fh_economy ledger: regional rep tiers, roving fence on a schedule (stops, not real driving), rare parts/treasure leads, hired hands as timers automating upkeep. Insurance stays with @core fh_death. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
 ## In flight
@@ -27,4 +27,5 @@
   - prog-p1 aef3632: P1 review fixes done (was FAIL 2/2/2 802dd2b), needs Gemini re-review. Specs green (17/274).
   - prog-p2 8a9611e (on 802dd2b): P2 fence, Gemini FAIL 2/2/3 (fence_stash per-player lock/dupe race + more). Needs fixes + rebase on prog-p1. Specs green.
   - prog-p3 d76a817 (on 802dd2b): P3 hands, Gemini FAIL 2/3/2 (double-charge/persistence races in processOwner/load/save + more). Needs fixes + rebase on prog-p1. Specs green.
+  - 2026-11-23: freeze still on (Overlord: ignore idle-kicks until cutover). Core says getRep is in B7 core-b7 9bad7c4 (passed); charge FAILed, ships with B7 fix after thaw.
   - Resume: send P2/P3 review findings (vs status rn-27c91b8a6c9b / rn-2733cf6127b7) to Prg3/Prg4, re-review P1, then P1b after Core B7, then P4.

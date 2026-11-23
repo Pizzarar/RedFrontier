@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Homestead
-- Lead: Homestead Lead
+- Lead: none
 - Workers: 0
 
 ## Done when

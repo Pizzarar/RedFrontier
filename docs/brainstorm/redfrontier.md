@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: RiffBot
-- Lead: Overlord
+- Lead: Overlord · RedFrontier hub
 - Workers: 0
 
 ## Done when
@@ -26,7 +26,8 @@
 - Spike verdicts S1/S2 still need Aub in-game; flags flip after.
 
 ## In flight
-- FORGE FREEZE (2026-11-23, Aub via Overlord): hub parked. No new spin-offs or routing until cutover is done. Hub has no workers or worktrees. Pending at freeze: @quests/@guide Buddy start (if not already started). Uncommitted at freeze in primary checkout (main): all lane briefs + plans under docs/brainstorm/, spec non-goal amendment; flagged to Overlord to commit before push.
+- 2026-11-23 C2 cutover: Overlord rn-01cad4e19b2b spawned (Lead - Claude); restart order core B7 → ui U2/U3 → survival S1 → quests/guide Buddies.
+- FORGE FREEZE (2026-11-23, owner via Overlord): hub parked. No new spin-offs or routing until cutover is done. Hub has no workers or worktrees. Pending at freeze: @quests/@guide Buddy start (if not already started). Uncommitted at freeze in primary checkout (main): all lane briefs + plans under docs/brainstorm/, spec non-goal amendment; flagged to Overlord to commit before push.
 
 ## Teams
 - @core (Cor2 rn-428940b6f1c5): M0 done (§4 contracts, 179 specs). Next: B4c flagged → B6b camp ∥ B6c death → B6d.

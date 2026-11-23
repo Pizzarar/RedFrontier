@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Survival
-- Lead: Survival Lead
+- Lead: none
 - Workers: 0
 
 ## Done when

@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Quests
-- Lead: Quests Lead
+- Lead: none
 - Workers: 0
 
 ## Done when
@@ -20,7 +20,7 @@
 - Lead: Quests Lead rn-cee29f7cf4ad (Lead - Claude).
 
 ## Open
-- Q0a @core idea-614: camp_cleared `participants`. Until it lands, camp_clear credits nobody.
+- Q0a @core idea-614: camp_cleared `participants`. Until it lands, camp_clear credits nobody. Still unclaimed in the core inbox (2026-11-23); core's post-thaw queue is B-access → B7 fix → B6f. Emit point: `fh_zones/server/main.lua:137` (payload today is `{camp_id, region_id, loot}`). Lean for the definition: participants = citizenids of players inside the camp radius when `clear()` fires. It needs no damage tracking. Hand this spec to @core on thaw.
 - Q0b @hunting: ACCEPTED 2026-11-23. pelt_sold gets `{citizenid,item_id,animal,size_class,quality,price,region_id}` in Hunting H3 (after H2). Until then, hunt_request matches on quality only.
 - @ui follow-ups: jobs board real wiring + quest journal/dialogue screen (replace the ox_lib fallback).
 

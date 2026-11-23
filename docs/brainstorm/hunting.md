@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Hunting
-- Lead: Hunting Lead
+- Lead: none
 - Workers: 0
 
 ## Done when
@@ -18,6 +18,7 @@
 - Overlord integration rules: vs worktree units; PASS → rebase → run-specs green → merge local main, log hash; one lane merges at a time; no push; tests in OWNER-TESTS.md `## Hunting`; log `decision hunting playtest-ready <hash>` at the end.
 
 ## Open
+- 2026-11-23: nearestWagon built on roads-r1 3cd2de9 (signature locked), merge held by freeze; Roads merges it first on thaw. Decided (R13): H3 codes against it now via pcall, nil/missing → refuse; no merge-order dependency.
 - Big-game/legendary cargo pelts are refused until a wagon lookup exists (idea-617 ACCEPTED into @roads R1: `exports.fh_cargo:nearestWagon(src, coords, range) -> container ref|nil` LOCKED: owner-only v1, coords nil = ped pos, range capped 25 m, never throws; lands in roads-r1 fix round, Roads sends the merge hash; idea-616 → @core carcass end). Lean: hunting calls it through pcall; H4 can merge with the trophy + chain_complete working, but the full legendary pelt loop waits on @roads.
 - @homestead H4 consumes getTrophyComfort (agreed; being built now).
 - When S4 spk_pelt returns GO, consider flipping `PeltQualitySource` to `native`.

@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Crafting
-- Lead: Crafting Lead
+- Lead: none
 - Workers: 0
 
 ## Done when
@@ -17,6 +17,7 @@
 - Visual wear behind existing `fh_spike_gated` convar (fh_core/docs/spike-gated.md); no new flag. Condition already in item info via FhItems.condition (fh_core/shared/items.lua:132); worn_rifle drops at 20-45 (fh_zones/config.lua:27).
 
 ## Open
+- 2026-11-23 Freeze still on (redfrontier 14:43: no spawns/merges until cutover done). Deps both FAIL-in-review: @homestead H3 c3d0dd2 (has getStations/stationAt/isNearStation, covers idea-599); @core B7 9bad7c4 (charge bug, fix brief ready). On thaw: C2 adapter mirrors H3 signatures so C5 swap is a rename.
 - Waiting on @homestead H3 merge and @core B7 + tonic caps idea-612 (C5/C4); carried-inventory take/give idea-615 (lead ask).
 
 ## In flight

@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Roads
-- Lead: Roads Lead
+- Lead: none
 - Workers: 0
 
 ## Done when

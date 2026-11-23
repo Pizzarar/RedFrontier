@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: ★ Cor3
+- Lead: none
 - Workers: 0
 
 ## Done when
@@ -24,7 +24,7 @@
 - No GitHub push without owner OK (Pizzarar/RedFrontier not pre-approved).
 
 ## Open
-- B-admin: owner never gets group.admin (server.cfg:49 has no principal). B-admin (tierA-security) queued after VS restart 9d63a01f: gated fh_dev AND fh_dev_autoadmin=1, server join event only, persisted to gitignored server/admins.cfg; first-run must enable it. Merged with B-access.
+- B-admin+B-access: Gemini re-review PASS on core-badmin 694ca7a (11-23). Only step left = merge, held by forge freeze. On thaw: spawn lead, merge 694ca7a, then B7 fix (notes/b7-fix-brief.md).
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
 - Aub: Cfx key + first join (OWNER-STEPS.md), then run OWNER-TESTS.md; flip fh_spike_gated after S1/S2.
 - RSG + fh_inventory (fork, unwrapped) client errors still need Aub to send CitizenFX log from Main.

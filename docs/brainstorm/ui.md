@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: UI
-- Lead: UI Lead · fh_ui shell
+- Lead: none
 - Workers: 0
 
 ## Done when

@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Guide
-- Lead: Guide Lead
-- Workers: 1
+- Lead: none
+- Workers: 0
 
 ## Done when
 - docs/wiki covers every fh_* system on main with Sources, checker green, no stubs once all lanes are playtest-ready.

@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Spikes
-- Lead: Spikes Lead
+- Lead: none
 - Workers: 0
 
 ## Done when
