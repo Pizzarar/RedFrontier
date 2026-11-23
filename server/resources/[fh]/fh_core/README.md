@@ -44,6 +44,16 @@ Resolved definition: `{ name, label, weight, size_class, stackable, value_base, 
   already rsg's 0-100 freshness). Read them with `FhItems.condition(item)` / `FhItems.stars(item)`: items saved
   before the fields existed return `nil`, never an error.
 - `cargo` items have `fast_travel = false`.
+- `registerItems` rules (B7): names are lowercase letters, digits and `_` (`fh_bad_item_name`; rsg-inventory
+  lowercases names when it counts/removes). A name already taken by `FhConfig.Items`, a base rsg item or another
+  resource's registration is refused with `fh_duplicate_item`; the same resource re-registering its own names is fine
+  (e.g. after it restarts). The whole batch is checked first; on any refusal nothing is applied.
+
+### For sibling lanes
+
+- Register your items from **your own resource** (on its start) with `exports.fh_core:registerItems({ ... })`; check
+  the `ok, err, badName` result. Never edit fh_core's `config.lua` (`FhConfig.Items` / `ItemOverrides`) for them.
+- If your feature has a conservative path behind `fh_spike_gated`, you may append rows to `docs/spike-gated.md`.
 
 ## Containers (§4.2)
 
@@ -156,7 +166,8 @@ A container ref is `{ type = <container type>, id = <id> }`: `id` is the player 
 | `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds to a registered world container (rules veto applies) |
 | `clearContainer(ref)` | `true` or `false, reason`; empties a registered world container (only fh_core may wipe one in fh_inventory) |
 | `deleteContainer(ref)` | `true, items` (what it still held) or `false, reason`; registered world stashes only, `fh_in_use` while anyone has it open |
-| `registerItems({ [name] = def })` | `ok, err, badName` (validates every entry before applying any) |
+| `registerItems({ [name] = def })` | `true` or `false, err, badName` (validates every entry before applying any; see Items for the duplicate rules) |
+| `removeItem(ref, name, amount?)` | `true` or `false, reason`; takes exactly `amount` (default 1, integer >= 1) from a registered world container, all-or-nothing (`fh_not_enough`: nothing removed) (B7) |
 
 - `registerContainer` refuses `equipped`/`backpack` (`fh_not_registrable`) and any world container without
   valid coords (`fh_no_coords`). Registrations are kept and re-sent when fh_inventory restarts, so register once
@@ -190,6 +201,7 @@ Locale keys (fh_inventory's `en.json` carries the text): `fh_unknown_container`,
 `fh_bad_ref`, `fh_not_registrable`, `fh_no_player`, `fh_no_container`, `fh_refused`, `fh_inventory_down`,
 `fh_inventory_error`. Item validation: `fh_item_not_table`, `fh_bad_item_name`, `fh_bad_label`, `fh_bad_weight`,
 `fh_bad_value_base`, `fh_bad_illicit`, `fh_bad_stackable`.
+B7: `fh_not_enough` (removeItem: container holds fewer than asked), `fh_duplicate_item` (registerItems name taken).
 
 ## Events
 
@@ -215,7 +227,7 @@ adopts it by netId.** Every `[fh]` spawn (admin commands, camps, drop bags) goes
 
 ```lua
 local id, err = exports.fh_core:requestSpawn({
-    kind = 'ped',            -- 'ped' | 'object' | 'horse' (no vehicles/wagons until M4)
+    kind = 'ped',            -- 'ped' | 'object' | 'horse' | 'wagon' (B7; 'vehicle' -> fh_spawn_kind_unsupported)
     model = 'g_m_m_unibanditos_01', -- name or hash
     coords = vector4(x, y, z, h),   -- vec3/vec4 or { x, y, z }; heading = spec.heading or coords.w or 0
     owner = { kind = 'camp', id = 'camp_1' }, tag = 'camp_1:outlaw:1',
@@ -229,6 +241,9 @@ exports.fh_core:despawn(id)      -- true | false, reason
 exports.fh_core:getSpawn(id)     -- { state, netId, tag, owner, kind, attempts } | nil
 ```
 
+- **Wagons (B7):** `kind = 'wagon'` is created client-side with `CreateVehicle` (networked,
+  `bDontAutoCreateDraftAnimals = false`: the game adds the draft horses; they are not separate requests). Adopt skips
+  the player-ped check for wagons and objects (`FhSpawnRules.isPedKind`). Gated owner drop: `docs/spike-gated.md` row 5.
 - **Spawner pick:** nearest ready player within `FhConfig.Spawn.Range` of `near`; players not yet tried this cycle
   first; else (if `FallbackAnyPlayer`) the nearest ready player anywhere; else park as `pending_no_client` and retry
   every tick (a player joins or comes in range).

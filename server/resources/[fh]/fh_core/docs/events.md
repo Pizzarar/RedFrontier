@@ -28,6 +28,7 @@ The emitting lane owns the name and documents it in its README.
 | `fh:zones:camp_cleared` | zones lane | `{ src, territory_id, tier }` |
 | `fh:economy:paid` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
 | `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason }` |
+| `fh:economy:charged` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }`: a `charge` debit (B7); `amount` is the positive sum taken |
 | `fh:buffs:applied` | fh_buffs | `{ src, buff_id, magnitude, expires_at, refreshed }` |
 | `fh:homestead:claimed` | fh_homestead | `{ src, citizenid, plot_id, region_id }` |
 | `fh:homestead:open_chest` | fh_homestead (client -> server request) | `{ plot_id }` (string); server revalidates owner + reach, `src` from `source` |
