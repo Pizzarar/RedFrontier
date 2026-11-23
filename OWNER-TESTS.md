@@ -215,7 +215,7 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 8. Run `/fh_ui_demo heat`.
    Expected: a heat indicator with factions, levels, tiers and a lay-low note appears; the mouse is NOT captured and you
    can keep moving. Run `/fh_ui_demo close heat` to remove it.
-   KNOWN GAP (idea-648): the heat indicator and buff panel may overlap top-right. Note it under RESULT; do not FAIL for it.
+   No overlap (idea-648): the heat indicator sits top-left, the buff panel top-right — they do NOT overlap even when both are up.
    RESULT:
 9. Run `/fh_ui_demo insurance`. Press Enter.
    Expected: Enter confirms (server console shows a relayed/unhandled `confirm`, no crash). After closing the dialog,

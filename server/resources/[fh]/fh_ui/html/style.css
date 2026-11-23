@@ -32,8 +32,8 @@ html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times
 /* U3 screens (heat, insurance, jobs, station, fence). Accent stays on .title only. */
 .panel.wide { min-width: 520px; }
 .title.small { font-size: 14px; padding: 4px 10px; }
-.hud:not(.hud-buffs):not(.hud-bags) { position: fixed; top: 12px; right: 12px; width: 240px; background: var(--paper); border: 2px solid var(--edge); }
-.hud:not(.hud-buffs):not(.hud-bags) .body { padding: 8px 10px; font-size: 14px; }
+.hud-heat { position: fixed; top: 12px; left: 12px; right: auto; width: 240px; background: var(--paper); border: 2px solid var(--edge); }
+.hud-heat .body { padding: 8px 10px; font-size: 14px; }
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0; }
 .row.card { padding: 8px; border: 1px solid var(--edge); }
 .row.card.disabled { opacity: .75; }

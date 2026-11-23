@@ -4,7 +4,7 @@ FH_UI.register('heat', {
   update: function (el, data) {
     const D = FH_DOM;
     D.clear(el);
-    const box = D.h('div', 'hud');
+    const box = D.h('div', 'hud hud-heat');
     box.appendChild(D.h('h2', 'title small', 'Heat'));
     const body = D.h('div', 'body');
     FH_DOM.asList(data && data.factions).forEach(function (f) {
