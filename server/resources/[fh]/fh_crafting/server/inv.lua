@@ -1,10 +1,9 @@
 -- Player carried-inventory adapter (plan crafting-01 C2/C5b).
 -- Raw ops mirror fh_core exactly:  removeItem(ref, item, amount) (@core B7)  /  addItem(ref, item, amount, info).
 -- A player's carried inventory = two fh_core refs: { type = 'equipped', id = src } and { type = 'backpack', id = src }.
--- removeItem (on main, B7) is the primary path; 'no_remove' only when the export is absent (and 'no_add' for give),
--- so nothing is half-done. Counting and slot reads use fh_core snapshot.
--- KNOWN GAP (reported to @core via lead): B7 removeItem/addItem refuse carried refs ('fh_not_registrable'), so
--- crafting refuses cleanly (no partial mutation, rollback intact) until idea-615 lands.
+-- core-03: addItem/removeItem accept these carried refs (key is `type`, not `kind`); an offline src refuses
+-- 'fh_player_offline' and bulky items are still vetoed from the backpack. 'no_remove' only when the export is absent
+-- (and 'no_add' for give), so nothing is half-done. Counting and slot reads use fh_core snapshot.
 FhCraftInv = {}
 
 local flow = FhCraftFlow
@@ -120,9 +119,18 @@ function FhCraftInv.slot(src, slot)
     return nil
 end
 
----No fh_core contract sets item info on a carried slot yet (reported to @core via lead): refuses.
+---Writes item info on a carried slot via exports.fh_core:setItemInfo (core-03). `expectName` guards a slot swap race
+---between read and write (fh_wrong_item). Tries equipped then backpack; a slot outside that section (fh_bad_slot) or empty (fh_empty_slot) moves on.
 ---@return boolean ok
----@return string|nil reason 'no_set_info'
-function FhCraftInv.setInfo(src, slot, info)
-    return false, 'no_set_info'
+---@return string|nil reason 'no_set_info' when fh_core lacks the export; else fh_core's reason
+function FhCraftInv.setInfo(src, slot, info, expectName)
+    local reason = 'fh_empty_slot'
+    for _, ref in ipairs(sections(src)) do
+        local called, ok, why = core('setItemInfo', ref, slot, info, expectName)
+        if not called then return false, ok == 'no_export' and 'no_set_info' or ok end
+        if ok == true then return true end
+        reason = why or 'fh_refused'
+        if reason ~= 'fh_empty_slot' and reason ~= 'fh_bad_slot' then return false, reason end
+    end
+    return false, reason
 end

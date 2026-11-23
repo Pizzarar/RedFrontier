@@ -31,7 +31,7 @@ Chat/notify strings come from the code: `busy`, `unknown_recipe`, `bad_type`, `n
 | `invTake` | `(src, item, amount) -> ok, reason` | All-or-nothing across equipped then backpack; `bad_item`, `bad_amount`, `not_enough`, `no_remove`, `fh_*`. |
 | `invGive` | `(src, item, amount, info?) -> ok, reason` | First carried section that takes the whole amount; `bad_item`, `bad_amount`, `no_add`, `fh_*`, `no_room`. |
 | `invSlot` | `(src, slot) -> item\|nil` | Reads one carried slot (equipped slots first, then backpack). |
-| `invSetInfo` | `(src, slot, info) -> false, 'no_set_info'` | Always refuses: no `fh_core` contract writes item info on a carried slot yet. |
+| `invSetInfo` | `(src, slot, info, expectName?) -> ok, reason` | `exports.fh_core:setItemInfo` on equipped then backpack (core-03); `expectName` refuses a swapped slot (`fh_wrong_item`); `no_set_info` only when fh_core lacks the export. |
 
 Internal globals (not exports): `FhCraftStations` (`isNearStation`, alias `isNear`, `getStations`, `stationAt`),
 `FhCraftInv` (`removeItem`, `addItem`, `count`, `take`, `give`, `slot`, `setInfo`), `FhCraft` (`craft`), `FhCraftFlow`,
@@ -44,6 +44,7 @@ Internal globals (not exports): `FhCraftStations` (`isNearStation`, alias `isNea
 | `items` | table, item name -> definition | Registered at start (and again when `fh_core` restarts) through `exports.fh_core:registerItems`. `resource_gunpowder`, `ammo_box_revolver`, `ammo_box_rifle` and `herb_*` already exist in rsg-core and are not re-registered. |
 | `TonicDurations` | table, tonic item -> seconds | `tonic_vigor = 600`, `tonic_steady = 300`. Read by `FhCraftRules.tonicFor`. |
 | `devStations` | table, station type -> `{x, y, z}` | Dev-only fallback stations (`gunsmith` at `-280.0, 805.0, 119.0`, `reload` at `-283.0, 805.0, 119.0`, `apothecary` at `-286.0, 805.0, 119.0`), consulted only while convar `fh_dev = 1`. Placeholder coordinates: TODO verify in game. |
+| `stationTypeMap` | table, crafting type -> H3 type | `gunsmith` and `reload` -> `workbench`, `apothecary` -> `campfire`. Applied in `server/stations.lua` before every `fh_homestead` call (homestead only builds workbench/campfire/tanning_rack). |
 | `stationMaxDist` | number | Default reach used by `isNearStation` / `stationAt` when no `maxDist` is passed (3.0). |
 
 Items registered by `fh_crafting`:
@@ -105,7 +106,7 @@ come from `FhCraftRules.tonicFor` (`TONICS` + `TonicDurations`).
 | `FhCraftInv.take` | `(src, item, amount) -> ok, reason` | all-or-nothing across equipped then backpack; `not_enough`, `bad_amount`, `no_remove` |
 | `FhCraftInv.give` | `(src, item, amount, info\|nil) -> ok, reason` | first carried section that takes the whole amount |
 | `FhCraftInv.slot` | `(src, slot) -> item\|nil` | |
-| `FhCraftInv.setInfo` | `(src, slot, info) -> ok, reason` | refuses `no_set_info` (no fh_core contract yet) |
+| `FhCraftInv.setInfo` | `(src, slot, info, expectName?) -> ok, reason` | fh_core `setItemInfo` (core-03); `no_set_info` when the export is missing |
 
 ## Events
 
@@ -120,16 +121,14 @@ No custom net events are emitted by this resource.
 
 ## Pending contracts
 
-- **@homestead H3 station API** (`isNearStation`, `getStations`, `stationAt`): H3 is the real path (C5b).
-  `server/stations.lua` calls `exports.fh_homestead` when the resource is started and the export exists, passing
-  `maxDist`. `devStations` is consulted only while `fh_dev 1`. With fh_homestead missing and `fh_dev` off,
-  `isNearStation` refuses `no_homestead`; an H3 export that throws is logged and refuses `homestead_error`. H3 itself
-  is on its own branch until it merges; until then use `fh_dev 1`.
-- **@core B7 `removeItem(ref, item, amount)`** (landed, on main): `server/inv.lua` calls it directly; `no_remove` only
-  when the export is absent.
-- **idea-615 (carried-inventory add/remove)**: B7 `removeItem`/`addItem` refuse carried refs (`fh_not_registrable`), so
-  crafting, restore and tonics refuse safely (no items are consumed or created) until @core accepts carried refs.
+- **@homestead H2 `/fh_build`** (not on main yet): stations are real (H3 on main) but only exist once built, so in-game
+  crafting needs H2 or `fh_dev 1`. Crafting types map to homestead types through `stationTypeMap`. Before the homestead
+  slot load finishes, H3 returns `{}` / `nil` / `false` / `'fh_not_ready'`; all read as `no_station`. `isNearStation`
+  is owner-only (own plot), so crafting works only on the player's own plot. `/fh_restore` reach reads
+  `getStations(citizenid)` filtered to `workbench` and compares coordinates with the open container.
+  `stationAt` returns the raw H3 type (`workbench`), not the crafting type.
 - **idea-612 (tonic caps in fh_buffs)**: `fh_buffs/config.lua` has no caps for `tonic_vigor`/`tonic_steady`, so
   `fh_buffs.apply` refuses and the tonic is returned (`buff_failed`) instead of applying a buff.
-- **@core carried-item `setInfo` contract** (unnamed in the plan): `FhCraftInv.setInfo` always refuses
-  (`no_set_info`), so `/fh_restore` cannot write a raised condition in game yet.
+
+Resolved: core-03 carried `addItem`/`removeItem` (refs `{ type = 'backpack'|'equipped', id = src }`; idea-615) and
+`setItemInfo(ref, slot, info, expectName)` (idea-689); B7 `removeItem`.

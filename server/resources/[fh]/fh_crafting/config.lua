@@ -26,6 +26,14 @@ FhCraftingConfig = {
         apothecary = { x = -286.0, y = 805.0, z = 119.0 },
     },
     stationMaxDist = 3.0,
+
+    -- Crafting station type -> fh_homestead (H3) station type. Homestead only builds workbench/campfire/tanning_rack
+    -- (fh_homestead/config.lua), so server/stations.lua maps every crafting type through this before any H3 call.
+    stationTypeMap = {
+        gunsmith   = 'workbench',
+        reload     = 'workbench',
+        apothecary = 'campfire',
+    },
 }
 
 if not GetCurrentResourceName then return FhCraftingConfig end

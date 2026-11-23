@@ -1,6 +1,8 @@
 -- Station adapter (plan crafting-01 C2). Mirrors the @homestead H3 exports exactly, so C5 only swaps the body:
 --   isNearStation(src, stationType, maxDist?) / getStations(citizenid) / stationAt(coords, maxDist?)
 -- Real source (C5b): exports.fh_homestead (H3) when GetResourceState('fh_homestead') == 'started' and the export exists.
+-- Crafting types are mapped to homestead types (FhCraftingConfig.stationTypeMap) before every H3 call. Before the
+-- homestead slot load finishes H3 returns {} / nil / false / 'fh_not_ready': all of those mean "no station".
 -- Dev fallback: FhCraftingConfig.devStations, consulted ONLY while convar fh_dev = 1. With fh_homestead missing and
 -- fh_dev off, isNearStation refuses 'no_homestead' (an H3 export that throws: 'homestead_error', logged).
 FhCraftStations = {}
@@ -41,7 +43,8 @@ local function build(env)
     function A.isNearStation(src, stationType, maxDist)
         if type(stationType) ~= 'string' or not FhCraftRules.STATION_TYPES[stationType] then return false, 'bad_type' end
         maxDist = maxDistOr(maxDist)
-        local called, near, why = homestead('isNearStation', src, stationType, maxDist)
+        local h3Type = cfg.stationTypeMap and cfg.stationTypeMap[stationType] or stationType
+        local called, near, why = homestead('isNearStation', src, h3Type, maxDist)
         if called and near == true then return true end
         if env.devOn() then -- fh_dev only: dev stations
             local coords = env.pedCoords(src)
@@ -73,7 +76,8 @@ local function build(env)
     function A.stationAt(coords, maxDist)
         maxDist = maxDistOr(maxDist)
         local called, res = homestead('stationAt', coords, maxDist)
-        if called and type(res) == 'table' then return res end
+        -- {} (not ready) is not a station: a real hit always carries station_type.
+        if called and type(res) == 'table' and res.station_type ~= nil then return res end
         if env.devOn() then
             local t = flow.nearestDev(cfg.devStations, coords, maxDist)
             if t then return { station_type = t, dev = true } end

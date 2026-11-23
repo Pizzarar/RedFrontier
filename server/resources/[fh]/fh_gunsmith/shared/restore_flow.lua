@@ -16,13 +16,36 @@ function M.plan(item, partsAvailable, rules)
     return { from = tonumber(info.condition), to = to, parts = used, cap = rules.restoreCap(info.stars), stars = info.stars }
 end
 
+M.STATION_REACH = 3.0 -- metres, container to station (same as fh_crafting stationMaxDist)
+M.WORKBENCH = 'workbench' -- H3 type crafting maps 'gunsmith' to (FhCraftingConfig.stationTypeMap)
+
+---Is any of the player's own stations a gunsmith bench within reach of `coords`? `stations` is
+---exports.fh_crafting:getStations(citizenid) (H3 shape { station_type, coords = {x,y,z} }; dev stations carry
+---dev = true and the crafting type 'gunsmith').
+---@return boolean ok, string|nil reason 'no_station'
+function M.stationInReach(stations, coords, maxDist)
+    maxDist = maxDist or M.STATION_REACH
+    if type(coords) ~= 'table' or type(coords.x) ~= 'number' or type(coords.y) ~= 'number' or type(coords.z) ~= 'number' then
+        return false, 'no_station'
+    end
+    for _, s in ipairs(type(stations) == 'table' and stations or {}) do
+        local c = type(s) == 'table' and s.coords
+        local bench = type(s) == 'table' and (s.station_type == M.WORKBENCH or (s.dev == true and s.station_type == 'gunsmith'))
+        if bench and type(c) == 'table' and type(c.x) == 'number' and type(c.y) == 'number' and type(c.z) == 'number' then
+            local dx, dy, dz = c.x - coords.x, c.y - coords.y, c.z - coords.z
+            if dx * dx + dy * dy + dz * dz <= maxDist * maxDist then return true end
+        end
+    end
+    return false, 'no_station'
+end
+
 ---deps (all injectable):
 ---  open(src) -> ref, view | nil, reason         the container the player has open (fh_core openRef + view)
 ---  containers                                    fh_core FhContainers (accepts, canReach)
 ---  playerCoords(src) -> coords | nil             server-side ped coords, for the reach check
----  nearStation(coords) -> ok, reason             gunsmith station reach for the container's coords
+---  nearStation(src, coords) -> ok, reason        gunsmith station reach for the container's coords (own plot)
 ---  count(src, item) -> n                         fh_crafting invCount (gun_parts held)
----  setInfo(ref, slot, info) -> ok, reason        @core setItemInfo write (idea-689; 'no_set_info' until it lands)
+---  setInfo(ref, slot, info, expectName) -> ok, reason   fh_core setItemInfo write (expectName = the weapon item name)
 ---  take(src, item, amount) -> ok, reason         part removal (fh_crafting invTake; B7-backed)
 ---  rules                                         optional, defaults to FhCraftRules
 ---Order: open container -> bulky type -> player reach -> station reach -> slot -> plan -> write condition -> consume
@@ -43,7 +66,7 @@ function M.run(deps, src, slot)
     local okReach, reachWhy = deps.containers.canReach(ref.type, view.coords, deps.playerCoords(src))
     if not okReach then return false, reachWhy or 'fh_out_of_reach' end
 
-    local okNear, nearWhy = deps.nearStation(view.coords)
+    local okNear, nearWhy = deps.nearStation(src, view.coords)
     if not okNear then return false, nearWhy or 'no_station' end
 
     slot = tonumber(slot)
@@ -58,12 +81,12 @@ function M.run(deps, src, slot)
     local newInfo = {}
     for k, v in pairs(item.info) do newInfo[k] = v end
     newInfo.condition = plan.to
-    local okSet, setWhy = deps.setInfo(ref, slot, newInfo)
+    local okSet, setWhy = deps.setInfo(ref, slot, newInfo, item.name)
     if not okSet then return false, setWhy or 'write_failed' end
 
     local okTake, takeWhy = deps.take(src, 'gun_parts', plan.parts)
     if not okTake then
-        local okRb, rbWhy = deps.setInfo(ref, slot, item.info) -- rollback
+        local okRb, rbWhy = deps.setInfo(ref, slot, item.info, item.name) -- rollback
         local meta = (not okRb) and { rollbackFailed = true, slot = slot, wanted = item.info.condition, reason = rbWhy } or nil
         if takeWhy == 'not_implemented' or takeWhy == 'no_remove' then return false, 'no_remove', meta end
         return false, takeWhy or 'take_failed', meta

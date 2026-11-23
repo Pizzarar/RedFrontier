@@ -84,4 +84,34 @@ describe('station adapter', function()
     end)
 end)
 
+describe('station type map + ready gate', function()
+    it('maps crafting types to homestead types before the H3 call', function()
+        for t, h3 in pairs({ gunsmith = 'workbench', reload = 'workbench', apothecary = 'campfire' }) do
+            eq(h3, cfg.stationTypeMap[t])
+            local a, calls = mk({ near = true })
+            eq(true, a.isNearStation(1, t))
+            eq(h3, calls[1].args[2], t)
+        end
+    end)
+    it('every recipe station type has a mapping', function()
+        for t in pairs(FhCraftRules.STATION_TYPES) do eq(true, cfg.stationTypeMap[t] ~= nil, t) end
+    end)
+    it('not-ready H3 results (false / nil / fh_not_ready / {}) are no_station, never homestead_error', function()
+        for _, v in ipairs({ false, 'fh_not_ready', {} }) do
+            local ok, why = mk({ near = v }).isNearStation(1, 'reload')
+            eq(false, ok); eq('no_station', why)
+        end
+        local ok, why = mk({}).isNearStation(1, 'reload') -- nil
+        eq(false, ok); eq('no_station', why)
+    end)
+    it('stationAt: nil / false / fh_not_ready / {} are nil', function()
+        for _, v in ipairs({ false, 'fh_not_ready', {} }) do eq(nil, mk({ at = v }).stationAt(atDev, 3.0)) end
+        eq(nil, mk({}).stationAt(atDev, 3.0))
+    end)
+    it('getStations: not-ready results give an empty list', function()
+        for _, v in ipairs({ false, 'fh_not_ready' }) do eq(0, #mk({ list = v }).getStations('cid')) end
+        eq(0, #mk({ list = {} }).getStations('cid'))
+    end)
+end)
+
 T.finish()

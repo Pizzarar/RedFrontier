@@ -525,11 +525,11 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
 
 ## Crafting (fh_crafting, fh_gunsmith)
 
-Preconditions: stations come from @homestead H3 (without fh_homestead started, crafting refuses `no_homestead` unless you
-turn on `fh_dev 1` and use the dev stations), @core B7 `removeItem` is on main, and item moves need idea-615
-(carried-inventory add/remove refuses, so crafting, restore and tonics refuse safely instead of eating items), the tonic
-buff needs idea-612 (caps in fh_buffs), and `/fh_restore` needs an @core `setItemInfo` contract (idea-689, not built
-yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+Preconditions: stations come from @homestead H3 (on main): crafting uses a built `workbench` (gunsmith, reload) or
+`campfire` (apothecary) on your OWN plot, so in-game testing needs @homestead H2 `/fh_build` (not on main yet), or
+`fh_dev 1` and the dev stations. Without fh_homestead started, crafting refuses `no_homestead`. Carried item moves and
+`/fh_restore` use the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff still needs idea-612
+(caps in fh_buffs). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle

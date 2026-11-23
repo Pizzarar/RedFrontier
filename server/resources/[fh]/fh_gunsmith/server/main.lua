@@ -14,6 +14,8 @@ local MESSAGES = {
     at_cap = 'That weapon is already at its best condition.',
     no_parts = 'You need gun parts.',
     no_remove = 'Removing items is not available yet.',
+    fh_wrong_item = 'That slot changed; try again.',
+    fh_empty_slot = 'Nothing in that slot.',
     no_set_info = 'Writing item condition is not available yet.',
 }
 
@@ -27,29 +29,32 @@ local function openContainer(src)
     return ref, view
 end
 
----The open container must sit within reach of a gunsmith station (fh_crafting station adapter, stationAt).
+---The open container must sit within reach of the player's OWN workbench (fh_homestead H3 isNearStation is
+---owner-only by design, so restore reads getStations(citizenid) and compares coordinates). Contract:
+---fh_homestead/README.md (getStations: {} before the slot load, so not-ready reads as no_station).
 ---@return boolean ok, string|nil reason
-local function nearGunsmithStation(coords)
-    local s = exports.fh_crafting:stationAt(coords)
-    if not s then return false, 'no_station' end
-    if s.station_type ~= 'gunsmith' then return false, 'no_station' end
-    return true
+local function nearGunsmithStation(src, coords)
+    local p = exports['rsg-core']:GetCoreObject().Functions.GetPlayer(src)
+    local citizenid = p and p.PlayerData and p.PlayerData.citizenid
+    if not citizenid then return false, 'no_station' end
+    local ok, stations = pcall(function() return exports.fh_crafting:getStations(citizenid) end)
+    if not ok then return false, 'no_station' end
+    return flow.stationInReach(stations, coords)
 end
 
----@core setItemInfo contract (idea-689, not built yet). Assumed signature:
----  exports.fh_core:setItemInfo(ref, slot, info) -> boolean ok, string|nil reason
----Stubbed behind the contract: refuse 'no_set_info' only when fh_core is down or the export is missing; any other
----failure is logged at error level and reported as 'write_failed' (so no parts are taken on either path).
+---fh_core setItemInfo (core-03): replaces the slot's info; expectName refuses a swapped slot (fh_wrong_item).
+---'no_set_info' only when fh_core is down or lacks the export; other failures are fh_core's reason (nothing is
+---taken on either path).
 ---@return boolean ok, string|nil reason
-local function setItemInfo(ref, slot, info)
+local function setItemInfo(ref, slot, info, expectName)
     if GetResourceState('fh_core') ~= 'started' then return false, 'no_set_info' end
-    local called, ok, reason = pcall(function() return exports.fh_core:setItemInfo(ref, slot, info) end)
+    local called, ok, reason = pcall(function() return exports.fh_core:setItemInfo(ref, slot, info, expectName) end)
     if not called then
         if not tostring(ok):find('No such export', 1, true) then
             print(('^1[fh_gunsmith] fh_core.setItemInfo failed: %s^7'):format(tostring(ok)))
             return false, 'write_failed'
         end
-        return false, 'no_set_info' -- export missing (contract not built yet)
+        return false, 'no_set_info'
     end
     if ok == true then return true end
     return false, reason or 'write_failed'

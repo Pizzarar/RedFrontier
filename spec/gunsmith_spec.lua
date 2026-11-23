@@ -52,12 +52,16 @@ local function mkDeps(o)
         view.items[o.slot or 1] = d.item
         return ref, view
     end
-    d.nearStation = function()
+    d.nearSrc = nil
+    d.nearStation = function(src, coords)
+        d.nearSrc, d.nearCoords = src, coords
         if o.tooFar then return false, 'no_station' end
         return true
     end
     d.count = function() return d.parts end
-    d.setInfo = function(_, _, info)
+    d.setCalls = {}
+    d.setInfo = function(ref, slot, info, expectName)
+        d.setCalls[#d.setCalls + 1] = { ref = ref, slot = slot, expectName = expectName }
         if o.setWhy then return false, o.setWhy end
         if o.setFails then return false, 'write_failed' end
         d.log[#d.log + 1] = 'set' .. info.condition; return true
@@ -136,6 +140,48 @@ describe('gunsmith flow', function()
         d.setInfo = function(...) n = n + 1; if n == 2 then return false, 'gone' end return set(...) end
         local ok, why, meta = F.run(d, 1, 1)
         eq(false, ok); eq('fh_not_registrable', why); eq(true, meta.rollbackFailed); eq('gone', meta.reason)
+    end)
+end)
+
+describe('gunsmith setInfo + station wiring', function()
+    it('passes the weapon item name as expectName on write and rollback', function()
+        local d = mkDeps({ takeWhy = 'no_remove' })
+        F.run(d, 7, 1)
+        eq(2, #d.setCalls)
+        eq('worn_rifle', d.setCalls[1].expectName); eq('worn_rifle', d.setCalls[2].expectName)
+        eq(1, d.setCalls[1].slot); eq('chest', d.setCalls[1].ref.type)
+    end)
+    it('nearStation gets the src and the container coords', function()
+        local d = mkDeps({ coords = { x = 0.5, y = 0.5, z = 0.5 } })
+        F.run(d, 7, 1)
+        eq(7, d.nearSrc); eq(0.5, d.nearCoords.z)
+    end)
+end)
+
+describe('gunsmith restore reach via getStations', function()
+    local bench = { plot_id = 1, slot_id = 2, station_type = 'workbench', coords = { x = 10.0, y = 20.0, z = 5.0 } }
+    local camp = { plot_id = 1, slot_id = 3, station_type = 'campfire', coords = { x = 10.0, y = 20.0, z = 5.0 } }
+    it('container in reach of the own workbench', function()
+        eq(true, F.stationInReach({ bench }, { x = 11.0, y = 20.0, z = 5.0 }))
+        eq(true, F.stationInReach({ bench }, { x = 13.0, y = 20.0, z = 5.0 })) -- exactly 3.0
+    end)
+    it('out of reach', function()
+        local ok, why = F.stationInReach({ bench }, { x = 14.0, y = 20.0, z = 5.0 })
+        eq(false, ok); eq('no_station', why)
+    end)
+    it("other player's plot (getStations of the asker has none) / not ready ({}) / nil", function()
+        eq('no_station', select(2, F.stationInReach({}, { x = 10.0, y = 20.0, z = 5.0 })))
+        eq('no_station', select(2, F.stationInReach(nil, { x = 10.0, y = 20.0, z = 5.0 })))
+    end)
+    it('only workbenches count (not campfire / tanning_rack)', function()
+        eq('no_station', select(2, F.stationInReach({ camp }, { x = 10.0, y = 20.0, z = 5.0 })))
+    end)
+    it('dev gunsmith station counts, dev reload does not; bad coords refuse', function()
+        local dev = { station_type = 'gunsmith', dev = true, coords = { x = 0.0, y = 0.0, z = 0.0 } }
+        eq(true, F.stationInReach({ dev }, { x = 1.0, y = 0.0, z = 0.0 }))
+        dev.station_type = 'reload'
+        eq('no_station', select(2, F.stationInReach({ dev }, { x = 1.0, y = 0.0, z = 0.0 })))
+        eq('no_station', select(2, F.stationInReach({ bench }, nil)))
     end)
 end)
 
