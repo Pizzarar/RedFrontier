@@ -594,6 +594,7 @@ yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what yo
     `/fh_restore <slot>`; at the gunsmith run `/fh_craft ammo_rifle`.
     Expected: both `no_station` messages (`You need to be at a gunsmith station.` / `You need to be at the right
     station.`); the station types do not substitute for each other.
+    RESULT:
 
 ## Survival (fh_survival, plan survival-01, S1-S5 combined)
 
