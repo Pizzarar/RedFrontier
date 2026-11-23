@@ -70,4 +70,22 @@ case('invalid input is refused without touching state', function()
     assert(next(st) == nil)
 end)
 
+case('snapshot remaining is seconds left, >= 0', function()
+    local st = {}
+    logic.apply(st, caps, 'well_fed', 1.1, 60, 100)
+    local snap = logic.snapshot(st, 130)
+    assert(snap.well_fed.remaining == 30 and snap.well_fed.expires_at == 160)
+    assert(logic.snapshot(st, 160).well_fed == nil) -- expired entries dropped
+    logic.apply(st, caps, 'rested', 1.1, 5, 200)
+    local s2 = logic.snapshot(st, 205.0)
+    assert(s2.rested == nil or s2.rested.remaining >= 0)
+end)
+
+case('config caps include tonic/hydrated/clean', function()
+    FhBuffsConfig = nil
+    dofile(here .. '../server/resources/[fh]/fh_buffs/config.lua')
+    local c = FhBuffsConfig.caps
+    assert(c.tonic_vigor == 1.15 and c.tonic_steady == 1.10 and c.hydrated == 1.0 and c.clean == 1.0)
+end)
+
 T.finish()

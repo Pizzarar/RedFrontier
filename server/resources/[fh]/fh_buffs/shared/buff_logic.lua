@@ -50,11 +50,11 @@ function logic.expire(state, now)
     return gone
 end
 
----Snapshot of active buffs: { [buff_id] = { magnitude, expires_at } } (expired entries dropped first).
+---Snapshot of active buffs: { [buff_id] = { magnitude, expires_at, remaining } } (remaining = seconds left, >= 0; expired entries dropped first).
 function logic.snapshot(state, now)
     logic.expire(state, now)
     local out = {}
-    for id, e in pairs(state) do out[id] = { magnitude = e.magnitude, expires_at = e.expires_at } end
+    for id, e in pairs(state) do out[id] = { magnitude = e.magnitude, expires_at = e.expires_at, remaining = math.max(0, e.expires_at - now) } end
     return out
 end
 
