@@ -29,8 +29,8 @@ local function newEnv(opts)
     local registered = {}
     local exp = setmetatable({}, { __call = function(_, name, fn) registered[name] = fn end })
     exp['rsg-core'] = { GetCoreObject = function() return { Functions = {
-        GetPlayer = function(_, src) local c = E.online[src] return c and { PlayerData = { citizenid = c, source = src } } or nil end,
-        GetPlayerByCitizenId = function(_, cid) for s, c in pairs(E.online) do if c == cid then return { PlayerData = { citizenid = c, source = s } } end end end,
+        GetPlayer = function(src) local c = E.online[src] return c and { PlayerData = { citizenid = c, source = src } } or nil end,
+        GetPlayerByCitizenId = function(cid) for s, c in pairs(E.online) do if c == cid then return { PlayerData = { citizenid = c, source = s } } end end end,
     } } end }
     exp.fh_trade = { getShortages = function() return {} end }
     exp.fh_cargo = {
