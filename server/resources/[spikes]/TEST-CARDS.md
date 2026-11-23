@@ -1,6 +1,6 @@
 # Spike test cards (S1 → S5), owner: Aub
 
-Checkout: `C:\Users\Fugma\projects\RedFrontier` (the same one you start the server from with `tools/start-server.ps1`). The spikes live in `server/resources/[spikes]/`. They are **not** in server.cfg, so you start each one by hand.
+Checkout: `<repo-root>` (the same one you start the server from with `tools/start-server.ps1`). The spikes live in `server/resources/[spikes]/`. They are **not** in server.cfg, so you start each one by hand.
 How: in the **server console window** type `ensure spk_<name>`. In game, press T and type the `/spk_...` command. Console output shows in the server window, and client output shows in F8.
 Each card takes 5 minutes or less. When you're done, open `server/resources/[spikes]/spk_<name>/README.md` and fill in the last line: `RESULT: GO|NO-GO|PARTIAL — <why>` (or just tell the Spikes lead).
 
