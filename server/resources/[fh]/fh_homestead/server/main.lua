@@ -6,7 +6,16 @@ local rules = FhPlotRules
 
 local claims = { byPlot = {}, byOwner = {} }
 local ready = false
-FhHomesteadClaims = claims -- read by server/slots.lua (plotOf, owner lookup)
+-- Read-only view for server/slots.lua; the claim tables themselves stay private to this file.
+FhHomesteadClaims = setmetatable({}, {
+    __index = {
+        isReady = function() return ready end,
+        ownerOf = function(plotId) return claims.byPlot[plotId] end,
+        plotOf = function(citizenid) return claims.byOwner[citizenid] end,
+    },
+    __newindex = function() error('FhHomesteadClaims is read-only', 2) end,
+    __metatable = false,
+})
 
 local function core() return exports['rsg-core']:GetCoreObject() end
 
