@@ -13,6 +13,15 @@ function logic.tierForRep(cfg, region, value)
     return 1
 end
 
+---Tier crossing between two rep values. An unknown old value (nil / not a number) never counts as a crossing.
+---@return boolean changed, integer oldTier, integer newTier
+function logic.crossing(cfg, region, oldValue, newValue)
+    local newTier = logic.tierForRep(cfg, region, newValue)
+    if type(oldValue) ~= 'number' or oldValue ~= oldValue then return false, newTier, newTier end
+    local oldTier = logic.tierForRep(cfg, region, oldValue)
+    return oldTier ~= newTier, oldTier, newTier
+end
+
 ---@param repByRegion table<string, number>|nil
 ---@return boolean ok, string? reason
 function logic.canUnlock(cfg, repByRegion, unlock_id)

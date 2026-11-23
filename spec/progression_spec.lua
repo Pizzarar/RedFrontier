@@ -52,4 +52,28 @@ case('canUnlock unknown unlock / missing rep / bad cfg -> false + reason', funct
     T.eq(false, ok)
 end)
 
+case('NaN / non-number rep is bad_value, tier 1, no error', function()
+    for _, bad in ipairs({ 0/0, 'x', true, {} }) do
+        local tier, why = logic.tierForRep(cfg, 'heartlands', bad)
+        T.eq(1, tier); T.eq('bad_value', why)
+    end
+    local ok, why = logic.canUnlock(cfg, { heartlands = 0/0 }, 'contracts_t2')
+    T.eq(false, ok); T.eq('bad_value', why)
+end)
+case('crossing: up, down, same tier, unknown old', function()
+    local t = cfg.tiers.heartlands
+    local c, o, n = logic.crossing(cfg, 'heartlands', t.t2 - 1, t.t2)
+    T.eq(true, c); T.eq(1, o); T.eq(2, n)
+    c, o, n = logic.crossing(cfg, 'heartlands', t.t3, t.t2)
+    T.eq(true, c); T.eq(3, o); T.eq(2, n)
+    c = logic.crossing(cfg, 'heartlands', 1, 5)
+    T.eq(false, c)
+    c, o, n = logic.crossing(cfg, 'heartlands', nil, t.t3)
+    T.eq(false, c); T.eq(3, n)
+    c = logic.crossing(cfg, 'heartlands', 0/0, t.t3)
+    T.eq(false, c)
+    c = logic.crossing(cfg, 'nowhere', 0, 999)
+    T.eq(false, c)
+end)
+
 T.finish()
