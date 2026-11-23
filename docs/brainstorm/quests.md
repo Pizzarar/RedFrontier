@@ -27,5 +27,7 @@
 ## In flight
 - PARKED (forge freeze, 2026-11-23): nothing new and no merges until the Overlord lifts it.
 - Q1: PASS from the builder (db7bcb6..4a0e7ff, 66 tests / 0 fail). Gemini review (Quests2 rn-5e9c4fb96b1a) is still to come. Not merged.
-- Q2: Quests3 rn-673186a1422b, worktree quests-q2, WIP commit on its branch. Migration provisionally 0008 (0006 is taken by homestead/survival); final number set at merge.
-- Resume order: Q1 review verdict → merge Q1 → announce README to @guide/@ui/@roads → Q2.
+- DRAINED (lead confirmed; both worktrees clean; nothing pushed). Parked heads:
+  - quests-q1 = 4a0e7ff
+  - quests-q2 = 9b79f2e WIP on a2390f0. It has migration 0008 (provisional) plus the shared rewards/store/journal/intake modules, all untested. Still to do: their specs, the server/ glue, and the fxmanifest exports.
+- Resume order: Q1 review verdict → merge Q1 → announce the README to @guide/@ui/@roads → rebase Q2 → finish Q2.
