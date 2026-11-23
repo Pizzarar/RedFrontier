@@ -1,12 +1,14 @@
 -- fh_heat server (spec L7): per-character per-faction heat 0-100. The server owns it; HUD (@ui) reads getAll/get.
 -- Natives: GetPlayers, GetPlayerPed, GetEntityCoords, GetGameTimer. NOT runtime-tested (no Cfx key yet).
--- Roadblocks / ambush / chase are R6: they hook `fh:heat:threshold` (src, faction, oldLevel, newLevel) or exports.fh_heat:level.
+-- Roadblocks / ambush / chase are R6: they hook `fh:heat:threshold` { src, citizenid, faction, old_level, level, value }
+-- or exports.fh_heat:level. Event payloads follow fh_core/docs/events.md (one table argument).
 local cfg = FhHeatConfig
 local rules = FhHeatRules
 local regions = FhRegions
 
 local byCid = {}   -- citizenid -> { [faction] = heat }
 local cidOf = {}   -- src -> citizenid (cached at first use, dropped on playerDropped)
+local payoffLocks = rules.newLocks() -- (citizenid, faction) -> bounty payoff in flight
 
 local function log(fmt, ...) print(('[fh_heat] ' .. fmt):format(...)) end
 local function reply(src, msg)
@@ -37,17 +39,18 @@ local function save(cid, faction, value)
         { cid, faction, value })
 end
 
--- Every change goes through here: persists, emits fh:heat:changed and (on a level change) fh:heat:threshold.
-local function apply(src, cid, faction, new)
+-- Every change goes through here: persists, emits fh:heat:changed and (on a level change) fh:heat:threshold
+-- (R6 hook point). One table payload each, built by rules.changeEvents.
+local function apply(src, cid, faction, new, reason)
     local heats = load(cid)
     local old = heats[faction] or 0
     new = rules.clamp(new, cfg.min, cfg.max)
     if new == old then return old, new end
     heats[faction] = new
     save(cid, faction, new)
-    TriggerEvent('fh:heat:changed', src, faction, old, new)
-    local lo, ln = rules.level(cfg.thresholds, old), rules.level(cfg.thresholds, new)
-    if lo ~= ln then TriggerEvent('fh:heat:threshold', src, faction, lo, ln) end -- R6 hook point
+    for _, ev in ipairs(rules.changeEvents(src, cid, faction, old, new, cfg.thresholds, reason)) do
+        TriggerEvent(ev[1], ev[2])
+    end
     return old, new
 end
 
@@ -72,7 +75,7 @@ local function set(src, faction, value)
     local cid, err = resolve(src, faction)
     if not cid then return false, err end
     if not rules.finite(value) then return false, 'fh_bad_amount' end
-    local _, new = apply(src, cid, faction, value)
+    local _, new = apply(src, cid, faction, value, 'set')
     return true, new
 end
 
@@ -82,7 +85,7 @@ local function add(src, faction, amount, reason)
     if not cid then return false, err end
     local target, aerr = rules.add(load(cid)[faction] or 0, amount, cfg.min, cfg.max)
     if not target then return false, aerr end
-    local _, new = apply(src, cid, faction, target)
+    local _, new = apply(src, cid, faction, target, reason)
     log('add %s %s %+g -> %g (%s)', tostring(src), faction, amount, new, tostring(reason))
     return true, new
 end
@@ -112,23 +115,45 @@ local function level(src, faction)
     return rules.level(cfg.thresholds, h)
 end
 
--- Bounty payoff. points nil = all heat with that faction.
+-- Region for the ledger row: the region of the territory the player stands in, else the faction's home region.
+local function chargeRegion(src, faction)
+    local x, y
+    local ped = GetPlayerPed(src)
+    if ped and ped ~= 0 then
+        local c = GetEntityCoords(ped)
+        x, y = c.x, c.y
+    end
+    return rules.chargeRegion(regions, faction, x, y)
+end
+
+-- Bounty payoff. points nil = all heat with that faction (capped to current heat).
+-- One payoff per (citizenid, faction) at a time: the charge yields (DB await), so without the lock two requests
+-- could both read the same heat and both charge. A second request while one is in flight gets fh_payoff_busy and is
+-- never charged. rules.runPayoff always releases the lock (success, refusal, early return, error).
 local function payoff(src, faction, points)
     local cid, err = resolve(src, faction)
     if not cid then return false, err end
-    local heat = load(cid)[faction] or 0
-    local charge = function(amount)
-        -- TODO(B7 @core): fh_economy.charge(src, amount, reason, region) lands with @core B7 (returns false,'fh_insufficient_funds').
-        if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
-        local ok, a, b = pcall(function() return exports.fh_economy:charge(src, amount, cfg.payoffReason, nil) end)
-        if not ok then return false, 'fh_economy_unavailable' end -- export missing until B7 merges
-        return a, b
-    end
-    local ok, paid, cost, perr = rules.payoff(heat, cfg.bountyPerPoint, points, charge)
-    if not ok then return false, perr, cost end
-    -- subtract the points paid from the CURRENT heat so heat gained during the (yielding) charge is not wiped
-    apply(src, cid, faction, (load(cid)[faction] or 0) - paid)
-    return true, paid, cost
+    local region = chargeRegion(src, faction)
+    if not region then return false, 'fh_unknown_region' end
+    return rules.runPayoff({
+        locks = payoffLocks,
+        key = rules.lockKey(cid, faction),
+        heat = function() return load(cid)[faction] or 0 end,
+        perPoint = cfg.bountyPerPoint,
+        points = points,
+        -- fh_economy.charge(src, amount, reason, region_id) -> ok, err, ledgerId (@core B7); false,'fh_insufficient_funds'.
+        charge = function(amount)
+            if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
+            local ok, a, b = pcall(function() return exports.fh_economy:charge(src, amount, cfg.payoffReason, region) end)
+            if not ok then return false, 'fh_economy_unavailable' end -- export missing until B7 merges
+            return a, b
+        end,
+        -- subtract the points paid from the CURRENT heat so heat gained during the (yielding) charge is not wiped
+        commit = function(paid) apply(src, cid, faction, (load(cid)[faction] or 0) - paid, 'bounty_payoff') end,
+        onError = function(msg, charged)
+            log('ERROR payoff %s %s (charged=%s): %s', tostring(cid), faction, tostring(charged), msg)
+        end,
+    })
 end
 
 exports('get', get)
@@ -154,10 +179,19 @@ RegisterCommand('paybounty', function(src, args)
         table.sort(parts)
         return reply(src, 'Heat: ' .. table.concat(parts, ' | ') .. '. Pay with /paybounty <faction> [points]')
     end
-    local ok, a, b = payoff(src, faction, tonumber(args[2]))
+    if not all[faction] then return reply(src, 'Unknown faction.') end
+    if all[faction].heat <= 0 then return reply(src, 'No heat with them.') end
+    -- only an omitted points arg means "all"; junk / <= 0 / more than the current heat is refused, nothing charged
+    local pok, points = rules.parsePoints(args[2], all[faction].heat)
+    if not pok then
+        return reply(src, ('Points must be a number above 0 and at most your heat with them (%g).'):format(all[faction].heat))
+    end
+    local ok, a, b = payoff(src, faction, points)
     if ok then return reply(src, ('Bounty paid: %g heat cleared for %d.'):format(a, b)) end
     local msgs = { fh_insufficient_funds = 'You cannot afford that bounty.', fh_no_heat = 'No heat with them.',
-        fh_unknown_faction = 'Unknown faction.', fh_economy_unavailable = 'Bounty payoff is not available yet.' }
+        fh_unknown_faction = 'Unknown faction.', fh_economy_unavailable = 'Bounty payoff is not available yet.',
+        fh_payoff_busy = 'A bounty payment is already being processed.', fh_bad_amount = 'Invalid points.',
+        fh_unknown_region = 'Bounty payoff is not available here.' }
     reply(src, msgs[a] or ('Could not pay bounty (' .. tostring(a) .. ').'))
 end, false)
 
@@ -180,6 +214,34 @@ end)
 
 -- ---------------------------------------------------------------- lay-low decay
 
+local function decayPlayer(src, dt)
+    local cid = citizenidOf(src)
+    if not cid then return end
+    local ped = GetPlayerPed(src)
+    local here
+    if ped and ped ~= 0 then
+        local c = GetEntityCoords(ped)
+        here = rules.factionAt(regions, c.x, c.y)
+    end
+    local changes = {} -- collect first: apply() writes into the table being iterated
+    for faction, heat in pairs(load(cid)) do
+        if heat > 0 then
+            local nv = rules.decay(heat, dt, cfg.decayPerMinute, here == faction, cfg.min, cfg.max)
+            if nv ~= heat then changes[faction] = nv end
+        end
+    end
+    for faction, nv in pairs(changes) do apply(src, cid, faction, nv, 'decay') end
+end
+
+local function decayTick(dt)
+    for _, s in ipairs(GetPlayers()) do
+        local src = tonumber(s)
+        -- per player too: one bad player record does not skip everyone after it
+        if src then rules.safeTick(decayPlayer, function(e) log('ERROR decay src %d: %s', src, e) end, src, dt) end
+    end
+end
+
+-- Each tick runs protected (rules.safeTick): an error is logged and the loop keeps running.
 CreateThread(function()
     local last = GetGameTimer()
     while true do
@@ -187,24 +249,7 @@ CreateThread(function()
         local now = GetGameTimer()
         local dt = (now - last) / 1000
         last = now
-        for _, s in ipairs(GetPlayers()) do
-            local src = tonumber(s)
-            local cid = src and citizenidOf(src)
-            if cid then
-                local ped = GetPlayerPed(src)
-                local here
-                if ped and ped ~= 0 then
-                    local c = GetEntityCoords(ped)
-                    here = rules.factionAt(regions, c.x, c.y)
-                end
-                for faction, heat in pairs(load(cid)) do
-                    if heat > 0 then
-                        local nv = rules.decay(heat, dt, cfg.decayPerMinute, here == faction, cfg.min, cfg.max)
-                        if nv ~= heat then apply(src, cid, faction, nv) end
-                    end
-                end
-            end
-        end
+        rules.safeTick(decayTick, function(e) log('ERROR decay tick: %s', e) end, dt)
     end
 end)
 
