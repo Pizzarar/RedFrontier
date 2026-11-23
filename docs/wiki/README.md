@@ -21,7 +21,7 @@ Player guide for RedFrontier, a frontier homestead server. Every page is written
 - [UI](systems/fh_ui.md)
 - [Survival](systems/survival.md)
 - [Crafting](systems/crafting.md)
-- [Roads: wagons, trade, heat, fence](systems/roads.md)
+- [Roads: wagons, trade, heat](systems/roads.md)
 - [Progression](systems/progression.md)
 - [Quests and the jobs board](systems/quests.md)
 
