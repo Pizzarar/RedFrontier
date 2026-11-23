@@ -43,7 +43,7 @@ local function save(cid, faction, value) MySQL.query(UPSERT, { cid, faction, val
 local function saveAwait(cid, faction, value)
     local ok, res = pcall(MySQL.query.await, UPSERT, { cid, faction, value })
     if not ok then log('ERROR heat write %s %s: %s', tostring(cid), faction, tostring(res)) end
-    return ok and res ~= nil
+    return ok and not not res -- truthy only (as fh_economy): a false / nil result is not a persisted write
 end
 
 -- Every change goes through here: persists, emits fh:heat:changed and (on a level change) fh:heat:threshold

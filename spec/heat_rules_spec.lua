@@ -231,7 +231,10 @@ case('refund: refund also fails -> distinct reason, error carries the amount, lo
     local last = w.errors[#w.errors]
     assert(last.msg:find('REFUND FAILED') and last.charged == true and last.amount == 160)
     assert(not w.locks.held(w.key))
-    local _, err2 = R.runPayoff(payoffWorld().deps()); assert(err2 ~= 'fh_payoff_busy', 'fresh lock set not stuck')
+    w.dbUp = true
+    local ok2, err2 = R.runPayoff(w.deps()) -- same world, same lock set: the released key accepts a follow-up payoff
+    assert(ok2 == true and err2 == 40, 'same lock set not stuck: ' .. tostring(err2))
+    assert(not w.locks.held(w.key))
 end)
 
 case('refund: a missing refund fn counts as refund failed (never silently success)', function()
