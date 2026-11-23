@@ -5,6 +5,7 @@
 local M = {}
 
 local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
+local function rules() return FhRules or require('rules') end
 
 local function xyz(v)
     local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
@@ -68,17 +69,17 @@ local function posInt(n)
     return i and i >= 1 and i or nil
 end
 
----Destination slot for `item` in a view: an existing same-name, non-unique stack (the rules veto decides whether it
----has room), else the first free slot, else nil.
+---Destination slot for `item` in a view: the first stack FhRules.canStack would accept a merge into (same name,
+---stackable, equal info), else the first free slot, else nil. Reuses rules.lua's stack check instead of name-only
+---matching, so a transfer never targets a same-name stack whose info differs (the move would be refused/swap there).
 function M.pickSlot(view, item)
     local slots = posInt(view and view.slots)
     if not slots then return nil end
     local items = view.items or {}
-    if not item.unique then
-        for s = 1, slots do
-            local it = items[s]
-            if it and it.name == item.name and not it.unique then return s end
-        end
+    local R = rules()
+    for s = 1, slots do
+        local it = items[s]
+        if it and R.canStack(it, item) then return s end
     end
     for s = 1, slots do
         if not items[s] then return s end
