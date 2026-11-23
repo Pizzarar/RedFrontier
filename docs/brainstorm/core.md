@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: ★ Cor2
+- Lead: ★ Cor3
 - Workers: 1
 
 ## Done when
@@ -33,3 +33,4 @@
 - Main 6307f28 = B1 boot, B2 boot-check+run-specs, B3 inventory fork, B4a container API+fh_inventory, B4b ledger/buffs/regions/events, B5 admin cmds+natives.md, B6a plot+chest, B-dev split+FH.safe. 179 specs green, Gemini PASS each. Nothing runtime-tested (no key yet). Unpushed.
 - Now: B4c spawn contract → B6b ∥ B6c → B6d.
 - B4c PASS (ca9aaff on core-b4c; Gemini re-review PASS; merged main 3c784d4): fh_core spawn-request contract, fh_spike_gated, spike-gated.md, OWNER-TESTS.md. 210 specs. B6b (rn-6e13b8f89183) + B6c (rn-21efce5bd3da) dispatched in parallel.
+- B6b PASS (409d995, Gemini re-review 0/0/0) + B6c PASS (f5de5ae, Gemini re-review 0/0/0) merged main a8356e7/bb56aa2; 248 specs, syntax 48 files clean. B6d stash home + M1 end-to-end card dispatched (rn-7c4617c755e5, core-b6d).
