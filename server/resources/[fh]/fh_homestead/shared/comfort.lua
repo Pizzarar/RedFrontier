@@ -10,7 +10,7 @@ local function rules() return FhBuildRules end
 local function validPoints(p) return type(p) == 'number' and p == p and p > 0 and p < math.huge end
 M.validPoints = validPoints
 
--- Storage limits (migration 0006): trophy_id varchar(64), points int unsigned. Checked before any item moves.
+-- Storage limits (migration 0011): trophy_id varchar(64), points int unsigned. Checked before any item moves.
 M.MAX_ID_LEN = 64
 M.MAX_POINTS = 4294967295
 

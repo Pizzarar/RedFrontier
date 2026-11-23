@@ -247,7 +247,7 @@ AddEventHandler('fh:homestead:unclaimed', function(data)
         end
     end
     byPlot[plotId] = nil
-    -- FK ON DELETE CASCADE (0006) already removed the rows with fh_plots; this only fires if that did not happen, and
+    -- FK ON DELETE CASCADE (0011) already removed the rows with fh_plots; this only fires if that did not happen, and
     -- never touches a plot someone has claimed again since.
     local ok, err = pcall(MySQL.update.await,
         'DELETE t FROM fh_plot_trophies t LEFT JOIN fh_plots p ON p.plot_id = t.plot_id WHERE t.plot_id = ? AND p.plot_id IS NULL',

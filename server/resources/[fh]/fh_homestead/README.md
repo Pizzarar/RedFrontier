@@ -87,7 +87,7 @@ Client to server: `fh:homestead:open_chest { plot_id }` (owner check, then fh_co
 
 - `fh_plots` / `fh_plot_chests` (0003): claim and chest rows.
 - `fh_plot_slots` (0005): `plot_id`, `slot_id`, `tier`, `built_at`. PK `(plot_id, slot_id)`. Tier 0 = no row. FK to `fh_plots` ON DELETE CASCADE.
-- `fh_plot_trophies` (0006): `plot_id`, `trophy_id` (varchar 64), `points`, `placed_at`. PK `(plot_id, trophy_id)`. FK to `fh_plots` ON DELETE CASCADE.
+- `fh_plot_trophies` (0011): `plot_id`, `trophy_id` (varchar 64), `points`, `placed_at`. PK `(plot_id, trophy_id)`. FK to `fh_plots` ON DELETE CASCADE.
 
 ## Build flow (H2, pending @core B7)
 
