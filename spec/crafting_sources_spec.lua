@@ -39,12 +39,15 @@ end
 
 -- Sources. Trade `supplies`: scan defensively (item->price map, or list of { item = .. } / { name = .. } / strings).
 local sources = {}
-local function addSupplies(s)
-    if type(s) ~= 'table' then return end
+local function addSupplies(s, depth)
+    depth = depth or 0
+    if type(s) ~= 'table' or depth > 4 then return end
     for k, v in pairs(s) do
-        if type(k) == 'string' then sources[k] = 'trade supplies'
+        if type(k) == 'string' and type(v) == 'table' then addSupplies(v, depth + 1) -- region/post-nested supplies
+        elseif type(k) == 'string' then sources[k] = 'trade supplies'
         elseif type(v) == 'string' then sources[v] = 'trade supplies'
-        elseif type(v) == 'table' and (v.item or v.name) then sources[v.item or v.name] = 'trade supplies' end
+        elseif type(v) == 'table' and (v.item or v.name) then sources[v.item or v.name] = 'trade supplies'
+        elseif type(v) == 'table' then addSupplies(v, depth + 1) end
     end
 end
 local function scan(t, depth, seen)
@@ -59,6 +62,12 @@ for _, camp in pairs(FhZonesConfig.camps or {}) do
     for _, e in ipairs(((camp.loot or {}).table) or {}) do sources[e.name or e.item] = 'zone loot' end
 end
 for item in pairs(EXTERNAL) do sources[item] = sources[item] or 'external' end
+
+it('source configs loaded (so the PENDING checks cannot go silent)', function()
+    assert(type(FhTradeConfig) == 'table', 'FhTradeConfig missing: renamed?')
+    assert(type(FhZonesConfig) == 'table' and type(FhZonesConfig.camps) == 'table' and next(FhZonesConfig.camps) ~= nil,
+        'FhZonesConfig.camps missing or empty: renamed?')
+end)
 
 it('every required input has a source or is PENDING', function()
     local bad = {}
