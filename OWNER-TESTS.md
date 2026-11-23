@@ -129,7 +129,7 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    Expected: Worn Rifle (condition 20-45) and Small Safe (both bulky).
    RESULT:
 5. Try to drag the Worn Rifle and the Small Safe into your backpack (refused: bulky). Then, with the camp stash still open and your horse within 3.5 m of you AND of the stash, run `/saddlebag in <slot>` for each (`<slot>` = the item's slot in the camp stash).
-   Expected: the backpack refuses both; each `/saddlebag in` replies `saddlebag: moved (in)`. Open the saddlebag (`/saddlebag`) and confirm both are inside. (A horse farther than 3.5 m, or a non-horse ped: `saddlebag: fh_out_of_reach` / `fh_not_a_horse`.)
+   Expected: the backpack refuses both; each `/saddlebag in` replies `saddlebag: moved (in)` and the open camp stash pane drops the item (if it does not, close and reopen the stash with E and note that in RESULT). Open the saddlebag (`/saddlebag`) and confirm both are inside. (A horse farther than 3.5 m, or a non-horse ped: `saddlebag: fh_out_of_reach` / `fh_not_a_horse`.)
    RESULT:
 6. Die once (fall or NPC) and respawn.
    Expected: `[fh_death] ... bag fh:dropbag:... moved`; revolver still in the hotbar; backpack empty.
@@ -138,7 +138,7 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    Expected: bread returns to the backpack; the bag empties and is swept.
    RESULT:
 8. Ride the horse home. Open the plot chest (E) and move the bread in. With the chest open and the horse within 3.5 m of you and the chest, run `/saddlebag out <slot>` for the rifle and the safe (`<slot>` = their slots in the saddlebag; run `/saddlebag` first to read them, then press E at the chest again).
-   Expected: `saddlebag: moved (out)` for both; the chest now holds the rifle (condition intact) and the safe.
+   Expected: `saddlebag: moved (out)` for both and the open chest pane shows them (if not, reopen the chest with E and note it); the chest now holds the rifle (condition intact) and the safe.
    RESULT:
 9. Restart persistence: put an item in the chest, stop the server, start it, rejoin, open the chest.
    Expected: the item is still there with its condition intact (check a rifle if you got one home).
@@ -164,5 +164,5 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    Expected: the item is still there.
    RESULT:
 7. Transfer path: open the plot chest (E) with bread inside, stand with your horse within 3.5 m of you and the chest, run `/saddlebag in <slot>` for the bread, then `/saddlebag out <slot>` for it again. Try `/saddlebag in <slot>` with no container open, and with the horse 6+ m away.
-   Expected: moved both ways with no duplicate or lost bread (count it before/after); with nothing open `saddlebag: fh_nothing_open`; far horse `saddlebag: fh_out_of_reach`. Spamming the command faster than twice a second is silently ignored.
+   Expected: moved both ways with no duplicate or lost bread (count it before/after; if the open pane looks stale, reopen the chest with E and note it); with nothing open `saddlebag: fh_nothing_open`; far horse `saddlebag: fh_out_of_reach`. Spamming the command faster than twice a second is silently ignored.
    RESULT:

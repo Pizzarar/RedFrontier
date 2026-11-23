@@ -121,7 +121,10 @@ to the horse (open) or the player (death). Contents persist in fh_inventory by s
   `fh_same_container`, `fh_bad_dir`, `fh_bad_slot`, `fh_bad_amount`, `fh_no_item`, `fh_no_slot`, `fh_no_coords`.
   Design choice: a toggle that swaps the player pane to the saddlebag was NOT built (the fork's move/use/drop/trash/give/
   sort handlers and the refresh all assume the "player" side is the player's own inventory; follow-up if wanted).
-  A pane left stale after a command-driven move refreshes when reopened.
+  Pane refresh: no new code. A successful move goes through fh_inventory's `MoveBetween`, which already calls `Refresh` on
+  both containers, and `Refresh` pushes the new contents to every player who has that container open, so the open
+  chest/camp pane should update by itself (the saddlebag has no open pane). **Unverified in-game**; if the pane does
+  not update, reopening the container (E) shows the truth.
 - **Export:** `exports.fh_core:saddlebagOf(src)` returns the stash id (registered at the player's position) for fh_death.
 - **Test horse:** the existing admin command `fh_spawn_horse [model]` (B4c spawn contract), no new command.
 - **TODO(horse milestone):** there is no horse ownership: any horse opens anyone's saddlebag, and the bag does not
