@@ -341,20 +341,20 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
 ## Q5: quests (fh_quests)
 
 Server console lines start with `[fh_quests]`. Needs the `fh_quest_state` table (`server/migrations/0007_quest_state.sql`,
-applied by `tools/setup-server.ps1`); `server.cfg` now ensures `fh_quests` after `fh_hunting`. `/jobs` opens the ox_lib fallback
-board (the @ui board later). All coordinates, models and camp ids in it are guesses (TODO-verify-in-game). The ledger check means
+applied by `tools/setup-server.ps1`); `server.cfg` now ensures `fh_quests` after `fh_hunting`. `/jobs` opens the fh_ui jobs
+board. All coordinates, models and camp ids in it are guesses (TODO-verify-in-game). The ledger check means
 the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step that needs another lane says so: mark it
 `SKIP expected-blocked on <lane/block>`, not `FAIL`.
 
 1. Boot with `ensure fh_quests` in `server.cfg` and join.
    Expected: no `[fh_quests] fh_quest_state missing` line, no `family ... rejected`/`failed to load`, no `built-in job type ...
-   not registered`; `fh_quest_state` exists in the DB. `/jobs` opens the "Jobs board" menu (a missing table would answer
+   not registered`; `fh_quest_state` exists in the DB. `/jobs` opens the fh_ui Jobs Board (a missing table would answer
    `Board unavailable: fh_not_ready`).
    RESULT:
 2. Board. Run `/jobs` (it works anywhere; the board spot/prop is at about -297, 795, 118).
-   Expected: 3-5 Heartlands offers (pelt requests, "Clear out: Heartlands outlaw camp", wanted NPCs), each with a reward, plus
-   "My active jobs" at the bottom. Accept a hunt offer: `Accepted: ...`; it comes back checked/disabled and shows under My active
-   jobs. Abandon it there (confirm the dialog): `Job abandoned.`, and it is selectable on the board again.
+   Expected: 3-5 Heartlands offers (pelt requests, "Clear out: Heartlands outlaw camp", wanted NPCs), each with a reward and an Accept button.
+   Accept a hunt offer: its row shows `Accepted` instead of the button and an inline notice confirms. Abandon it in `/journal`: click
+   Abandon, then click the `Confirm abandon?` button a second time; the job leaves the journal and its offer is selectable on the board again.
    RESULT:
 3. hunt_request. Take a pelt offer from step 2 and note its title (animal and stars, e.g. 2-star wolf). Sell a pelt of that animal
    and quality (or better) at the trapper (until @hunting H3 puts `animal` in the sold payload, any pelt of that quality counts).
@@ -367,7 +367,7 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    -170, 860, 118).
    Expected: the NPC is there, visible and hostile. Kill it: the job completes for you, the acceptor, paid once; ledger reason
    `quest:job:bounty:bounty_<name_key>`. Then take the other bounty if it is on the board, confirm its NPC spawns, and abandon it
-   from My active jobs: the NPC disappears and the job is gone with no payment.
+   in `/journal` (Abandon, then `Confirm abandon?`): the NPC disappears and the job is gone with no payment.
    RESULT:
 5. Bounty rearm: relog. Accept a bounty ("Wanted: ..."; if step 4 used both, wait for the next rotation in step 8), note where
    the NPC stands, do NOT kill it, then quit and rejoin.
@@ -379,7 +379,7 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    character/client, go to the spot and open the board.
    Expected: the NPC is gone, and that bounty is offered again: accepting it spawns a new NPC, with no `fh_bounty_taken`
    ("Somebody is already after that one."). Rejoin while that player still holds the offer: your old job row stays active
-   without an NPC (console `not re-armed`); abandon it from My active jobs, which is the designed outcome. If they already
+   without an NPC (console `not re-armed`); abandon it in `/journal` (Abandon, then `Confirm abandon?`), which is the designed outcome. If they already
    finished or abandoned it, your NPC re-arms instead and the job plays normally.
    RESULT:
 7. camp_clear. Accept "Clear out: Heartlands outlaw camp" and clear the camp (about -145, 845, 117) while standing inside it.
