@@ -63,7 +63,8 @@ end
 function M.get(model, legendary)
     if legendary then return M.byKey.legendary_bear end
     if type(model) == 'string' then return M.byModel[model:lower()] or M.byKey[model:lower()] end
-    if type(model) == 'number' then return M.byHash[model & 0xFFFFFFFF] end
+    -- integers only: `&` on a float with a fraction, NaN or inf raises, and a float hash is never a model
+    if math.type(model) == 'integer' then return M.byHash[model & 0xFFFFFFFF] end
     return nil
 end
 

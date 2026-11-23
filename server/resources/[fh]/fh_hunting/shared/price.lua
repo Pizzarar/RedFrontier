@@ -5,7 +5,7 @@ local M = {}
 ---@return number|nil amount, string|nil err
 function M.price(itemBase, stars, isLegendary, cfg)
     cfg = cfg or FhHuntingConfig
-    if type(itemBase) ~= 'number' or itemBase ~= itemBase or itemBase < 0 then return nil, 'fh_bad_base' end
+    if type(itemBase) ~= 'number' or itemBase ~= itemBase or itemBase < 0 or itemBase == math.huge then return nil, 'fh_bad_base' end
     local mult = cfg.QualityMult[stars]
     if not mult then return nil, 'fh_bad_stars' end
     if isLegendary then mult = mult * cfg.LegendaryMult end

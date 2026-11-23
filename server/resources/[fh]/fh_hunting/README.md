@@ -6,7 +6,7 @@ and is specced with `python tools/run-specs.py` (`spec/hunting_*_spec.lua`); not
 
 ## Config flag
 
-`Config.PeltQualitySource` in `config.lua`:
+`FhHuntingConfig.PeltQualitySource` in `config.lua`:
 
 - `'roll'` (default): the server maps the last damage bone to a zone (head/vital 3 stars, body 2 stars,
   limb/gut/explosive/multi-hit 1 star). Head and vital are always 3 stars; only the body zone rolls, with a 10% chance
@@ -43,7 +43,8 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 
 ## Events
 
-Emitted: none yet (`fh:hunting:trophy_placed` / `fh:hunting:trophy_removed` arrive in H5).
+Emitted: none yet. No trophy events, ever: @homestead owns trophy placement and reads
+`exports.fh_hunting:getTrophyComfort(itemId)` (number, or nil for a non-trophy), added in H5.
 
 Consumed: `onResourceStart` (own resource and `fh_core`, to register the items).
 
