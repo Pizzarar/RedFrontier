@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: UI
 - Lead: UI Lead · fh_ui shell
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - fh_ui on local main with U1-U4 PASS, specs green, `## UI` card in OWNER-TESTS.md, `decision ui playtest-ready <hash>` logged.
@@ -31,4 +31,6 @@
   - ui-u2 b956563: U2 buff HUD + own drop-bag timer, specs green, NOT reviewed/merged. Degrades until core idea-609 (bags mine/remaining) + idea-610 (buffs remaining).
   - ui-u3 24e884e: U3 fixture screens + fh_ui_demo, specs green, NOT reviewed/merged. Pending: rename contracts -> jobs (owner quests, rows kind/title/region_id/payout/risk tier) + review fixes.
   - U2 review (Ui5, Gemini) landed after drain: FAIL 1 major/2 minor/1 nit on b956563. Major: client/hud.lua pushBags recomputes deadline every 5s tick, so the countdown never runs down (compute deadline only on fh:death:bags/callback; tick refreshes dir/dist only). Minors: hud.js use Math.ceil (jitter skips seconds); @ox_lib/init.lua -> shared_scripts like siblings. Fix via Ui3 on resume, re-review.
-  - Resume: U3 review (Ui6; check if it landed, else re-spawn), merge U2, rebase+merge U3, then U4. core idea-611: run-specs TOTAL hides spec load errors.
+  - U3 review (Ui6, Gemini) FAIL 0/3/3 on 24e884e. Majors: (1) fh_ui_demo checks IsPlayerAceAllowed(src,'group.admin'), which isn't granted, so admins get locked out -> check 'command.fh_ui_demo' like fh_homestead; (2) empty Lua {} serializes as JSON {}, so `(rows||[]).forEach` crashes heat/contracts/station/fence -> normalize lists with Array.isArray (dom.js helper); (3) Enter auto-focus fires accept/craft/buy on list screens, and insurance.update adds the global Enter listener while hidden -> no autofocus on list screens; update only when open. Minor: .panel needs max-height + overflow-y auto. Apply with the jobs rename via Ui4, re-review.
+  - Also check U2 widgets for the same {}-vs-[] crash when fixing U2.
+  - Resume order: fix U2 (Ui3) || fix U3+jobs rename (Ui4) -> re-reviews -> merge U2 -> rebase+merge U3 -> U4., merge U2, rebase+merge U3, then U4. core idea-611: run-specs TOTAL hides spec load errors.
