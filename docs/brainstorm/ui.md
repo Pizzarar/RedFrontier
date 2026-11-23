@@ -19,6 +19,7 @@
 
 ## Open
 - Future screens, not in current plan: @quests quest journal, @guide handbook + tutorial prompts. Wait for their schemas.
+- idea-601 (accepted): fh_fence (@progression P2) ships data + temporary ox_lib menu; @ui then wires the `fence` screen to it (schema in fh_ui README, actions fh:fence:ui_buy/ui_sell) and fh_fence drops its menu. Blocked on: forge freeze, U3 merge, fh_fence on main.
 - Real wiring per fixture screen as lanes ship: heat (L7), insurance (L4), jobs board (@quests: contracts/bounties/hunting requests; replaces contract board), station menus (L1/L5), fence (L9).
 - (orig ask) L10 fh_ui: one shared NUI shell (vanilla JS): buff HUD, heat indicator, insurance dialog, contract board, station menus, fence shop. Lanes ship data/events, UI ships screens. Hypnospace-light surrealism but readability first. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
