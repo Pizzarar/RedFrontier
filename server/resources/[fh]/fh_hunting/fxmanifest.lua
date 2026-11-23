@@ -7,6 +7,7 @@ lua54 'yes'
 description 'RedFrontier hunting (spec L8): pelt quality from shot placement, pelts as bulky/cargo items, price rules'
 
 shared_scripts {
+    '@ox_lib/init.lua',
     'config.lua',
     'shared/animals.lua',
     'shared/quality.lua',
@@ -14,9 +15,16 @@ shared_scripts {
 }
 
 server_scripts {
+    '@fh_core/shared/containers.lua',
+    'shared/skin.lua',
     'server/main.lua',
 }
 
-dependencies { 'fh_core', 'fh_economy' }
+client_scripts {
+    '@fh_core/client/safe.lua',
+    'client/main.lua',
+}
+
+dependencies { 'fh_core', 'fh_economy', 'ox_lib', 'rsg-target' }
 
 server_exports { 'getAnimal', 'getPeltItem', 'price' }
