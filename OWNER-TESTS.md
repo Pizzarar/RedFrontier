@@ -390,3 +390,17 @@ Needs `ensure fh_progression`, `ensure fh_fence`, `ensure fh_hands` (shipped in 
 15. Permission check: as a non-admin player run `/fh_rep <id> heartlands 5`, `/fh_fence_next`, `/fh_hand_tick <id>` and `/fh_hand_hire <id> ranch_hand` from F8.
     Expected: nothing happens (no rep change, the fence does not move, no tick). The same three from the server console or as `group.admin` work.
     RESULT:
+
+## Hunting
+
+### H2 skin flow (fh_hunting)
+
+All unverified in-game.
+
+1. Spawn a test deer: `fh_spawn_ped a_c_deer_01` (note the id it prints). Kill it with a head shot, stand within 5 m, use the rsg-target "Skin" option. Expected: progress bar, then a `pelt_deer` with 3 stars in your saddlebag; the carcass is deleted.
+2. Spawn another deer, shoot it in the gut (belly). Skin it. Expected: a `pelt_deer` with 1 star.
+3. Kill a bear (no wagon nearby) and try to skin it. Expected: refused with a notification (no wagon), no pelt, the carcass is still there and stays skinnable. Bring a wagon within 8 m and skin again: the pelt goes into the wagon.
+4. Spam the Skin option twice on one carcass. Expected: exactly one pelt, the second request is refused or ignored.
+5. After skinning a test deer, run `fh_despawn <id>` from step 1: fh_core re-requests an adopted carcass that disappears, so the deer respawns otherwise (see Known gaps).
+
+   RESULT:
