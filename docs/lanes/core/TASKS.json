@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T21:52:42.316Z",
+  "updatedAt": "2026-11-23T22:09:47.851Z",
   "units": [
     {
       "id": "B5",
@@ -154,18 +154,18 @@
       "goal": "core-03 requestOfNetId(netId) export",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-c3c",
-      "commit": "a3cd996"
+      "commit": "07449f7"
     },
     {
       "id": "C3ab",
       "goal": "core-03 carried add/remove + setItemInfo",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-c3ab",
-      "commit": "57161cd"
+      "commit": "1baff20"
     }
   ]
 }

@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: Core lead · B7 fix + merge
-- Workers: 1
+- Lead: ★ Cor2
+- Workers: 0
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -46,3 +46,4 @@
 - B-run PASS (c8f1b22 Gemini 0/0/2, lows fixed db83664) merged main de086db: tools/first-run.cmd/.ps1 (UAC firewall, hidden key prompt, start + connect line), OWNER-STEPS 4 steps. test-firstrun ALL PASS, 267 specs. Owner: install RDR2+RedM, key, double-click first-run.cmd.
 - 11-23 merged to local main (unpushed): B-access 495621d, B7 334642c, idea-614 b63a340; 23 spec files / 431 green. Siblings notified.
 - core-03 handed to lead rn-f602a24ed9c2 (C3a+b one worker, C3c parallel).
+- 11-23 core-03 COMPLETE: C3c 07449f7 + C3a 2b7587d / C3b 1baff20 merged main (Gemini tierA PASS 0/0/0 57161cd, range-diff '='; venv 51/1057/0). Siblings to swap adapters for fh_core addItem/removeItem carried refs + setItemInfo.
