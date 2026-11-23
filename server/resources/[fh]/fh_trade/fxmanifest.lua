@@ -11,11 +11,13 @@ shared_scripts {
     '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
     'config.lua',
     'shared/trade_prices.lua',
+    'shared/freight.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua',
+    'server/freight.lua',
 }
 
 client_scripts {
@@ -24,4 +26,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'fh_economy', 'oxmysql', 'rsg-core', 'ox_lib' }
 
-server_exports { 'quote', 'getShortages', 'setShortage', 'listGoods', 'previewSell' }
+server_exports { 'quote', 'getShortages', 'setShortage', 'listGoods', 'previewSell', 'getContracts' }

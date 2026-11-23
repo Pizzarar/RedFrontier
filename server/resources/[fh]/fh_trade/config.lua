@@ -26,4 +26,22 @@ FhTradeConfig = {
     posts = {
         { id = 'valentine_post', label = 'Valentine Trade Post', region = 'heartlands', x = -176.0, y = 630.0, z = 114.0, radius = 6.0 },
     },
+
+    -- Freight contracts (R4): a fh_quests job type generated from shortages. Destinations are where your OWN wagon
+    -- (holding the cargo) must be to deliver. APPROXIMATE, unverified in game.
+    freight = {
+        minQty = 1, maxQty = 20,       -- cargo units per contract
+        qtyPerLevel = 20,              -- qty = ceil(shortage level * this), clamped
+        premium = 1.25,                -- reward = qty * current quote * premium
+        repDelta = 2,                  -- rep gained at the destination region
+        deadlineSeconds = 1800,        -- from accept
+        maxOffers = 3, rewardCapMultiple = 4,
+        maxActivePerPlayer = 2,
+        allowSameRegion = false,       -- only one region exists today: no offers until a 2nd region is added (or set true to test)
+        checkMs = 5000, graceChecks = 3, -- delivery/loss scan period; consecutive misses before wagon/cargo loss counts
+        acceptReach = 8.0,             -- m: your wagon must be this close to you to take a contract
+        destinations = {
+            heartlands = { x = -176.0, y = 630.0, z = 114.0, radius = 40.0 },
+        },
+    },
 }
