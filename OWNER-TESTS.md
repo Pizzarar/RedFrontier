@@ -306,6 +306,24 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 18. Switch characters (log out to character select, load another), then `/journal`.
     Expected: only the new character's jobs show; the previous character's entries and notices are gone.
     RESULT:
+19. `/fh_ui_demo dialogue`.
+    Expected: a dialogue screen with the speaker name and the first page; Next pages through; after the last page the offer shows `I will` / `Not yet`; Enter does nothing; Esc closes and controls return.
+    RESULT:
+20. Walk to a family giver (Hale, Marrow or Whitlock) and use "Talk to <name>".
+    Expected: the fh_ui dialogue screen opens (no ox_lib popups) with the giver's intro lines, then the `I will` / `Not yet` offer.
+    RESULT:
+21. Click `I will`.
+    Expected: a `Quest started.` notice, the offer is gone; the quest appears in `/journal`.
+    RESULT:
+22. Talk to the same giver again.
+    Expected: talk-step lines show if a step advanced, otherwise `Nothing more to say right now.` with a `Goodbye` button.
+    RESULT:
+23. Talk to a giver, walk more than 5 m away with the screen open, then click `I will`.
+    Expected: a `You are too far away.` error notice and the quest is not started.
+    RESULT:
+24. Run `grep -rn "lib.alertDialog\|giver:talk\|giver:start" server/resources/[fh]/fh_quests`.
+    Expected: no matches.
+    RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 
