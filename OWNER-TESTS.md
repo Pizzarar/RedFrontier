@@ -404,3 +404,17 @@ All unverified in-game.
 5. After skinning a test deer, run `fh_despawn <id>` from step 1: fh_core re-requests an adopted carcass that disappears, so the deer respawns otherwise (see Known gaps).
 
    RESULT:
+
+### H3 trapper (fh_hunting)
+
+All unverified in-game. Needs `fh_economy` and the database running. Trapper coordinates are approximate: if `[E] Sell pelts` does not show, stand where the trapper should be, read your coordinates and adjust `Trapper.coords` in `fh_hunting/config.lua`.
+
+1. Put a 1 star and a 3 star `pelt_deer` in your saddlebag (skin two deer: a gut shot gives 1 star, a head shot 3 stars). Note your cash.
+2. Walk to the trapper (default near the Heartlands homestead), press E at the prompt. Expected: a menu listing both pelts with prices ($6 for the 1 star, $25 for the 3 star).
+3. Sell the 1 star. Expected: "Sold Deer (1 star) for $6", cash +6, the pelt is gone from the saddlebag. Sell the 3 star: +$25, the pelt is gone.
+4. Check the ledger: `SELECT kind, amount, reason, region_id FROM fh_ledger ORDER BY id DESC LIMIT 2;` Expected: two `pay` rows with reason `hunting:pelt`, region `heartlands`, amounts 25 and 6.
+5. Try to sell from more than 4 m away (a stale menu, or a second client). Expected: refused, nothing paid, the pelt stays.
+6. Big game: kill a bear (or bison), bring an owned wagon within 8 m (needs `fh_cargo`, roads-r1) and skin it. Expected: the pelt goes into the wagon. Skin one with no wagon: refused, the carcass stays and can be skinned again once the wagon is near.
+7. With the wagon at the trapper, sell the bear pelt from the menu. Expected: $45 x 1.8 = $81 for a 3 star, and removed from the wagon.
+
+   RESULT:

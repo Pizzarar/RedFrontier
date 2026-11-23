@@ -32,6 +32,15 @@ FhHuntingConfig = {
     -- Cause-of-death weapons that count as explosive (1 star). UNVERIFIED names.
     ExplosiveWeapons = { 'weapon_thrown_dynamite', 'weapon_thrown_molotov' },
 
+    -- H3 trapper (M1 region). All coordinates UNVERIFIED in game (stand at the spot, read coords, adjust).
+    Trapper = {
+        region_id = 'heartlands',               -- fh_economy ledger region (must be a FhRegions id)
+        label = 'Trapper',
+        coords = { x = -299.0, y = 792.0, z = 118.2 },
+        SellRange = 4.0,                        -- metres, player to trapper (server-read position)
+        PromptDistance = 2.0,                   -- client: show the sell prompt this close
+    },
+
     -- 'roll' source. A zone sets the star band; the roll only ever lowers it by one star, with this chance.
     -- Limb / gut / explosive / multi-hit stay 1 star.
     Zones = {

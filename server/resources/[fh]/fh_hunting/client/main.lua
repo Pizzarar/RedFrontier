@@ -5,7 +5,7 @@
 -- Natives (fh_core/docs/natives.md, all UNVERIFIED in-game): GET_PED_LAST_DAMAGE_BONE, GET_PED_CAUSE_OF_DEATH,
 -- _GET_PED_QUALITY, _GET_PED_DAMAGE_CLEANLINESS (by hash, from spk_pelt), GetPedBoneIndex, GetEntityBoneIndexByName,
 -- HasEntityBeenDamagedByWeapon, ClearEntityLastWeaponDamage, GetGamePool, PlayerPedId, GetEntityCoords, GetEntityModel,
--- IsPedAPlayer, IsEntityDead, DoesEntityExist, NetworkGetEntityIsNetworked, NetworkGetNetworkIdFromEntity, GetGameTimer.
+-- IsPedAPlayer, IsEntityDead, IsControlJustReleased (H3 trapper prompt, input 0xCEFD9220 = context key), DoesEntityExist, NetworkGetEntityIsNetworked, NetworkGetNetworkIdFromEntity, GetGameTimer.
 local cfg, animals = FhHuntingConfig, FhHuntingAnimals
 
 local N_LAST_DMG_BONE   = 0xD75960F6BD9EA49C -- GET_PED_LAST_DAMAGE_BONE(ped, int* outBone) -> BOOL
@@ -108,12 +108,13 @@ local function skin(entity)
     end
     local netId = NetworkGetNetworkIdFromEntity(entity)
     busy = true
-    local done = lib.progressBar({
+    -- pcall: if the progress bar throws, `busy` must still reset or the Skin option stays locked forever.
+    local ok, done = pcall(lib.progressBar, {
         duration = cfg.SkinDurationMs, label = 'Skinning...', canCancel = true,
         disable = { move = true, car = true, combat = true },
     })
     busy = false
-    if not done then return end
+    if not ok or not done then return end
     local d = dead[netId] or {}
     local payload = { netId = netId, bone = d.bone, hits = d.hits, explosive = d.explosive == true }
     if cfg.PeltQualitySource == 'native' and DoesEntityExist(entity) then
@@ -145,4 +146,42 @@ end)
 FH.on('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     exports['rsg-target']:removeModel(models, OPTION)
+end)
+
+-- ---------------------------------------------------------------- H3 trapper
+
+-- Sell prompt at the trapper (cfg.Trapper). The server re-checks range, container, item and price; the rows below
+-- are only what it sent us for display.
+local CONTEXT_KEY = 0xCEFD9220 -- INPUT_CONTEXT (E). UNVERIFIED
+local tp = cfg.Trapper
+
+local function stars(n) return string.rep('*', n) end
+
+FH.onNet('fh:hunting:sell_rows', function(rows)
+    if type(rows) ~= 'table' or #rows == 0 then
+        return lib.notify({ title = 'Trapper', description = 'You have no pelts to sell here.', type = 'inform' })
+    end
+    local options = {}
+    for _, r in ipairs(rows) do
+        options[#options + 1] = {
+            title = ('%s %s%s'):format(r.label, stars(r.stars), r.legendary and ' (Legendary)' or ''),
+            description = ('$%d, from your %s'):format(r.price, r.container),
+            onSelect = function()
+                TriggerServerEvent('fh:hunting:sell', { container = r.container, slot = r.slot, item = r.item })
+            end,
+        }
+    end
+    lib.registerContext({ id = 'fh_hunting_trapper', title = tp.label, options = options })
+    lib.showContext('fh_hunting_trapper')
+end)
+
+FH.thread(function()
+    local point = lib.points.new({
+        coords = vec3(tp.coords.x, tp.coords.y, tp.coords.z), distance = tp.PromptDistance,
+    })
+    function point:onEnter() lib.showTextUI('[E] Sell pelts') end
+    function point:onExit() lib.hideTextUI() end
+    function point:nearby()
+        if IsControlJustReleased(0, CONTEXT_KEY) then TriggerServerEvent('fh:hunting:sell_open') end
+    end
 end)

@@ -17,6 +17,8 @@ shared_scripts {
 server_scripts {
     '@fh_core/shared/containers.lua',
     'shared/skin.lua',
+    'shared/wagon.lua',
+    'shared/sell.lua',
     'server/main.lua',
 }
 

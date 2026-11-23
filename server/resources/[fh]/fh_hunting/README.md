@@ -1,7 +1,7 @@
 # fh_hunting: pelts and hunting (spec L8)
 
-H1 (data and rules) and H2 (skin flow) are built: animal table, pelt items, quality rules, price rules. The trapper sell
-point (H3), Legendary Bear (H4) and trophy comfort contract (H5) come in later blocks. Pure logic lives in `shared/`
+H1 (data and rules), H2 (skin flow) and H3 (trapper sell point) are built: animal table, pelt items, quality rules, price
+rules, skinning, selling. Legendary Bear (H4) and trophy comfort contract (H5) come in later blocks. Pure logic lives in `shared/`
 and is specced with `python tools/run-specs.py` (`spec/hunting_*_spec.lua`); nothing here is runtime-tested yet.
 
 ## Config flag
@@ -26,6 +26,7 @@ H2 keys:
 - `ClaimPruneMs` (30000): server, forget skinned-claim entries whose carcass no longer exists.
 - `TrackRadius` (150.0), `TrackIntervalMs` (250): client tracking of live animals (last damage bone, weapon hits).
 - `DeadCacheSeconds` (900): keep a dead animal's shot data this long, by netId.
+- `Trapper` (H3): `{ region_id = 'heartlands', label, coords, SellRange = 4.0, PromptDistance = 2.0 }`. Coordinates are approximate and unverified; `region_id` is the fh_economy ledger region.
 - `ExplosiveWeapons`: cause-of-death weapons that count as explosive (1 star). Unverified names.
 - `NativeQualityStars`, `NativeCleanlinessStars`: result maps for the `'native'` source.
 
@@ -54,6 +55,26 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 - `getPeltItem(model|hash, legendary)`: pelt item id or nil.
 - `price(peltItem, stars)`: payout amount or `nil, err`.
 
+## Trapper (H3)
+
+A sell point at `Config.Trapper.coords` (M1 region `heartlands`). The client shows `[E] Sell pelts` within
+`PromptDistance`; E asks the server (`fh:hunting:sell_open`), which sends back the sellable pelts in the player's
+saddlebag and a nearby wagon with the prices it computed, shown as an ox_lib context menu. Picking one sends
+`fh:hunting:sell` `{ container = 'saddlebag'|'wagon', slot, item }`.
+
+The server (`shared/sell.lua`, wired in `server/main.lua`) trusts none of it. It re-reads the player position (within
+`SellRange` of the trapper), the container (saddlebag, or a wagon from `fh_cargo:nearestWagon`), the item at that slot
+(must match the requested id, must be a pelt in the animal table; trophies are not bought) and the stars
+(`info.stars` 1-3; legendary pelts are always 3). The payout is `price.price(base, stars, legendary)`, i.e.
+base x `QualityMult[stars]` (1 star 0.4, 2 stars 1.0, 3 stars 1.8) x `LegendaryMult` 4 for legendary. Order: remove the
+pelt, then `fh_economy:pay(src, amount, 'hunting:pelt', region_id)`. If the payout fails the pelt is put back with its
+info. One sale per player at a time and a short request throttle, so a pelt cannot be paid twice.
+
+Wagon lookup (`shared/wagon.lua`): `exports.fh_cargo:nearestWagon(src, coords, Config.WagonRange)` returns
+`{ type = 'wagon', id = 'fh:wagon:<id>' }` or nil (roads-r1). nil, a thrown error or a missing `fh_cargo` all mean "no
+wagon": big-game skins are refused and the carcass stays claimable. The adapter reports the player's position as the
+wagon position because `fh_cargo` already applied the range.
+
 ## Skin approach
 
 Skinning is our own rsg-target "Skin" prompt on a dead, networked animal; we do not intercept the game's built-in
@@ -77,13 +98,15 @@ Consumed (requests, client to server):
   `bone` is a name or number, the rest are quality hints. The server trusts none of it beyond those hints: it re-reads
   the carcass, state and distances, and rate-limits to one request per player per `SkinCooldownMs`.
 
+- `fh:hunting:sell_open` (no payload) and `fh:hunting:sell` `{ container, slot, item }` (H3, see Trapper). Server replies with `fh:hunting:sell_rows` (client event, display only).
+
 Consumed (engine): `onResourceStart` (own resource and `fh_core`, to register the items), `playerDropped`.
 
 Emitted (server-only, for @quests and @guide; never sent to clients):
 
 - `fh:hunting:pelt_skinned` `{ src, citizenid, item_id, animal, quality, size_class }`: now, after a grant only.
   Never fired on a refusal.
-- Planned, H3: `fh:hunting:pelt_sold` `{ citizenid, item_id, animal, size_class, quality, price, region_id }`.
+- `fh:hunting:pelt_sold` `{ citizenid, item_id, animal, size_class, quality, price, region_id }`: H3, after a payout succeeded only. `price` is what `fh_economy:pay` was given.
 - Planned, H4: `fh:hunting:clue_found` `{ citizenid, chain_id, step }`, `fh:hunting:legendary_spawned`
   `{ citizenid, chain_id }`, `fh:hunting:chain_complete` `{ citizenid, chain_id }`.
 
@@ -91,7 +114,7 @@ No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_h
 (number, or nil for a non-trophy), added in H5.
 
 Consumes from other resources: `fh_core:registerItems`, `fh_core:saddlebagOf`, `fh_core:addItem` and the container
-rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay` from H3 on.
+rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_economy:pay` and `fh_core:snapshot` (H3); `fh_cargo:nearestWagon` (roads-r1, not on main yet).
 
 ## Known gaps
 
@@ -100,8 +123,11 @@ rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_econo
 - Adopted carcasses respawn after deletion: fh_core re-requests an adopted entity that disappears
   (`fh_core/server/spawn.lua:237-239`). Requested from @core (a netId to spawn-request lookup or a "release on death"
   option).
-- `findCargoWagon` (`server/main.lua`) is a stub returning nil, so cargo pelts (bear, bison, ...) are refused until
-  @core/@roads ship a wagon lookup.
+- `findCargoWagon` (`server/main.lua`) now calls `exports.fh_cargo:nearestWagon`; until `fh_cargo` (roads-r1) is on main
+  every cargo pelt is refused (fail closed).
+- No `removeItem` export in fh_core §4: the trapper removes a pelt through the rsg-inventory compat `RemoveItem`
+  (`removeItem` in `server/main.lua`, unverified in game). Requested from @core: `removeItem(ref, name, n, slot)`.
+- Pelts in the backpack are not sold (bulky and cargo pelts cannot be there); only the saddlebag and a nearby wagon.
 
 ## In-game test card
 
@@ -111,5 +137,6 @@ H2 card (also in `OWNER-TESTS.md`, section `## Hunting`). All unverified in-game
 2. Spawn another deer, shoot it in the gut (belly). Skin it. Expected: a `pelt_deer` with 1 star.
 3. Kill a bear (no wagon nearby) and try to skin it. Expected: refused with a notification (no wagon), no pelt, the carcass is still there and stays skinnable. Bring a wagon within 8 m and skin again: the pelt goes into the wagon.
 4. Spam the Skin option twice on one carcass. Expected: exactly one pelt, the second request is refused or ignored.
-5. After skinning a test deer, run `fh_despawn <id>` from step 1: fh_core re-requests an adopted carcass that disappears, so the deer respawns otherwise (see Known gaps).
+5. Sell: stand at the trapper with a 1 star and a 3 star `pelt_deer` in your saddlebag, press E, pick one, then the other. Expected: $6 for the 1 star and $25 for the 3 star, two `hunting:pelt` ledger rows, the pelts gone. Selling from out of range is refused.
+6. After skinning a test deer, run `fh_despawn <id>` from step 1: fh_core re-requests an adopted carcass that disappears, so the deer respawns otherwise (see Known gaps).
 

@@ -36,13 +36,21 @@ local function citizenidOf(src)
     return p and p.PlayerData.citizenid or nil
 end
 
----Adapter: the wagon container a player owns or is using, near them. fh_core has no wagon lookup yet (wagons are
----@roads / M4; fh_core only knows the `wagon` container type), so this returns nil and every cargo pelt is refused
----with "bring a wagon". Contract requested from @core/@roads: a server export returning { ref, coords } for the
----player's owned/used wagon container. Keep this the only place that changes when it ships.
+local function playerCoords(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return nil end
+    return GetEntityCoords(ped)
+end
+
+---Adapter: the wagon container the player owns or uses, near them: exports.fh_cargo:nearestWagon(src, coords, range)
+---(roads-r1) -> { type = 'wagon', id = 'fh:wagon:<id>' } | nil. nil, a throw or a missing fh_cargo all mean "no wagon":
+---the skin is refused and the carcass stays claimable. The shape adaptation is the pure FhHuntingWagon.find.
 ---@return table|nil { ref = { type = 'wagon', id }, coords }
-local function findCargoWagon(src)
-    return nil
+local function findCargoWagon(src, coords)
+    coords = coords or playerCoords(src)
+    return FhHuntingWagon.find(function(s, c, range)
+        return exports.fh_cargo:nearestWagon(s, c, range)
+    end, src, coords, cfg.WagonRange)
 end
 
 ---H4 sets this for the legendary bear it spawned (server-side memory, never a client-writable state bag).
@@ -58,12 +66,6 @@ local function readCarcass(netId)
         model = GetEntityModel(ent), coords = GetEntityCoords(ent), dead = GetEntityHealth(ent) <= 0,
         legendary = legendaryEntities[ent] == true,
     }
-end
-
-local function playerCoords(src)
-    local ped = GetPlayerPed(src)
-    if not ped or ped == 0 then return nil end
-    return GetEntityCoords(ped)
 end
 
 local function saddlebagOf(src)
@@ -126,5 +128,75 @@ CreateThread(function()
         claims:prune(function(netId, e)
             return DoesEntityExist(e.token) and NetworkGetEntityFromNetworkId(netId) == e.token
         end)
+    end
+end)
+
+-- ---------------------------------------------------------------- H3 trapper
+
+-- Take an item out of a world container. fh_core §4 has no remove export yet, so this goes through the rsg-inventory
+-- compat RemoveItem (fh_inventory API.RemoveItem(containerId, name, amount, slot, reason); it only removes when the
+-- slot really holds `name`). UNVERIFIED in game. Request to @core: a removeItem(ref, name, n, slot) export; this is
+-- the only place that changes when it ships.
+local function removeItem(ref, name, amount, slot)
+    local ok, done = pcall(function()
+        return exports['rsg-inventory']:RemoveItem(ref.id, name, amount, slot, 'hunting:pelt')
+    end)
+    return ok and done == true
+end
+
+local function snapshotOf(ref)
+    local ok, items = pcall(function() return exports.fh_core:snapshot(ref) end)
+    if not ok or type(items) ~= 'table' then return nil end
+    return items
+end
+
+local function paySrc(src, amount, reason, region)
+    local ok, done = pcall(function() return exports.fh_economy:pay(src, amount, reason, region) end)
+    return ok and done == true
+end
+
+local trapper = FhHuntingSell.new({
+    cfg = cfg, animals = animals, price = price,
+    deps = {
+        citizenid = citizenidOf, playerCoords = playerCoords, snapshot = snapshotOf, removeItem = removeItem,
+        addItem = addItem, pay = paySrc,
+        refFor = function(kind, src, pc)
+            if kind == 'saddlebag' then return saddlebagOf(src) end
+            local w = findCargoWagon(src, pc)
+            return w and w.ref or nil
+        end,
+        emit = function(name, payload) TriggerEvent(name, payload) end, -- server-only, never to clients
+        log = function(msg) print('^1[fh_hunting] ' .. msg .. '^7') end,
+    },
+})
+
+local lastSell = {}
+AddEventHandler('playerDropped', function() lastSell[source] = nil; trapper.busy[source] = nil end)
+
+local function sellThrottled(src)
+    local now = GetGameTimer()
+    if lastSell[src] and now - lastSell[src] < 500 then return true end
+    lastSell[src] = now
+    return false
+end
+
+-- Client asks to open the sell menu; the server answers with the rows it computed itself.
+RegisterNetEvent('fh:hunting:sell_open', function()
+    local src = source
+    if sellThrottled(src) then return end
+    local rows, err = trapper.list(src)
+    if not rows then return notify(src, 'error', FhHuntingSell.message(err)) end
+    TriggerClientEvent('fh:hunting:sell_rows', src, rows)
+end)
+
+-- Client request: { container, slot, item }. Position, container, item, quality and price are all re-read here.
+RegisterNetEvent('fh:hunting:sell', function(payload)
+    local src = source
+    if sellThrottled(src) then return end
+    local ok, res = trapper.sell(src, payload)
+    if ok then
+        notify(src, 'success', ('Sold %s (%d star%s) for $%d.'):format(res.label, res.stars, res.stars == 1 and '' or 's', res.price))
+    else
+        notify(src, 'error', FhHuntingSell.message(res))
     end
 end)
