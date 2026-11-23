@@ -16,6 +16,7 @@ shared_scripts {
 
 server_scripts {
     '@fh_core/shared/containers.lua',
+    '@oxmysql/lib/MySQL.lua',
     'shared/skin.lua',
     'shared/wagon.lua',
     'shared/sell.lua',
@@ -29,6 +30,6 @@ client_scripts {
     'client/main.lua',
 }
 
-dependencies { 'fh_core', 'fh_economy', 'ox_lib', 'rsg-target' }
+dependencies { 'fh_core', 'fh_economy', 'ox_lib', 'rsg-target', 'oxmysql' }
 
 server_exports { 'getAnimal', 'getPeltItem', 'price', 'getTrophyComfort' }

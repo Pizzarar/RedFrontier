@@ -85,26 +85,29 @@ wagon position because `fh_cargo` already applied the range.
 ## Legendary bear (H4)
 
 One Legendary Bear hunt per character, a three-clue chain inside the Heartlands. The state machine is pure
-(`shared/chain.lua`, `FhHuntingChain`); `server/main.lua` injects the DB, `fh_economy:pay` and `fh_core:requestSpawn`
+(`shared/chain.lua`, `FhHuntingChain`); `server/main.lua` injects the DB, the rumour charge and `fh_core:requestSpawn`
 sides. Chain state persists in `fh_hunting_chains` (one row per `(citizenid, chain_id)`), so a relog resumes where the
 character left off.
 
 1. **Clue 1 (rumour):** at the trapper, the client prompt becomes "[E] Ask about the legendary bear" while the
-   character is at step 1. The server charges `LegendaryBear.rumourPrice` through `fh_economy:pay(..., 'hunting:rumour', ...)`
-   and advances to step 2. Refused if already bought, paid-for, complete, or out of range.
+   character is at step 1. The server charges `LegendaryBear.rumourPrice` via rsg-core `RemoveMoney` (interim; see Known
+   gaps) with reason `hunting:rumour` and advances to step 2. Refused if already bought, paid-for, complete, or out of
+   range.
 2. **Clue 2 (track):** a track marker appears; inspecting it (in range, current step only) advances to step 3.
 3. **Clue 3 (carcass):** a carcass marker appears; inspecting it requests the bear through
    `fh_core:requestSpawn` (server decides, a client creates, the server adopts). `spawn_request` is persisted once, so
-   the bear is spawned exactly once per chain.
-4. **Spawn:** on adoption the entity is marked legendary (so the H2 skin flow reads it as legendary) and
-   `fh:hunting:legendary_spawned` fires once.
-5. **Kill and skin:** the skin flow grants `pelt_legendary_bear` (cargo, always 3 stars, wagon path) and the bulky
+   the bear is spawned exactly once per chain. If the spawn exhausts its retries, `onSpawnFailed` resets the chain to
+   the carcass clue so the player can try again.
+4. **Spawn:** on adoption the entity is marked as that character's legendary (so the H2 skin flow reads it as legendary
+   and owner-scoped) and `fh:hunting:legendary_spawned` fires once.
+5. **Kill and skin:** only the character whose chain spawned the bear may skin it (`fh_not_your_legendary` otherwise).
+   The skin flow grants `pelt_legendary_bear` (cargo, always 3 stars, wagon path) and the bulky
    `trophy_legendary_bear`, then `fh:hunting:chain_complete` fires once and the request is despawned (no post-skin
    re-spawn).
 
 Server-side validation for every step: the player must be in range of the right marker for the current step only; wrong
 marker, skipped steps and repeated steps are refused (`fh_chain_wrong_marker`, `fh_chain_spawned`, ...). The rumour is
-paid exactly once (a busy guard covers the `fh_economy` yield). The trophy grant is best-effort: the pelt is the primary
+charged exactly once (a busy guard covers the charge yield). The trophy grant is best-effort: the pelt is the primary
 grant, so a full saddlebag never fails or double-pays the skin.
 
 ## Skin approach
@@ -167,12 +170,14 @@ rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_econo
   (`removeItem` in `server/main.lua`, unverified in game). Requested from @core: `removeItem(ref, name, n, slot)`.
 - `removeItem` workaround (rsg-inventory compat call) stays until @core ships a `removeItem` export; request queued.
 - Pelts in the backpack are not sold (bulky and cargo pelts cannot be there); only the saddlebag and a nearby wagon.
+- The rumour charge uses rsg-core `RemoveMoney` directly (fh_economy exposes only `pay`, which credits, and `rep`), so
+  the charge has no `fh_ledger` row. Queued follow-up to @core: an `fh_economy:charge`/debit export that also writes the
+  ledger. (`chargeSrc` in `server/main.lua` is the one place to change when it ships.)
 - Legendary trophy is best-effort: if the saddlebag and the wagon are both full, the pelt is still granted and the chain
   completes, but the trophy is not stowed (the skin notification says so).
 - A legendary bear killed but never skinned, whose carcass is later cleaned up, is re-requested by fh_core (the general
   "adopted carcass respawns" gap above); the chain still counts one spawn, and the post-skin `despawn` prevents the
-  common "skin it and another bear appears" case. `legendaryEntities` is only cleared by a resource restart (one entry
-  per character, negligible).
+  common "skin it and another bear appears" case. `legendaryEntities` is cleared on `finishCarcass` and per spawn.
 
 ## In-game test card
 

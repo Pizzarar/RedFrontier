@@ -259,4 +259,56 @@ describe('hunting skin: fh:hunting:pelt_skinned', function()
     end)
 end)
 
+describe('hunting skin: legendary bear pelt + trophy', function()
+    local function legendaryWorld(w)
+        w = w or {}
+        w.model = BEAR
+        w.carcassPatch = w.carcassPatch or {}
+        w.carcassPatch.legendary = true
+        w.carcassPatch.legendaryOwner = w.legendaryOwner or CID
+        w.legendaryOwner = nil
+        return world(w)
+    end
+
+    it('grants the cargo 3-star pelt to the wagon and the bulky trophy to the saddlebag', function()
+        local W = legendaryWorld({ wagon = wagonAt(2) })
+        local ok, res = W.skin()
+        assert(ok, tostring(res))
+        eq('pelt_legendary_bear', res.item); eq(3, res.stars); eq('wagon', res.container)
+        eq('trophy_legendary_bear', res.trophy.item); eq('saddlebag', res.trophy.container)
+        eq(2, #W.adds)
+        eq('pelt_legendary_bear', W.adds[1].name); eq('wagon', W.adds[1].ref.type); same({ stars = 3 }, W.adds[1].info)
+        eq('trophy_legendary_bear', W.adds[2].name); eq('saddlebag', W.adds[2].ref.type)
+        same({ src = SRC, citizenid = CID, item_id = 'pelt_legendary_bear', animal = 'legendary_bear',
+            quality = 3, size_class = 'cargo' }, W.events[1].payload)
+    end)
+    it('refuses a non-owner (no cross-player legendary farming)', function()
+        local W = legendaryWorld({ wagon = wagonAt(2), legendaryOwner = 'OTHER' })
+        eq('fh_not_your_legendary', select(2, W.skin()))
+        eq(0, #W.adds); eq(0, #W.events)
+    end)
+    it('the trophy falls back to the wagon when the saddlebag is full', function()
+        local W = legendaryWorld({ wagon = wagonAt(2), refuse = { saddlebag = 'no_space' } })
+        local ok, res = W.skin()
+        assert(ok)
+        eq('pelt_legendary_bear', res.item); eq('wagon', res.container)
+        eq('wagon', res.trophy.container)
+        eq(2, #W.adds); eq('wagon', W.adds[2].ref.type)
+    end)
+    it('a throwing trophy grant still completes the pelt without double-paying', function()
+        local W = legendaryWorld({ wagon = wagonAt(2) })
+        local origAdd = W.deps.addItem
+        W.deps.addItem = function(ref, name, n, info)
+            if name == 'trophy_legendary_bear' then error('boom') end
+            return origAdd(ref, name, n, info)
+        end
+        local ok, res = W.skin()
+        assert(ok, tostring(res))
+        eq('pelt_legendary_bear', res.item)
+        eq('fh_skin_error', res.trophy.reason)
+        eq(1, #W.adds) -- only the pelt; the trophy addItem threw before recording
+        eq('skinned', W.claims:state(101, 5001)) -- the carcass never pays again
+    end)
+end)
+
 T.finish()

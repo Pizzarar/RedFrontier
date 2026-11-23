@@ -160,6 +160,19 @@ local tp = cfg.Trapper
 local lb = cfg.LegendaryBear
 local chainStep = 0 -- 1 rumour -> 2 track -> 3 carcass -> 4 spawned -> 5 complete (server tells us)
 
+-- Shared TextUI: track the currently-shown string so a chain-step change can re-render (or hide) the active prompt
+-- immediately, instead of waiting for the player to leave and re-enter the point.
+local shownText = nil
+local function showText(text)
+    if text ~= shownText then
+        shownText = text
+        lib.showTextUI(text)
+    end
+end
+local function hideText()
+    if shownText then shownText = nil; lib.hideTextUI() end
+end
+
 FH.onNet('fh:hunting:chain_state', function(state)
     if type(state) == 'table' and type(state.step) == 'number' then chainStep = state.step end
 end)
@@ -177,11 +190,13 @@ if lb then
             local point = lib.points.new({
                 coords = vec3(m.coords.x, m.coords.y, m.coords.z), distance = m.radius,
             })
-            function point:onEnter()
-                if chainStep == step then lib.showTextUI('[E] Inspect ' .. m.label) end
+            function point:onEnter() point:render() end
+            function point:onExit() hideText() end
+            function point:render()
+                if chainStep == step then showText('[E] Inspect ' .. m.label) else hideText() end
             end
-            function point:onExit() lib.hideTextUI() end
             function point:nearby()
+                point:render() -- keep the prompt in sync with chainStep
                 if chainStep == step and IsControlJustReleased(0, CONTEXT_KEY) then
                     TriggerServerEvent('fh:hunting:chain_inspect', { marker = m.id })
                 end
@@ -210,23 +225,19 @@ FH.onNet('fh:hunting:sell_rows', function(rows)
     lib.showContext('fh_hunting_trapper')
 end)
 
-local textShown = false
-local function hideText()
-    if textShown then textShown = false; lib.hideTextUI() end
-end
-
 local trapperPoint
 FH.thread(function()
     trapperPoint = lib.points.new({
         coords = vec3(tp.coords.x, tp.coords.y, tp.coords.z), distance = tp.PromptDistance,
     })
-    function trapperPoint:onEnter()
-        textShown = true
-        -- Step 1: the trapper has a rumour to sell. Afterwards (and for everyone past step 1) E sells pelts.
-        if chainStep == 1 then lib.showTextUI('[E] Ask about the legendary bear') else lib.showTextUI('[E] Sell pelts') end
-    end
+    function trapperPoint:onEnter() trapperPoint:render() end
     function trapperPoint:onExit() hideText() end
+    function trapperPoint:render()
+        -- Step 1: the trapper has a rumour to sell. Afterwards (and for everyone past step 1) E sells pelts.
+        showText(chainStep == 1 and '[E] Ask about the legendary bear' or '[E] Sell pelts')
+    end
     function trapperPoint:nearby()
+        trapperPoint:render() -- keep the prompt in sync with chainStep
         if IsControlJustReleased(0, CONTEXT_KEY) then
             if chainStep == 1 then TriggerServerEvent('fh:hunting:chain_rumour') else TriggerServerEvent('fh:hunting:sell_open') end
         end

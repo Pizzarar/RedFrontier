@@ -56,7 +56,8 @@ local function findCargoWagon(src, coords)
     end, src, coords, cfg.WagonRange)
 end
 
----H4 sets this for the legendary bear it spawned (server-side memory, never a client-writable state bag).
+---H4 records the citizenid that owns each spawned legendary bear (server-side memory, never a client-writable state
+---bag). Ownership scopes skinning: only that character's chain may skin the bear, and it is cleared on finish.
 local legendaryEntities = {}
 FhHuntingLegendary = legendaryEntities
 
@@ -64,10 +65,11 @@ local function readCarcass(netId)
     local ent = NetworkGetEntityFromNetworkId(netId)
     if not ent or ent == 0 or not DoesEntityExist(ent) then return nil end
     local isPlayer = IsPedAPlayer(ent)
+    local owner = legendaryEntities[ent]
     return {
         entity = ent, isPed = GetEntityType(ent) == 1, isPlayer = isPlayer == true or isPlayer == 1,
         model = GetEntityModel(ent), coords = GetEntityCoords(ent), dead = GetEntityHealth(ent) <= 0,
-        legendary = legendaryEntities[ent] == true,
+        legendary = owner ~= nil, legendaryOwner = owner,
     }
 end
 
@@ -85,6 +87,7 @@ end
 
 local function finishCarcass(ent)
     if not DoesEntityExist(ent) then return end
+    legendaryEntities[ent] = nil -- the legendary owner is only relevant while the carcass exists
     Entity(ent).state:set('fhSkinned', true, true) -- clients hide the Skin option
     if cfg.DeleteCarcass then DeleteEntity(ent) end
 end
@@ -219,8 +222,19 @@ end)
 -- ---------------------------------------------------------------- H4 legendary bear chain
 
 local chain
----Adapter: fh_core requestSpawn for the legendary bear. onReady marks the adopted entity legendary (so the skin flow
----sees legendary = true) and advances the chain; onFailed only logs (the chain keeps its persisted spawn_request).
+---Charge the player for the rumour. INTERIM: rsg-core RemoveMoney directly (fh_economy exposes only `pay`, which
+---credits, and `rep`). Queued follow-up to @core: an `fh_economy:charge`/debit export (with a ledger row). Until then
+---the rumour charge has no fh_ledger row; RemoveMoney refuses to go below the configured minus limit.
+local function chargeSrc(src, amount, reason)
+    if not RSGCore and GetResourceState('rsg-core') == 'started' then RSGCore = exports['rsg-core']:GetCoreObject() end
+    local p = RSGCore and RSGCore.Functions.GetPlayer(src)
+    if not p or not p.Functions.RemoveMoney then return false end
+    local ok, done = pcall(function() return p.Functions.RemoveMoney('cash', amount, reason) end)
+    return ok and done == true
+end
+
+---Adapter: fh_core requestSpawn for the legendary bear. onReady marks the adopted entity as the cid's legendary (so the
+---skin flow sees legendary + owner) and advances the chain; onFailed resets the chain so the player can retry.
 local function requestLegendary(cid, chainCfg)
     local c = chainCfg.spawn.coords
     local ok, id = pcall(function()
@@ -233,11 +247,12 @@ local function requestLegendary(cid, chainCfg)
             near = { x = c.x, y = c.y, z = c.z },
             onReady = function(netId)
                 local ent = NetworkGetEntityFromNetworkId(netId)
-                if ent and ent ~= 0 and DoesEntityExist(ent) then legendaryEntities[ent] = true end
+                if ent and ent ~= 0 and DoesEntityExist(ent) then legendaryEntities[ent] = cid end
                 chain.onAdopted(cid)
             end,
-            onFailed = function(reason)
+            onFailed = function(reason, requestId)
                 print(('^1[fh_hunting] legendary bear spawn for %s failed: %s^7'):format(cid, tostring(reason)))
+                chain.onSpawnFailed(cid, requestId)
             end,
         })
     end)
@@ -267,9 +282,8 @@ chain = FhHuntingChain.new({
             ]], { cid, s.chain_id, s.step, s.spawn_request or 0, s.spawned and 1 or 0, s.completed and 1 or 0 })
             return ok
         end,
-        pay = function(src, cid, amount, reason, region)
-            local ok, done = pcall(function() return exports.fh_economy:pay(src, amount, reason, region) end)
-            return ok and done == true
+        charge = function(src, cid, amount, reason, region)
+            return chargeSrc(src, amount, reason)
         end,
         spawn = function(cid, chainCfg) return requestLegendary(cid, chainCfg) end,
         despawn = function(requestId) pcall(function() exports.fh_core:despawn(requestId) end) end,
@@ -329,7 +343,10 @@ AddEventHandler('fh:hunting:pelt_skinned', function(payload)
     if type(payload) ~= 'table' or payload.animal ~= 'legendary_bear' then return end
     if type(payload.citizenid) ~= 'string' then return end
     local ok, why = chain.onSkinned(payload.citizenid)
-    if not ok and why ~= 'fh_chain_not_spawned' then
+    if ok then
+        -- Push step 5 (complete) to the client so the trapper prompt flips back to "Sell pelts" immediately.
+        if type(payload.src) == 'number' and payload.src > 0 then pushChainState(payload.src, payload.citizenid) end
+    elseif why ~= 'fh_chain_not_spawned' then
         print(('^3[fh_hunting] chain complete refused for %s: %s^7'):format(payload.citizenid, tostring(why)))
     end
 end)

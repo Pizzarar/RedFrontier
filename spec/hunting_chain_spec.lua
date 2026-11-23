@@ -18,15 +18,15 @@ local far = { x = 10000, y = 10000, z = 0 }
 local function fake(store)
     local D = {
         store = store or {},
-        paid = {}, spawns = {}, despawns = {}, events = {},
-        payResult = true, spawnResult = 100, spawnCalls = 0,
+        charges = {}, spawns = {}, despawns = {}, events = {},
+        chargeResult = true, spawnResult = 100, spawnCalls = 0,
     }
     D.deps = {
         load = function(cid) return D.store[cid] end,
         save = function(cid, s) D.store[cid] = s; return true end,
-        pay = function(src, cid, amount, reason, region)
-            D.paid[#D.paid + 1] = { src = src, cid = cid, amount = amount, reason = reason, region = region }
-            return D.payResult
+        charge = function(src, cid, amount, reason, region)
+            D.charges[#D.charges + 1] = { src = src, cid = cid, amount = amount, reason = reason, region = region }
+            return D.chargeResult
         end,
         spawn = function(cid, chainCfg)
             D.spawnCalls = D.spawnCalls + 1
@@ -58,7 +58,7 @@ describe('hunting chain: order and no skip', function()
         local D = fake()
         eq('fh_chain_wrong_marker', select(2, D.chain.inspect(CID, 'track', atTrack)))
         eq('fh_chain_wrong_marker', select(2, D.chain.inspect(CID, 'carcass', atCarcass)))
-        eq(0, #D.events); eq(0, #D.paid)
+        eq(0, #D.events); eq(0, #D.charges)
     end)
     it('the carcass (clue 3) cannot be inspected before the track (clue 2)', function()
         local D = fake()
@@ -85,7 +85,7 @@ describe('hunting chain: idempotent repeats', function()
         local D = fake()
         assert(D.chain.buyRumour(SRC, CID, atTrapper))
         eq('fh_chain_rumour_done', select(2, D.chain.buyRumour(SRC, CID, atTrapper)))
-        eq(1, #D.paid); eq(1, #D.events)
+        eq(1, #D.charges); eq(1, #D.events)
     end)
     it('inspecting the same track twice refuses the second (step moved on)', function()
         local D = fake()
@@ -150,6 +150,32 @@ describe('hunting chain: one spawn per chain', function()
     end)
 end)
 
+describe('hunting chain: spawn failure resets the chain', function()
+    it('onSpawnFailed resets to the carcass clue so the spawn can be retried', function()
+        local D = toClue3(fake())
+        assert(D.chain.inspect(CID, 'carcass', atCarcass)) -- spawn_request = 100, step = 4
+        assert(D.chain.onSpawnFailed(CID, 100))
+        eq(Chain.STEP_CARCASS, D.chain.state(CID).step)
+        eq(nil, D.chain.state(CID).spawn_request)
+        local ok = D.chain.inspect(CID, 'carcass', atCarcass)
+        assert(ok); eq(2, D.spawnCalls)
+    end)
+    it('onSpawnFailed with a mismatched requestId is refused', function()
+        local D = toClue3(fake())
+        assert(D.chain.inspect(CID, 'carcass', atCarcass)) -- spawn_request = 100
+        eq('fh_chain_wrong_spawn', select(2, D.chain.onSpawnFailed(CID, 999)))
+        eq(100, D.chain.state(CID).spawn_request)
+    end)
+    it('onSpawnFailed after adoption is a no-op (the bear is already live)', function()
+        local D = toClue3(fake())
+        assert(D.chain.inspect(CID, 'carcass', atCarcass))
+        assert(D.chain.onAdopted(CID))
+        eq('fh_chain_spawned', select(2, D.chain.onSpawnFailed(CID, 100)))
+        eq(true, D.chain.state(CID).spawned)
+        eq(Chain.STEP_SPAWNED, D.chain.state(CID).step)
+    end)
+end)
+
 describe('hunting chain: completion only after the skin', function()
     it('onSkinned before the bear is spawned is refused', function()
         local D = toClue3(fake())
@@ -174,10 +200,10 @@ describe('hunting chain: completion only after the skin', function()
 end)
 
 describe('hunting chain: range and failure validation', function()
-    it('the rumour is refused from too far and never paid', function()
+    it('the rumour is refused from too far and never charged', function()
         local D = fake()
         eq('fh_chain_too_far', select(2, D.chain.buyRumour(SRC, CID, far)))
-        eq(0, #D.paid); eq(0, #D.events)
+        eq(0, #D.charges); eq(0, #D.events)
         eq(Chain.STEP_RUMOUR, D.chain.state(CID).step)
     end)
     it('a marker is refused from too far', function()
@@ -188,7 +214,7 @@ describe('hunting chain: range and failure validation', function()
     end)
     it('a failed rumour payment leaves the step untouched', function()
         local D = fake()
-        D.payResult = false
+        D.chargeResult = false
         eq('fh_chain_pay_failed', select(2, D.chain.buyRumour(SRC, CID, atTrapper)))
         eq(Chain.STEP_RUMOUR, D.chain.state(CID).step)
     end)
@@ -196,7 +222,7 @@ describe('hunting chain: range and failure validation', function()
         local D = toClue3(fake())
         D.spawnResult = nil
         eq('fh_chain_spawn_failed', select(2, D.chain.inspect(CID, 'carcass', atCarcass)))
-        eq(0, D.chain.state(CID).spawn_request)
+        eq(nil, D.chain.state(CID).spawn_request)
         eq(Chain.STEP_CARCASS, D.chain.state(CID).step)
         -- a later successful request goes through
         D.spawnResult = 200
@@ -209,11 +235,11 @@ describe('hunting chain: range and failure validation', function()
         eq('fh_chain_bad_marker', select(2, D.chain.inspect(CID, 'nope', atTrack)))
         eq('fh_chain_bad_marker', select(2, D.chain.inspect(CID, 2, atTrack)))
     end)
-    it('the rumour is paid through fh_economy with reason hunting:rumour', function()
+    it('the rumour is charged with reason hunting:rumour', function()
         local D = fake()
         assert(D.chain.buyRumour(SRC, CID, atTrapper))
         same({ { src = SRC, cid = CID, amount = cfg.LegendaryBear.rumourPrice, reason = 'hunting:rumour',
-            region = cfg.LegendaryBear.region_id } }, D.paid)
+            region = cfg.LegendaryBear.region_id } }, D.charges)
     end)
 end)
 

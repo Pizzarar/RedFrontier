@@ -1,6 +1,6 @@
 -- fh_hunting legendary hunt chain (spec L8, H4). Pure Lua, no natives: the state machine that enforces clue order
 -- (rumour -> track -> carcass -> spawn -> skin), no skipping, idempotent repeats, relog resume, and one spawn per
--- chain. server/main.lua injects every side effect (load/save, pay, requestSpawn, despawn, emit) as deps, so
+-- chain. server/main.lua injects every side effect (load/save, charge, requestSpawn, despawn, emit) as deps, so
 -- spec/hunting_chain_spec.lua runs the real flow with fakes.
 --
 -- Persisted state (one row per character per chain, keyed (citizenid, chain_id)):
@@ -27,8 +27,12 @@ M.MARKERS = { track = M.STEP_TRACK, carcass = M.STEP_CARCASS }
 
 local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
 
-local function xyz(v)
-    if v == nil then return nil end
+-- Position/distance: reuse the H3 helpers (shared/sell.lua FhHuntingSell.xyz/distance, which handle vector3 userdata)
+-- when they are loaded (server runtime: sell.lua loads before chain.lua). The spec loads chain.lua alone, so a local
+-- fallback of the same shape is kept for it.
+local function localXyz(v)
+    local t = type(v)
+    if t ~= 'table' and t ~= 'userdata' then return nil end
     local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
     if not ok or not finite(x) or not finite(y) or not finite(z) then return nil end
     return { x = x, y = y, z = z }
@@ -36,7 +40,8 @@ end
 
 ---Distance in metres between two {x,y,z} / vector3 positions; nil when either is unreadable.
 function M.distance(a, b)
-    local pa, pb = xyz(a), xyz(b)
+    if FhHuntingSell and FhHuntingSell.distance then return FhHuntingSell.distance(a, b) end
+    local pa, pb = localXyz(a), localXyz(b)
     if not pa or not pb then return nil end
     local dx, dy, dz = pa.x - pb.x, pa.y - pb.y, pa.z - pb.z
     return math.sqrt(dx * dx + dy * dy + dz * dz)
@@ -80,6 +85,7 @@ local MESSAGES = {
     fh_chain_spawn_failed = 'The legendary bear could not be found right now.',
     fh_chain_not_spawned = 'The legendary bear has not appeared.',
     fh_chain_no_spawn = 'No legendary hunt is in progress.',
+    fh_chain_wrong_spawn = 'That is not the bear you were tracking.',
     fh_chain_error = 'The hunt could not be updated.',
 }
 function M.message(reason) return MESSAGES[reason] or ('Hunt: ' .. tostring(reason)) end
@@ -87,7 +93,7 @@ function M.message(reason) return MESSAGES[reason] or ('Hunt: ' .. tostring(reas
 ---Build a chain. opts = { cfg (FhHuntingConfig), deps = {
 ---  load(cid)                              -> persisted state table|nil
 ---  save(cid, state)                       -> ok boolean (false = DB error; the in-memory state still advances)
----  pay(src, cid, amount, reason, region)  -> ok boolean (the rumour purchase)
+---  charge(src, cid, amount, reason, region) -> ok boolean (the rumour charge: DEDUCTS cash from the player)
 ---  spawn(cid, chainCfg)                   -> requestId|nil (fh_core requestSpawn wrapper)
 ---  despawn(requestId)                     -> ok (fh_core despawn; stops the post-skin re-request)
 ---  emit(name, payload)                    -> server-only TriggerEvent
@@ -95,7 +101,7 @@ function M.message(reason) return MESSAGES[reason] or ('Hunt: ' .. tostring(reas
 function M.new(opts)
     local cfg, deps = opts.cfg, opts.deps
     local cache = {} -- [cid] = state (the in-memory truth; persisted on every change)
-    local busy = {}  -- [cid] = true while an action is mid-flight (guards re-entrancy across the pay/save yield)
+    local busy = {}  -- [cid] = true while an action is mid-flight (guards re-entrancy across the charge/save yield)
 
     local function get(cid)
         local s = cache[cid]
@@ -147,7 +153,7 @@ function M.new(opts)
             if s.spawned or s.step > M.STEP_RUMOUR then return false, 'fh_chain_rumour_done' end
             local d = M.distance(coords, cfg.Trapper.coords)
             if not d or d > lb.RumourRange then return false, 'fh_chain_too_far' end
-            if not deps.pay(src, cid, lb.rumourPrice, 'hunting:rumour', lb.region_id) then
+            if not deps.charge(src, cid, lb.rumourPrice, 'hunting:rumour', lb.region_id) then
                 return false, 'fh_chain_pay_failed'
             end
             s.step = M.STEP_TRACK
@@ -203,6 +209,19 @@ function M.new(opts)
         s.spawned = true
         save(cid, s)
         deps.emit(M.EVENT_SPAWNED, { citizenid = cid, chain_id = M.CHAIN_ID })
+        return true
+    end
+
+    ---The bear spawn failed (requestSpawn onFailed after retries were exhausted). Resets the chain to the carcass clue
+    ---so the character can try again, unless the bear was already adopted (spawned).
+    ---@return boolean ok, string|nil reason
+    function C.onSpawnFailed(cid, requestId)
+        local s = get(cid)
+        if s.spawned then return false, 'fh_chain_spawned' end
+        if requestId ~= nil and s.spawn_request ~= requestId then return false, 'fh_chain_wrong_spawn' end
+        s.spawn_request = nil
+        s.step = M.STEP_CARCASS
+        save(cid, s)
         return true
     end
 

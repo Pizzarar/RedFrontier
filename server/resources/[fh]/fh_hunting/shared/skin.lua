@@ -134,6 +134,7 @@ local MESSAGES = {
     fh_not_huntable = 'There is nothing here to skin.',
     fh_no_container = 'Nowhere to put the pelt: you need your saddlebag or a wagon nearby.',
     fh_size_class = 'No room for the pelt in your saddlebag or a wagon.',
+    fh_not_your_legendary = 'This legendary beast is not yours to claim.',
     no_space = 'No room for the pelt in your saddlebag or a wagon.',
     too_heavy = 'No room for the pelt in your saddlebag or a wagon.',
     fh_too_heavy = 'No room for the pelt in your saddlebag or a wagon.',
@@ -248,6 +249,11 @@ function M.new(opts)
         if not car or car.entity == nil or not car.isPed or car.isPlayer then return false, 'fh_no_carcass' end
         local animal = animals.get(car.model, car.legendary)
         if not animal then return false, 'fh_not_huntable' end
+        -- H4: a legendary carcass belongs to the character whose chain spawned it; nobody else may skin it (prevents
+        -- cross-player farming of the always-3-star legendary pelt and trophy).
+        if animal.legendary and car.legendaryOwner and car.legendaryOwner ~= cid then
+            return false, 'fh_not_your_legendary'
+        end
 
         local key, token = req.netId, car.entity
         local okP, why = quality.plausibility({
