@@ -45,7 +45,7 @@ local function newEnv(opts)
             E.items[ref.id] = (E.items[ref.id] or 0) + n
             return true
         end,
-        snapshot = function(_, ref) local n = E.items[ref.id] if n == nil then return nil, 'x' end return { [1] = { name = 'trade_salt', amount = n } } end,
+        snapshot = function(_, ref) if E.snapshotYield then coroutine.yield('io') end local n = E.items[ref.id] if n == nil then return nil, 'x' end return { [1] = { name = 'trade_salt', amount = n } } end,
         removeItem = function(_, ref, name, n)
             E.removeCalls[#E.removeCalls + 1] = { ref = ref, name = name, n = n }
             if E.removeYield then coroutine.yield('io') end
@@ -65,7 +65,7 @@ local function newEnv(opts)
     exports = exp
     MySQL = { query = { await = function(sql)
         if sql:find('^SELECT') then return E.rows end
-        if sql:find('^DELETE') then E.deleted[#E.deleted + 1] = true end
+        if sql:find('^DELETE') then E.deleted[#E.deleted + 1] = true if E.deleteYield then coroutine.yield('io') end end
         return {}
     end } }
     local thread
@@ -234,6 +234,28 @@ case('D: abandon mid-check while that check\'s removeItem fails: the check retri
     E.hooks.abandon(7, state('heartlands.dunes.trade_salt'))
     T.eq('wait', E.step())
     T.eq(2, #E.removeCalls); T.eq(0, delivered(E)); T.eq(0, E.items['fh:wagon:CID1:t2'])
+end)
+
+case('idea-676: abandon yielding in drop() while the check finishes its undo: cargo removed exactly once', function()
+    -- check parks in snapshot (busy held); abandon marks the contract and parks in drop()'s DELETE before reading busy.
+    -- The check then sees c.abandoned and runs the undo takeCargo, parking in removeItem. busy must still be held
+    -- there, so the resumed abandon skips its own takeCargo instead of removing the qty a second time.
+    local E = newEnv(); assert(accept(E)); T.eq(5, E.items['fh:wagon:CID1:t2'])
+    E.snapshotYield = true
+    T.eq('io', E.step())                     -- check is inside snapshot
+    E.snapshotYield, E.deleteYield = false, true
+    local A = coroutine.create(function() E.hooks.abandon(7, state('heartlands.dunes.trade_salt')) end)
+    local okA, r = coroutine.resume(A); assert(okA, tostring(r)); T.eq('io', r) -- abandon parked in drop()
+    E.deleteYield, E.removeYield = false, true
+    T.eq('io', E.step())                     -- check: abandoned -> undo takeCargo, parked in removeItem
+    T.eq(1, #E.removeCalls)
+    okA, r = coroutine.resume(A); assert(okA, tostring(r))
+    T.eq(1, #E.removeCalls, 'resumed abandon must not start a second removeItem')
+    T.eq('wait', E.step())                   -- check's removeItem completes
+    if coroutine.status(A) ~= 'dead' then assert(coroutine.resume(A)) end
+    T.eq(1, #E.removeCalls); T.eq(0, E.items['fh:wagon:CID1:t2'], 'qty removed once, not twice')
+    T.eq(0, delivered(E)); T.eq(0, #failedReasons(E)); T.eq(0, #E.registered.getContracts(7))
+    E.removeYield = false; E.tick(); T.eq(1, #E.removeCalls, 'later ticks touch nothing')
 end)
 
 case('E: accept lock per player: a second accept during the first is refused, cap holds', function()

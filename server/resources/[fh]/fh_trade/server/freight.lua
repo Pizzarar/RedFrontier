@@ -185,8 +185,8 @@ local function check(c)
         drop(c)
         TriggerEvent(F.EVENT_DELIVERED, payloadOf(c, src))
     end)
-    busy[tag] = nil
     if c.abandoned then takeCargo(c) end -- abandon() skipped removal while we were in flight: finish the undo (no-op if done)
+    busy[tag] = nil -- only after the undo: an abandon parked in drop() must still see busy and not take the cargo again
     if not ok then log('check error for %s: %s', c.key, tostring(err)) end
 end
 
