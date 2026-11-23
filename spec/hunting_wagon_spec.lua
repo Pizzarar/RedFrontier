@@ -40,6 +40,23 @@ describe('hunting wagon adapter', function()
     end)
 end)
 
+describe('hunting wagon adapter: vector3 coords', function()
+    it('accepts a vector-like player position and passes it through', function()
+        local v = setmetatable({}, { __index = { x = 1, y = 2, z = 3 } })
+        local got
+        local w = W.find(function(_, c) got = c; return { type = 'wagon', id = 'fh:wagon:2' } end, 7, v, 8)
+        eq(true, got == v)
+        eq('fh:wagon:2', w.ref.id)
+        eq(true, w.coords == v)
+    end)
+    it('rejects coords without numeric x, y, z', function()
+        local f = function() return { type = 'wagon', id = 'fh:wagon:2' } end
+        eq(nil, W.find(f, 7, 'here', 8))
+        eq(nil, W.find(f, 7, { x = 1, y = 2 }, 8))
+        eq(nil, W.find(f, 7, setmetatable({}, { __index = { x = 1, y = 'a', z = 3 } }), 8))
+    end)
+end)
+
 describe('hunting wagon adapter inside the skin flow', function()
     local SRC, CID = 7, 'CID123'
     local function skinner(nearest)
@@ -81,3 +98,5 @@ describe('hunting wagon adapter inside the skin flow', function()
         eq(false, claims:isClaimed(101, 5001))
     end)
 end)
+
+T.finish()

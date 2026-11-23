@@ -133,7 +133,7 @@ end)
 
 -- ---------------------------------------------------------------- H3 trapper
 
--- Take an item out of a world container. fh_core §4 has no remove export yet, so this goes through the rsg-inventory
+-- WORKAROUND until @core removeItem export: take an item out of a world container. fh_core §4 has no remove export, so this goes through the rsg-inventory
 -- compat RemoveItem (fh_inventory API.RemoveItem(containerId, name, amount, slot, reason); it only removes when the
 -- slot really holds `name`). UNVERIFIED in game. Request to @core: a removeItem(ref, name, n, slot) export; this is
 -- the only place that changes when it ships.
@@ -170,20 +170,23 @@ local trapper = FhHuntingSell.new({
     },
 })
 
-local lastSell = {}
+local lastSell = {} -- [src] = { open = ms, sell = ms }
 AddEventHandler('playerDropped', function() lastSell[source] = nil; trapper.busy[source] = nil end)
 
-local function sellThrottled(src)
+-- Per player and per event: ignore a request that comes within cfg.SellCooldownMs of the previous one.
+local function sellThrottled(src, kind)
     local now = GetGameTimer()
-    if lastSell[src] and now - lastSell[src] < 500 then return true end
-    lastSell[src] = now
+    local t = lastSell[src]
+    if not t then t = {}; lastSell[src] = t end
+    if t[kind] and now - t[kind] < cfg.SellCooldownMs then return true end
+    t[kind] = now
     return false
 end
 
 -- Client asks to open the sell menu; the server answers with the rows it computed itself.
 RegisterNetEvent('fh:hunting:sell_open', function()
     local src = source
-    if sellThrottled(src) then return end
+    if sellThrottled(src, 'open') then return end
     local rows, err = trapper.list(src)
     if not rows then return notify(src, 'error', FhHuntingSell.message(err)) end
     TriggerClientEvent('fh:hunting:sell_rows', src, rows)
@@ -192,7 +195,7 @@ end)
 -- Client request: { container, slot, item }. Position, container, item, quality and price are all re-read here.
 RegisterNetEvent('fh:hunting:sell', function(payload)
     local src = source
-    if sellThrottled(src) then return end
+    if sellThrottled(src, 'sell') then return end
     local ok, res = trapper.sell(src, payload)
     if ok then
         notify(src, 'success', ('Sold %s (%d star%s) for $%d.'):format(res.label, res.stars, res.stars == 1 and '' or 's', res.price))

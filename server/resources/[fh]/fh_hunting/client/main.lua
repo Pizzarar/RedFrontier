@@ -175,13 +175,25 @@ FH.onNet('fh:hunting:sell_rows', function(rows)
     lib.showContext('fh_hunting_trapper')
 end)
 
+local textShown = false
+local function hideText()
+    if textShown then textShown = false; lib.hideTextUI() end
+end
+
+local trapperPoint
 FH.thread(function()
-    local point = lib.points.new({
+    trapperPoint = lib.points.new({
         coords = vec3(tp.coords.x, tp.coords.y, tp.coords.z), distance = tp.PromptDistance,
     })
-    function point:onEnter() lib.showTextUI('[E] Sell pelts') end
-    function point:onExit() lib.hideTextUI() end
-    function point:nearby()
+    function trapperPoint:onEnter() textShown = true; lib.showTextUI('[E] Sell pelts') end
+    function trapperPoint:onExit() hideText() end
+    function trapperPoint:nearby()
         if IsControlJustReleased(0, CONTEXT_KEY) then TriggerServerEvent('fh:hunting:sell_open') end
     end
+end)
+
+FH.on('onResourceStop', function(res)
+    if res ~= GetCurrentResourceName() then return end
+    hideText()
+    if trapperPoint then trapperPoint:remove(); trapperPoint = nil end
 end)

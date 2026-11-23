@@ -26,6 +26,7 @@ H2 keys:
 - `ClaimPruneMs` (30000): server, forget skinned-claim entries whose carcass no longer exists.
 - `TrackRadius` (150.0), `TrackIntervalMs` (250): client tracking of live animals (last damage bone, weapon hits).
 - `DeadCacheSeconds` (900): keep a dead animal's shot data this long, by netId.
+- `SellCooldownMs` (500): server, per-player per-event throttle for the sell menu and sale requests.
 - `Trapper` (H3): `{ region_id = 'heartlands', label, coords, SellRange = 4.0, PromptDistance = 2.0 }`. Coordinates are approximate and unverified; `region_id` is the fh_economy ledger region.
 - `ExplosiveWeapons`: cause-of-death weapons that count as explosive (1 star). Unverified names.
 - `NativeQualityStars`, `NativeCleanlinessStars`: result maps for the `'native'` source.
@@ -127,6 +128,7 @@ rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_econo
   every cargo pelt is refused (fail closed).
 - No `removeItem` export in fh_core §4: the trapper removes a pelt through the rsg-inventory compat `RemoveItem`
   (`removeItem` in `server/main.lua`, unverified in game). Requested from @core: `removeItem(ref, name, n, slot)`.
+- `removeItem` workaround (rsg-inventory compat call) stays until @core ships a `removeItem` export; request queued.
 - Pelts in the backpack are not sold (bulky and cargo pelts cannot be there); only the saddlebag and a nearby wagon.
 
 ## In-game test card

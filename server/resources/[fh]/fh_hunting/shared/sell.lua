@@ -3,9 +3,22 @@
 -- back if the payout fails, so a pelt is paid at most once. One sale per player at a time.
 local M = {}
 
+-- Position as x, y, z: a plain { x, y, z } table or a vector3 (userdata/table with .x .y .z; FiveM/RedM natives
+-- return vector3, which is NOT type 'table' in the userdata build). nil when unreadable.
+local function xyz(v)
+    local t = type(v)
+    if t ~= 'table' and t ~= 'userdata' then return nil end
+    local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
+    if not ok or type(x) ~= 'number' or type(y) ~= 'number' or type(z) ~= 'number' then return nil end
+    return x, y, z
+end
+M.xyz = xyz
+
 local function distance(a, b)
-    if type(a) ~= 'table' or type(b) ~= 'table' then return nil end
-    local dx, dy, dz = (a.x or 0) - (b.x or 0), (a.y or 0) - (b.y or 0), (a.z or 0) - (b.z or 0)
+    local ax, ay, az = xyz(a)
+    local bx, by, bz = xyz(b)
+    if not ax or not bx then return nil end
+    local dx, dy, dz = ax - bx, ay - by, az - bz
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 M.distance = distance

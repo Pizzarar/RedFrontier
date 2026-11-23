@@ -41,6 +41,8 @@ FhHuntingConfig = {
         PromptDistance = 2.0,                   -- client: show the sell prompt this close
     },
 
+    SellCooldownMs = 500,     -- server: one sell_open and one sell request per player per this many ms (extra ones ignored)
+
     -- 'roll' source. A zone sets the star band; the roll only ever lowers it by one star, with this chance.
     -- Limb / gut / explosive / multi-hit stay 1 star.
     Zones = {

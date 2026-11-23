@@ -238,3 +238,30 @@ describe('hunting sell: wagon container and the UI list', function()
         eq(nil, rows); eq('fh_too_far', err)
     end)
 end)
+
+-- A stand-in for a vector3 userdata: not type 'table'-comparable by shape, fields are read through a metatable.
+local function vec(x, y, z)
+    local data = { x = x, y = y, z = z }
+    return setmetatable({}, { __index = data })
+end
+
+describe('hunting sell: vector3 coordinates (natives return vectors, not plain tables)', function()
+    it('a vector-like player position at the trapper sells', function()
+        local c = cfg.Trapper.coords
+        local W = world({ player = vec(c.x, c.y, c.z) })
+        eq(true, (W.sell()))
+    end)
+    it('a vector-like position out of range is refused, an unreadable one too', function()
+        local c = cfg.Trapper.coords
+        local W = world({ player = vec(c.x + 50, c.y, c.z) })
+        local ok, err = W.sell(); eq(false, ok); eq('fh_too_far', err)
+        W = world({ player = vec(nil, 1, 2) })
+        ok, err = W.sell(); eq(false, ok); eq('fh_too_far', err)
+    end)
+    it('S.distance reads both shapes', function()
+        eq(5, S.distance({ x = 0, y = 0, z = 0 }, vec(3, 4, 0)))
+        eq(nil, S.distance(5, { x = 0, y = 0, z = 0 }))
+    end)
+end)
+
+T.finish()
