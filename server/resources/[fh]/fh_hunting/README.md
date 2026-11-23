@@ -165,7 +165,7 @@ rules; `ox_lib` (notify, progress bar) and `rsg-target` on the client; `fh_econo
   option).
 - `findCargoWagon` (`server/main.lua`) now calls `exports.fh_cargo:nearestWagon`; until `fh_cargo` (roads-r1) is on main
   every cargo pelt is refused (fail closed).
-- `fh_core:removeItem` (B7) removes by name with no slot. `removeItem` in `server/main.lua` snapshots the container before and after to find the slot that really lost the pelt; the sale is priced from that pelt, so mixed-star stacks pay correctly. Pocket/backpack refs are refused by the export (`fh_not_registrable`) and only registered world containers work: the saddlebag and wagon, which are all the trapper uses. If fh_cargo has not registered the wagon stash with fh_core the removal fails closed (`fh_remove_failed`).
+- `fh_core:removeItem` (B7) removes by name with no slot. `removeItem` in `server/main.lua` snapshots the container before and after to find the slot that really lost the pelt; the sale is priced from that pelt, so mixed-star stacks pay correctly. Since core-03 the export also accepts carried refs (`{ type = 'backpack'|'equipped', id = src }`; an offline src gives `fh_player_offline`, and bulky items are still vetoed from the backpack), but the trapper uses only the saddlebag and wagon because pelts never sit in the backpack. If fh_cargo has not registered the wagon stash with fh_core the removal fails closed (`fh_remove_failed`).
 - Pelts in the backpack are not sold (bulky and cargo pelts cannot be there); only the saddlebag and a nearby wagon.
 - Legendary trophy is best-effort: if the saddlebag and the wagon are both full, the pelt is still granted and the chain
   completes, but the trophy is not stowed (the skin notification says so).
