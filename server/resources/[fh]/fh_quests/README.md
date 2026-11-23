@@ -256,9 +256,14 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 - **Not spike-gated.** Death detection is the same server-side health check `fh_zones` already ships ungated for
   `camp_clear`, so a bounty can be no less reliable than a camp; gating it would also leave the default
   (`fh_spike_gated true`) board without a bounty and `spike-gated.md` untouched. Still **unverified in-game**.
-- **Limitations:** watchers are in memory. After a restart an active bounty job has no ped and never completes: abandon
-  it (no cooldown) and take it again. A watched ped that stays gone (not re-requested) leaves the job open until
-  abandoned. The job type's `events` list is `fh:quests:bounty_down` only.
+- **Owner leaves (drop or character unload):** the ped is despawned and the offer freed at once (no stuck
+  `fh_bounty_taken`, no ped left to be killed by a bystander), and nobody is credited: the death event fires only while
+  the acceptor's character is still online. The **job row stays `active`** (nothing persisted changes). When that
+  character loads again, or fh_quests restarts with them online, the server **re-arms** it: a fresh ped for each
+  of their active bounty jobs (spawn setup rebuilt from the template by region + key). If the template is gone or the
+  offer is taken by someone else, the job stays open and can be abandoned.
+- **Limitations:** watchers are in memory (re-armed as above). A ped that fh_core cannot spawn leaves the job open until
+  relog or abandon.
 
 **Rotation.** Each region's board holds 3-5 offers, picked by `board.rotate` from the offers of every registered
 type (types are interleaved, so every type is on the board while templates last), re-picked every 60 minutes

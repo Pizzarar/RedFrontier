@@ -77,11 +77,13 @@ end
 
 RegisterCommand('jobs', function() openMenu(DEFAULT_REGION) end, false)
 
--- Board spots (rsg-target is optional: without it only /jobs works).
+-- Board spots (rsg-target is optional: without it only /jobs works). Zones and props are removed on stop.
+local zones, props, stopping = {}, {}, false
+
 CreateThread(function()
     if GetResourceState('rsg-target') ~= 'started' then return end
     for _, b in ipairs(BOARDS) do
-        exports['rsg-target']:addSphereZone({
+        zones[#zones + 1] = exports['rsg-target']:addSphereZone({
             coords = b.coords, radius = 1.5, debug = false,
             options = { { label = b.label, icon = 'fa-solid fa-clipboard-list', distance = 2.0,
                 onSelect = function() openMenu(b.region_id) end } },
@@ -90,28 +92,25 @@ CreateThread(function()
         if IsModelValid(hash) then -- unverified model: skip the prop when RedM does not know it
             RequestModel(hash)
             local t = GetGameTimer() + 3000
-            while not HasModelLoaded(hash) and GetGameTimer() < t do Wait(50) end
-            if HasModelLoaded(hash) then
+            while not HasModelLoaded(hash) and GetGameTimer() < t and not stopping do Wait(50) end
+            if HasModelLoaded(hash) and not stopping then
                 local prop = CreateObject(hash, b.coords.x, b.coords.y, b.coords.z, false, false, false)
+                props[#props + 1] = prop
                 PlaceObjectOnGroundProperly(prop)
                 FreezeEntityPosition(prop, true)
-                SetModelAsNoLongerNeeded(hash)
             end
+            SetModelAsNoLongerNeeded(hash)
         end
     end
 end)
 
--- The jobs board's bounty target (spawned by the server via fh_core): make it hostile like fh_zones camp peds.
--- Tag format: fh_quests:bounty:<region>:<key>. Natives as in fh_zones/client/main.lua (unverified in-game).
-FH.on('fh:spawn:adopted', function(d)
-    if type(d) ~= 'table' or d.kind ~= 'ped' or type(d.tag) ~= 'string' or d.tag:sub(1, 17) ~= 'fh_quests:bounty:' then return end
-    local ped = d.entity
-    if not ped or not DoesEntityExist(ped) then return end
-    AddRelationshipGroup('FH_BOUNTY')
-    local group = joaat('FH_BOUNTY')
-    SetPedRelationshipGroupHash(ped, group)
-    SetRelationshipBetweenGroups(5, group, joaat('PLAYER'))
-    SetBlockingOfNonTemporaryEvents(ped, true)
-    SetPedCombatAttributes(ped, 46, true)
-    TaskCombatHatedTargetsAroundPed(ped, 60.0, 0)
+AddEventHandler('onResourceStop', function(res)
+    if res ~= GetCurrentResourceName() then return end
+    stopping = true
+    for _, prop in ipairs(props) do
+        if DoesEntityExist(prop) then DeleteEntity(prop) end
+    end
+    if GetResourceState('rsg-target') == 'started' then
+        for _, id in ipairs(zones) do pcall(function() exports['rsg-target']:removeZone(id) end) end
+    end
 end)

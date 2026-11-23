@@ -213,4 +213,37 @@ describe('quests jobtypes: region rotation', function()
     end)
 end)
 
+describe('quests jobtypes: bounty watch helpers', function()
+    local function watchOf()
+        return {
+            ['t:b'] = { tag = 't:b', src = 2, cid = OTHER, key = 'k2' },
+            ['t:a'] = { tag = 't:a', src = 1, cid = ME, key = 'k1' },
+            ['t:c'] = { tag = 't:c', src = 1, cid = ME, key = 'k3' },
+        }
+    end
+    it('collectDead returns a sorted snapshot, so the caller may mutate the watch afterwards', function()
+        local watch = watchOf()
+        local dead = JT.collectDead(watch, function(w) return w.tag ~= 't:c' end)
+        same({ 't:a', 't:b' }, { dead[1].tag, dead[2].tag })
+        watch['t:new'] = { tag = 't:new' } -- an accept inserting mid-fire cannot affect the snapshot
+        watch['t:a'] = nil
+        eq(2, #dead)
+    end)
+    it('collectDead skips an entry whose check throws and keeps the others', function()
+        local dead = JT.collectDead(watchOf(), function(w) if w.tag == 't:a' then error('boom') end return true end)
+        same({ 't:b', 't:c' }, { dead[1].tag, dead[2].tag })
+    end)
+    it('ownedBy finds only that player\'s bounties (owner left: despawn these, credit nobody)', function()
+        local mine = JT.ownedBy(watchOf(), 1)
+        same({ 't:a', 't:c' }, { mine[1].tag, mine[2].tag })
+        eq(0, #JT.ownedBy(watchOf(), 99))
+    end)
+    it('bountyOffer rebuilds the spawn setup from region + key (re-arm after relog / restart)', function()
+        local o = JT.bountyOffer(REGION, 'bounty_silas_crow')
+        eq('bounty_silas_crow', o.key); eq('string', type(o.model)); eq('table', type(o.coords))
+        eq(nil, JT.bountyOffer(REGION, 'bounty_nobody'))
+        eq(nil, JT.bountyOffer('nowhere', 'bounty_silas_crow'))
+    end)
+end)
+
 T.finish()

@@ -90,6 +90,38 @@ end
 ---Tag of a bounty's spawn request (fh_core requestSpawn spec.tag). One live bounty per region + offer key.
 function M.bountyTag(region_id, key) return M.BOUNTY_TAG_PREFIX .. region_id .. ':' .. key end
 
+---The bounty offer of a region by offer key (the spawn setup is not stored in the job snapshot, so a re-arm after a
+---restart or a relog rebuilds it from the template). nil when the template is gone.
+function M.bountyOffer(region_id, key)
+    for _, o in ipairs(M.offers('bounty', region_id)) do
+        if o.key == key then return o end
+    end
+    return nil
+end
+
+---Watched bounties whose ped is dead, as a sorted snapshot list. Taken before anything yields, so the caller can
+---fire events and mutate `watch` afterwards without invalidating a traversal. isDead(w) -> boolean (may throw: that
+---entry is skipped).
+function M.collectDead(watch, isDead)
+    local out = {}
+    for _, w in pairs(watch) do
+        local ok, dead = pcall(isDead, w)
+        if ok and dead then out[#out + 1] = w end
+    end
+    table.sort(out, function(a, b) return a.tag < b.tag end)
+    return out
+end
+
+---Watched bounties owned by player `src` (they left: despawn these, credit nobody). Snapshot list, sorted.
+function M.ownedBy(watch, src)
+    local out = {}
+    for _, w in pairs(watch) do
+        if w.src == src then out[#out + 1] = w end
+    end
+    table.sort(out, function(a, b) return a.tag < b.tag end)
+    return out
+end
+
 -- The accepted-offer snapshot is the source of truth for what a job needs (it survives rotation and restarts).
 local function snapOf(job_type, state)
     local snap = type(state) == 'table' and type(state.progress) == 'table' and state.progress.job or nil

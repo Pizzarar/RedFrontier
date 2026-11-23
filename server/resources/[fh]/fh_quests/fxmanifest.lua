@@ -30,11 +30,11 @@ server_scripts {
     'server/menu.lua',     -- WORKAROUND: ox_lib fallback jobs menu, server side (replaced by the @ui jobs board)
 }
 
--- WORKAROUND: ox_lib fallback jobs menu (/jobs + board prop via rsg-target). Replaced by the @ui jobs-board screen.
 client_scripts {
     '@ox_lib/init.lua',
     '@fh_core/client/safe.lua',
-    'client/jobs_menu.lua',
+    'client/bounty.lua',     -- permanent: bounty NPC hostile-AI setup
+    'client/jobs_menu.lua',  -- WORKAROUND: ox_lib fallback jobs menu (/jobs + board prop via rsg-target), replaced by the @ui jobs-board screen
 }
 
 dependencies { 'fh_core', 'fh_economy', 'oxmysql', 'ox_lib', 'rsg-core' }
