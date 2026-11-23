@@ -4,6 +4,19 @@ Run top to bottom in your first in-game session (boot, then each block in plan o
 section here; keep the order. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`, then send the
 file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need your account in `group.admin`.
 
+## Core: B-access (owner auto-admin, friend allowlist) - do this first
+
+1. Join (OWNER-STEPS step 4). On the DevPC, `server/logs/fxserver.log` has exactly one line `granted group.admin to license:<hash>`.
+   RESULT:
+2. In game, run an fh_ admin command, e.g. `fh_dump backpack <yourId>`: it replies (no "no permission").
+   RESULT:
+3. Restart the server (close its window, run `first-run.cmd`), rejoin: still admin (step 2 works), and no new `granted` line in fxserver.log.
+   RESULT:
+4. Friend (optional, needs a second account): a not-yet-allowlisted connect is rejected with the private-server message, and the server console prints one `allowlist: rejected <name> license:<hash>` line.
+   RESULT:
+5. Run `fh_allow license:<hash>` with that license; the friend reconnects and gets in, and `fh_dump backpack <theirId>` from THEIR client says no permission (they are not admin).
+   RESULT:
+
 ## B4c: spawn-request contract (fh_core)
 
 Server console lines start with `[fh_core:spawn]`. `server.cfg` ships `set fh_spike_gated true` (the conservative path).

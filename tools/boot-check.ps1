@@ -56,6 +56,8 @@ if (-not $ReplayLog -and (Test-FxBusy)) { Write-Host 'server already running (FX
 if (-not $ReplayLog -and -not (Test-Path $Fx))      { Write-Host "FXServer not found at $Fx. Run tools/setup-server.ps1 or pass -ServerRoot."; exit 1 }
 if (-not $ReplayLog -and -not (Test-Path $secrets)) { Write-Host "No secrets.cfg at $secrets - licence key missing. See OWNER-STEPS.md."; exit 2 }
 
+if (-not $ReplayLog) { Initialize-AccessCfgs }   # server.cfg execs admins.cfg/allowlist.cfg
+
 # Expected resources come from the ensure lines (not hardcoded).
 $cfgLines = Get-Content $Cfg
 $expected = @($cfgLines | ForEach-Object { if ($_ -match '^\s*(?:ensure|start)\s+(\S+)') { $Matches[1] } }) + $ExtraEnsure | Select-Object -Unique

@@ -18,6 +18,8 @@ Start order in `server.cfg`: `rsg-core`, then `fh_core`, then `fh_inventory`.
 | `shared/spawn_rules.lua` | `FhSpawnRules` | Spawn-request state machine, spawner pick, adopt validation (pure) |
 | `server/spawn.lua` | `FhSpawn` | Spawn-request exports and net events (natives) |
 | `client/spawn.lua` | - | Creates the networked entity a spawn request asks for |
+| `shared/access_rules.lua` | `FhAccessRules` | Auto-admin and allowlist rules (pure) |
+| `server/access.lua` | - | First-joiner auto-admin, allowlist reject line, `fh_allow` |
 
 The shared modules are pure Lua (no natives). Under FXServer they set their global; under busted they `return`
 the module. They look each other up at call time, so load order inside `shared/*.lua` does not matter.
@@ -251,6 +253,31 @@ exports.fh_core:getSpawn(id)     -- { state, netId, tag, owner, kind, attempts }
 - **Admin:** `fh_spawn_horse [model]`, `fh_spawn_ped [model]` (2 m in front of you), `fh_despawn <requestId>`;
   `group.admin`.
 - Pure part specced in `spec/spawn_rules_spec.lua`; the natives side is **not runtime-tested** (no Cfx key yet).
+
+## Access (B-access, private server)
+
+Private dev server: the owner plus up to 5 friends over Tailscale (`sv_maxclients 6`, unlisted via `sv_master1 ""`).
+Files: `shared/access_rules.lua` (`FhAccessRules`, pure, `spec/access_rules_spec.lua`), `server/access.lua` (natives, io).
+
+- **Auto-admin:** with `fh_dev 1` and `fh_dev_autoadmin 1` (server.cfg, private dev server only) and no admin line in
+  `server/admins.cfg`, the first player to connect gets `add_principal identifier.license:<hash> group.admin`, live
+  and appended to `admins.cfg`; the console prints `granted group.admin to license:<hash>`. The lock engages only
+  once the line is verified on disk. If the write fails, that same license stays admin until restart and the write is
+  retried on the next connect; nobody else is granted meanwhile. Later joiners are never auto-granted. Server
+  events only (playerConnecting); there is no net event.
+- **Allowlist:** rsg-core's own whitelist, switched on in `rsg-core/shared/config.lua` with
+  `WhitelistPermission = 'fh.allowlist'`. server.cfg: `add_ace group.fh_allowlist fh.allowlist allow` and
+  `add_principal group.admin group.fh_allowlist`, so admins always pass. A friend is
+  `add_principal identifier.license:<hash> group.fh_allowlist` in the gitignored `server/allowlist.cfg`.
+  `group.admin` also inherits `rsgcore.admin`, so rsg-core's admin commands work for the owner.
+- **Connect order:** fh_core grants synchronously in its playerConnecting handler; rsg-core yields (`Wait(0)`,
+  events.lua:139) before its whitelist check, so the first joiner is admin, and therefore allowlisted, before rsg-core
+  checks, whichever handler runs first.
+- **Rejected connect:** one console line `allowlist: rejected <name> license:<hash> [discord:<id>]`; the player sees
+  "This is a private server and you are not on its allowlist...".
+- **Adding a friend:** `fh_allow <license:hash | hash | discord:id>` (group.admin, or the server console). Applies
+  live and appends to `allowlist.cfg` (idempotent). The friend reconnects. Revoke: delete the line and restart.
+- `tools/lib.ps1` `Initialize-AccessCfgs` creates both cfgs (comments only) when missing, so `exec` never fails.
 
 ## Natives
 

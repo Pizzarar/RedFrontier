@@ -8,4 +8,6 @@ Implemented RedM server base — Thanks to these projects:
 - **cfx-server-data** (mapmanager, spawnmanager) by the Cfx.re collective (citizenfx)
 - **MariaDB** portable server and **FXServer** are downloaded at setup time, not redistributed.
 
+- Implemented the friend allowlist (B-access) on rsg-core's ACE whitelist — Thanks to rsg-core by Rexshack-RedM
+
 See server/VENDORED.md for exact versions.

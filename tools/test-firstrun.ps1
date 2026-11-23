@@ -12,7 +12,22 @@ Check 'bad charset'      (-not (Test-CfxKey 'cfxk_abcdEFGH1234 ijklMNOP"x'))
 Check 'empty/null'       ((-not (Test-CfxKey '')) -and (-not (Test-CfxKey $null)))
 
 $t = Join-Path ([IO.Path]::GetTempPath()) "fh-secrets-$([guid]::NewGuid()).cfg"
+$cd = Join-Path ([IO.Path]::GetTempPath()) "fh-access-$([guid]::NewGuid())"
+New-Item -ItemType Directory -Force $cd | Out-Null
 try {
+    # access cfgs: created with a comment-only header when missing; existing files are never touched
+    Initialize-AccessCfgs $cd *>&1 | Out-Null
+    $adm = Join-Path $cd 'admins.cfg'; $alw = Join-Path $cd 'allowlist.cfg'
+    Check 'access cfgs created' ((Test-Path $adm) -and (Test-Path $alw))
+    $onlyComments = { param($p) -not (@([IO.File]::ReadAllLines($p)) | Where-Object { $_ -notmatch '^\s*(#|$)' }) }
+    Check 'access cfgs comment-only' ((& $onlyComments $adm) -and (& $onlyComments $alw))
+    $ab = [IO.File]::ReadAllBytes($adm)
+    Check 'access cfg no BOM' (-not ($ab[0] -eq 0xEF -and $ab[1] -eq 0xBB))
+    [IO.File]::WriteAllText($alw, "add_principal identifier.license:abc group.fh_allowlist`n")
+    Initialize-AccessCfgs $cd *>&1 | Out-Null
+    Check 'access cfg kept' ([IO.File]::ReadAllText($alw) -eq "add_principal identifier.license:abc group.fh_allowlist`n")
+    Remove-Item $adm, $alw
+
     Check 'absent -> null' ($null -eq (Get-SecretsKey $t))
     Set-SecretsKey $t 'cfxk_AAAAAAAAAAAAAAAAAAAA'
     Check 'create' ((Get-SecretsKey $t) -eq 'cfxk_AAAAAAAAAAAAAAAAAAAA')
@@ -32,12 +47,13 @@ try {
     Check 'CRLF merge' ((Get-SecretsKey $t) -eq 'cfxk_DDDDDDDDDDDDDDDDDDDD' -and ($cl -contains 'set a b') -and ($cl -contains '# n') -and $cl.Count -eq 3)
     # first-run end to end against the temp file: no elevation, no server start
     $env:FH_CFX_KEY = 'cfxk_TESTTESTTESTTESTTEST'
-    $frOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'first-run.ps1') -NoElevate -KeyFromEnv -NoStart -SecretsPath $t *>&1 | Out-String
+    $frOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'first-run.ps1') -NoElevate -KeyFromEnv -NoStart -SecretsPath $t -CfgDir $cd *>&1 | Out-String
     $code = $LASTEXITCODE
     Check 'no key in output' (-not $frOut.Contains('cfxk_TESTTESTTESTTESTTEST'))
     Check 'first-run -KeyFromEnv' ($code -eq 0 -and (Get-SecretsKey $t) -eq 'cfxk_TESTTESTTESTTESTTEST')
+    Check 'first-run creates access cfgs' ((Test-Path (Join-Path $cd 'admins.cfg')) -and (Test-Path (Join-Path $cd 'allowlist.cfg')))
     $env:FH_CFX_KEY = $null
-} finally { Remove-Item $t -ErrorAction SilentlyContinue }
+} finally { Remove-Item $t -ErrorAction SilentlyContinue; Remove-Item $cd -Recurse -Force -ErrorAction SilentlyContinue }
 
 $ok = @('Started resource a', 'Started resource b', 'Database server connection established')
 Check 'boot ok'      ((Get-BootState $ok @('a', 'b')) -eq 'ok')

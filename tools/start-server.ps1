@@ -2,6 +2,7 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib.ps1')
 if (-not (Test-Path $Fx)) { throw 'Run tools/setup-server.ps1 first' }
+Initialize-AccessCfgs
 Start-Db
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $log = Join-Path $LogDir 'fxserver.log'

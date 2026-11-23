@@ -57,6 +57,21 @@ function Set-SecretsKey([string]$Path, [string]$Key) {
     $out = @($out); if (-not $done) { $out += $new }
     [IO.File]::WriteAllText($Path, (($out -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
 }
+# Creates server/admins.cfg and server/allowlist.cfg (gitignored) with a comment header when missing, so server.cfg's
+# `exec` never errors. Never touches an existing file. Called by first-run.ps1 and start-server.ps1.
+function Initialize-AccessCfgs([string]$Dir = $Server) {
+    $headers = @{
+        'admins.cfg'    = "# Owner admin (gitignored). fh_core auto-admin appends the first joiner here:`n#   add_principal identifier.license:<hash> group.admin`n# Delete the line and restart to revoke.`n"
+        'allowlist.cfg' = "# Friend allowlist (gitignored). fh_allow <license> appends here; or add by hand:`n#   add_principal identifier.license:<hash> group.fh_allowlist`n# Delete a line and restart to revoke.`n"
+    }
+    foreach ($n in 'admins.cfg', 'allowlist.cfg') {
+        $p = Join-Path $Dir $n
+        if (-not (Test-Path $p)) {
+            [IO.File]::WriteAllText($p, $headers[$n], (New-Object Text.UTF8Encoding $false))
+            Write-Host "[access] created $n"
+        }
+    }
+}
 # Classifies boot-log lines: 'license' | 'error' | 'ok' | 'pending'. Shared by boot-check and first-run.
 $script:BootErrPat = 'SCRIPT ERROR|Couldn''t start resource|Couldn''t find resource|Failed to load|ECONNREFUSED|Unable to establish connection|Access denied for user'
 function Get-BootState([string[]]$Lines, [string[]]$Expected) {
