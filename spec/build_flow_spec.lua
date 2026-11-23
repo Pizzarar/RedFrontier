@@ -71,7 +71,7 @@ local MAIN_SRC, SLOTS_SRC, BUILD_SRC = readSrc(dir .. 'server/main.lua'), readSr
 local function newWorld()
     local W = { db = { plots = {}, slots = {} }, events = {}, handlers = {}, threads = {}, ex = {}, logs = {}, client = {},
         commands = {}, callbacks = {}, players = { [1] = 'A', [2] = 'B' }, peds = {}, hold = {}, order = {},
-        chest = {}, cash = { A = 1000, B = 1000 }, containers = {}, registeredItems = {},
+        chest = {}, cash = { A = 1000, B = 1000 }, containers = {}, opened = {}, registeredItems = {},
         calls = { removeItem = 0, addItem = 0, charge = 0, pay = 0, registerItems = 0 } }
     W.peds[1], W.peds[2] = at(p1), at(cfg.plots[P2])
     local function await(tag)
@@ -138,6 +138,7 @@ local function newWorld()
         ['rsg-core'] = { GetCoreObject = function() return core end },
         fh_core = {
             registerContainer = function(_, ref, opts) W.containers[ref.id] = opts; return true end,
+            open = function(_, src, ref) W.opened[#W.opened + 1] = { src = src, ref = ref }; return true end,
             registerItems = function(_, defs)
                 W.calls.registerItems = W.calls.registerItems + 1
                 for n in pairs(defs) do W.registeredItems[n] = true end
@@ -519,8 +520,15 @@ T.describe('server/build.lua', function()
         local W = world({ cabin = 1 })
         T.eq(nil, W.containers['fh:chest:heartlands_01:2'])
         W.players[1] = 'A'
-        W.net['fh:homestead:open_chest']({ plot_id = P1, chest = 2 }) -- source is nil in the stub: refused anyway
+        W.env.source = 1
+        local function lastMsg() local c = W.client[#W.client]; return c and c.args[1].args[2] end
+        W.net['fh:homestead:open_chest']({ plot_id = P1, chest = 2 })
+        T.eq('chest: fh_chest_not_built', lastMsg())
+        T.eq(0, #W.opened)
         assert(W.build(1, 'chest_2'))
+        W.net['fh:homestead:open_chest']({ plot_id = P1, chest = 2 })
+        T.eq(1, #W.opened)
+        T.eq('fh:chest:heartlands_01:2', W.opened[1].ref.id)
         local c = W.containers['fh:chest:heartlands_01:2']
         assert(c, 'chest_2 registered on build')
         T.eq(p1.center.x - 4.0, c.coords.x)
