@@ -77,8 +77,11 @@ case('crossing: up, down, same tier, unknown old', function()
 end)
 
 case('crossing: bad new value / unknown region never crosses (no spurious drop)', function()
-    for _, bad in ipairs({ nil, 0/0, 'x', true }) do
-        local c, o, n = logic.crossing(cfg, 'heartlands', cfg.tiers.heartlands.t2 + 50, bad)
+    local high = cfg.tiers.heartlands.t2 + 50
+    local c, o, n = logic.crossing(cfg, 'heartlands', high, nil)
+    T.eq(false, c); T.eq(1, o); T.eq(1, n)
+    for _, bad in ipairs({ 0/0, 'x', true }) do
+        c, o, n = logic.crossing(cfg, 'heartlands', high, bad)
         T.eq(false, c); T.eq(1, o); T.eq(1, n)
     end
     T.eq(false, (logic.crossing(cfg, 'nowhere', 999, 0)))
