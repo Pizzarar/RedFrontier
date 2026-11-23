@@ -454,7 +454,13 @@ Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests
 
 ## In-game test card
 
-(Filled in by Q2-Q5; the lane's in-game checks go in `OWNER-TESTS.md`, section `## Quests`.)
+The ordered quests checklist is `OWNER-TESTS.md`, section `## Q5: quests (fh_quests)`. Smoke test once per build:
+
+1. Boot with `ensure fh_quests` after `fh_hunting`: no `[fh_quests]` error lines and no `fh_quest_state missing`.
+2. `/jobs` opens the board with 3-5 Heartlands offers (hunt requests, the camp, wanted NPCs).
+3. Accept a hunt request, sell a pelt of its quality: it completes and pays once (ledger `quest:job:hunt_request:<key>`).
+4. Accept and abandon a bounty: the wanted NPC spawns, then disappears on abandon.
+5. Talk to Hale, Marrow and Whitlock: the intro lines show and the line starts; relog keeps progress and pays no second reward.
 
 ## Family questlines (Q4)
 
