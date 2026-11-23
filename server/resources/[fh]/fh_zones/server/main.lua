@@ -53,7 +53,7 @@ end)
 AddEventHandler('onResourceStart', function(res)
     if res ~= 'fh_core' then return end
     for _, camp in pairs(camps) do
-        camp.peds, camp.state, camp.respawnAt = {}, 'idle', nil
+        camp.peds, camp.state, camp.respawnAt, camp.retryAt = {}, 'idle', nil, nil
     end
     CreateThread(setup)
 end)
@@ -131,6 +131,9 @@ local function clear(camp)
     if not step(camp, 'clear') then return end
     local loot = rollIntoStash(camp)
     log('camp %s cleared, %d loot entries', camp.cfg.id, #loot)
+    -- Drop the ped requests now: a dead ped left registered would be re-requested (fh_spike_gated spawner drop / corpse
+    -- cleanup) and pop in alive until the respawn timer, then be despawned by onReady.
+    despawnPeds(camp)
     TriggerEvent('fh:zones:camp_cleared', { camp_id = camp.cfg.id, region_id = camp.cfg.region, loot = loot })
     step(camp, 'wait')
     camp.respawnAt = GetGameTimer() + math.floor(camp.cfg.respawnMinutes * 60000)
@@ -138,11 +141,19 @@ end
 
 local function respawn(camp)
     if not step(camp, 'respawn') then return end
-    despawnPeds(camp) -- remove the bodies
+    despawnPeds(camp) -- no-op after clear(); kept for safety
     exports.fh_core:clearContainer(stashRef(camp))
     camp.respawnAt = nil
     log('camp %s respawned (idle)', camp.cfg.id)
     TriggerEvent('fh:zones:camp_respawned', { camp_id = camp.cfg.id, region_id = camp.cfg.region })
+end
+
+-- Every ped failed to spawn (bad model, retries used up): give up and go idle after a cooldown instead of wedging.
+local function abort(camp)
+    if not step(camp, 'abort') then return end
+    despawnPeds(camp)
+    camp.retryAt = GetGameTimer() + (cfg.AbortCooldownMs or 60000)
+    log('camp %s aborted: every ped failed to spawn; retry in %d ms', camp.cfg.id, cfg.AbortCooldownMs or 60000)
 end
 
 -- Re-check ped deaths from server state and clear the camp when every ped is dead.
@@ -154,7 +165,8 @@ local function evaluate(camp)
         if p and not p.dead and isDead(p) then p.dead = true end
         list[i] = p or { dead = false, failed = false }
     end
-    if rules.allDead(list) then clear(camp) end
+    if rules.allDead(list) then clear(camp)
+    elseif rules.allFailed(list) then abort(camp) end
 end
 
 local function playerPositions()
@@ -174,7 +186,7 @@ CreateThread(function()
             local ok, err = pcall(function()
                 if camp.state == 'idle' then
                     positions = positions or playerPositions()
-                    if rules.shouldActivate(camp.state, camp.cfg, positions) then activate(camp) end
+                    if rules.cooldownOver(GetGameTimer(), camp.retryAt) and rules.shouldActivate(camp.state, camp.cfg, positions) then activate(camp) end
                 elseif camp.state == 'active' then
                     evaluate(camp)
                 elseif camp.state == 'respawn_wait' and rules.respawnDue(GetGameTimer(), camp.respawnAt) then

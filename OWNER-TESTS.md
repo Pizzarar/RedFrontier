@@ -29,7 +29,8 @@ Server console lines start with `[fh_core:spawn]`. `server.cfg` ships `set fh_sp
    RESULT:
 5. Run `fh_spawn_horse`, then right away `restart fh_core` in the server console.
    Expected: the horse is removed when fh_core stops; nothing is left behind after the restart.
-   RESULT:
+   RESULT:
+
 
 ## B6b: one T1 outlaw camp (fh_zones)
 
@@ -44,7 +45,7 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    and they attack you (hostile). If they stand around, note it.
    RESULT:
 3. Kill all four outlaws.
-   Expected: console `camp heartlands_t1_01 cleared, 2 loot entries` once the last one dies (within ~2 s). No clear while one is alive.
+   Expected: console `camp heartlands_t1_01 cleared, 2 loot entries` once the last one dies (within ~2 s); the bodies vanish at that moment. No clear while one is alive.
    RESULT:
 4. Walk to the camp center (within 2 m) and press E at `[E] Outlaw camp stash`.
    Expected: the stash opens with a Worn Rifle (condition between 20 and 45 shown or in item info) and a Small Safe.
@@ -54,7 +55,7 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    Expected: refused (cargo only fits wagon/chest). The Worn Rifle is also refused by the backpack (bulky). The Worn Rifle goes into a saddlebag; the Small Safe is refused there too.
    RESULT:
 6. Wait `respawnMinutes` (10 min; lower it in config for the test). Stay away from the camp.
-   Expected: console `camp heartlands_t1_01 respawned (idle)`, bodies gone, stash empty. Ride back within 40 m: the outlaws are there again.
+   Expected: console `camp heartlands_t1_01 respawned (idle)`, stash empty. Ride back within 40 m: the outlaws are there again.
    RESULT:
 7. (Gated path) While the outlaws are alive and you are the only player, quit and rejoin.
    Expected: console `owner <id> dropped, despawned and re-requested`; after you return the outlaws come back hostile (once each, not doubled); killing them still clears the camp.

@@ -2,6 +2,7 @@
 -- The camp sits in territory heartlands_t1_camp (fh_core shared/regions.lua, region 'heartlands').
 FhZonesConfig = {
     TickMs = 1000, -- ms between server camp ticks
+    AbortCooldownMs = 60000, -- after every ped failed to spawn, the camp can't wake again for this long
     camps = {
         heartlands_t1_01 = {
             id = 'heartlands_t1_01',

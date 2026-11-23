@@ -230,6 +230,7 @@ local function addItem(ref, name, amount, info)
     local ok, reason = validRef(ref)
     if not ok then return false, reason end
     if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
     local done, err = inv('AddItem', ref.id, name, amount or 1, info)
     if done == true then return true end
     return false, type(err) == 'string' and err or 'fh_refused'
@@ -241,6 +242,7 @@ local function clearContainer(ref)
     local ok, reason = validRef(ref)
     if not ok then return false, reason end
     if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
     local r, err = inv('ClearStash', ref.id)
     if r == false then return false, err end
     return true

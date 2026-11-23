@@ -7,7 +7,7 @@ M.STATES = { 'idle', 'active', 'cleared', 'respawn_wait' }
 -- state -> event -> next state. 'cleared' is the instant loot is rolled; the server moves on to respawn_wait at once.
 M.TRANSITIONS = {
     idle         = { activate = 'active' },
-    active       = { clear = 'cleared' },
+    active       = { clear = 'cleared', abort = 'idle' }, -- abort: every ped failed to spawn
     cleared      = { wait = 'respawn_wait' },
     respawn_wait = { respawn = 'idle' },
 }
@@ -57,6 +57,20 @@ function M.allDead(peds)
         elseif not p.failed then return false end
     end
     return anyDead
+end
+
+---True when every ped's spawn failed (none ever came up): the camp can never be cleared, so it must abort.
+function M.allFailed(peds)
+    if type(peds) ~= 'table' or #peds == 0 then return false end
+    for _, p in ipairs(peds) do
+        if not p.failed then return false end
+    end
+    return true
+end
+
+---After an abort the camp waits for retryAt (ms game time) before a player can wake it again. nil = no cooldown.
+function M.cooldownOver(now, retryAt)
+    return retryAt == nil or (type(now) == 'number' and now >= retryAt)
 end
 
 ---Is a reporter close enough to a camp to be believed about its peds? (Client death reports are only hints.)

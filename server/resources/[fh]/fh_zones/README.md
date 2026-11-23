@@ -15,7 +15,9 @@ Seed of lane L3 (spec L89, M1 L107): one T1 outlaw camp, `heartlands_t1_01`, in 
   - On clear: loot is rolled (`rollLoot`, `info.condition` on the rifle) into an fh_core `chest` container
     `fh:camp:<id>` (accepts cargo; the safe cannot go into a backpack/equipped/saddlebag). Open = `fh:zones:open_loot`
     -> `exports.fh_core:open` (server reach check), only after the camp is cleared.
-  - After `respawnMinutes` the bodies are despawned, the stash is emptied and the camp is idle again.
+  - On clear the ped requests are despawned (no corpse re-request pop-in). If every ped fails to spawn the camp aborts to idle
+    with an `AbortCooldownMs` cooldown instead of wedging.
+  - After `respawnMinutes` the stash is emptied and the camp is idle again.
 - `client/main.lua`: hostile AI setup (relationship group hating players, weapon) in the handler of fh_core's local
   `fh:spawn:adopted` hook, death hints, stash prompt. All handlers via FH.on / FH.thread / FH.wrap.
 - Events: `fh:zones:camp_activated`, `fh:zones:camp_cleared`, `fh:zones:camp_respawned` (fh_core/docs/events.md).
