@@ -13,6 +13,19 @@ FhSurvivalConfig = {
     SluggishEffect = 'notify',     -- 'notify' (text + level only, no natives) | 'native' (S5, unverified in game)
 
     -- == S3 food / water / wash / warmth ==
+    CanteenMax = 5,                -- charges in a full canteen (item.info.charges; a canteen with none is fresh = full)
+    WashCooldownSeconds = 300,     -- per-player gap between washes
+    -- 'zones' (default, safe): server checks the ped against WaterZones. 'native': client reports IsEntityInWater
+    -- (unverified in game, trusts the client; cooldown still applies). See fh_core/docs/natives.md.
+    WaterCheck = 'zones',
+    -- Standing-in-water spots for refill/wash: { x = , y = , z = (optional), radius = (default 6.0) }. Owner fills these
+    -- from in-game coords; empty means refill/wash only work with WaterCheck = 'native'.
+    WaterZones = {},
+    -- Campfires / heat sources that give `warm`: { x = , y = , z = (optional), radius = (default HeatRadius) }.
+    -- Other resources can add live ones with exports.fh_survival:setHeatSource.
+    Campfires = {},
+    HeatRadius = 4.0,
+    HeatCheckSeconds = 10,         -- warm is re-applied (full duration) this often while near heat
     -- == S4 rest / comfort ==
     -- == S5 sluggish effect ==
 }

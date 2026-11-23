@@ -296,3 +296,16 @@ fh_hunting (`client/main.lua`, `server/main.lua`, H2), all **unverified in-game*
 
 ## fh_gunsmith (C3)
 `_SET_WEAPON_DEGRADATION` (`0xA7A57E89E965D839`) is still **candidate, unproven** (spk_wear), so fh_gunsmith stays data-only (condition in item info); no degradation native is called. `fh_gunsmith/client/wear.lua` only logs this when `fh_spike_gated` is false. Wire the native there once the spk_wear spike proves it.
+
+### fh_survival S3 (food / water / wash / warmth) - all **unverified in-game**, no Cfx key yet
+
+Default path (`FhSurvivalConfig.WaterCheck = 'zones'`) uses no water native: the server compares the ped position with
+`WaterZones`. The native path is opt-in (`WaterCheck = 'native'`) and trusts the client's report, so the wash cooldown still applies.
+
+| Native | Hash | Where used | Side |
+|---|---|---|---|
+| `IS_ENTITY_IN_WATER` (`IsEntityInWater`) | `0xDDE5C125C6EF73F2` (from the RDR3 native DB, **not looked up in this repo, verify before enabling**) | `fh_survival/client/actions.lua` (only read by the server when `WaterCheck = 'native'`) | client |
+| `PlayerPedId` | 0x096275889B8E0EE0 | `fh_survival/client/actions.lua` | client |
+| `GetPlayerPed`, `GetEntityCoords`, `GetPlayers`, `GetGameTimer` | see above | `fh_survival/server/actions.lua` (water zone check, campfire proximity, cooldown clock) | server |
+
+Cfx/RSG glue (not natives): `exports['rsg-core']:CreateUseableItem`, `exports['rsg-inventory']:GetItemBySlot/GetItemByName/RemoveItem/SetItemInfo`, `exports.fh_core:registerItems`, event `ox_lib:notify` (client).

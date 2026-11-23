@@ -10,16 +10,19 @@ shared_scripts {
     '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
     'config.lua',
     'shared/needs.lua',
+    'shared/items.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua',
+    'server/actions.lua',
 }
 
 client_scripts {
     '@fh_core/client/safe.lua',
     'client/main.lua', -- stub: S5 adds the sluggish effect
+    'client/actions.lua',
 }
 
 dependencies { 'fh_core', 'fh_buffs', 'oxmysql', 'rsg-core' }
