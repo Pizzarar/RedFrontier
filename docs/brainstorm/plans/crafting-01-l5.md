@@ -23,6 +23,10 @@ in-game test card. No push.
   true, condition is data only and is shown in the item label/tooltip.
 - Recipes are pure-Lua data tables in `fh_crafting/shared/recipes.lua`; station_type in {gunsmith, reload, apothecary}.
 
+- 2026-11-23 Restore source (lead ask, rifle is `bulky`, carried slots refuse bulky per fh_core/shared/containers.lua:11-12): `/fh_restore` acts on the world container the player has OPEN (`exports.fh_core:openRef(src)` + `view`, fh_core/server/inventory.lua:351; same pattern as saddlebag.lua:110) when that container is within reach of a gunsmith station and its type accepts bulky (chest/wagon/saddlebag). Write-back via @core setItemInfo on that ref. Checked: openRef/view exist; no H3 stash API (git grep c3d0dd2 fh_homestead chest|stash = 0), so no new homestead contract. Rejected (a) weapon slot = new core feature; (c) un-bulky = breaks spec size classes. Folds into C5.
+
+- 2026-11-23 H3 on main (2a7d98a, main fad2417). Homestead station types are workbench/campfire/tanning_rack (fh_homestead/config.lua:29-40); crafting uses gunsmith/reload/apothecary (fh_crafting config devStations). Crafting owns a `stationTypeMap` in fh_crafting/config.lua: gunsmith→workbench, reload→workbench, apothecary→campfire. No homestead change. Adapter treats fh_not_ready/{}/nil/false as "no station" (README:29). isNearStation is owner-only (README:40), so crafting is home-only, which fits. Restore's container-reach check uses getStations(citizenid) coords.
+
 ## Contracts / stubs
 - **@homestead H3** (in review, c3d0dd2): `isNearStation(src, type)`, `getStations(citizenid)`, `stationAt(coords)`.
   `fh_crafting/server/stations.lua` adapter calls it when `GetResourceState('fh_homestead')=='started'` and the export
