@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: RiffBot
-- Lead: Overlord · RedFrontier hub
+- Lead: ★ Red2
 - Workers: 0
 
 ## Done when
@@ -26,6 +26,9 @@
 - Spike verdicts S1/S2 still need Aub in-game; flags flip after.
 
 ## In flight
+- 2026-11-23 PASS merge queue (Red2): quests, core C3c+C3a/b, survival S1-S3b, guide W1-W2, progression P1-P4, roads A, hunting H2-H6, homestead H1-H5, crafting C1-C6 on main 2775580 (59/1205/0, migs to 0012). playtest-ready: @guide 415a736, @core 018df02, @ui db06ed0, @quests b53979a, @homestead 2775580, @roads 9a9ed6c, @hunting 5c70876, @survival e9a2efc, @progression 7c66833, @crafting 9211816.
+- 2026-11-23 PASS playtest gate (Red2): late merges core K1, roads supplies (idea-716), homestead H2c/H2d, then OWNER-STEPS/OWNER-TESTS gate docs e3d83de on main (73/1407/0, migs to 0015). Owner playtest ready; no push.
+- 2026-11-23 PASS @core: B-access 495621d, B7 334642c, idea-614 b63a340 merged local main (specs 23/431/0). Specs unblocked via user-site lupa 2.8 wheel. Merge queue: ui > quests > guide > progression > hunting > homestead; roads/survival/crafting on ask.
 - 2026-11-23 C2 cutover: Overlord rn-01cad4e19b2b spawned (Lead - Claude); restart order core B7 → ui U2/U3 → survival S1 → quests/guide Buddies.
 - FORGE FREEZE (2026-11-23, owner via Overlord): hub parked. No new spin-offs or routing until cutover is done. Hub has no workers or worktrees. Pending at freeze: @quests/@guide Buddy start (if not already started). Uncommitted at freeze in primary checkout (main): all lane briefs + plans under docs/brainstorm/, spec non-goal amendment; flagged to Overlord to commit before push.
 
