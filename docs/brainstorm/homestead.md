@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Homestead
 - Lead: Homestead lead · H3/H4 fixes + H2/H5
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - H1-H5 of plans/homestead-01 merged to local main (review PASS, run-specs green) and `decision homestead playtest-ready <hash>` logged; Overlord gates the combined playtest.
@@ -23,10 +23,8 @@
 - (orig ask) L1 fh_homestead (ownership moves from @core after its B6a/B6d chest work): cabin/fence/prop placement on fixed plots, persistent storage, station-slot API (Crafting consumes it), comfort score (Survival + Hunting feed/read it). No world-object clearing: pick clear plots or fake with props. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
 ## In flight
+- MERGED H2 to local main (ff-only, Red2 slot): 8bbc891 2e696ce 42baa30 (review PASS 0/0/2 rn-59cb34a9a37b, venv 59/1205/0). H1-H5 all merged. Follow-up H2b (2 lows: open_chest chestBuilt spec gap; fh_economy missing from fxmanifest dependencies) on homestead-h2b, then playtest-ready.
 - MERGED to local main (ff-only, slot from Red2): H3 2a7d98a, H4 f22ea9d (migration renumbered 0011_homestead_trophies), H5 84cfd2e + refs chore f4272e6. Venv specs 51/1022/0, migration dedupe empty. H2 (8b15695, stacked on old H5) in Gemini review Hom10 rn-59cb34a9a37b; rebase onto main + next slot.
-- Overlord is now Red2 rn-657b4dc593d4 (merge-slot asks + slot-free go to Red2). Specs only via ~/.venvs/rf/bin/python. Migrations 0007 quests, 0008 roads A reserved; ours = highest+1 at merge.
-- Lead rn-115ea34769e8 (Homestead lead · H3/H4 fixes + H2/H5). Freeze over: lupa is in (main 8b6b1a7 specs green).
-- Stack review PASS + specs green, waiting on merge slot (queue 8th, after hunting): h3 eda256c → h4 ef6cdf4 → h5 b67e0c9. At merge: rebase, renumber H4 migration 0006 to main's highest + 1, run specs, merge, log hashes, ping Crafting Buddy that H3 merged.
-- H2 UNBLOCKED (2026-11-23): core B7 on local main 334642c (charge, removeItem fh_not_enough, registerItems). Sent to lead: build H2 stacked on homestead-h5; removeItem then charge, refund items on charge fail; handle fh_insufficient_funds/ledger_failed/removemoney_refused/no_player/player_changed/fh_charge_busy (retry). Merge with the stack if it passes in time. Hom8 hit ~99k context with no edits: told to commit its H2 work in progress and write a handoff note, then the lead starts a fresh worker from it (watch w-c281bbdb). Specs only via `~/.venvs/rf/bin/python tools/run-specs.py`; stack re-runs under venv before the merge-slot ask; any H2 migration uses placeholder 0099_homestead_<x>.sql, renumbered at merge; pre-merge dup check `ls server/migrations | cut -c1-4 | sort | uniq -d` must be empty.
-- H2 done, in Gemini review (Hom10, watch w-fdd5df01): ebe56a6 build flow, d87d369 spec, 8b15695 docs, on top of h5. Full venv suite on tip 28/542/0. Order: take materials, charge, set tier; each failure refunds once; ownership re-checked after every wait; lumber+nails; isInSafeZone only claimed plots, bigger when fenced; props behind verifiedProps; no migration. Hom9 also fixed 3 defects in the Lua-error-mid-build path (details lost; review checks them).
+- Lead rn-115ea34769e8. Overlord Red2 rn-657b4dc593d4 (merge slot). Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (highest now 0011). Crafting Buddy told H3 exports on main (idea-599 unblocked).
+- LAST BLOCK: H2 in Gemini review; needs its own merge slot, rebase onto fad2417 after review (Hom10, watch w-fdd5df01): ebe56a6 build flow, d87d369 spec, 8b15695 docs, on top of h5. Full venv suite on tip 28/542/0. Order: take materials, charge, set tier; each failure refunds once; ownership re-checked after every wait; lumber+nails; isInSafeZone only claimed plots, bigger when fenced; props behind verifiedProps; no migration. Hom9 also fixed 3 defects in the Lua-error-mid-build path (details lost; review checks them).
 - Contacts: Hunting Buddy rn-323e75f78948, Overlord Red2 rn-657b4dc593d4 (merge slot), Crafting Buddy (H3 consumer).

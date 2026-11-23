@@ -1,15 +1,15 @@
 {
   "laneId": "homestead",
-  "updatedAt": "2026-11-23T22:09:03.643Z",
+  "updatedAt": "2026-11-23T22:23:40.589Z",
   "units": [
     {
       "id": "H2",
-      "goal": "clean commits ebe56a6/d87d369/8b15695 (Hom9); full venv suite 28/542/0; Gemini review Hom10 rn-59cb34a9a37b",
+      "goal": "review PASS 0/0/2 8b15695 (rn-59cb34a9a37b); rebased 42baa30 on 66d028c, venv 59/1205/0; merge-slot asked (Red2)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "homestead-h2",
-      "commit": "8b15695"
+      "commit": "42baa30"
     },
     {
       "id": "H1",
