@@ -1,12 +1,51 @@
 # Owner tests (one ordered checklist)
 
-Run top to bottom in your first in-game session (boot, then each block in plan order). Each block appends its own
+Run in the order of the "Playtest order" table below (the detailed sections are in lane-merge order, not run order). Each block appends its own
 section here; keep the order. Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`, then send the
 file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need your account in `group.admin`.
 
+## Playtest order (start here)
+
+One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 305 minutes total.
+
+| # | Section | ~min | Notes |
+|---|---|---|---|
+| 1 | [Core: B-access (owner auto-admin, friend allowlist) - do this first](#core-b-access-owner-auto-admin-friend-allowlist---do-this-first) | 5 | Steps 4-5 need a friend (second account); skip them if solo |
+| 2 | [B4c: spawn-request contract (fh_core)](#b4c-spawn-request-contract-fh_core) | 10 | solo |
+| 3 | [B6b: one T1 outlaw camp (fh_zones)](#b6b-one-t1-outlaw-camp-fh_zones) | 15 | solo; also feeds spike S1 |
+| 4 | [B6c: soft death (fh_death)](#b6c-soft-death-fh_death) | 15 | needs two characters (second client or character switch) |
+| 5 | [B6d: M1 stash home + end-to-end card (fh_homestead, fh_zones, fh_death)](#b6d-m1-stash-home--end-to-end-card-fh_homestead-fh_zones-fh_death) | 10 | solo |
+| 6 | [M1 end-to-end](#m1-end-to-end) | 20 | solo; the main one-pass check, do it with an empty inventory |
+| 7 | [B6e saddlebag](#b6e-saddlebag) | 10 | solo |
+| 8 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); `lumber`/`nails` must be given first (OWNER-STEPS section 7) |
+| 9 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
+| 10 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
+| 11 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
+| 12 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
+| 13 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
+| 14 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7 |
+| 15 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 30 | solo; do last, live fence/jobs steps need those resources already exercised |
+
+Needs another person (table rows): 1 (B-access steps 4-5), 4 (death, two characters), 8 (Homestead second player), 12 (step 15 permission check as non-admin), 13 (`fh_not_owner` from a second character). Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
+
+Out of order is fine for the HUD-only checks in UI, but run sections 1-6 first so there is state to look at. The Hunting subsections sit under one `## Hunting` heading ([Hunting](#hunting)).
+
+### Spike verdicts you must record
+
+Spikes are separate 5-minute cards in `server/resources/[spikes]/TEST-CARDS.md` (not in server.cfg: type `ensure spk_<name>` in the server console, run the `/spk_...` command in game, then write the last line `RESULT: GO|NO-GO|PARTIAL - <why>` in `server/resources/[spikes]/spk_<name>/README.md`). Do these after the sections they gate, or before if you want the ungated passes:
+
+- **S1 `spk_camp`** (camp spawn + ownership, the M1 blocker): GO lets you flip `fh_spike_gated` to false for entity-ownership behaviour (see `server/resources/[fh]/fh_core/docs/spike-gated.md`, row 1). Run before/with section 3 and 6.
+- **S2 `spk_chase`** (mounted wagon chase): gates night ambush + mounted chase (Roads M5 steps 22-23, `fh_heat`).
+- **S3 `spk_wheel`** (wheel break): gates the ungated wheel break (Roads M4 step 7) and `fh_cargo`.
+- S4 `spk_pelt` and S5 `spk_wear` have cards too; record them if time allows (not gated in this build).
+
+After recording, flip with `set fh_spike_gated false` in the console only for the ungated passes in Progression step 4 and Roads steps 7, 23. Not to be confused with the Survival section's "S1-S5", which are survival steps.
+
+---
+
 ## Core: B-access (owner auto-admin, friend allowlist) - do this first
 
-1. Join (OWNER-STEPS step 4). On the DevPC, `server/logs/fxserver.log` has exactly one line `granted group.admin to license:<hash>`.
+1. Join (OWNER-STEPS section 4). On the DevPC, `server/logs/fxserver.log` has exactly one line `granted group.admin to license:<hash>`.
    RESULT:
 2. In game, run an fh_ admin command, e.g. `fh_dump backpack <yourId>`: it replies (no "no permission").
    RESULT:
