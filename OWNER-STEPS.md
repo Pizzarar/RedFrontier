@@ -5,12 +5,19 @@ Two machines. **DevPC** has the repo, FXServer, MariaDB and the Cfx key. **Main 
 1. **Main PC:** install RDR2 (your own legit copy) and the RedM client.
 2. **Cfx key:** get a server key at https://portal.cfx.re (Server Keys). Where it asks for an IP/name, give the DevPC's Tailscale IP `100.83.196.251` (not `localhost`).
 3. **DevPC:** double-click `tools/first-run.cmd`, accept the UAC prompt (opens the firewall on port 30120), and paste the key when asked (it is hidden and saved to the gitignored `server/secrets.cfg`). It starts the server and prints the connect line.
-4. **Main PC:** open RedM, press F8, type `connect 100.83.196.251:30120`, then work through OWNER-TESTS.md.
+4. **Main PC:** open RedM, press F8, type `connect 100.83.196.251:30120`, then work through OWNER-TESTS.md. The first player to join becomes admin automatically (you); nothing else to set up.
+
+## Friends (max 6 players, no router port-forward)
+
+1. In the Tailscale admin console, share the DevPC machine with your friend; they install Tailscale + RedM and F8 `connect 100.83.196.251:30120`. They are rejected the first time.
+2. In the DevPC server window, copy the license from the `allowlist: rejected <name> license:<hash>` line and type `fh_allow license:<hash>` there (or in game F8 as admin).
+3. They connect again and get in (not as admin).
 
 ## If something breaks
 
 - First time on a fresh DevPC only: run `tools/setup-server.ps1` once (about 10 minutes of downloads), then repeat step 3. `first-run.cmd` is safe to run again any time.
 - Stop the server: close its window, then `tools/stop-server.ps1`.
+- Admin check: `server/logs/fxserver.log` (written by `tools/start-server.ps1`) should have one `granted group.admin to license:<hash>` line from your first join. To revoke admin or a friend, delete their line from `server/admins.cfg` / `server/allowlist.cfg` and restart the server (with `admins.cfg` empty, the next first joiner becomes admin).
 - Declined UAC: LAN/Tailscale may still work; run `first-run.cmd` again to retry the firewall rules.
 - Report anything odd to Core with the last lines of `server/logs/fxserver.log` (DevPC). If the client log is needed, send the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` from the Main PC (path to be confirmed).
 - With `fh_dev` on (see `server.cfg`), client script errors are also appended to `server/logs/client-errors.log` on the DevPC. Run `fh_clienterr` in game (admin) to check the pipe: expect a line in that file. Exception: `fh_inventory` (an rsg-inventory fork) is not wrapped, so its client errors only show in the RedM client log on the Main PC.

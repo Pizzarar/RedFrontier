@@ -17,4 +17,5 @@ Config order follows the same recipe's server.cfg. FXServer/MariaDB are fetched 
 | mapmanager, spawnmanager | citizenfx/cfx-server-data resources/[managers] | c6afa3909c763e3327ed76825e78453286c99f05 | https://github.com/citizenfx/cfx-server-data/archive/c6afa3909c763e3327ed76825e78453286c99f05.zip | n/a (git commit pin) |
 
 Not vendored on purpose (skipped from the recipe for the B1 minimum): rsg-hud, rsg-banking, rsg-wardrobe, rsg-menubase, PolyZone, menu_base, rNotify, rsg-voice, xsound, etc.
+Local edit (B-access): `rsg-core/shared/config.lua` sets `RSGConfig.Server.Whitelist = true` and `WhitelistPermission = 'fh.allowlist'` (was `false` / `'admin'`); see fh_core README "Access".
 rsg-core guards its optional rsg-banking call with GetResourceState. Add more as later blocks need them.

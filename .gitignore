@@ -1,5 +1,7 @@
 # secrets / local runtime
 server/secrets.cfg
+server/admins.cfg
+server/allowlist.cfg
 server/artifacts/
 server/db/
 server/cache/

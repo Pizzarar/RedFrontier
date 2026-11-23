@@ -95,8 +95,8 @@ RSGConfig.Server = {}                                    -- General server confi
 RSGConfig.Server.Closed = false                          -- Set server closed (no one can join except people with ace permission 'rsgadmin.join')
 RSGConfig.Server.ClosedReason = 'Server Closed'          -- Reason message to display when people can't join the server
 RSGConfig.Server.Uptime = 0                              -- Time the server has been up.
-RSGConfig.Server.Whitelist = false                       -- Enable or disable whitelist on the server
-RSGConfig.Server.WhitelistPermission = 'admin'           -- Permission that's able to enter the server when the whitelist is on
+RSGConfig.Server.Whitelist = true                        -- RedFrontier edit (B-access): on; friends allowlisted via allowlist.cfg + fh_allow (fh_core)
+RSGConfig.Server.WhitelistPermission = 'fh.allowlist'    -- RedFrontier edit (B-access): was 'admin' (= rsgcore.admin, would make friends RSG admins); ace granted to group.fh_allowlist in server.cfg
 RSGConfig.Server.PVP = true                              -- Enable or disable pvp on the server (Ability to shoot other players)
 RSGConfig.Server.Discord = ''                            -- Discord invite link
 RSGConfig.Server.CheckDuplicateLicense = true            -- Check for duplicate rockstar license on join

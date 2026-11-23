@@ -1,6 +1,6 @@
 # One double-click first run (via first-run.cmd): firewall 30120, Cfx key, start server, print the connect line.
 # Idempotent. Switches for headless tests: -NoElevate (skip firewall), -KeyFromEnv ($env:FH_CFX_KEY),
-# -SecretsPath (default server/secrets.cfg), -NoStart (skip server start). The key is never echoed.
+# -SecretsPath (default server/secrets.cfg), -CfgDir (default server/), -NoStart (skip server start). The key is never echoed.
 [CmdletBinding()]
 param(
     [switch]$NoElevate,
@@ -8,6 +8,7 @@ param(
     [switch]$NoStart,
     [switch]$FirewallOnly,   # internal: the elevated child
     [string]$SecretsPath,
+    [string]$CfgDir,         # where admins.cfg/allowlist.cfg live (default server/); tests pass a temp dir
     [int]$TimeoutSec = 120
 )
 $ErrorActionPreference = 'Stop'
@@ -86,7 +87,10 @@ if ($need) {
     if (-not $ok) { Write-Host 'No valid key entered; stopping. Run first-run.cmd again.' -ForegroundColor Red; exit 2 }
 }
 
-# ---- 3. Start ----
+# ---- 3. Access cfgs (admins.cfg / allowlist.cfg, created empty if missing) ----
+Initialize-AccessCfgs $(if ($CfgDir) { $CfgDir } else { $Server })
+
+# ---- 4. Start ----
 if ($NoStart) { Write-Host '[start] skipped (-NoStart)'; return }
 $ip = $null
 try { $ip = (& tailscale ip -4 2>$null | Select-Object -First 1) } catch {}
