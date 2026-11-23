@@ -29,6 +29,7 @@
 - (orig ask) L10 fh_ui: one shared NUI shell (vanilla JS): buff HUD, heat indicator, insurance dialog, contract board, station menus, fence shop. Lanes ship data/events, UI ships screens. Hypnospace-light surrealism but readability first. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
 ## In flight
+- idea-715 PASS (rn-c3cea2029d1b 0/0/1) merged 60ec4aa: heat card top 3 + "+K more"; 720p note clip accepted.
 - Shell plan done: U1 b0ac78a, U2 535ce8d, U3 693372d, U4 1ccf7b5 on local main. `ui playtest-ready` not yet logged (asked lead).
 - Plan 2: docs/plans/ui-wiring-fence-quests.md (W1 fence/idea-601 ∥ W2 jobs board -> W3 journal -> W4 drop fallbacks + test card). Handed to UI lead rn-f62d43216817 2026-11-23.
 - fh_fence on main (P2 f60805c, tip ed2cb1e); @progression P1b in flight touches fence debits (event names stable) -> W1 rebases after it.
