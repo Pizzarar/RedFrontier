@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: none
+- Lead: Core lead · B7 fix + merge
 - Workers: 0
 
 ## Done when
@@ -24,7 +24,9 @@
 - No GitHub push without owner OK (Pizzarar/RedFrontier not pre-approved).
 
 ## Open
-- B-admin+B-access: Gemini re-review PASS on core-badmin 694ca7a (11-23). Only step left = merge, held by forge freeze. On thaw: spawn lead, merge 694ca7a, then B7 fix (notes/b7-fix-brief.md).
+- B-admin+B-access: rebased core-badmin 20e4b5e (was 694ca7a, Gemini PASS), conflict-free (range-diff: server.cfg context shift only), PASS stands, merge-ready; held because forge has no lupa so specs cannot run (owner sudo, Overlord flagged). Lead rn-f602a24ed9c2.
+- idea-614 (Q0a, @quests): add `participants = {citizenid,...}` to fh:zones:camp_cleared (fh_zones/server/main.lua:137) = players within camp activationRadius of cfg.center when clear() fires; no damage tracking. Additive, optional for quests. Dispatched 11-23 rn-a527caf4add5 branch core-i614 (fh_zones only, no clash).
+- B7 fix dispatched (11-23) to Cor1 rn-d0832267ea2f; brief docs/brainstorm/plans/core-02-b7-fix.md (review transcript lost: crit known, 2 lows untitled).
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
 - Aub: Cfx key + first join (OWNER-STEPS.md), then run OWNER-TESTS.md; flip fh_spike_gated after S1/S2.
 - RSG + fh_inventory (fork, unwrapped) client errors still need Aub to send CitizenFX log from Main.
@@ -32,6 +34,7 @@
 - Push to GitHub: owner OK needed.
 
 ## In flight
+- 11-23 post-thaw PASS+merged local main (unpushed): B-access 495621d, B7 334642c (Gemini tierA PASS 0/0/1; fix brief plans/core-02-b7-fix.md), idea-614 b63a340 (Sonnet PASS 0/0/0). 23 specs/431 tests green. Siblings notified. Nit B7-nit (README Tests list) queued.
 - FORGE FREEZE (2026-11-23, owner via Hub15): PARKED, start nothing. B-access core-badmin 694ca7a (re-review pending), B7 core-b7 9bad7c4 (review pending); neither merged. Branches unpushed (Overlord pushes). Resume after cutover reported done: finish both reviews, merge, notify @progression/@homestead/@roads.
 - B7 contracts batch (plan core-02): charge/getRep/removeItem/wagon spawn kind/heat delegate/registerItems for @progression/@homestead/@roads (idea-600/602/603 merged).
 - Plan: docs/brainstorm/plans/core-01-boot-to-m1.md (+ amendments: machine split, autonomy). Lead Cor2 rn-428940b6f1c5.

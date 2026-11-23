@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T04:08:55.363Z",
+  "updatedAt": "2026-11-23T21:45:00.186Z",
   "units": [
     {
       "id": "B5",
@@ -111,18 +111,34 @@
       "goal": "B-access: unlisted 6-slot server, first-joiner auto-admin (fh_dev+fh_dev_autoadmin, admins.cfg), rsg-core whitelist via gitignored allowlist.cfg, Friends-over-Tailscale docs",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-badmin",
-      "commit": "694ca7a"
+      "commit": "495621d"
     },
     {
       "id": "B7",
       "goal": "core-02 contracts: fh_economy charge+getRep, fh_core removeItem, spawn kind wagon, fh_heat admin delegate, registerItems for siblings",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-b7",
-      "commit": "9bad7c4"
+      "commit": "334642c"
+    },
+    {
+      "id": "idea-614",
+      "goal": "fh_zones camp_cleared participants (citizenids in activationRadius) for @quests Q0a",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-i614",
+      "commit": "b63a340"
+    },
+    {
+      "id": "B7-nit",
+      "goal": "fh_economy README ## Tests: list spec/fh_economy_server_spec.lua (B7 re-review low; fold into next fh_economy unit)",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
