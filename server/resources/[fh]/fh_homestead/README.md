@@ -5,7 +5,7 @@ Seed of lane L1 (spec L87, L107, L138-139): fixed homestead plots, one claim per
 - `config.lua`: plots (id, region, center, radius, chest coords/heading). Coordinates are approximate: verify in game.
 - `shared/plot_rules.lua`: pure rules (in-radius, free, one-per-player, owner-only chest); specced in `spec/plot_rules_spec.lua`.
 - `server/main.lua`: `/fh_claim`, `/fh_unclaim [plot_id]` (owner, or admin with a plot id), exports
-  `claim`, `unclaim`, `getPlot`, `isInSafeZone` (stub, TODO fh_zones). DB: `server/migrations/0003_homestead.sql`.
+  `claim`, `unclaim`, `getPlot`, `isInSafeZone` (query only, enforcement is TODO fh_zones). DB: `server/migrations/0003_homestead.sql`.
 - Chest = fh_core `chest` container (`fh:chest:<plot>:1`) with coords; open goes through `exports.fh_core:open`
   (server-side reach check) after the owner check.
 - Client draws the chest as a local, non-networked prop. TODO(waits on B4c): anything networked.
@@ -34,7 +34,7 @@ claims and `fh_plot_slots` has finished.
 | `claim(src)` | `true, plot_id` or `false, reason` | reasons: `fh_not_ready`, `fh_no_character`, `fh_no_player`, `fh_not_in_plot`, plus the `plot_rules` refusals (plot taken, already own one), `fh_claim_failed` |
 | `unclaim(src, plot_id?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_unclaim_failed` |
 | `getPlot(citizenid)` | plot id or `nil` | |
-| `isInSafeZone(coords)` | boolean | stub: true inside ANY configured plot, claimed or not (TODO fh_zones) |
+| `isInSafeZone(coords)` | boolean | true within the safe radius of a CLAIMED plot: `baseSafeRadius` (else the plot radius) plus the built fence's `safeRadiusBonus` (+10 m). Unclaimed plots never count; `false` until claims are loaded; before the slot cache is loaded the fence bonus is not counted. Query only: nothing enforces it yet (TODO fh_zones) |
 | `getStations(citizenid)` | `{ {plot_id, slot_id, station_type, coords}, ... }` | built stations on that character's own plot; `{}` before the load or without a plot. Used by @crafting |
 | `stationAt(coords, maxDist)` | `{plot_id, slot_id, station_type}` or `nil` | nearest built station on ANY plot within `maxDist` (default 3.0 m). Used by @crafting |
 | `isNearStation(src, stationType, maxDist)` | boolean | OWNER-ONLY: only stations on the plot the asking character owns, measured from the server-side ped. Used by @crafting |
@@ -68,7 +68,11 @@ Slot interface (server-local table `FhHomesteadSlots`, for H2, not an export): `
 | `fh:homestead:trophy_placed` | `{ citizenid, trophy_id, comfort }` | after `placeTrophy` succeeds (`comfort` = that trophy's points) |
 | `fh:homestead:trophy_removed` | `{ citizenid, trophy_id, comfort }` | after `unplaceTrophy` succeeds |
 
-Client to server: `fh:homestead:open_chest { plot_id }` (owner check, then fh_core `open`). Callback `fh:homestead:plots`.
+Client to server: `fh:homestead:open_chest { plot_id, chest? }` (owner check; `chest` 2/3 needs the `chest_2`/`chest_3` slot
+built, else `chest: fh_chest_not_built`; then fh_core `open`). Callbacks `fh:homestead:plots` and `fh:homestead:slot_props`
+(H2: `{ [plot_id] = props }` for every claimed plot, `nil` = not loaded yet, the client retries).
+Server to client (H2): `fh:homestead:slot_props` `(plot_id, props)` to everyone on claim, build and unclaim (empty list);
+`props` = `{ slot_id, kind, tier, model, coords, heading, chest? }` per built slot, drawn client-local and non-networked.
 
 ## Config keys (`config.lua`, `FhHomesteadConfig`)
 
@@ -79,7 +83,9 @@ Client to server: `fh:homestead:open_chest { plot_id }` (owner check, then fh_co
   `stationType` (stations), `requires = { slot = minTier }`, `prop`, and `tiers[n] = { cost { money, items }, comfort,
   unlocks { chests, safeRadiusBonus, stationType, trophyComfort } }`. Slots: `cabin` (2 tiers), `fence`, `station_1`
   workbench, `station_2` campfire, `station_3` tanning_rack, `trophy_wall`, `chest_2` (needs cabin 1), `chest_3` (needs cabin 2).
-  Costs are data only until H2.
+  Costs are charged by the H2 build flow (below).
+- `buildItems` (H2): the build materials `lumber` and `nails`, full §4.1 item defs, registered with
+  `exports.fh_core:registerItems` from this resource only (at start and again when fh_core restarts).
 - `trophyComfortCap` (20): max total trophy points. `trophyMaxByWallTier` (`{ [1] = 6 }`): how many trophies (best first) count.
   Trophy comfort counts only with the trophy wall built.
 
@@ -89,14 +95,66 @@ Client to server: `fh:homestead:open_chest { plot_id }` (owner check, then fh_co
 - `fh_plot_slots` (0005): `plot_id`, `slot_id`, `tier`, `built_at`. PK `(plot_id, slot_id)`. Tier 0 = no row. FK to `fh_plots` ON DELETE CASCADE.
 - `fh_plot_trophies` (0011): `plot_id`, `trophy_id` (varchar 64), `points`, `placed_at`. PK `(plot_id, trophy_id)`. FK to `fh_plots` ON DELETE CASCADE.
 
-## Build flow (H2, pending @core B7)
+## Build flow (H2, `server/build.lua`)
 
-H2 fills this in (build command/UI, money and material debit, build materials registered through `fh_core:registerItems`).
+`/fh_build <slot>` builds the next tier of a slot on your own plot (`cabin`, `fence`, `station_1..3`, `trophy_wall`,
+`chest_2`, `chest_3`). `/fh_build` with no slot lists every slot as `slot tier/max next: $money, n item` (or `(max)`).
+Success reply: `fh_build: built <slot> tier <n> ($<money>, <n> <item>, ...)`. Server-local entry point:
+`FhHomesteadBuild.build(src, slotId)` -> `true, tier, cost` or `false, reason, detail`.
+
+Order (tier A: no dupes, no free builds, no lost items):
+
+1. Checks, nothing taken yet: slot cache loaded (`fh_not_ready`), slot id (`fh_unknown_slot`), character
+   (`fh_no_character`), own a plot (`fh_no_plot`), ped (`fh_no_player`), standing inside the plot (`fh_not_in_plot`),
+   lock (`fh_build_busy`), then the H1 rules (`fh_not_owner`, `fh_max_tier`, `fh_prereq_missing`, ...).
+2. Materials come out of the plot's main chest `fh:chest:<plot>:1` (NOT the player's inventory), one
+   `fh_core.removeItem` per item in name order, each all-or-nothing. A shortfall returns `fh_not_enough` with the item
+   name (`fh_build: fh_not_enough (not enough nails in your plot chest ...)`); items already taken go back first.
+3. Money: `fh_economy.charge(src, money, 'homestead build', plot region)`, skipped when the tier costs $0. Right before
+   it the flow checks the same character is still loaded on `src` (else `player_changed`). Any charge error
+   (`fh_insufficient_funds`, `fh_charge_busy`, `ledger_failed`, `removemoney_refused`, `no_player`, `player_changed`,
+   ...) is returned as is, after the items went back. `fh_charge_busy` is not retried: the command says
+   `another payment is in progress, try again in a moment`.
+4. `FhHomesteadSlots.setTier` (writes only while `fh_plots` still says this character owns the plot).
+
+Refunds: any failure after step 2 puts back exactly what was taken. Items go back into the same chest with
+`fh_core.addItem`; money goes back with `fh_economy.pay(src, amount, 'homestead build refund', region)`, and only while
+the same character is still loaded on `src`. Each refund runs at most once and is checked. A failed refund is logged
+on the server console as `ITEM LOST: build refund failed: citizenid=... plot=... slot=... item=... amount=...` or
+`MONEY LOST: build refund of $<n> to citizenid=...`, and the build returns `fh_build_refund_failed`
+(`tell an admin`). These two are the only credit paths and `charge` the only debit path.
+
+Lock: one build per plot and per character at a time (a second gets `fh_build_busy`), held across every await and
+released on every path, Lua errors included (`pcall`; the error path is guarded too). A Lua error before the tier is
+saved refunds and returns `fh_build_failed`. If the error comes after the tier was saved (for example in a
+`slot_changed` handler), the build stands, nothing is refunded and the console logs `tier <n> was saved before the
+error; kept`.
+
+Ownership: every unclaim bumps a per-plot counter. After each await the flow re-checks that the same character owns
+the same plot with no unclaim in between (also unclaim + re-claim): otherwise `fh_no_plot` and a full refund.
+
+Other reasons: `fh_removeitem_unavailable` / `fh_charge_unavailable` (the fh_core / fh_economy export threw),
+`fh_slot_busy`, `fh_plot_free`, `fh_slot_save_failed` (setTier; full refund), `fh_bad_cost` (config error, logged).
+
+Also in H2:
+
+- Extra chests: a built `chest_2` / `chest_3` is registered as an fh_core `chest` container `fh:chest:<plot>:<n>` at its
+  prop position (on build, at start and when fh_core restarts), opened with `[E] Homestead chest <n>` at the prop.
+- Props: every built slot gets a client-local, non-networked prop (see Events for the feed).
+- `/fh_trophy place <item>` / `/fh_trophy remove <trophy_id>` (the `placeTrophy` / `unplaceTrophy` exports, item from the
+  plot chest), `/fh_comfort` (prints your `getComfort`) and `/fh_station <type>` (prints `isNearStation` for you:
+  `fh_station: workbench near=true|false`). All three are thin wrappers so the owner tests can run; they add no rules.
 
 ## Open
 
 - Spill-on-unclaim gap: chest contents stay in the stash and pass to the next owner of the plot (see Known gaps above).
+  The same holds for the extra chests (`fh:chest:<plot>:2` / `:3`): their stashes stay after an unclaim too.
+- Build materials must be in the plot chest: fh_core `removeItem` works on registered world containers only, not on
+  the player's own inventory, so `/fh_build` cannot take lumber/nails from the pockets.
+- No offline or by-citizenid money credit in fh_economy (`pay` needs the character loaded on `src`): if the player logs
+  off or switches character between the charge and a failed `setTier`, the money refund cannot be paid and is logged
+  as `MONEY LOST` for an admin to pay back by hand.
+- Nothing in the game hands out `lumber` or `nails` yet; only an admin `/giveitem` does (needs a gathering/vendor lane).
 - Plots 2-4 coordinates (`heartlands_02..04`) are placeholders: TODO-verify in game. Slot prop offsets and the `p_chest01x` fallback model are also TODO-verify.
 - `fh_hunting:getTrophyComfort` is guarded (`GetResourceState` plus `pcall`): until Hunting merges, `placeTrophy` returns `fh_hunting_unavailable`.
 - `placeTrophy` needs fh_core `removeItem` (core B7): until it exists it returns `fh_removeitem_unavailable`.
-- No player or admin command sets slot tiers or places trophies yet; that arrives with H2.

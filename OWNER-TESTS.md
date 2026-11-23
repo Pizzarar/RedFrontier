@@ -239,9 +239,9 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 14. `restart fh_ui` while a screen is open.
     Expected: the screen disappears, the mouse is released, movement works.
 
-## Homestead (H1-H4): slots, stations, comfort
+## Homestead (H1-H4 + H2): slots, build, stations, comfort
 
-Resource: `fh_homestead`. The build commands (slot tiers, trophy place/unplace) do not exist yet: H2 adds them, and trophies also need Hunting plus core B7. So only steps 1, 2, 9 and 10 can be run today; the rest are marked "after H2" and stay `SKIP` until then. Start from a character with no plot.
+Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hunting's `getTrophyComfort` (today step 6 shows the refusal). `<id>` is your server id (as in the fh_economy tests). Start from a character with no plot and an empty plot chest. Materials are taken from the plot chest, never from your pockets. If a `/giveitem` is refused as too heavy, give 20 at a time and move each batch into the chest.
 
 1. Stand inside the plot circle at (-300, 790, 118) and run `/fh_claim`.
    Expected: `fh_claim: claimed plot heartlands_01`. Run it again: it refuses (you already own a plot).
@@ -249,29 +249,69 @@ Resource: `fh_homestead`. The build commands (slot tiers, trophy place/unplace) 
 2. Press E at the chest (-296, 790, 118) and put 1 bread in.
    Expected: the plot chest opens and takes it.
    RESULT:
-3. Set slot tiers (build the workbench, campfire, tanning rack, trophy wall, cabin). After H2: there is no console or admin command for this in H1-H4.
-   Expected (after H2): each build is saved; the server console shows no errors.
+3. Build. Prepare: `/giveitem <id> lumber 65`, move all 65 lumber into the plot chest, then `/givemoney <id> cash 500`. Note your cash (call it C).
+   a. `/fh_build`
+      Expected: `fh_build: plot heartlands_01: cabin 0/2 next: $150, 20 lumber; chest_2 0/1 next: $40, 8 lumber; chest_3 0/1 next: $60, 10 lumber; fence 0/1 next: $100, 15 lumber; station_1 0/1 next: $60, 10 lumber; station_2 0/1 next: $25, 5 lumber; station_3 0/1 next: $80, 12 lumber; trophy_wall 0/1 next: $120, 10 lumber`
+   b. `/fh_build chest_2` (needs the cabin first).
+      Expected: `fh_build: fh_prereq_missing`. Chest still 65 lumber, cash still C.
+   c. Run these in order. After each one, check the reply and the lumber left in the plot chest:
+      `/fh_build cabin` -> `fh_build: built cabin tier 1 ($150, 20 lumber)` (45 left)
+      `/fh_build chest_2` -> `fh_build: built chest_2 tier 1 ($40, 8 lumber)` (37 left)
+      `/fh_build station_1` -> `fh_build: built station_1 tier 1 ($60, 10 lumber)` (27 left)
+      `/fh_build station_2` -> `fh_build: built station_2 tier 1 ($25, 5 lumber)` (22 left)
+      `/fh_build station_3` -> `fh_build: built station_3 tier 1 ($80, 12 lumber)` (10 left)
+      Expected: cash is now C - 355. A placeholder prop (`p_chest01x`) stands at each built slot. Walk up to the chest_2 prop at about (-304, 790): `[E] Homestead chest 2` shows, and E opens an empty chest.
+   d. No trophy wall yet: `/fh_trophy place bread` (the bread from step 2; the wall is checked before anything else).
+      Expected: `fh_trophy: fh_no_trophy_wall`. The bread is still in the chest (count 1).
+   e. `/fh_build trophy_wall`
+      Expected: `fh_build: built trophy_wall tier 1 ($120, 10 lumber)`. 0 lumber left, cash C - 475.
+   f. Money refund: `/setmoney <id> cash 50`, give 15 lumber and move it into the chest, run `/fh_build fence`.
+      Expected: `fh_build: fh_insufficient_funds (not enough cash)`. The chest still has 15 lumber (taken and put back), cash is still $50.
+      Then `/givemoney <id> cash 100` and `/fh_build fence`.
+      Expected: `fh_build: built fence tier 1 ($100, 15 lumber)`, cash $50, 0 lumber left.
+   g. Item refund: give 40 lumber and 5 nails, move both into the chest, run `/fh_build cabin` (tier 2 needs 40 lumber + 20 nails).
+      Expected: `fh_build: fh_not_enough (not enough nails in your plot chest (materials are taken from the chest))`. The chest still has 40 lumber and 5 nails, cash is still $50.
+   h. DB: `SELECT kind, amount, reason FROM fh_ledger WHERE reason LIKE 'homestead%' ORDER BY id;`
+      Expected: exactly 7 rows, all `charge`, `homestead build`, amounts 150, 40, 60, 25, 80, 120, 100. No row for the refused attempts and no `homestead build refund` row.
+      The server console shows no red errors and no `ITEM LOST` / `MONEY LOST` line.
    RESULT:
-4. Stations seen from crafting (after H2, needs @crafting). Stand within 3 m of a built workbench.
-   Expected: crafting accepts the workbench for you (`isNearStation`), but not for another player or on a plot you do not own. Walk away: refused.
+4. Stations (what @crafting will ask through `isNearStation`). Prop spots: workbench about (-294, 794), campfire (-294, 786), tanning rack (-290, 790).
+   Expected:
+   - At the workbench: `/fh_station workbench` -> `fh_station: workbench near=true`; `/fh_station campfire` -> `fh_station: campfire near=false`.
+   - At the campfire: `/fh_station campfire` -> `fh_station: campfire near=true`.
+   - Walk to the plot center (-300, 790): `/fh_station workbench` -> `fh_station: workbench near=false` (more than 3 m away).
+   - A second player with no plot stands at your workbench and runs `/fh_station workbench` -> `fh_station: workbench near=false` (owner-only).
    RESULT:
-5. Comfort value (after H2). With the cabin tier 1 (10) and the workbench (3) built.
-   Expected: `getComfort` reads 13. Add the trophy wall (5): 18. A fresh character with no plot reads 0.
+5. Comfort. Built after step 3: cabin 1 (10), chest_2 (2), the three stations (3 each), trophy wall (5), fence (5).
+   Expected: `/fh_comfort` -> `fh_comfort: 31`. The second player (no plot) -> `fh_comfort: 0`.
    RESULT:
-6. Place a trophy (after H2, needs Hunting and core B7). Put one trophy item in the plot chest and place it on the wall.
-   Expected: the item leaves the chest (count 1 to 0) and comfort rises by its points. With no trophy wall built: refused `fh_no_trophy_wall`, item stays in the chest.
+6. Place a trophy.
+   Today (Hunting has no `getTrophyComfort` yet): run `/fh_trophy place bread`.
+   Expected: `fh_trophy: fh_hunting_unavailable`, the bread is still in the chest (count 1), `/fh_comfort` is still 31, and the console warns `fh_hunting:getTrophyComfort failed`.
+   Once Hunting has it: put one `trophy_legendary_bear` in the plot chest (it is bulky: carry it by saddlebag or wagon, it does not fit the backpack) and run `/fh_trophy place trophy_legendary_bear`.
+   Expected: `fh_trophy: place ok trophy_legendary_bear#1`, the chest count goes 1 -> 0, and `/fh_comfort` rises by the trophy's points (trophy comfort is capped at 20 in total).
    RESULT:
-7. Unplace that trophy (after H2).
-   Expected: the item is back in the chest exactly once (count 1, never 2) and comfort drops back. Doing it a second time is refused (`fh_no_trophy`), no extra item.
+7. Unplace that trophy (only after step 6 placed it; SKIP until then). Run `/fh_trophy remove trophy_legendary_bear#1`.
+   Expected: `fh_trophy: remove ok`, the trophy is back in the chest exactly once (count 1, never 2), and `/fh_comfort` -> `fh_comfort: 31`. Run it a second time: `fh_trophy: fh_no_trophy`, and the count stays 1.
    RESULT:
-8. Unclaim clears comfort (after H2, with slots and a trophy in place). Run `/fh_unclaim`.
-   Expected: `fh_unclaim: released plot heartlands_01`; comfort reads 0. Claim again: slots and trophies are gone (a fresh plot).
+8. Unclaim clears the plot. Run `/fh_unclaim`.
+   Expected: `fh_unclaim: released plot heartlands_01`. All slot props disappear. `/fh_comfort` -> `fh_comfort: 0`. `/fh_build` -> `fh_build: fh_no_plot`.
+   DB: `SELECT * FROM fh_plot_slots WHERE plot_id = 'heartlands_01';` -> 0 rows.
+   Run `/fh_claim` there again: `fh_claim: claimed plot heartlands_01`; `/fh_build` lists every slot at 0 again (`cabin 0/2 next: $150, 20 lumber; ...`); `/fh_comfort` -> `fh_comfort: 0`.
+   Known gap: the main chest keeps its items (the bread, 40 lumber and 5 nails), and the chest 2 stash keeps its contents too.
    RESULT:
 9. Claim and unclaim a plot with no builds.
    Expected: `/fh_unclaim` replies `fh_unclaim: released plot heartlands_01`, no red errors in the server console. (Known gap: bread left in the chest stays there and the next owner of the plot gets it.)
    RESULT:
-10. Server restart: claim a plot, stop the server, start it, rejoin, press E at the chest.
-    Expected: you still own the plot (`/fh_claim` there refuses) and the chest still holds its items. After H2, repeat with built slots and a placed trophy: the same tiers, comfort value and trophy are back.
+10. Server restart. Claim heartlands_01 again with `/fh_claim` (step 9 left you without a plot). Make sure the plot chest holds at least 30 lumber and you have at least $210 cash. Run `/fh_build cabin`, then `/fh_build station_1`, put 1 bread in the chest, then stop the server, start it and rejoin.
+    Expected:
+    - `/fh_claim` at the plot refuses (you still own it).
+    - `/fh_build` shows `cabin 1/2 next: $400, 40 lumber, 20 nails` and `station_1 1/1 (max)`.
+    - The cabin and workbench props are back.
+    - `/fh_comfort` -> `fh_comfort: 13`.
+    - At the workbench, `/fh_station workbench` -> `fh_station: workbench near=true`.
+    - E at the chest shows the bread and the leftover lumber.
+    After Hunting: also build the trophy wall and place a trophy before the restart; after it, the trophy is still on the wall (`/fh_trophy remove` works once) and comfort is the same as before the restart.
     RESULT:
 
 ## Q5: quests (fh_quests)
