@@ -27,26 +27,22 @@ exports('restAtBed', function(src) return rest(src, 'bed') end)
 -- The server re-checks proximity itself; a client can only ask.
 RegisterNetEvent('fh:survival:restBed', function() rest(source, 'bed') end)
 
--- ---- bedroll item (guarded: fh_core registerItems may be missing/older) ----
+-- ---- bedroll item ----
+-- The item definition lives in shared/items.lua (FhSurvivalItems.ITEMS) and is registered with the S3 items by
+-- server/actions.lua through exports.fh_core:registerItems. Only the usable-item callback is ours.
+local BEDROLL = FhSurvivalItems.BEDROLL
+
 local function registerUsable()
     pcall(function()
-        exports['rsg-core']:CreateUseableItem(cfg.BedrollItem, function(source) rest(source, 'bedroll') end)
+        exports['rsg-core']:CreateUseableItem(BEDROLL, function(source) rest(source, 'bedroll') end)
     end)
 end
 
-local function registerBedroll()
-    local def = { [cfg.BedrollItem] = { label = 'Bedroll', weight = 2500, size_class = 'bulky', stackable = false, value_base = 12, useable = true } }
-    local ok, res, err = pcall(function() return exports.fh_core:registerItems(def) end)
-    if not ok or res == false then print(('[fh_survival] bedroll item registration skipped: %s'):format(tostring(ok and err or res))) end
-    registerUsable()
-end
-
 CreateThread(function()
-    while GetResourceState('fh_core') ~= 'started' do Wait(500) end
-    registerBedroll()
+    while GetResourceState('rsg-core') ~= 'started' do Wait(500) end
+    registerUsable()
 end)
--- fh_core restart drops its item registry; rsg-core restart drops UsableItems callbacks.
+-- rsg-core restart drops UsableItems callbacks.
 AddEventHandler('onResourceStart', function(res)
-    if res == 'fh_core' then CreateThread(registerBedroll)
-    elseif res == 'rsg-core' then CreateThread(registerUsable) end
+    if res == 'rsg-core' then CreateThread(registerUsable) end
 end)

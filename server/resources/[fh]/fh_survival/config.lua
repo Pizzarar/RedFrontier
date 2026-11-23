@@ -37,7 +37,6 @@ FhSurvivalConfig = {
     HeatRadius = 4.0,
     HeatCheckSeconds = 10,         -- warm is re-applied (full duration) this often while near heat
     -- == S4 rest / comfort ==
-    BedrollItem = 'bedroll',       -- usable item: rested 1.0 anywhere
     ComfortK = 0.01,               -- homestead bed: rested magnitude = 1.0 + comfort * ComfortK
     RestedCap = 1.20,              -- must match the fh_buffs cap for `rested`
     -- == S5 sluggish effect ==

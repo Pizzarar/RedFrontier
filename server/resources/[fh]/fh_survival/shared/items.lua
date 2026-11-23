@@ -7,6 +7,7 @@ local DEFAULT_MAX = 5 -- mirrors FhSurvivalNeeds.DEFAULT_CANTEEN_MAX (kept local
 I.DEFAULT_WASH_COOLDOWN = 300
 I.DEFAULT_HEAT_RADIUS = 4.0
 I.DEFAULT_WATER_RADIUS = 6.0
+I.BEDROLL = 'bedroll' -- S4 rest item; used by server/rest.lua, not part of I.USE (no buff-on-use path here)
 
 -- fh_core registerItems definitions (spec 4.1). weight is grams per unit.
 I.ITEMS = {
@@ -14,6 +15,8 @@ I.ITEMS = {
     fh_biscuit = { label = 'Hardtack',      weight = 120, size_class = 'pocket', stackable = true,  value_base = 1, illicit = false },
     fh_stew    = { label = 'Tin of Stew',   weight = 400, size_class = 'pocket', stackable = true,  value_base = 4, illicit = false },
     fh_canteen = { label = 'Canteen',       weight = 500, size_class = 'pocket', stackable = false, value_base = 6, illicit = false },
+    -- S4: rested 1.0 anywhere (server/rest.lua). Same registerItems path as the rest.
+    bedroll    = { label = 'Bedroll',       weight = 2500, size_class = 'bulky', stackable = false, value_base = 12, illicit = false, useable = true },
 }
 
 -- Item -> effect. kind 'food' is consumed; 'canteen' spends one charge. `scale` multiplies the configured duration.

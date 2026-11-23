@@ -111,6 +111,10 @@ case('ITEMS pass fh_core registerItems validation (B7)', function()
         assert(Core.validName(name), name)
         assert(def.illicit == false, name .. ' full 4.1 def has explicit illicit')
     end
+    local b = I.ITEMS[I.BEDROLL]
+    assert(I.BEDROLL == 'bedroll' and b and b.useable == true and b.illicit == false and b.stackable == false)
+    assert(I.USE[I.BEDROLL] == nil, 'bedroll has no buff-on-use entry: server/rest.lua owns it')
+    assert(Core.checkRegister({ [I.BEDROLL] = b }, 'fh_survival', function() return false end), 'bedroll passes the validator alone')
     ok, err, bad = Core.register(I.ITEMS, 'fh_survival', nil)
     assert(ok, tostring(err))
     ok = Core.register(I.ITEMS, 'fh_survival', nil) -- re-register after a restart is fine
