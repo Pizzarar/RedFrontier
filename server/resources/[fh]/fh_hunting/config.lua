@@ -16,8 +16,8 @@ FhHuntingConfig = {
     -- 'roll' source. A zone sets the star band; the roll only ever lowers it by one star, with this chance.
     -- Limb / gut / explosive / multi-hit stay 1 star.
     Zones = {
-        head   = { stars = 3, downgradeChance = 0.10 },
-        vital  = { stars = 3, downgradeChance = 0.10 },
+        head   = { stars = 3, downgradeChance = 0 },
+        vital  = { stars = 3, downgradeChance = 0 },
         body   = { stars = 2, downgradeChance = 0.10 },
         limb   = { stars = 1, downgradeChance = 0 },
         gut    = { stars = 1, downgradeChance = 0 },

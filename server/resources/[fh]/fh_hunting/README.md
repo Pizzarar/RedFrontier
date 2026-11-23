@@ -9,7 +9,8 @@ and is specced with `python tools/run-specs.py` (`spec/hunting_*_spec.lua`); not
 `Config.PeltQualitySource` in `config.lua`:
 
 - `'roll'` (default): the server maps the last damage bone to a zone (head/vital 3 stars, body 2 stars,
-  limb/gut/explosive/multi-hit 1 star) and rolls within that zone's band. Needs no native result.
+  limb/gut/explosive/multi-hit 1 star). Head and vital are always 3 stars; only the body zone rolls, with a 10% chance
+  of dropping one star (`Zones.body.downgradeChance`). Needs no native result.
 - `'native'`: read `_GET_PED_QUALITY` / `_GET_PED_DAMAGE_CLEANLINESS` instead (waits on the S4 `spk_pelt` verdict).
 
 Both feed the same `FhHuntingQuality.resolve()`. Other config: `QualityMult` (1 star 0.4, 2 stars 1.0, 3 stars 1.8),
