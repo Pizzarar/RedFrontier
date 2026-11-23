@@ -1,13 +1,15 @@
 {
   "laneId": "progression",
-  "updatedAt": "2026-11-23T21:58:50.848Z",
+  "updatedAt": "2026-11-23T22:54:04.026Z",
   "units": [
     {
       "id": "prog-p1b",
       "goal": "P1b (after P2 spec fix; stack on P4): fh_progression drop oxmysql shim -> getRep export only; fh_fence+fh_hands debits via B7 charge, full error map (fh_insufficient_funds, ledger_failed, removemoney_refused, no_player, player_changed, fh_charge_busy retry no double-charge); fence sell via fh_core.removeItem (all-or-nothing, fh_not_enough); fold P4 lows",
       "files": [],
       "doneCheck": "",
-      "status": "blocked"
+      "status": "done",
+      "branch": "prog-p1b",
+      "commit": "7c66833"
     },
     {
       "id": "prog-fence-window",
