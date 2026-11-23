@@ -175,4 +175,21 @@ case('fastTravelVerdict: carrying cargo, wagon with cargo in reach, otherwise fi
         'custom reach shrinks the zone')
 end)
 
+case('planTransfer: stackable flag wins over unique; lowest matching stack; non-stackable takes a free slot', function()
+    local function stack(slot) return { name = 'gold_bar', amount = 1, weight = 1000, size_class = 'cargo', stackable = true } end
+    local p = plan({ wagonView = { items = { [5] = stack(), [2] = stack() } } })
+    p.open.items[1] = { name = 'gold_bar', amount = 1, weight = 1000, size_class = 'cargo', stackable = true }
+    assert(R.planTransfer(p).toSlot == 2, 'deterministic: lowest slot, not pairs() order')
+    -- same name present, but the incoming item is non-stackable: never merges, first free slot
+    p.open.items[1] = { name = 'gold_bar', amount = 1, weight = 1000, size_class = 'cargo', stackable = false }
+    assert(R.planTransfer(p).toSlot == 1)
+    -- stackable = false with no unique flag still counts as non-stackable
+    p.wagonView.items[1] = { name = 'x', amount = 1, weight = 1, size_class = 'cargo' }
+    assert(R.planTransfer(p).toSlot == 3)
+end)
+case('fastTravelVerdict fails closed when a container could not be read', function()
+    local ok, r = R.fastTravelVerdict({ unknown = 'fh_inventory_down', carriedCargo = 0, playerCoords = me, wagons = {} })
+    assert(not ok and r == 'fh_cargo_unknown')
+end)
+
 T.finish()

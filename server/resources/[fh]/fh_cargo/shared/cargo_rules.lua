@@ -117,13 +117,25 @@ local function weightOf(items)
     return w
 end
 
+local function stackable(it)
+    if it.stackable ~= nil then return it.stackable and true or false end
+    return it.unique ~= true
+end
+
+---Lowest slot first, so the pick is deterministic: a same-name, same-info stack if the item stacks, else the first free slot.
 local function pickSlot(dest, item)
-    if item.unique ~= true then
-        for s, it in pairs(dest.items) do
-            if it.name == item.name and it.unique ~= true and sameInfo(it.info, item.info) then return s end
+    local n = dest.slots
+    if not n then
+        n = 0
+        for s in pairs(dest.items) do if type(s) == 'number' and s > n then n = s end end
+    end
+    if stackable(item) then
+        for s = 1, n do
+            local it = dest.items[s]
+            if it and it.name == item.name and stackable(it) and sameInfo(it.info, item.info) then return s end
         end
     end
-    for s = 1, dest.slots or 0 do
+    for s = 1, n do
         if not dest.items[s] then return s end
     end
 end
@@ -184,10 +196,12 @@ function M.planTransfer(p)
 end
 
 ---Fast-travel veto (spec 2 + 4.1: cargo never fast-travels).
----f = { carriedCargo = n, wagons = { { coords, cargoCount } }, playerCoords, reach }
+---f = { unknown = reason|nil, carriedCargo = n, wagons = { { coords, cargoCount } }, playerCoords, reach }
 ---@return boolean ok, string|nil reason, table|nil wagon the blocking wagon
 function M.fastTravelVerdict(f)
     f = f or {}
+    -- Fail closed: the caller could not read a container (f.unknown = its reason), so we cannot say it is safe.
+    if f.unknown then return false, 'fh_cargo_unknown' end
     if (tonumber(f.carriedCargo) or 0) > 0 then return false, 'fh_cargo_carried' end
     for _, w in ipairs(f.wagons or {}) do
         if (tonumber(w.cargoCount) or 0) > 0 and within(w.coords, f.playerCoords, f.reach or M.DEFAULT_FAST_TRAVEL_REACH) then
