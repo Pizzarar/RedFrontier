@@ -45,7 +45,7 @@ case('validateSpec: kinds, vehicles refused, coords/heading/owner/tag checks', f
     T.same({ kind = 'admin', id = 1 }, s.owner)
     local function code(o) local _, e = R.validateSpec(spec(o)) return e end
     T.eq('fh_spawn_kind_unsupported', code({ kind = 'vehicle' }))
-    T.eq('fh_spawn_kind_unsupported', code({ kind = 'wagon' }))
+    T.eq('wagon', assert(R.validateSpec(spec({ kind = 'wagon' }))).kind, 'wagon accepted (B7)')
     T.eq('fh_spawn_bad_kind', code({ kind = 'tank' }))
     T.eq('fh_spawn_bad_model', code({ model = '' }))
     T.eq('fh_spawn_bad_model', code({ model = {} }))

@@ -13,7 +13,14 @@
 -- in state `dispatched`, can enter `verifying`; every other `created` is rejected and its entity deleted.
 local M = {}
 
-M.KINDS = { ped = true, object = true, horse = true } -- no vehicles/wagons until M4
+M.KINDS = { ped = true, object = true, horse = true, wagon = true } -- wagon: B7 (roads M4); other vehicles refused
+
+-- Which client create native each kind uses (client/spawn.lua). 'vehicle' = CreateVehicle (wagons get their draft
+-- horses from the game: bDontAutoCreateDraftAnimals = false).
+M.CREATE = { ped = 'ped', horse = 'ped', object = 'object', wagon = 'vehicle' }
+
+---Kinds whose entity is a ped: only those are checked with IsPedAPlayer at adopt (a vehicle/object never is one).
+function M.isPedKind(kind) return M.CREATE[kind] == 'ped' end
 
 M.TRANSITIONS = {
     pending           = { dispatched = true, pending_no_client = true, failed = true, despawned = true },
@@ -92,7 +99,7 @@ end
 ---Validates and normalises a spawn spec. Returns spec or nil, '<code>'.
 function M.validateSpec(spec)
     if type(spec) ~= 'table' then return nil, 'fh_spawn_bad_spec' end
-    if spec.kind == 'vehicle' or spec.kind == 'wagon' then return nil, 'fh_spawn_kind_unsupported' end
+    if spec.kind == 'vehicle' then return nil, 'fh_spawn_kind_unsupported' end
     if not M.KINDS[spec.kind] then return nil, 'fh_spawn_bad_kind' end
     local model = spec.model
     if (type(model) ~= 'string' or model == '') and type(model) ~= 'number' then return nil, 'fh_spawn_bad_model' end

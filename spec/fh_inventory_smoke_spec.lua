@@ -253,4 +253,70 @@ T.describe('fh_death hookup (B6c): backpack -> registered drop_bag stash, then d
       and CORE.deleteContainer({ type = 'drop_bag', id = dropId }) == false and I.Inventories[dropId] ~= nil end)
 end)
 
+T.describe('fh_core.removeItem all-or-nothing (B7)', function()
+  local id = 'fh:chest:b7:1'
+  local ref = { type = 'chest', id = id }
+  local function bread() local n = 0 for _, x in pairs(I.Inventories[id] and I.Inventories[id].items or {}) do
+    if x.name == 'bread' then n = n + x.amount end end return n end
+  case('register chest', function() return CORE.registerContainer(ref, { coords = { x = 400, y = 400, z = 10 } }) == true end)
+  case('seed 3 + 4 bread in two stacks', function()
+    return CORE.addItem(ref, 'bread', 3) == true and CORE.addItem(ref, 'bread', 4) == true and bread() == 7, bread() end)
+  case('exact across stacks: remove 7 leaves 0', function()
+    I.Inventories[id].items = { [1] = it('bread', 3, 1), [2] = it('bread', 4, 2) }
+    local ok, why = CORE.removeItem(ref, 'bread', 7)
+    return ok == true and bread() == 0 and next(I.Inventories[id].items) == nil, why end)
+  case('partial amount spans stacks: remove 5 of 3+4 leaves 2', function()
+    I.Inventories[id].items = { [1] = it('bread', 3, 1), [2] = it('bread', 4, 2) }
+    local ok, why = CORE.removeItem(ref, 'bread', 5)
+    return ok == true and bread() == 2, why end)
+  case('short: fh_not_enough and NOTHING removed (no partial)', function()
+    I.Inventories[id].items = { [1] = it('bread', 3, 1), [2] = it('bread', 4, 2) }
+    local ok, why = CORE.removeItem(ref, 'bread', 8)
+    local items = I.Inventories[id].items
+    return ok == false and why == 'fh_not_enough' and bread() == 7 and items[1].amount == 3 and items[2].amount == 4, why end)
+  case('fh_inventory RemoveItem itself is all-or-nothing (short -> false, untouched)', function()
+    return EXPORTED.RemoveItem(id, 'bread', 8) == false and bread() == 7 end)
+  case('stale pre-count (taken meanwhile): RemoveItem refuses, fh_not_enough, nothing removed', function()
+    local real = EXPORTED.GetItemCount
+    local calls = 0
+    EXPORTED.GetItemCount = function(...) calls = calls + 1; if calls == 1 then return 99 end return real(...) end
+    local ok, why = CORE.removeItem(ref, 'bread', 8)
+    EXPORTED.GetItemCount = real
+    return ok == false and why == 'fh_not_enough' and bread() == 7 and calls == 2, why end)
+  case('item not held: fh_not_enough', function()
+    local ok, why = CORE.removeItem(ref, 'saddle', 1) return ok == false and why == 'fh_not_enough', why end)
+  case('default amount is 1', function()
+    local ok, why = CORE.removeItem(ref, 'bread') return ok == true and bread() == 6, why end)
+  case('bad amounts refused, nothing removed', function()
+    for _, a in ipairs({ 0, -1, 1.5, 0/0, math.huge, '2' }) do
+      local ok, why = CORE.removeItem(ref, 'bread', a)
+      if ok ~= false or why ~= 'fh_bad_amount' then return false, tostring(a) .. ' ' .. tostring(why) end
+    end
+    return bread() == 6 end)
+  case('2.0 is an integer amount', function() return CORE.removeItem(ref, 'bread', 2.0) == true and bread() == 4 end)
+  case('bad item name refused', function() return select(2, CORE.removeItem(ref, '', 1)) == 'fh_bad_item_name' end)
+  case('unregistered world container refused', function()
+    return select(2, CORE.removeItem({ type = 'chest', id = 'fh:chest:b7:nope' }, 'bread', 1)) == 'fh_unknown_container' end)
+  case('carried refs refused (players use rsg RemoveItem)', function()
+    mkPlayer(8, { [1] = it('bread', 5, 1) })
+    local ok, why = CORE.removeItem({ type = 'backpack', id = 8 }, 'bread', 1)
+    return ok == false and why == 'fh_not_registrable' and players[8].PlayerData.items[1].amount == 5, why end)
+  case('unknown container type refused', function()
+    return select(2, CORE.removeItem({ type = 'nope', id = id }, 'bread', 1)) == 'fh_unknown_container' end)
+end)
+
+T.describe('fh_core.registerItems wiring (B7)', function()
+  case('base rsg item name refused as duplicate (read from RSGCore.Shared.Items)', function()
+    local ok, err, bad = CORE.registerItems({ bread = { label = 'B', weight = 1 } })
+    return ok == false and err == 'fh_duplicate_item' and bad == 'bread', err end)
+  case('schema refused before anything is applied', function()
+    local ok, err, bad = CORE.registerItems({ b7_tool = { label = 'T', weight = 1, size_class = 'huge' } })
+    return ok == false and err == 'fh_bad_size_class' and bad == 'b7_tool' and env.FhItems.definition('b7_tool') == nil, err end)
+  case('an fh-defined shared entry (pushed before an fh_core restart) is not a base item', function()
+    shared.b7_crate = { name = 'b7_crate', label = 'C', weight = 1, fh_defined = true }
+    local _, err = CORE.registerItems({ b7_crate = { label = 'C', weight = 1 } })
+    shared.b7_crate = nil
+    return err ~= 'fh_duplicate_item', err end)
+end)
+
 T.finish()
