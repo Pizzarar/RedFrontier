@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Hunting
 - Lead: ★ Hun2
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - H1–H5 of docs/brainstorm/plans/hunting-01-l8.md merged to local main with reviewer PASS + run-specs green, a `## Hunting` section in OWNER-TESTS.md, and `decision hunting playtest-ready <hash>` logged.
@@ -18,13 +18,14 @@
 - Overlord integration rules: vs worktree units; PASS → rebase → run-specs green → merge local main, log hash; one lane merges at a time; no push; tests in OWNER-TESTS.md `## Hunting`; log `decision hunting playtest-ready <hash>` at the end.
 
 ## Open
-- LANDED: nearestWagon + getWagon on local main b06fc58 (commit 6db6c2e). Was roads-r1 32817e7, re-review PASS 0/0/0. Returns {type='wagon', id='fh:wagon:<id>'}|nil. Hunting passes range=8 (plan). idea-616(2) wagon coords = exports.fh_cargo:getWagon(ref.id:gsub('^fh:wagon:','')).coords (no new export; Roads 2026-11-23). findCargoWagon wraps both in pcall. Merges first in the roads order once python3-lupa is on the forge; Roads Lead sends the main hash. Decided (R13): H3 codes against it now via pcall, nil/missing → refuse; no merge-order dependency.
+- LANDED + CLOSED (Roads): nearestWagon + getWagon on local main b06fc58 (commit 6db6c2e); roads-01 playtest-ready 9a9ed6c. Was roads-r1 32817e7, re-review PASS 0/0/0. Returns {type='wagon', id='fh:wagon:<id>'}|nil. Hunting passes range=8 (plan). idea-616(2) wagon coords = exports.fh_cargo:getWagon(ref.id:gsub('^fh:wagon:','')).coords (no new export; Roads 2026-11-23). findCargoWagon wraps both in pcall. Merges first in the roads order once python3-lupa is on the forge; Roads Lead sends the main hash. Decided (R13): H3 codes against it now via pcall, nil/missing → refuse; no merge-order dependency.
 - (UNBLOCKED, kept for context) Big-game/legendary cargo pelts are refused until a wagon lookup exists (idea-617 ACCEPTED into @roads R1: `exports.fh_cargo:nearestWagon(src, coords, range) -> container ref|nil` LOCKED: owner-only v1, coords nil = ped pos, range capped 25 m, never throws; lands in roads-r1 fix round, Roads sends the merge hash; idea-616 → @core carcass end). Lean: hunting calls it through pcall; H4 can merge with the trophy + chain_complete working, but the full legendary pelt loop waits on @roads.
 - idea-616(1) delivered: core C3c on local main 2116460: exports.fh_core:requestOfNetId(netId) -> requestId|nil (adopted only). On skin: id = requestOfNetId(netId); if id then despawn(id) (pcall; nil for wild animals, the Legendary Bear path). Goes into H3 (claim) and H4 (bear). Carried removeItem (idea-687) = core C3a, in review.
 - @homestead H4 consumes getTrophyComfort (agreed; being built now).
 - When S4 spk_pelt returns GO, consider flipping `PeltQualitySource` to `native`.
 
 ## In flight
+- 2026-11-23 Hun2: H7 MERGED to main 2c84742 (fc5dee4+2c84742; Gemini PASS 0/0/0 cc030aa; range-diff '!' OWNER-TESTS placement only, code '='; venv 64/1285/0, no mig). idea-616(1) closed. Lane plan complete; open: tune trophy comfort 25 + trapper coords with owner/homestead.
 - 2026-11-23 Hun2: H6 MERGED to main 3ba2783 (ab49b50+3ba2783, range-diff '=' vs reviewed 3a97873, venv 57/1164/0, no migration). H7 despawn(requestOfNetId) on hunting-h7 cc030aa, in Gemini review rn-452bd87f8fa2.
 - 2026-11-23 MERGED to main (slot, main 0fb8dc6 base): H2 43742a4, H3 ec31845, H5 f7b8eb8, H4 855ef3f (migration renumbered 0010). venv specs 49/962/0. H6 (core B7 charge/removeItem, hunting-h6) awaits re-review -> next slot; despawn(requestOfNetId) wiring -> next slot.
 - 2026-11-23 Hunting lead rn-fba839f5dc6c: ALL BLOCKS REVIEW-CLEAN, merges held on lupa. Stack h2>h3>h5>h4 (branches hunting-h2..h4, local only):
