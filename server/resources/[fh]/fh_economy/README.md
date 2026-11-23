@@ -76,7 +76,7 @@ in `shared/ledger_logic.lua` (pure, tested).
   `server/migrations/0006_fh_ledger_charge.sql` widens the `kind` enum with `charge` (B7); existing rows untouched.
 - `fh_rep` (citizenid, region_id, value), PK (citizenid, region_id).
 - `fh_pending_credit` (id, citizenid, amount int unsigned, reason, region_id, claimed_by NULL|token, created_at):
-  queued offline credits (`server/migrations/0012_fh_pending_credit.sql`, which also widens `fh_ledger.kind` with
+  queued offline credits (`server/migrations/0015_fh_pending_credit.sql`, which also widens `fh_ledger.kind` with
   `credit` and `credit_pending`). `credit_pending` = queued, no money moved; `credit` = money added.
 
 Region ids: fh_economy loads `@fh_core/shared/regions.lua` itself in its manifest (`shared_scripts`), so it
@@ -97,7 +97,7 @@ From the repo root: `~/.venvs/rf/bin/python tools/run-specs.py spec/ledger_logic
 - [ ] Unknown region / empty reason via an exports call from another resource -> refused.
 - [ ] Migration 0005 applied; server console `fh_charge <id> 5` with >= $5 -> cash -$5, one `fh_ledger` row
       kind=charge amount=5; with less cash than asked -> `fh_insufficient_funds`, no row, no cash change.
-- [ ] Migration 0012 applied; `fh_credit <online citizenid> 5` -> cash +$5, ledger row kind=credit. Log the
+- [ ] Migration 0015 applied; `fh_credit <online citizenid> 5` -> cash +$5, ledger row kind=credit. Log the
       character out, `fh_credit <its citizenid> 7` -> `[true, null, "pending"]`, one `fh_pending_credit` row + ledger
       row kind=credit_pending, `players.money` untouched; log back in -> cash +$7 once, the pending row is gone, a
       kind=credit row is added. Relog again -> no further cash.
