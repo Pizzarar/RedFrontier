@@ -41,6 +41,7 @@
   window.addEventListener('message', function (ev) {
     const m = ev.data || {};
     if (!m.screen) return;
+    if (!screens[m.screen]) { console.warn('fh_ui: no screen "' + m.screen + '"'); return; }
     if (m.type === 'open') { el(m.screen).hidden = false; call(m.screen, 'open', m.data); }
     else if (m.type === 'update') call(m.screen, 'update', m.data);
     else if (m.type === 'close') {

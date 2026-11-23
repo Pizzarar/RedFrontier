@@ -9,12 +9,12 @@ local function now() return GetGameTimer() / 1000.0 end
 RegisterNetEvent('fh:ui:action', function(msg)
     local src = source
     if not src or src <= 0 then return end
-    local ok, name, payload = relay.relay(limiter, src, msg, now())
+    local ok, name, ev = relay.relay(limiter, src, msg, now())
     if not ok then
         log('dropped action from %s: %s', tostring(src), tostring(name))
         return
     end
-    TriggerEvent(name, src, payload)
+    TriggerEvent(name, ev)
 end)
 
 AddEventHandler('playerDropped', function()

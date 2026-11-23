@@ -25,6 +25,10 @@ end
 
 local function openScreen(p)
     if type(p) ~= 'table' or type(p.screen) ~= 'string' then return end
+    if not relay.screens[p.screen] then
+        print(('[fh_ui] open ignored, unknown screen: %s'):format(tostring(p.screen)))
+        return
+    end
     open[p.screen] = true
     send('open', p.screen, p.data)
     syncFocus()

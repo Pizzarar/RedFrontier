@@ -11,7 +11,7 @@ M.screens = {
     insurance   = 'death',     -- tracker insurance dialog (L4 Death & Insurance)
     contracts   = 'trade',     -- contract board (L6 Cargo/Trade)
     station     = 'homestead', -- station menus (L1 stations; L5 crafting may take over later)
-    fence       = 'economy',   -- fence shop (L9 fh_fence lives under Economy)
+    fence       = 'fence',     -- fence shop (fh_fence owns it)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
@@ -97,12 +97,12 @@ function M.validate(msg)
 end
 
 -- Full relay decision: rate limit first (counts bad traffic too), then validate.
--- Returns true, eventName, payload | false, reason.
+-- Returns true, eventName, eventPayload | false, reason. eventPayload = { src, screen, action, payload } (events.md: one table, src first).
 function M.relay(lim, src, msg, now)
     if not M.take(lim, src, now) then return false, 'rate_limited' end
     local ok, lane, action, payload = M.validate(msg)
     if not ok then return false, lane end
-    return true, M.eventName(lane, action), payload
+    return true, M.eventName(lane, action), { src = src, screen = msg.screen, action = action, payload = payload }
 end
 
 if GetCurrentResourceName then
