@@ -32,4 +32,5 @@
 - Merge order (Overlord-approved, 2 slots; gate = review PASS or '=' range-diff + specs green on ~/.venvs/rf + merge slot): Slot A roads-a = r1 32817e7 + r5 ece580e + R6 54f8f40 (mig 0008_fh_heat), queued in Red2's slot after progression; Roads14 rebasing onto b53979a + spec rerun. Slot B = r3 b278526 + r2 c334bc6 + R4 c790f63 + R7 f92e653, built after core C3a lands, r3/R4 migrations renumbered then. Spec fix 1c9216e (freight stub dot-call) verified.
 - After r1 merges: send the hash to the Hunting Buddy, close idea-617.
 - 2026-11-23 Slot A PASS: roads-a (r1+r5+R6, mig 0008_fh_heat) ff-merged to local main b06fc58 (from 03516d1). venv 44/862/0; range-diff vs 84e8d0e 7= 2! (server.cfg hunk context only). Slot B pending core C3a.
+- 2026-11-23 Slot B PASS: roads-b (r3+r2+R4+R7 + spec fix, migs 0013_fh_trade/0014_fh_trade_contracts) ff-merged to local main 9a9ed6c (from 2775580). venv 63/1270/0. PLAN roads-01 COMPLETE: roads playtest-ready 9a9ed6c.
 - Done = all merged + `vs log decision "roads playtest-ready <hash>"`.
