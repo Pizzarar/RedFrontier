@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: UI
 - Lead: ★ UI2
-- Workers: 2
+- Workers: 1
 
 ## Done when
 - fh_ui on local main with U1-U4 PASS, specs green, `## UI` card in OWNER-TESTS.md, `decision ui playtest-ready <hash>` logged.
@@ -34,3 +34,4 @@
 - fh_fence on main (P2 f60805c, tip ed2cb1e); @progression P1b in flight touches fence debits (event names stable) -> W1 rebases after it.
 - W2 jobs board PASS (Gemini 1378d9a), merged main 47a1761.
 - idea-648 heat HUD PASS (Gemini 6287c71; forecast overlap lead-accepted), merged main bd06000.
+- W3 quest journal PASS (Gemini delta 9a2689c), merged main 6eb752e.
