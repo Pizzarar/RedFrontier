@@ -30,4 +30,5 @@
   - ui-u1 58ca760: U1 merged to main b0ac78a (done).
   - ui-u2 b956563: U2 buff HUD + own drop-bag timer, specs green, NOT reviewed/merged. Degrades until core idea-609 (bags mine/remaining) + idea-610 (buffs remaining).
   - ui-u3 24e884e: U3 fixture screens + fh_ui_demo, specs green, NOT reviewed/merged. Pending: rename contracts -> jobs (owner quests, rows kind/title/region_id/payout/risk tier) + review fixes.
-  - Resume: Gemini review U2 + U3 (Ui5/Ui6 spawned but never started; re-spawn), merge U2, rebase+merge U3, then U4. core idea-611: run-specs TOTAL hides spec load errors.
+  - U2 review (Ui5, Gemini) landed after drain: FAIL 1 major/2 minor/1 nit on b956563. Major: client/hud.lua pushBags recomputes deadline every 5s tick, so the countdown never runs down (compute deadline only on fh:death:bags/callback; tick refreshes dir/dist only). Minors: hud.js use Math.ceil (jitter skips seconds); @ox_lib/init.lua -> shared_scripts like siblings. Fix via Ui3 on resume, re-review.
+  - Resume: U3 review (Ui6; check if it landed, else re-spawn), merge U2, rebase+merge U3, then U4. core idea-611: run-specs TOTAL hides spec load errors.
