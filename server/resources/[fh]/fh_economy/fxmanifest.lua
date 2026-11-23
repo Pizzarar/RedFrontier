@@ -19,4 +19,4 @@ server_scripts {
 
 dependencies { 'fh_core', 'oxmysql', 'rsg-core' }
 
-server_exports { 'pay', 'rep', 'charge', 'getRep' }
+server_exports { 'pay', 'rep', 'charge', 'getRep', 'credit' }

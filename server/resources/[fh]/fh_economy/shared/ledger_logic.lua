@@ -47,6 +47,23 @@ function logic.validateCharge(args, ctx)
         maxReason = ctx.maxReason })
 end
 
+---Credit (idea-700, offline-safe payout): a valid citizenid (logic.validCitizenid) and a positive INTEGER amount
+---(5.0 is taken as 5; 5.5, numeric strings, NaN and inf are refused), then the same rules as pay / charge with its own
+---cap (ctx.maxCredit).
+---@param args { citizenid:any, amount:any, reason:any, region_id:any }
+---@param ctx { isKnownRegion:fun(id:any):boolean, maxCredit:number?, maxReason:number? }
+---@return boolean ok, string? err, integer? amount  the amount as a Lua integer when ok
+function logic.validateCredit(args, ctx)
+    args = args or {}
+    if not logic.validCitizenid(args.citizenid) then return false, 'invalid_citizenid' end
+    local n = isFinite(args.amount) and math.tointeger(args.amount) or nil
+    if not n or n <= 0 then return false, 'invalid_amount' end
+    local ok, err = logic.validatePay({ amount = n, reason = args.reason, region_id = args.region_id },
+        { isKnownRegion = ctx.isKnownRegion, maxPay = ctx.maxCredit, maxReason = ctx.maxReason })
+    if not ok then return false, err end
+    return true, nil, n
+end
+
 ---True when `balance` covers `amount`. A missing / junk balance never covers anything.
 function logic.canAfford(balance, amount)
     return isFinite(balance) and isFinite(amount) and balance >= amount

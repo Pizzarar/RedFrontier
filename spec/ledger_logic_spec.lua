@@ -279,4 +279,18 @@ case('validCitizenid: rsg-style ids pass; digits-only, padded, blank, junk, too 
     assert(logic.validCitizenid(nil) == false and logic.validCitizenid(string.rep('A', 50)) == true)
 end)
 
+case('validateCredit: valid citizenid, positive integer amount (whole floats normalised), pay rules with maxCredit', function()
+    local cr = { isKnownRegion = regions.isKnownRegion, maxCredit = 100, maxReason = 128 }
+    local ok, err, n = logic.validateCredit({ citizenid = 'ABC1', amount = 5.0, reason = 'r', region_id = 'heartlands' }, cr)
+    assert(ok == true and err == nil and n == 5 and math.type(n) == 'integer')
+    for _, bad in ipairs({ 0, -1, 1.5, '5', 0 / 0, math.huge, false }) do
+        ok, err = logic.validateCredit({ citizenid = 'ABC1', amount = bad, reason = 'r', region_id = 'heartlands' }, cr)
+        assert(ok == false and err == 'invalid_amount', tostring(bad))
+    end
+    T.eq('amount_too_large', select(2, logic.validateCredit({ citizenid = 'ABC1', amount = 101, reason = 'r', region_id = 'heartlands' }, cr)))
+    T.eq('invalid_citizenid', select(2, logic.validateCredit({ citizenid = '42', amount = 5, reason = 'r', region_id = 'heartlands' }, cr)))
+    T.eq('invalid_reason', select(2, logic.validateCredit({ citizenid = 'ABC1', amount = 5, reason = ' ', region_id = 'heartlands' }, cr)))
+    T.eq('unknown_region', select(2, logic.validateCredit({ citizenid = 'ABC1', amount = 5, reason = 'r', region_id = 'x' }, cr)))
+end)
+
 T.finish()

@@ -60,6 +60,7 @@ local exportsT = setmetatable({}, {
 local env = setmetatable({
     exports = exportsT, MySQL = MySQL, GetCurrentResourceName = function() return 'fh_economy' end,
     TriggerEvent = function(name, payload) events[#events + 1] = { name = name, payload = payload } end,
+    AddEventHandler = function() end, -- credit's PlayerLoaded claim (specced in fh_economy_credit_spec.lua)
     RegisterCommand = function() end, json = { encode = function() return '' end },
     print = function(...) warnings[#warnings + 1] = table.concat({ ... }, ' ') end,
 }, { __index = _G })
