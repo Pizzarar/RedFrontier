@@ -59,4 +59,43 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    RESULT:
 7. (Gated path) While the outlaws are alive and you are the only player, quit and rejoin.
    Expected: console `owner <id> dropped, despawned and re-requested`; after you return the outlaws come back hostile (once each, not doubled); killing them still clears the camp.
+## B6c: soft death (fh_death)
+
+Server console lines start with `[fh_death]`. Needs the `fh_death_drops` table (`server/migrations/0004_death.sql`,
+applied by `tools/setup-server.ps1`). You need two characters: a second client, or a second character you switch to.
+`equipped` = the hotbar slots; everything else in your inventory is the backpack.
+
+1. Give yourself a weapon and some items: `/giveitem <yourId> weapon_revolver_cattleman 1` and drag it into a hotbar
+   slot; `fh_give <yourId> bread 3` and leave the bread in the backpack (not the hotbar).
+   Expected: the revolver sits in the hotbar, 3 bread in the backpack.
+   RESULT:
+2. Die (fall from a height, or let an NPC kill you) and respawn.
+   Expected: server console `[fh_death] <citizenid> life 1: bag fh:dropbag:<t>-<n> at <x y z>, 1 stack(s) moved, 0 kept`.
+   After respawning the revolver is still in your hotbar and the backpack is empty.
+   RESULT:
+3. Go back to where you died.
+   Expected: a bag prop lies at the death spot (if no prop shows, note it, the console will say `prop for ... failed`,
+   and carry on: the bag must still work). Standing on the spot shows `[E] Dropped belongings`.
+   RESULT:
+4. As the OTHER character, stand on the bag and press E.
+   Expected: chat `fh bag: fh_not_owner`; no inventory opens.
+   RESULT:
+5. As the owner, press E on the bag.
+   Expected: the inventory opens with the bag on the other side holding the 3 bread. From 5 m away pressing E (if the
+   prompt still showed) does nothing / says `fh_out_of_reach`.
+   RESULT:
+6. Drag the bread back into your backpack and close the inventory. Wait up to 15 s.
+   Expected: console `[fh_death] bag fh:dropbag:... recovered by <citizenid>`; the prop and the E prompt are gone.
+   You have exactly 3 bread (no dupe, none missing).
+   RESULT:
+7. Die with nothing in the backpack (the revolver stays in the hotbar).
+   Expected: console `<citizenid> died with nothing to drop; no bag`. No prop appears.
+   RESULT:
+8. Expiry: set `despawnMinutes = 1` in `fh_death/config.lua`, `restart fh_death`, put 1 bread in the backpack, die,
+   respawn and do NOT open the bag. Wait about 2 minutes.
+   Expected: console `bag ... expired; lost: 1xbread`; the prop and prompt are gone. Set `despawnMinutes` back to 30.
+   RESULT:
+9. Restart survival: put 1 bread in the backpack, die, respawn, then `restart fh_death` (or restart the server).
+   Expected: console `[fh_death] 1 bag(s) loaded`; the prop comes back at the same spot and the owner can still open
+   it and take the bread out.
    RESULT:

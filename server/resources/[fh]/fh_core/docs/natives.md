@@ -73,6 +73,16 @@ checked the hash yet. fh_inventory is a fork of rsg-inventory, so most client na
 | `GetGameTimer` | not looked up | `fh_homestead/client/main.lua` (model-load timeout) | client |
 | `IsControlJustReleased` + control `0xCEFD9220` (INPUT_CONTEXT, E) | not looked up | `fh_homestead/client/main.lua` | client |
 
+### fh_death (B6c) - all **unverified in-game**, no Cfx key yet
+
+| Native | Hash | Where used | Side |
+|---|---|---|---|
+| `GetEntityHealth` (server) | not looked up (server) | `fh_death/server/main.lua` (death confirmed only when the server reads health <= 0; alive again when > 0). Fails safe: if it never reads <= 0 nobody drops anything; if it never reads > 0 again a character drops once per session | server |
+| `GetPlayerPed`, `GetEntityCoords` | see above | `fh_death/server/main.lua` (death spot, open owner+reach check) | server |
+| `GetGameTimer` | Cfx runtime | `fh_death/server/main.lua` (open rate limit) | server |
+| `IsControlJustReleased` + control `0xCEFD9220` (INPUT_CONTEXT, E) | not looked up | `fh_death/client/main.lua` (open prompt) | client |
+| Prop model `p_bag_leather01x` | not looked up | `fh_death/config.lua` `propModel`, created by `fh_core/client/spawn.lua` (B4c, `kind='object'`) | client |
+
 ### fh_core spawn-request contract (B4c) - all **unverified in-game**, no Cfx key yet
 
 Server CREATE_PED / CREATE_OBJECT_NO_OFFSET / CREATE_AUTOMOBILE / CREATE_VEHICLE_SERVER_SETTER are compiled out on RDR3,

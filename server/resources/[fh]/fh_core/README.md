@@ -114,6 +114,7 @@ A container ref is `{ type = <container type>, id = <id> }`: `id` is the player 
 | `createDropBag(coords, items, { owner?, label? })` | `id` or `nil, reason` |
 | `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds to a registered world container (rules veto applies) |
 | `clearContainer(ref)` | `true` or `false, reason`; empties a registered world container (only fh_core may wipe one in fh_inventory) |
+| `deleteContainer(ref)` | `true, items` (what it still held) or `false, reason`; registered world stashes only, `fh_in_use` while anyone has it open |
 | `registerItems({ [name] = def })` | `ok, err, badName` (validates every entry before applying any) |
 
 - `registerContainer` refuses `equipped`/`backpack` (`fh_not_registrable`) and any world container without
@@ -137,6 +138,7 @@ state before mutating.
 | `FhSetCoords(ref, coords)` | `ok, reason` |
 | `FhOpen(src, ref)` | `ok, reason` |
 | `FhCreateDropBag(coords, items, opts)` | `id` or `nil, reason` |
+| `FhDeleteContainer(ref)` | `true, items` or `false, reason` (deletes memory, FhMeta and the `inventories` row; refused while open) |
 
 ### Reason codes
 

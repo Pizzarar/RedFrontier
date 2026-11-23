@@ -20,8 +20,11 @@ The emitting lane owns the name and documents it in its README.
 |---|---|---|
 | `fh:inventory:moved` | fh_core | `{ src, citizenid, from, to, item, count }` |
 | `fh:inventory:refused` | fh_core | `{ src, citizenid, from, to, item, count, reason }` |
-| `fh:death:dropped` | death lane | `{ src, citizenid, container_id, coords }` |
-| `fh:death:recovered` | death lane | `{ src, citizenid, container_id }` |
+| `fh:death:dropped` | fh_death | `{ src, citizenid, container_id, coords, life, expires_at, moved, kept }`: one per life; `container_id` = drop_bag stash id; `moved` = stacks moved; `kept` = `{ from, name?, amount?, reason }[]` left in their source; `expires_at` = unix seconds |
+| `fh:death:recovered` | fh_death | `{ src, citizenid, container_id }`: the owner emptied the bag, which is deleted (`src` 0: found by the sweep; `citizenid` = owner) |
+| `fh:death:expired` | fh_death | `{ src, citizenid, container_id, coords, lost }`: despawn timer ran out, bag deleted; `lost` = `{ [slot] = item }` it still held (also logged); `src` 0 |
+| `fh:death:open` | fh_death (client -> server request) | `{ id }` (bag id string); server checks owner (citizenid) + reach from the server ped, rate-limited 500 ms, then fh_core.open re-checks reach |
+| `fh:death:bags` | fh_death (server -> all clients) | `{ { id, x, y, z }, ... }`: live bags for the open prompt; no owner in it |
 | `fh:zones:camp_cleared` | zones lane | `{ src, territory_id, tier }` |
 | `fh:economy:paid` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
 | `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason }` |
