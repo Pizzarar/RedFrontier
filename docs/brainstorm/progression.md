@@ -22,10 +22,7 @@
 - (orig ask) L9 fh_fence + fh_hands + rep-tier unlocks on top of @core's fh_economy ledger: regional rep tiers, roving fence on a schedule (stops, not real driving), rare parts/treasure leads, hired hands as timers automating upkeep. Insurance stays with @core fh_death. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 
 ## In flight
-- 2026-11-23 FORGE FREEZE (Overlord): all parked. No spawns/reviews/merges. Lead told to cancel queued reviews Prg5 (P2) / Prg6 (P3), commit WIP, drain. Resume after cutover: P1 fix review → P2/P3 reviews → B7 → P1b → P4.
-- Lead Prg rn-cf119741f978 (Lead - Claude) running plan-01. P1 worker Prg1 rn-916f3055472e in worktree prog-p1 (shim prefers fh_economy:getRep if present). P4 admin cmd renamed fh_prog_rep (fh_economy owns fh_rep).
-- P1 802dd2b FAILED Gemini (2H: login preload never runs, cache keyed by src not citizenid; 2M; 2L), fixes on prog-p1. P2 8a9611e (sell refund on pay fail) + P3 committed, in Gemini review. P2 fence Prg3 rn-43a13a0290ed (prog-p2), P3 hands Prg4 rn-b4790ae4be1f (prog-p3), both based on 802dd2b. Debits isolated, return charge_unavailable until idea-600.
-- idea-600 = Core B7 (plans/core-02-contracts-batch.md), Cor3 dispatching, pings on merge. charge fails 'fh_insufficient_funds', never negative; getRep 0 if no row; removeItem all-or-nothing; items via fh_core.registerItems only. Relayed to lead. After B7: rebase, P1b drop shim.
+- FORGE FREEZE: lead drained, 'drained forge-freeze progression' sent to Overlord rn-5930636cd935. Lead Prg rn-cf119741f978 idle. Core B7 (getRep/charge, idea-600) still pending; P2/P3 debits return charge_unavailable until it merges.
 - PARKED (forge freeze 2026-11-22), all worktrees clean, nothing merged, nothing pushed:
   - prog-p1 aef3632: P1 review fixes done (was FAIL 2/2/2 802dd2b), needs Gemini re-review. Specs green (17/274).
   - prog-p2 8a9611e (on 802dd2b): P2 fence, Gemini FAIL 2/2/3 (fence_stash per-player lock/dupe race + more). Needs fixes + rebase on prog-p1. Specs green.

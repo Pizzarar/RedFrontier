@@ -17,9 +17,9 @@
 - Visual wear behind existing `fh_spike_gated` convar (fh_core/docs/spike-gated.md); no new flag. Condition already in item info via FhItems.condition (fh_core/shared/items.lua:132); worn_rifle drops at 20-45 (fh_zones/config.lua:27).
 
 ## Open
-- Waiting on @homestead H3 merge and @core B7 + tonic caps (C5/C4).
+- Waiting on @homestead H3 merge and @core B7 + tonic caps idea-612 (C5/C4); carried-inventory take/give idea-615 (lead ask).
 
 ## In flight
 - 2026-11-23 FORGE FREEZE: PARKED. crafting-c1 @ 924ff24 (C1 built, specs 23/372 green, committed, NOT reviewed, NOT merged). Review Cra2 cancelled before start. C2-C6 not started. Resume: Gemini review of crafting-c1, then rebase+specs+merge.
-- 2026-11-22 FORGE FREEZE: nothing new. Lead told to park WIP on its branches ('WIP: parked for forge freeze'), commit everything, no push (Overlord pushes). Parked branches/hashes: pending lead reply. Resume plan crafting-01-l5 from the next unstarted block after cutover.
+- 2026-11-22 FORGE FREEZE: nothing new. Lead told to park WIP on its branches ('WIP: parked for forge freeze'), commit everything, no push (Overlord pushes). Parked: crafting-c1 @ 924ff24 (C1 built, 23 specs/372 tests green, NOT reviewed/merged; worktree clean). C2-C6 not started. Resume: Gemini review of crafting-c1 → rebase → specs → merge, then C2/C3/C4 in parallel.
 - Lead rn-aab7586ab709 (Crafting Lead) spawned with crafting-01-l5. C1 first, then C2/C3/C4 in parallel, C5 after H3+B7, C6 last.

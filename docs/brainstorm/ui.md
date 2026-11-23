@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: UI
 - Lead: UI Lead · fh_ui shell
-- Workers: 2
+- Workers: 1
 
 ## Done when
 - fh_ui on local main with U1-U4 PASS, specs green, `## UI` card in OWNER-TESTS.md, `decision ui playtest-ready <hash>` logged.
