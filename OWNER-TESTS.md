@@ -17,7 +17,7 @@ One in-game session, in this order (it groups sections so state carries over: ge
 | 5 | [B6d: M1 stash home + end-to-end card (fh_homestead, fh_zones, fh_death)](#b6d-m1-stash-home--end-to-end-card-fh_homestead-fh_zones-fh_death) | 10 | solo |
 | 6 | [M1 end-to-end](#m1-end-to-end) | 20 | solo; the main one-pass check, do it with an empty inventory |
 | 7 | [B6e saddlebag](#b6e-saddlebag) | 10 | solo |
-| 8 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); `lumber`/`nails` are defined (fh_homestead) but still must be given first (OWNER-STEPS section 7) |
+| 8 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); get `lumber`/`nails` first: buy at the Valentine trade post or give via OWNER-STEPS section 7 |
 | 9 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
 | 10 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
 | 11 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |

@@ -36,19 +36,19 @@ Open RedM, press F8, type `connect 100.83.196.251:30120`. Then follow `OWNER-TES
 
 ## 7. Materials you'll need `fh_give` / `/giveitem` for
 
-Trade-post stock is still pending (see `spec/crafting_sources_spec.lua` PENDING; outlaw camps now drop `gun_parts`), so hand these out yourself: `fh_give <yourId> <item> <n>` (admin) or `/giveitem <yourId> <item> <n>`.
+Everything in this list has an in-game source. Trade posts sell the supplies at a flat price with unlimited stock, at every post; today the only post is the **Valentine Trade Post** (heartlands, about -176, 630, 114, radius 6). Buy with `/tradebuy <item> <n>` (max 100 per buy) or the Buy entries in the `/tradepost` menu; `/tradequote` lists prices; a failed grant refunds in full. You need cash (`/givemoney <yourId> cash 500`). `fh_give <yourId> <item> <n>` (admin) or `/giveitem <yourId> <item> <n>` is just a shortcut that skips the shop.
 
-| Item name | Used for | Source status (PENDING owner) |
+| Item name | Used for | Source |
 |---|---|---|
-| `lumber` | homestead builds (5 to 40 per slot tier) | PENDING (idea-716, trade post); defined in fh_homestead |
-| `nails` | homestead build tier 2 (20) | PENDING (idea-716, trade post); defined in fh_homestead |
-| `lead` | ammo recipes (2 each) | PENDING (idea-716); defined in fh_crafting |
-| `casings` | ammo recipes (2 each) | PENDING (idea-716); defined in fh_crafting |
-| `resource_gunpowder` | ammo recipes (1 to 2) | PENDING (idea-716); defined in rsg-core |
-| `herb_american_ginseng` | tonic recipe (2) | PENDING; rsg-core item |
-| `herb_wild_mint` | tonic recipe (1) | PENDING; rsg-core item |
-| `herb_oregano` | tonic recipe (2) | PENDING; rsg-core item |
-| `herb_red_sage` | tonic recipe (1) | PENDING; rsg-core item |
+| `lumber` | homestead builds (5 to 40 per slot tier) | Valentine trade post $3 (roads); defined in fh_homestead |
+| `nails` | homestead build tier 2 (20) | Valentine trade post $2 (roads); defined in fh_homestead |
+| `lead` | ammo recipes (2 each) | Valentine trade post $2 (roads); defined in fh_crafting |
+| `casings` | ammo recipes (2 each) | Valentine trade post $2 (roads); defined in fh_crafting |
+| `resource_gunpowder` | ammo recipes (1 to 2) | Valentine trade post $3 (roads); defined in rsg-core |
+| `herb_american_ginseng` | tonic recipe (2) | Valentine trade post $3 (roads); defined in rsg-core |
+| `herb_wild_mint` | tonic recipe (1) | Valentine trade post $3 (roads); defined in rsg-core |
+| `herb_oregano` | tonic recipe (2) | Valentine trade post $3 (roads); defined in rsg-core |
+| `herb_red_sage` | tonic recipe (1) | Valentine trade post $3 (roads); defined in rsg-core |
 | `gun_parts` | `/fh_restore` (fh_gunsmith) | outlaw camp loot (core-05); defined in fh_crafting |
 
 Note: if `fh_give` replies `fh_unknown_item` for `lumber`/`nails`, restart `fh_homestead` after `fh_core` and tell Core. Counts per build are in `fh_homestead/config.lua`; per recipe in `fh_crafting/shared/recipes.lua`. Other test items: `bread`, `hammer`, `wagon_wheel`, `test_cargo_crate`, `weapon_revolver_cattleman` (the OWNER-TESTS steps name them).
