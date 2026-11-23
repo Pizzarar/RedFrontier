@@ -45,6 +45,7 @@ Only `cargo` items move (spec §4.1). Cargo cannot live in a backpack, so loadin
 |---|---|
 | `canFastTravel(src)` | `ok, reason`. Blocked (`fh_cargo_carried`) while carrying cargo, or (`fh_cargo_wagon_near`) while your own wagon holding cargo is within `FastTravelReach` (30 m). Emits `fh:cargo:fasttravel_blocked`. No fast-travel system exists: whoever adds one must call this |
 | `spawnWagon(src, tier, coords)` | `wagonId` or `nil, reason` |
+| `nearestWagon(src, coords, range)` | Container ref `{ type = 'wagon', id = 'fh:wagon:...' }` (what `fh_core` `move` accepts) of the nearest LIVE wagon within `range` m of `coords` (nil = the player's ped) that `src` may load into (v1: owner only), else `nil`. `range` must be > 0 and is capped at 25 m. Bad args return `nil`, never throw. Used by fh_hunting |
 | `getWagon(wagonId)` | `{ id, owner, tier, netId, coords }` or `nil` |
 
 ## Events (server-local, one table)
