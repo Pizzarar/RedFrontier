@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Survival
 - Lead: Survival Lead
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - S1-S5 of plan survival-01 merged on local main (specs green), `## Survival` card in OWNER-TESTS.md, `survival playtest-ready <hash>` logged. S3b/S4b (remove the stubs) done once @core B7 and @homestead H3/H4 are on main.
@@ -18,10 +18,10 @@
 
 ## Open
 - @core idea-613: add caps `hydrated`/`clean` to fh_buffs config. Not blocking: apply refuses cleanly until then.
+- ColdRegions ids. Lean: use the high-elevation/snow §4.4 region ids if the registry has them, otherwise an empty list (warm is then only a bonus). The lead decides at S3 from the registry, no owner input needed.
 
 ## In flight
 - FORGE FREEZE (Overlord, from the owner via Hub15): nothing new starts and there are no merges or pushes. The Overlord pushes all branches. Parked:
   - S1 is built on `survival-s1` @ 533fba9 (22 specs/355 tests green), NOT merged. Its review Sur2 rn-ba97d44e5597 was in progress.
-  - S2 Sur3 rn-3a7a0d93aa0f had just started. The lead was told to commit WIP ('WIP: parked for forge freeze') on its branch and stop it.
-  - Resume after the cutover: S1 review → merge → S2.
-- Survival Lead rn-d2edee3242e0 was told to drain and to confirm the parked hashes.
+  - Resume after the cutover: re-run the S1 review → merge → S2 review (rebase, fix server.cfg) → merge → S3||S4||S5.
+- DRAINED (lead): `survival-s1` @ 533fba9 (S1, review incomplete: Sur2 stopped with no verdict, so re-run the review after the cutover). `survival-s2` @ d3c3e37 (empty WIP marker on top of a7c9268, S2 server core complete: 357 tests green, unreviewed; rebase on main expected to conflict in server.cfg). Both worktrees are clean and unmerged. Open: @core hydrated/clean caps; pick the ColdRegions ids.

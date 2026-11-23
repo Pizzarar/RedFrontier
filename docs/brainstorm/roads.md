@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Roads
 - Lead: Roads Lead
-- Workers: 3
+- Workers: 0
 
 ## Done when
 - M4 + M5 (spec §6) code-complete: specs green, `## Roads` card in OWNER-TESTS.md, `decision roads playtest-ready <hash>` logged.
@@ -27,7 +27,7 @@
 - Roads Lead rn-764dca5ae384 spawned on roads-01, R1 first.
 - PARKED (forge freeze 2026-11-22), nothing merged to main, all committed, no push:
   - roads-r1 @ 32817e7 (8c355fc R1 + 68332be review fixes + 3cd2de9 nearestWagon idea-617, specs green 286). Review PASS 0/1/3 on 8c355fc; fixes + nearestWagon need re-review before merge.
-  - roads-r2 @ 884f19e (R2 wheel/hammer, on 8c355fc; needs rebase onto r1 + review).
-  - roads-r3 @ b278526 (R3 fh_trade prices; review not run).
-  - roads-r5 @ 0def2aa (R5 fh_heat; review not run). r3+r5 both use migration 0005_* (name-keyed, harmless).
+  - roads-r2 @ 884f19e (R2 wheel/hammer, on 8c355fc; Gemini review PASS 0/2/2 rn-a0a4aca1b2ad. Fix meds before merge: SET_VEHICLE_FIXED must be gated behind native path + reset top-speed modifier on repair; cancel repair (no wheel consumed) when wagon coords nil. Lows: recheck broken+hammer on done tick, capped[netId] leak. Then rebase onto r1.)
+  - roads-r3 @ b278526 (R3 fh_trade prices; Gemini review PASS 0/0/3 rn-f7d46a7dcf42, landed during freeze; merge-ready after freeze, lows optional).
+  - roads-r5 @ 0def2aa (R5 fh_heat; Gemini review FAIL 1/4/3 rn-425d7c090215: payoff double-charge race (needs per cid+faction in-flight lock), events must be one-table payload per fh_core/docs/events.md, charge region nil (ledger NOT NULL), /paybounty bad points arg pays full, decay error unhandled. Fix round + re-review after freeze.) r3+r5 both use migration 0005_* (name-keyed, harmless).
   - Not started: R4 (fh_quests job-type reshape), R6, R7.

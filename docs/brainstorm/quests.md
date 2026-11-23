@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Quests
 - Lead: Quests Lead
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - fh_quests is on local main with all of the following, review PASS and specs green:

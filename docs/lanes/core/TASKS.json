@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T03:05:36.938Z",
+  "updatedAt": "2026-11-23T04:08:55.363Z",
   "units": [
     {
       "id": "B5",
@@ -86,7 +86,7 @@
       "goal": "follow-up: backpack/saddlebag player-pane toggle in fh_inventory fork (~6 handlers assume player pane); replaces /saddlebag in|out UX; tierA-invariant",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "blocked"
     },
     {
       "id": "B6g",
@@ -112,7 +112,8 @@
       "files": [],
       "doneCheck": "",
       "status": "running",
-      "branch": "core-badmin"
+      "branch": "core-badmin",
+      "commit": "694ca7a"
     },
     {
       "id": "B7",

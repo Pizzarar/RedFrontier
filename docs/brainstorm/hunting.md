@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Hunting
 - Lead: Hunting Lead
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - H1–H5 of docs/brainstorm/plans/hunting-01-l8.md merged to local main with reviewer PASS + run-specs green, a `## Hunting` section in OWNER-TESTS.md, and `decision hunting playtest-ready <hash>` logged.
@@ -26,5 +26,5 @@
 - Hunting Lead rn-36662e6cd481 spawned 2026-11-22 with plan hunting-01-l8 (H1→H5).
 - H1 PASS: merged to main e3fc679 (Gemini PASS e74ee3d, specs 21/345 green).
 - FORGE FREEZE: no spawns, reviews or merges until the Overlord lifts it. Buddy watch cancelled; no workers running.
-- PARKED (forge freeze 2026-11-23): H2 hunting-h2 2a841b6 committed and clean, specs 22/372 green, unreviewed (Hun5 never started). Resume order: Gemini review of e3fc679..2a841b6, rebase, merge. Then H3 (trapper + pelt_sold {citizenid,item_id,animal,size_class,quality,price,region_id} + findCargoWagon via pcall exports.fh_cargo:nearestWagon(src,coords,range)), then H4||H5.
+- PARKED (forge freeze 2026-11-23): H2 hunting-h2 2a841b6 committed and clean, specs 22/372 green. H2 PASS: Gemini PASS 0/0/1 2a841b6 (vs verdict exit 0), merge held by freeze. Resume order: rebase, run-specs, merge. The low (pcall around lib.progressBar, client/main.lua:110-115) goes into H3. Then H3 (trapper + pelt_sold {citizenid,item_id,animal,size_class,quality,price,region_id} + findCargoWagon via pcall exports.fh_cargo:nearestWagon(src,coords,range)), then H4||H5.
 - Known: boot-check needs a licence key; pelts non-stackable pending @core.

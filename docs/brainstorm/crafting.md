@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Crafting
 - Lead: Crafting Lead
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - (what makes this team finished)
