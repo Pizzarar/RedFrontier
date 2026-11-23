@@ -134,14 +134,19 @@ local function citizenidOf(src)
 end
 
 -- Players within activationRadius of the camp centre right now (citizenids). No damage tracking: presence only.
+-- The lookup is guarded (rsg-core may be restarting): on error it logs and returns {} so clear() always reaches 'wait'.
 local function campParticipants(camp)
-    local entries = {}
-    for _, s in ipairs(GetPlayers()) do
-        local src = tonumber(s)
-        local ped = GetPlayerPed(src)
-        if ped ~= 0 then entries[#entries + 1] = { citizenid = citizenidOf(src), pos = GetEntityCoords(ped) } end
-    end
-    return rules.participants(camp.cfg.center, camp.cfg.activationRadius, entries)
+    local list, err = rules.safeParticipants(camp.cfg.center, camp.cfg.activationRadius, function()
+        local entries = {}
+        for _, s in ipairs(GetPlayers()) do
+            local src = tonumber(s)
+            local ped = GetPlayerPed(src)
+            if ped ~= 0 then entries[#entries + 1] = { citizenid = citizenidOf(src), pos = GetEntityCoords(ped) } end
+        end
+        return entries
+    end)
+    if err then log('camp %s: participants lookup failed: %s', camp.cfg.id, err) end
+    return list
 end
 
 local function clear(camp)

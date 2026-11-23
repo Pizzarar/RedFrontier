@@ -155,4 +155,20 @@ case('participants: in range, out of range, nobody in range', function()
     eq(0, #R.participants(c, r, {})); eq(0, #R.participants(c, r, nil))
 end)
 
+case('participants: entries with missing or invalid pos are skipped', function()
+    local c = { x = 0, y = 0, z = 0 }
+    local got = R.participants(c, 45.0, {
+        { citizenid = 'A1' }, { citizenid = 'B2', pos = 'nope' }, { citizenid = 'C3', pos = { x = 1, y = 0 } },
+        { citizenid = 'D4', pos = { x = 0 / 0, y = 0, z = 0 } }, { citizenid = 'E5', pos = { x = 1, y = 1, z = 1 } },
+    })
+    eq(1, #got); eq('E5', got[1])
+end)
+case('safeParticipants: throwing lookup falls back to {} with the error', function()
+    local c = { x = 0, y = 0, z = 0 }
+    local got, err = R.safeParticipants(c, 45.0, function() error('rsg-core down') end)
+    eq('table', type(got)); eq(0, #got); assert(err and err:find('rsg-core down', 1, true))
+    local ok, e2 = R.safeParticipants(c, 45.0, function() return { { citizenid = 'A1', pos = { x = 1, y = 0, z = 0 } } } end)
+    eq(1, #ok); eq('A1', ok[1]); eq(nil, e2)
+end)
+
 T.finish()

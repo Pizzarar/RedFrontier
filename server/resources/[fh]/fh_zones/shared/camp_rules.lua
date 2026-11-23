@@ -57,6 +57,15 @@ function M.participants(center, radius, entries)
     return out
 end
 
+---Like participants, but entries come from gather() (the impure native/rsg-core lookup). If gather or the filter throws,
+---returns {} plus the error so a lookup failure can never break the clear -> wait step.
+---@return table participants, string|nil err
+function M.safeParticipants(center, radius, gather)
+    local ok, res = pcall(function() return M.participants(center, radius, gather()) end)
+    if ok and type(res) == 'table' then return res end
+    return {}, tostring(res)
+end
+
 ---peds = array of { dead = bool, failed = bool }. Cleared when none is still alive and at least one died
 ---(a camp whose spawns all failed is not "cleared": nobody killed anything).
 function M.allDead(peds)
