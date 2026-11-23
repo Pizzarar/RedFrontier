@@ -21,13 +21,12 @@ Missing needs add up to a level from 0 (fine) to 3 (worst): one missing is level
 - **Water:** use a canteen. It holds 5 charges, and one use spends one charge and gives `hydrated`. An empty canteen refuses. Stand in water and type `/refill` to fill it.
 - **Clean:** stand in water and type `/wash`. You can wash once every 5 minutes.
 - **Rest:** use a bedroll, or a bed at your homestead (needs a bed station nearby; a better-furnished home rests you a little stronger, up to 1.20).
-- **Warm:** stand within 4 m of a campfire. Two seeded fires exist, at the heartlands homestead and the outlaw camp (approximate positions).
+- **Warm:** stand within 8 m of one of the two seeded fires (the heartlands homestead and the outlaw camp; approximate positions). Elsewhere the default campfire range is 4 m.
 
 "Standing in water" is checked against two seeded spots on the Dakota River (approximate; they are marked owner-verifiable in the config). The native in-water check is unverified.
 
 ## Known limits
 - No cold region is set up, so warmth is only a bonus for now.
-- `hydrated` and `clean` need caps in the buffs resource; until that is in, the game logs a warning and the other needs keep running.
 - Not yet tested in game.
 
 See also: [Buffs](fh_buffs.md) · [Homestead](fh_homestead.md) · [Tips](../tips.md) · [Wiki index](../README.md)

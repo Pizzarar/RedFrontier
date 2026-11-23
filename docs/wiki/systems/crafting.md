@@ -14,7 +14,7 @@ Type `/fh_craft <recipe>`. With no recipe it lists every recipe id. You get `Don
 | `tonic_steady` | apothecary | 2 oregano, 1 red sage | 1 Steady Tonic |
 
 ## Stations
-Reload counts as a **workbench** and apothecary as a **campfire** at your homestead, so you have to build one first (see [Homestead](fh_homestead.md)). You must stand within 3 m. The stations only exist once built; until the build command is in, crafting needs the dev fallback stations.
+Reload counts as a **workbench** and apothecary as a **campfire** at your homestead, so you have to build one first (see [Homestead](fh_homestead.md)). You must stand within 3 m. The stations only exist once built; build them with `/fh_build`.
 
 ## Tonics
 Use a tonic from your inventory. It is only used up if the buff applies.
