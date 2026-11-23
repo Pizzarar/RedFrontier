@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T00:43:59.255Z",
+  "updatedAt": "2026-11-23T00:49:08.043Z",
   "units": [
     {
       "id": "B5",
@@ -93,7 +93,9 @@
       "goal": "nit: saddlebag_rules pickSlot matches stacks by name only, ignores info equality (rules.lua:73-78) -> picks occupied slot; no dupe",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done",
+      "branch": "core-b6g",
+      "commit": "06f2d3b"
     }
   ]
 }
