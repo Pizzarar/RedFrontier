@@ -71,4 +71,103 @@ case('applyRep clamps to bounds', function()
     assert(logic.applyRep(-8, -5, -10, 10) == -10)
 end)
 
+-- B7 charge -----------------------------------------------------------------------------------------------------
+local cctx = { isKnownRegion = regions.isKnownRegion, maxCharge = 500, maxReason = 128 }
+case('validateCharge uses pay rules with maxCharge', function()
+    assert(logic.validateCharge({ amount = 5, reason = 'wages', region_id = 'heartlands' }, cctx) == true)
+    for _, bad in ipairs({ 0, -1, 0/0, math.huge, '5' }) do
+        local ok, err = logic.validateCharge({ amount = bad, reason = 'x', region_id = 'heartlands' }, cctx)
+        assert(ok == false and err == 'invalid_amount', tostring(bad))
+    end
+    local ok, err = logic.validateCharge({ amount = 501, reason = 'x', region_id = 'heartlands' }, cctx)
+    assert(ok == false and err == 'amount_too_large')
+    ok, err = logic.validateCharge({ amount = 5, reason = ' ', region_id = 'heartlands' }, cctx)
+    assert(ok == false and err == 'invalid_reason')
+    ok, err = logic.validateCharge({ amount = 5, reason = 'x', region_id = 'nowhere' }, cctx)
+    assert(ok == false and err == 'unknown_region')
+end)
+case('canAfford: exact covers, short and junk balances do not', function()
+    assert(logic.canAfford(10, 10) == true)
+    assert(logic.canAfford(9.99, 10) == false)
+    assert(logic.canAfford(nil, 1) == false and logic.canAfford(0/0, 1) == false and logic.canAfford('10', 1) == false)
+end)
+
+-- A fake wallet + ledger that records the order of side effects.
+local function wallet(balance, opts)
+    opts = opts or {}
+    local w = { balance = balance, rows = {}, log = {}, nextId = 1 }
+    w.io = {
+        balance = function() return w.balance end,
+        insert = function()
+            w.log[#w.log + 1] = 'insert'
+            if opts.insertFails then return nil end
+            local id = w.nextId; w.nextId = id + 1
+            w.rows[id] = { kind = 'charge' }
+            if opts.spendDuringInsert then w.balance = w.balance - opts.spendDuringInsert end -- the insert yields
+            return id
+        end,
+        remove = function()
+            w.log[#w.log + 1] = 'remove'
+            if opts.removeRefuses then return false end
+            w.balance = w.balance - w.amount
+            return true
+        end,
+        void = function(id) w.log[#w.log + 1] = 'void'; if opts.voidFails then return false end; w.rows[id] = nil; return true end,
+        warn = function(id) w.warned = id end,
+    }
+    w.charge = function(amount) w.amount = amount; return logic.runCharge(w.io, amount) end
+    return w
+end
+local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+
+case('charge ok: ledger row first, then money, returns the row id', function()
+    local w = wallet(50)
+    local ok, err, id = w.charge(20)
+    assert(ok == true and err == nil and id == 1)
+    assert(w.balance == 30 and count(w.rows) == 1 and w.rows[1].kind == 'charge')
+    T.same({ 'insert', 'remove' }, w.log)
+end)
+case('charge exact balance -> 0, never negative', function()
+    local w = wallet(20)
+    assert(w.charge(20) == true and w.balance == 0)
+    local ok, err = w.charge(0.01)
+    assert(ok == false and err == 'fh_insufficient_funds' and w.balance == 0 and count(w.rows) == 1)
+end)
+case('charge short: fh_insufficient_funds, no row, no money taken', function()
+    local w = wallet(5)
+    local ok, err, id = w.charge(20)
+    assert(ok == false and err == 'fh_insufficient_funds' and id == nil)
+    assert(w.balance == 5 and count(w.rows) == 0 and #w.log == 0)
+end)
+case('charge: ledger insert fails -> ledger_failed, no money taken', function()
+    local w = wallet(50, { insertFails = true })
+    local ok, err = w.charge(20)
+    assert(ok == false and err == 'ledger_failed' and w.balance == 50)
+    T.same({ 'insert' }, w.log)
+end)
+case('charge: spent during the insert yield -> short, row voided, balance untouched', function()
+    local w = wallet(50, { spendDuringInsert = 40 })
+    local ok, err = w.charge(20)
+    assert(ok == false and err == 'fh_insufficient_funds' and w.balance == 10 and count(w.rows) == 0)
+    T.same({ 'insert', 'void' }, w.log)
+end)
+case('charge: RemoveMoney refused with funds -> removemoney_refused, row voided', function()
+    local w = wallet(50, { removeRefuses = true })
+    local ok, err = w.charge(20)
+    assert(ok == false and err == 'removemoney_refused' and w.balance == 50 and count(w.rows) == 0)
+    T.same({ 'insert', 'remove', 'void' }, w.log)
+end)
+case('charge: void fails -> warned with the row id', function()
+    local w = wallet(50, { removeRefuses = true, voidFails = true })
+    assert(w.charge(20) == false and w.warned == 1)
+end)
+
+-- B7 getRep -----------------------------------------------------------------------------------------------------
+case('repValue: no row -> 0, row -> integer (floored)', function()
+    assert(logic.repValue(nil) == 0 and math.type(logic.repValue(nil)) == 'integer')
+    assert(logic.repValue(42) == 42 and math.type(logic.repValue(42.0)) == 'integer')
+    assert(logic.repValue(7.9) == 7 and logic.repValue(-2.5) == -3)
+    assert(logic.repValue('15') == 15 and logic.repValue(0/0) == 0 and logic.repValue('x') == 0)
+end)
+
 T.finish()

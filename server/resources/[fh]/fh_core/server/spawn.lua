@@ -120,7 +120,7 @@ local function verify(req, src, token, netId)
     if req.state ~= 'verifying' or req.token ~= token then return end -- retried/despawned meanwhile: cleaned up there
     local exists = entity ~= 0 and DoesEntityExist(entity)
     local isPlayer = false
-    if exists and req.spec.kind ~= 'object' then
+    if exists and R.isPedKind(req.spec.kind) then -- objects and wagons are never player peds
         local ok, p = pcall(IsPedAPlayer, entity)
         isPlayer = ok and p == true or (ok and p == 1)
     end

@@ -5,7 +5,7 @@
 -- when given), so a forged, stale or duplicate message can never delete anything else, nor the adopted entity.
 -- fh:spawn:release { token, netId } after adoption: forget it (server owns its lifetime).
 -- Natives (docs/natives.md, all unverified in-game): RequestModel, HasModelLoaded, IsModelInCdimage, CreatePed,
--- CreateObject, SetEntityHeading, _SET_RANDOM_OUTFIT_VARIATION (0x283978A15512B2FE), NetworkGetEntityIsNetworked,
+-- CreateObject, CreateVehicle (wagon, B7), SetEntityHeading, _SET_RANDOM_OUTFIT_VARIATION (0x283978A15512B2FE), NetworkGetEntityIsNetworked,
 -- NetworkGetNetworkIdFromEntity, NetworkDoesNetworkIdExist, SetModelAsNoLongerNeeded, SetEntityAsMissionEntity,
 -- DoesEntityExist, DeleteEntity, GetGameTimer. Not runtime-tested (no Cfx key yet).
 local MODEL_TIMEOUT_MS = 5000
@@ -41,12 +41,17 @@ local function create(d, slot)
     local c, hash = d.coords, d.modelHash
     if not loadModel(hash) then made[d.token] = nil; return fail(d, 'model_timeout') end
     local e
-    if d.kind == 'ped' or d.kind == 'horse' then
+    local how = FhSpawnRules.CREATE[d.kind]
+    if how == 'ped' then
         e = CreatePed(hash, c.x, c.y, c.z, d.heading + 0.0, true, true, false, false)
         if e and e ~= 0 then Citizen.InvokeNative(0x283978A15512B2FE, e, true) end -- else RDR3 peds can be invisible
-    elseif d.kind == 'object' then
+    elseif how == 'object' then
         e = CreateObject(hash, c.x, c.y, c.z, true, true, false, false, false)
         if e and e ~= 0 then SetEntityHeading(e, d.heading + 0.0) end
+    elseif how == 'vehicle' then
+        -- CreateVehicle(model, x, y, z, heading, isNetwork, bScriptHostVeh, bDontAutoCreateDraftAnimals, p8):
+        -- networked, draft horses auto-created by the game (they are not separate spawn requests)
+        e = CreateVehicle(hash, c.x, c.y, c.z, d.heading + 0.0, true, true, false, false)
     end
     SetModelAsNoLongerNeeded(hash)
     if not e or e == 0 then made[d.token] = nil; return fail(d, 'create_failed') end

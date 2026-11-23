@@ -1,6 +1,7 @@
 -- fh_core server container API (spec §4.2). The one inventory API other lanes use:
 --   exports.fh_core:move / canFit / getWeight / snapshot / transferAll
 --   exports.fh_core:registerContainer / setContainerCoords / open / createDropBag / deleteContainer / registerItems
+--   exports.fh_core:addItem / removeItem / clearContainer (registered world containers only)
 -- fh_core never reads or writes inventory tables. Everything goes through fh_inventory's Fh* exports, which re-check
 -- with FhRules under their own state before mutating anything.
 --
@@ -236,6 +237,30 @@ local function addItem(ref, name, amount, info)
     return false, type(err) == 'string' and err or 'fh_refused'
 end
 
+---Take exactly `amount` (default 1) of item `name` out of a registered world container, all-or-nothing (B7).
+---fh_inventory's RemoveItem without a slot counts the whole container first and removes only when it covers
+---`amount`, with no yield in between, so a short container is never partly emptied.
+---@return boolean ok, string|nil reason  fh_not_enough when the container holds fewer (nothing removed)
+local function removeItem(ref, name, amount)
+    local ok, reason = validRef(ref)
+    if not ok then return false, reason end
+    if FhContainers.CARRIED[ref.type] then return false, 'fh_not_registrable' end
+    if not registered[refKey(ref)] then return false, 'fh_unknown_container' end
+    if type(name) ~= 'string' or name == '' then return false, 'fh_bad_item_name' end
+    if amount == nil then amount = 1 end
+    amount = type(amount) == 'number' and math.tointeger(amount) or nil -- 2.0 ok; 2.5, NaN, inf, '2' refused
+    if not amount or amount < 1 then return false, 'fh_bad_amount' end
+    local have, why = inv('GetItemCount', ref.id, name)
+    if type(have) ~= 'number' then return false, type(why) == 'string' and why or 'fh_inventory_error' end
+    if have < amount then return false, 'fh_not_enough' end
+    local done, err = inv('RemoveItem', ref.id, name, amount, nil, 'fh_core:removeItem')
+    if done == true then return true end
+    if err == 'fh_inventory_down' or err == 'fh_inventory_error' then return false, err end
+    have = inv('GetItemCount', ref.id, name)
+    if type(have) == 'number' and have < amount then return false, 'fh_not_enough' end
+    return false, 'fh_refused'
+end
+
 ---Empty a registered world container (fh_inventory only lets fh_core wipe an fh_core container).
 ---@return boolean ok, string|nil reason
 local function clearContainer(ref)
@@ -277,7 +302,8 @@ end
 
 -- ---------------------------------------------------------------- items
 
--- Push fh definitions and ItemOverrides into RSGCore.Shared.Items (one SetItems broadcast).
+-- Push fh definitions and ItemOverrides into RSGCore.Shared.Items (one SetItems broadcast). Entries built from a full
+-- fh definition carry `fh_defined = true`, so registerItems can tell them from base rsg items after an fh_core restart.
 local function pushItems(names)
     local c = core()
     if not c then return false, 'rsg_core_down' end
@@ -285,31 +311,35 @@ local function pushItems(names)
     local batch = {}
     local defs = FhItems.all()
     if names then
-        for _, n in ipairs(names) do batch[n] = FhItems.toRsg(n, defs[n], shared[n]) end
+        for _, n in ipairs(names) do batch[n] = FhItems.toRsg(n, defs[n], shared[n]); batch[n].fh_defined = true end
     else
-        for n, def in pairs(defs) do batch[n] = FhItems.toRsg(n, def, shared[n]) end
+        for n, def in pairs(defs) do batch[n] = FhItems.toRsg(n, def, shared[n]); batch[n].fh_defined = true end
         for n, over in pairs(FhConfig.ItemOverrides or {}) do
             if shared[n] and not batch[n] then batch[n] = FhItems.toRsg(n, over, shared[n]) end
         end
     end
     if next(batch) == nil then return true end
-    return exports['rsg-core']:SetItems(batch)
+    local ok, err = exports['rsg-core']:SetItems(batch)
+    if ok then return true end
+    return false, type(err) == 'string' and err or 'rsg_setitems_failed'
 end
 
----Define items at runtime: defs = { name = { label, weight, size_class, stackable, value_base, illicit, ... } }.
----Validates every entry before applying any. Returns ok, err, badName.
+-- A base rsg item: in RSGCore.Shared.Items but not built from an fh definition.
+local function isBaseItem(name)
+    local c = core()
+    local item = c and c.Shared.Items[name]
+    return type(item) == 'table' and not item.fh_defined
+end
+
+---Define items at runtime from any resource: defs = { name = { label, weight, size_class, stackable, value_base,
+---illicit, ... } } (full §4.1 definitions). The whole batch is checked first (FhItems.checkRegister: schema, name,
+---no duplicate of a config item, a base rsg item or another resource's item) and nothing is applied on a refusal.
+---The calling resource may re-register its own names (e.g. after it restarts).
+---@return boolean ok, string|nil err, string|nil badName
 local function registerItems(defs)
-    if type(defs) ~= 'table' then return false, 'fh_item_not_table' end
-    for name, def in pairs(defs) do
-        if type(name) ~= 'string' or name == '' then return false, 'fh_bad_item_name', name end
-        local ok, err = FhItems.validate(def)
-        if not ok then return false, err, name end
-    end
-    local names = {}
-    for name, def in pairs(defs) do
-        FhItems.define(name, def)
-        names[#names + 1] = name
-    end
+    local owner = GetInvokingResource() or GetCurrentResourceName()
+    local ok, err, names = FhItems.register(defs, owner, isBaseItem)
+    if not ok then return false, err, names end
     return pushItems(names)
 end
 
@@ -360,6 +390,7 @@ exports('setContainerCoords', setContainerCoords)
 exports('open', open)
 exports('createDropBag', createDropBag)
 exports('addItem', addItem)
+exports('removeItem', removeItem)
 exports('clearContainer', clearContainer)
 exports('deleteContainer', deleteContainer)
 exports('registerItems', registerItems)

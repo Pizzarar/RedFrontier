@@ -14,6 +14,7 @@ M.SIZE_CLASSES = { pocket = true, bulky = true, cargo = true }
 M.FAST_TRAVEL = { pocket = true, bulky = true, cargo = false }
 
 local registry = {} -- name -> validated definition added via M.define
+local owners = {}   -- name -> resource that registered it through M.register (B7)
 
 local function cfg()
     return FhConfig or require('config')
@@ -60,7 +61,53 @@ function M.define(name, def)
 end
 
 ---Drop runtime definitions (tests).
-function M._reset() registry = {} end
+function M._reset() registry = {}; owners = {} end
+
+---Runtime item names: lowercase letters, digits and underscores (rsg-inventory lowercases names when it counts or
+---removes, so a mixed-case name could be added but never taken out again).
+function M.validName(name)
+    return type(name) == 'string' and name:match('^[%l%d_]+$') ~= nil
+end
+
+---Pure check of a runtime registration batch (exports.fh_core:registerItems, B7). Every entry must be a full §4.1
+---definition (M.validate) under a valid name, and no name may already be taken: by FhConfig.Items, by another
+---resource's registration, or by a base rsg item (`isBase(name)` -> true; rsg items take fh fields through
+---FhConfig.ItemOverrides instead). The same owner re-registering its own names is allowed (its resource restarted).
+---Checks the whole batch before anything is applied.
+---@param isBase fun(name:string):boolean|nil
+---@return boolean ok, string|nil err, string|nil badName
+function M.checkRegister(defs, owner, isBase)
+    if type(defs) ~= 'table' then return false, 'fh_item_not_table' end
+    for name, def in pairs(defs) do
+        if not M.validName(name) then return false, 'fh_bad_item_name', tostring(name) end
+        local ok, err = M.validate(def)
+        if not ok then return false, err, name end
+        if (cfg().Items or {})[name] ~= nil then return false, 'fh_duplicate_item', name end
+        if registry[name] ~= nil then
+            if owners[name] ~= owner then return false, 'fh_duplicate_item', name end
+        elseif isBase and isBase(name) then
+            return false, 'fh_duplicate_item', name
+        end
+    end
+    return true
+end
+
+---checkRegister, then define every entry under `owner`. Returns ok, err, badName | true, nil, names (sorted).
+function M.register(defs, owner, isBase)
+    local ok, err, bad = M.checkRegister(defs, owner, isBase)
+    if not ok then return false, err, bad end
+    local names = {}
+    for name, def in pairs(defs) do
+        M.define(name, def)
+        owners[name] = owner
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return true, nil, names
+end
+
+---Resource that registered `name` at runtime, or nil (config item / unknown).
+function M.ownerOf(name) return owners[name] end
 
 ---Full definition source for `name`: runtime registry, then FhConfig.Items.
 function M.definition(name)
