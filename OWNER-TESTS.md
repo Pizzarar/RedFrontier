@@ -412,6 +412,7 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    Expected: no `[fh_quests] fh_quest_state missing` line, no `family ... rejected`/`failed to load`, no `built-in job type ...
    not registered`; `fh_quest_state` exists in the DB. `/jobs` opens the fh_ui Jobs Board (a missing table would answer
    `Board unavailable: fh_not_ready`).
+   Also: fh_quests starts with no ox_lib or script errors in the server console (ox_lib dependency removed).
    RESULT:
 2. Board. Run `/jobs` (it works anywhere; the board spot/prop is at about -297, 795, 118).
    Expected: 3-5 Heartlands offers (pelt requests, "Clear out: Heartlands outlaw camp", wanted NPCs), each with a reward and an Accept button.
