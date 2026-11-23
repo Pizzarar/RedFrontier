@@ -474,8 +474,8 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
 
 ## Crafting (fh_crafting, fh_gunsmith)
 
-Preconditions: the station API is a pending contract (@homestead H3, so until it lands turn on `fh_dev 1` and use the dev
-stations; a built gunsmith station on your plot arrives with H3), item moves need @core B7 `removeItem` and idea-615
+Preconditions: stations come from @homestead H3 (without fh_homestead started, crafting refuses `no_homestead` unless you
+turn on `fh_dev 1` and use the dev stations), @core B7 `removeItem` is on main, and item moves need idea-615
 (carried-inventory add/remove refuses, so crafting, restore and tonics refuse safely instead of eating items), the tonic
 buff needs idea-612 (caps in fh_buffs), and `/fh_restore` needs an @core `setItemInfo` contract (idea-689, not built
 yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.

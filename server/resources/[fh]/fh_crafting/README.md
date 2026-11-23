@@ -15,7 +15,7 @@ with what was not undone.
 | `/fh_craft <recipe>` | player | Craft one recipe id. No argument prints the usage plus every recipe id. Success: `Done: <label>.`; short inputs: `Missing: <need>x <item> (have <n>), ...`. Runtime-only; the server console is refused. |
 | `/fh_restore <slot>` | player | Owned by `fh_gunsmith`, not this resource (see its README). |
 
-Chat/notify strings come from the code: `busy`, `unknown_recipe`, `bad_type`, `no_station`, `no_remove`, `no_add`,
+Chat/notify strings come from the code: `busy`, `unknown_recipe`, `bad_type`, `no_station`, `no_homestead`, `homestead_error`, `no_remove`, `no_add`,
 `not_enough` (see `server/craft.lua`).
 
 ## Server exports
@@ -23,7 +23,7 @@ Chat/notify strings come from the code: `busy`, `unknown_recipe`, `bad_type`, `n
 | Export | Signature | Notes |
 |---|---|---|
 | `getRecipes` | `() -> list` | The `shared/recipes.lua` list (live table, not a copy). |
-| `isNearStation` | `(src, stationType, maxDist?) -> boolean, reason\|nil` | H3 shape; delegate of `FhCraftStations.isNearStation`; reasons `bad_type`, `no_station`. |
+| `isNearStation` | `(src, stationType, maxDist?) -> boolean, reason\|nil` | H3 shape; delegate of `FhCraftStations.isNearStation`; reasons `bad_type`, `no_station`, `no_homestead`, `homestead_error`. |
 | `getStations` | `(citizenid) -> list` | H3 shape; `fh_homestead` stations plus `devStations` (`dev = true`) while `fh_dev 1`. |
 | `stationAt` | `(coords, maxDist?) -> { plot_id, slot_id, station_type }\|nil` | H3 shape; dev fallback `{ station_type, dev = true }`. |
 | `craft` | `(src, recipeId) -> ok, reason, info` | Programmatic `/fh_craft`; reasons `no_player`, `busy`, `unknown_recipe`, `no_station` (+ station reason), `missing_inputs` (`info.missing`), take/give reasons (`no_remove`, `no_add`, `not_enough`, `fh_*`), `error`. |
@@ -93,11 +93,11 @@ magnitude, duration)`. The tonic is consumed only when the buff applies; on an a
 (`buff_failed`); if the give-back also fails it is lost (`refund_failed`, logged at error level). Magnitude/duration
 come from `FhCraftRules.tonicFor` (`TONICS` + `TonicDurations`).
 
-## Adapter contract (workaround until C5; signatures mirror @homestead H3 and @core B7 so C5 swaps bodies only)
+## Adapter contract (signatures mirror @homestead H3 and @core B7)
 
 | Global | Signature | Notes |
 |---|---|---|
-| `FhCraftStations.isNearStation` (alias `isNear`) | `(src, stationType, maxDist?) -> boolean, reason\|nil` | H3 shape; reasons `bad_type`, `no_station`. `fh_homestead` export when started, plus `devStations` while `fh_dev 1` |
+| `FhCraftStations.isNearStation` (alias `isNear`) | `(src, stationType, maxDist?) -> boolean, reason\|nil` | H3 shape; reasons `bad_type`, `no_station`, `no_homestead`, `homestead_error`. `fh_homestead` export when started; `devStations` only while `fh_dev 1` |
 | `FhCraftStations.getStations` | `(citizenid) -> list` | H3 shape; dev stations appended (`dev = true`) under `fh_dev` |
 | `FhCraftStations.stationAt` | `(coords, maxDist?) -> { plot_id, slot_id, station_type }\|nil` | H3 shape; dev fallback `{ station_type, dev = true }` |
 | `FhCraftInv.removeItem` | `(ref, item, amount) -> ok, reason` | mirrors fh_core B7; `no_remove` when fh_core lacks the export |
@@ -120,12 +120,13 @@ No custom net events are emitted by this resource.
 
 ## Pending contracts
 
-- **@homestead H3 station API** (`isNearStation`, `getStations`, `stationAt`): not on main yet. `server/stations.lua`
-  calls `exports.fh_homestead` when the resource is started and the export exists; otherwise (and when the player has no
-  built station) it falls back to `devStations` while `fh_dev 1`. Workaround removed by block C5 (the fallback then
-  stays behind `fh_dev` only).
-- **@core B7 `removeItem(ref, item, amount)`** (not on main yet): `server/inv.lua` calls it when the fh_core export
-  exists; otherwise every take refuses with `no_remove` and nothing is half-done. Workaround removed by C5.
+- **@homestead H3 station API** (`isNearStation`, `getStations`, `stationAt`): H3 is the real path (C5b).
+  `server/stations.lua` calls `exports.fh_homestead` when the resource is started and the export exists, passing
+  `maxDist`. `devStations` is consulted only while `fh_dev 1`. With fh_homestead missing and `fh_dev` off,
+  `isNearStation` refuses `no_homestead`; an H3 export that throws is logged and refuses `homestead_error`. H3 itself
+  is on its own branch until it merges; until then use `fh_dev 1`.
+- **@core B7 `removeItem(ref, item, amount)`** (landed, on main): `server/inv.lua` calls it directly; `no_remove` only
+  when the export is absent.
 - **idea-615 (carried-inventory add/remove)**: B7 `removeItem`/`addItem` refuse carried refs (`fh_not_registrable`), so
   crafting, restore and tonics refuse safely (no items are consumed or created) until @core accepts carried refs.
 - **idea-612 (tonic caps in fh_buffs)**: `fh_buffs/config.lua` has no caps for `tonic_vigor`/`tonic_steady`, so

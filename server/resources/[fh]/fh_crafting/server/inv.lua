@@ -1,10 +1,10 @@
--- Player carried-inventory adapter (plan crafting-01 C2; C5 swaps the bodies, not the signatures).
+-- Player carried-inventory adapter (plan crafting-01 C2/C5b).
 -- Raw ops mirror fh_core exactly:  removeItem(ref, item, amount) (@core B7)  /  addItem(ref, item, amount, info).
 -- A player's carried inventory = two fh_core refs: { type = 'equipped', id = src } and { type = 'backpack', id = src }.
--- removeItem is used only when fh_core is started and has the export; otherwise every take refuses with 'no_remove'
--- (and a give with 'no_add'), so nothing is half-done. Counting and slot reads use fh_core snapshot.
+-- removeItem (on main, B7) is the primary path; 'no_remove' only when the export is absent (and 'no_add' for give),
+-- so nothing is half-done. Counting and slot reads use fh_core snapshot.
 -- KNOWN GAP (reported to @core via lead): B7 removeItem/addItem refuse carried refs ('fh_not_registrable'), so
--- crafting refuses cleanly until @core adds a carried contract; C5 swaps to it.
+-- crafting refuses cleanly (no partial mutation, rollback intact) until idea-615 lands.
 FhCraftInv = {}
 
 local flow = FhCraftFlow
