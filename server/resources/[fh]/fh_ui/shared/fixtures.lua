@@ -19,15 +19,14 @@ M.fixtures = {
         note = 'Pay now; if you die your pack is delivered to the chest after the delay.',
     },
     jobs = {
-        title = 'Jobs Board',
-        region = 'Heartlands',
-        jobs = {
-            { id = 'j1', kind = 'contract', title = 'Haul crated rifles to Big Valley', region_id = 'heartlands',
-              payout = 240, risk = 'high' },
-            { id = 'j2', kind = 'bounty', title = 'Hollis Gang lookout', region_id = 'big_valley', payout = 150,
-              risk = 'medium' },
-            { id = 'j3', kind = 'hunt', title = 'Pelts for the Tall Trees tannery', region_id = 'tall_trees',
-              payout = 70, risk = 'low' },
+        region_id = 'heartlands',
+        expires_at = 4102444800,
+        offers = {
+            { id = 'heartlands:1:hunt_request:wolf_2', job_type = 'hunt_request', title = 'Two-star wolf pelt',
+              text = 'Sell a 2-star or better wolf pelt.', rewards = { money = 12 }, accepted = false },
+            { id = 'heartlands:1:bounty:hollis', job_type = 'bounty', title = 'Hollis Gang lookout',
+              text = 'Take down the lookout.', rewards = { money = 150, rep = { region_id = 'heartlands', delta = 5 } },
+              accepted = true },
         },
     },
     station = {
@@ -61,9 +60,9 @@ S.heat = {
 S.insurance = { title = 'string', fee = 'number', delay_minutes = 'number', target_chest = 'string', note = 'string?' }
 local item = { list = { item = 'string', qty = 'number' } }
 S.jobs = {
-    title = 'string?', region = 'string?',
-    jobs = { list = { id = 'string', kind = 'string', title = 'string', region_id = 'string', payout = 'number',
-        risk = 'string' } },
+    region_id = 'string', expires_at = 'number', expired = 'boolean?', notice = 'string?',
+    offers = { list = { id = 'string', job_type = 'string', title = 'string', text = 'string?', accepted = 'boolean',
+        rewards = { obj = { money = 'number?' } } } },
 }
 S.station = {
     title = 'string',

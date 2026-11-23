@@ -91,9 +91,12 @@ Fed by `fh:death:bags` plus the `fh:death:bags` callback fetch at start. `open/u
 Lane revalidates fee and chest ownership.
 
 ### jobs (owner `quests`)
-Jobs board: contracts, bounties and hunting requests (rows come from the future @quests lane).
-`open/update` data `{ title?, region?, jobs = { { id, kind, title, region_id, payout, risk } } }`
-(`kind` is `contract|bounty|hunt`; `risk` is a tier: low/medium/high). Actions: `accept` `{ id }` (relays `fh:quests:ui_accept`), `close` `{}`.
+Jobs board, the real `fh_quests` board (README "Client sync: fh:quests:sync").
+`open/update` data `{ region_id, expires_at, expired?, notice?, notice_kind?, offers = { { id, job_type, title, text, rewards = { money?, rep = { region_id, delta }?, items = { { name, amount } }? }, accepted } } }`.
+`job_type` is data (freight, hunt_request, bounty ...), never switched on. An `update` without `offers` only changes the inline
+`notice` (`notice_kind` `ok|error`); the board stays. `expired` boards show no offers. Accepted offers show "Accepted" and no button.
+Actions: `accept` `{ id }` (relays `fh:quests:ui_accept`; the lane answers with a `notice` update), `close` `{}`. No autofocus, Enter does nothing.
+The client adapter (`client/adapter.lua` + `shared/quests_view.lua`) turns each `fh:quests:sync` into an `update` while the screen is open.
 
 ### station (owner `homestead`)
 `open/update` data `{ title, options = { { id, label, inputs = { { item, qty } }, outputs = { { item, qty } }, time_seconds, can_craft } } }`.

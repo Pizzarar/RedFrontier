@@ -20,6 +20,7 @@ shared_scripts {
     'shared/relay.lua',
     'shared/hud.lua',
     'shared/fixtures.lua',
+    'shared/quests_view.lua',
 }
 
 server_scripts {
@@ -30,6 +31,7 @@ client_scripts {
     '@fh_core/client/safe.lua',
     'client/main.lua',
     'client/hud.lua',
+    'client/adapter.lua',
 }
 
 dependencies { 'fh_core', 'ox_lib' }

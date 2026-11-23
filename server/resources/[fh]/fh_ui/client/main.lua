@@ -41,6 +41,12 @@ local function closeScreen(p)
     syncFocus()
 end
 
+-- Small surface for client/adapter.lua (loaded after this file).
+FhUiClient = {
+    isOpen = function(screen) return open[screen] == true end,
+    update = function(screen, data) send('update', screen, data) end,
+}
+
 FH.onNet('fh:ui:open', openScreen)
 FH.onNet('fh:ui:close', closeScreen)
 FH.onNet('fh:ui:update', function(p)

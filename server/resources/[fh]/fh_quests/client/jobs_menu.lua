@@ -75,7 +75,10 @@ function openMenu(region_id)
     lib.showContext(MENU)
 end
 
-RegisterCommand('jobs', function() openMenu(DEFAULT_REGION) end, false)
+-- W2: /jobs and the board spots open the fh_ui jobs screen (server/ui.lua); openMenu above stays until W4 deletes it.
+local function openBoard(region_id) TriggerServerEvent('fh:quests:ui_open', region_id) end
+
+RegisterCommand('jobs', function() openBoard(DEFAULT_REGION) end, false)
 
 -- Board spots (rsg-target is optional: without it only /jobs works). Zones and props are removed on stop.
 local zones, props, stopping = {}, {}, false
@@ -86,7 +89,7 @@ CreateThread(function()
         zones[#zones + 1] = exports['rsg-target']:addSphereZone({
             coords = b.coords, radius = 1.5, debug = false,
             options = { { label = b.label, icon = 'fa-solid fa-clipboard-list', distance = 2.0,
-                onSelect = function() openMenu(b.region_id) end } },
+                onSelect = function() openBoard(b.region_id) end } },
         })
         local hash = joaat(b.model)
         if IsModelValid(hash) then -- unverified model: skip the prop when RedM does not know it

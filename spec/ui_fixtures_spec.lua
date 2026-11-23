@@ -35,10 +35,10 @@ case('fixture actions relay (confirm/cancel/accept/craft/buy/sell/close)', funct
         assert(R.validate({ screen = screen, action = act, payload = { id = 'x', qty = 1 } }), screen)
     end
 end)
-case('jobs fixture shows one row of each kind', function()
+case('jobs fixture shows an open and an accepted offer', function()
     local seen = {}
-    for _, j in ipairs(F.fixtures.jobs.jobs) do seen[j.kind] = true end
-    assert(seen.contract and seen.bounty and seen.hunt)
+    for _, o in ipairs(F.fixtures.jobs.offers) do seen[o.accepted and 'yes' or 'no'] = true end
+    assert(seen.yes and seen.no)
 end)
 case('parseDemo', function()
     T.same({ action = 'open', screen = 'fence' }, F.parseDemo({ 'Fence' }))

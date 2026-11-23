@@ -29,6 +29,8 @@ server_scripts {
     'server/api.lua',
     'server/jobtypes.lua', -- built-in job types, registered through the public registerJobType
     'server/menu.lua',     -- WORKAROUND: ox_lib fallback jobs menu, server side (replaced by the @ui jobs board)
+    'server/ui_text.lua',  -- pure error code -> notice text for the fh_ui jobs screen
+    'server/ui.lua',       -- fh_ui jobs board glue (open + fh:quests:ui_accept)
     'server/families.lua', -- Q4: register the family questlines, spawn givers, WORKAROUND dialogue callbacks
 }
 
