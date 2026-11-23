@@ -125,4 +125,23 @@ case('config: saddlebagOf asks fh_core and feeds sources()', function()
     assert(#b == 2 and b[2].type == 'saddlebag' and b[2].id == 'fh:saddle:C1')
 end)
 
+case('publicBags: per-receiver mine, remaining >= 0, no owner id', function()
+    local bags = {
+        b1 = { id = 'b1', owner = 'C1', coords = { x = 1, y = 2, z = 3 }, expiresAt = 150 },
+        b2 = { id = 'b2', owner = 'C2', coords = { x = 4, y = 5, z = 6 }, expiresAt = 200 },
+    }
+    local function find(l, id) for _, e in ipairs(l) do if e.id == id then return e end end end
+    local l1 = R.publicBags(bags, 100, 'C1')
+    assert(#l1 == 2 and find(l1, 'b1').mine == true and find(l1, 'b2').mine == false)
+    assert(find(l1, 'b1').remaining == 50 and find(l1, 'b2').remaining == 100)
+    local l2 = R.publicBags(bags, 100, 'C2')
+    assert(find(l2, 'b1').mine == false and find(l2, 'b2').mine == true)
+    assert(find(R.publicBags(bags, 100, nil), 'b1').mine == false)
+    for _, e in ipairs(l1) do assert(e.owner == nil and e.citizenid == nil and e.cid == nil) end
+    for _, e in ipairs(R.publicBags(bags, 1000, 'C1')) do assert(e.remaining >= 0) end
+    assert(#R.publicBags(bags, 1000, 'C1') == 0) -- expired bags are not listed
+    bags.b1.expiresAt = 100
+    assert(#R.publicBags(bags, 100, 'C1') == #l1 - 1 or find(R.publicBags(bags, 100, 'C1'), 'b1') == nil or find(R.publicBags(bags, 100, 'C1'), 'b1').remaining == 0)
+end)
+
 T.finish()

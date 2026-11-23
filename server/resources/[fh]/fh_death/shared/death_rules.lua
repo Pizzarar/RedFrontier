@@ -105,6 +105,20 @@ function M.isLive(bag, now)
     return type(bag) == 'table' and not bag.busy and not M.isExpired(bag, now)
 end
 
+---Client-safe bag list for ONE receiver: live bags only, `mine` (receiver owns it) and `remaining` seconds (>= 0).
+---Owner ids / citizenids never appear in the result. receiverCid may be nil (-> mine=false everywhere).
+function M.publicBags(bags, now, receiverCid)
+    local out = {}
+    for id, b in pairs(bags or {}) do
+        if M.isLive(b, now) then
+            out[#out + 1] = { id = id, x = b.coords.x, y = b.coords.y, z = b.coords.z,
+                mine = receiverCid ~= nil and b.owner == receiverCid,
+                remaining = math.max(0, (tonumber(b.expiresAt) or 0) - now) }
+        end
+    end
+    return out
+end
+
 local function dist(a, b)
     local ok, ax, ay, az, bx, by, bz = pcall(function() return a.x, a.y, a.z, b.x, b.y, b.z end)
     if not ok then return nil end

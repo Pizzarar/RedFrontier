@@ -51,15 +51,17 @@ local function describe(items)
     return #parts > 0 and table.concat(parts, ', ') or 'nothing'
 end
 
-local function publicList()
-    local out, now = {}, os.time()
-    for id, b in pairs(bags) do
-        if rules.isLive(b, now) then out[#out + 1] = { id = id, x = b.coords.x, y = b.coords.y, z = b.coords.z } end
-    end
-    return out
+local function publicList(src)
+    return rules.publicBags(bags, os.time(), src and citizenidOf(src) or nil)
 end
 
-local function broadcast() TriggerClientEvent('fh:death:bags', -1, publicList()) end
+-- Per-player: every online player gets the list, each with their own `mine` flags (no owner ids on the wire).
+local function broadcast()
+    for _, pid in ipairs(GetPlayers()) do
+        local src = tonumber(pid)
+        if src then TriggerClientEvent('fh:death:bags', src, publicList(src)) end
+    end
+end
 
 -- ---------------------------------------------------------------- prop (visual only)
 
@@ -327,7 +329,7 @@ RegisterNetEvent('fh:death:open', function(payload)
     if not ok then reply(src, 'bag: ' .. tostring(why or 'fh_refused')) end
 end)
 
-lib.callback.register('fh:death:bags', function() return publicList() end)
+lib.callback.register('fh:death:bags', function(src) return publicList(src) end)
 
 ---Live bags (copies): { id, owner, coords, expiresAt }. For admin tools / the insurance block (L4).
 exports('getBags', function()

@@ -77,7 +77,7 @@ function M.retarget(rows, player)
 end
 
 -- Bag list (fh:death:bags) -> own bags only. Ownership is never guessed: only entries the server marked
--- `mine == true` are shown. TODO(contract): publicList currently has no `mine`/`remaining`; request in README.
+-- `mine == true` are shown. Server sends `mine` and `remaining` per receiver (fh_death publicBags).
 -- player = { x, y } optional, for direction and distance.
 function M.bagRows(list, now, player)
     local rows = {}
