@@ -4,7 +4,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 
 lua54 'yes'
 
-description 'RedFrontier homestead: fixed plot claim + one chest (spec L1)'
+description 'RedFrontier homestead: fixed plots, build slots, stations, comfort (spec L1)'
 
 shared_scripts {
     '@ox_lib/init.lua',
@@ -20,6 +20,7 @@ server_scripts {
     'server/main.lua',
     'server/slots.lua',
     'server/comfort.lua',
+    'server/build.lua',
 }
 
 client_scripts {

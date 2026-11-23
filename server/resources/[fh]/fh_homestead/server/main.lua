@@ -121,10 +121,36 @@ end
 ---Plot id the character owns, or nil.
 local function getPlot(citizenid) return claims.byOwner[citizenid] end
 
----Safe zone query (spec L139: homestead is a safe zone). STUB: true when coords are inside ANY configured plot,
----claimed or not. TODO(fh_zones): AI/damage handling and the real zone registry live in fh_zones; nothing enforces this yet.
+---Safe zone query (spec L139: homestead is a safe zone). True when coords are within the safe radius of a CLAIMED
+---plot: FhHomesteadConfig.baseSafeRadius (else the plot radius) plus the built fence's safeRadiusBonus. Unclaimed plots
+---and everything before the claim load are not safe. Before the slot cache is loaded the fence bonus is not counted.
+---TODO(fh_zones): AI/damage handling and the real zone registry live in fh_zones; nothing enforces this yet.
+local plotIds = {}
+for id in pairs(cfg.plots) do plotIds[#plotIds + 1] = id end
+table.sort(plotIds)
+
 local function isInSafeZone(coords)
-    return rules.plotAt(cfg.plots, coords) ~= nil
+    if not ready then return false end
+    local slots = FhHomesteadSlots -- server/slots.lua (loaded after this file)
+    for _, id in ipairs(plotIds) do
+        if claims.byPlot[id] then
+            local plot = cfg.plots[id]
+            local tiers = slots and slots.getTiers and slots.getTiers(id) or {}
+            local d = rules.dist(plot.center, coords)
+            if d and d <= FhBuildRules.safeRadius(plot, tiers, cfg.baseSafeRadius) then return true end
+        end
+    end
+    return false
+end
+
+---Is chest n of the plot usable? 1 = the claim chest; 2+ = the matching chest_<n> slot must be built.
+local function chestBuilt(plot, n)
+    if n == 1 then return true end
+    local slots = FhHomesteadSlots
+    if not (slots and slots.isReady and slots.isReady()) then return false end
+    local slotId = 'chest_' .. n
+    if FhBuildRules.chestNumber(slotId, plot.slots and plot.slots[slotId]) ~= n then return false end
+    return (slots.getTiers(plot.id)[slotId] or 0) >= 1
 end
 
 -- Client prompt -> request. The server revalidates ownership and reach (fh_core.open re-checks distance from the
@@ -135,9 +161,13 @@ RegisterNetEvent('fh:homestead:open_chest', function(payload)
     if type(payload) ~= 'table' or type(payload.plot_id) ~= 'string' then return end
     local plot = cfg.plots[payload.plot_id]
     if not plot then return end
+    -- H2: payload.chest picks an extra chest (chest_2/chest_3 slots); default 1 = the claim chest
+    local n = payload.chest == nil and 1 or (type(payload.chest) == 'number' and math.tointeger(payload.chest))
+    if not n or n < 1 then return end
     local ok, why = rules.canOpenChest(plot.id, citizenidOf(src), claims)
     if not ok then return reply(src, 'chest: ' .. why) end
-    ok, why = exports.fh_core:open(src, chestRef(plot))
+    if not chestBuilt(plot, n) then return reply(src, 'chest: fh_chest_not_built') end
+    ok, why = exports.fh_core:open(src, { type = 'chest', id = rules.chestStashId(plot.id, n) })
     if not ok then reply(src, 'chest: ' .. tostring(why)) end
 end)
 

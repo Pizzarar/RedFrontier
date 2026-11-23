@@ -95,6 +95,71 @@ function M.propFor(slot, verifiedProps)
     return slot.prop
 end
 
+-- ---- H2 helpers (pure) ----
+
+local function wholeCount(n) return type(n) == 'number' and math.tointeger(n) or nil end
+
+---Normalise a tier cost for the build flow: { money = int >= 0, items = { {item=, amount=}, ... } } with items sorted
+---by name (deterministic take/refund order) and every amount a whole number >= 1. nil + reason on a bad cost.
+function M.costList(cost)
+    if type(cost) ~= 'table' then return nil, 'fh_bad_cost' end
+    local money = cost.money == nil and 0 or wholeCount(cost.money)
+    if not money or money < 0 then return nil, 'fh_bad_cost' end
+    local items = {}
+    for name, n in pairs(type(cost.items) == 'table' and cost.items or {}) do
+        local amount = wholeCount(n)
+        if type(name) ~= 'string' or name == '' or not amount or amount < 1 then return nil, 'fh_bad_cost' end
+        items[#items + 1] = { item = name, amount = amount }
+    end
+    table.sort(items, function(a, b) return a.item < b.item end)
+    return { money = money, items = items }
+end
+
+---Safe-zone radius of a claimed plot: base (cfg.baseSafeRadius, else the plot radius) plus every built
+---safeRadiusBonus (the fence). Unknown/garbage tiers count as nothing built.
+function M.safeRadius(plot, currentTiers, baseRadius)
+    if type(plot) ~= 'table' then return 0 end
+    local base = tonumber(baseRadius) or tonumber(plot.radius) or 0
+    return base + M.unlockedState(plot, type(currentTiers) == 'table' and currentTiers or {}).safeRadiusBonus
+end
+
+---Chest number of a chest-kind slot ('chest_2' -> 2), or nil. Chest 1 is the claim chest, never a slot.
+function M.chestNumber(slotId, slot)
+    if type(slot) ~= 'table' or slot.kind ~= 'chest' or type(slotId) ~= 'string' then return nil end
+    local n = math.tointeger(tonumber(slotId:match('^chest_(%d+)$')) or 0)
+    return (n and n >= 2) and n or nil
+end
+
+---World position of a slot prop: plot center + prop offset ({x,y,z} table), heading from the prop (default 0).
+function M.slotPlacement(plot, slot, verifiedProps)
+    local prop = M.propFor(slot, verifiedProps)
+    if type(plot) ~= 'table' or type(prop) ~= 'table' or type(prop.model) ~= 'string' then return nil end
+    local okc, cx, cy, cz = pcall(function() return plot.center.x, plot.center.y, plot.center.z end)
+    local o = type(prop.offset) == 'table' and prop.offset or {}
+    local ox, oy, oz = tonumber(o.x) or 0, tonumber(o.y) or 0, tonumber(o.z) or 0
+    if not okc or type(cx) ~= 'number' or type(cy) ~= 'number' or type(cz) ~= 'number' then return nil end
+    return { model = prop.model, coords = { x = cx + ox, y = cy + oy, z = cz + oz }, heading = tonumber(prop.heading) or 0.0 }
+end
+
+---Props for every built slot of a plot, sorted by slot id: { slot_id, kind, tier, model, coords, heading, chest? }.
+---What the client draws (client-local, non-networked). Slots without a usable prop are skipped.
+function M.slotProps(plot, currentTiers, verifiedProps)
+    local out = {}
+    if type(plot) ~= 'table' or type(plot.slots) ~= 'table' then return out end
+    local ids = {}
+    for id in pairs(plot.slots) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do
+        local slot, tier = plot.slots[id], tierOf(currentTiers, id)
+        local place = tier >= 1 and M.slotPlacement(plot, slot, verifiedProps) or nil
+        if place then
+            out[#out + 1] = { slot_id = id, kind = slot.kind, tier = tier, model = place.model, coords = place.coords,
+                heading = place.heading, chest = M.chestNumber(id, slot) }
+        end
+    end
+    return out
+end
+
 ---Config sanity: every slot has a cost and comfort for each tier 1..maxTier. Returns a list of problems (empty = valid).
 function M.validatePlot(plot)
     local bad = {}

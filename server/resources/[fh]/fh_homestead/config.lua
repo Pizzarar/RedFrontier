@@ -1,11 +1,11 @@
 -- fh_homestead fixed plots (spec L138-139). Coordinates are APPROXIMATE (from fh_core regions) and must be verified
 -- in game: stand at the spot, read coords, adjust. One entry per plot; ids are stable (stored in fh_plots).
 -- H1: each plot also lists build SLOTS (cabin, fence, stations, trophy wall, chests). Costs/comfort are data only here;
--- the build flow and the money/item debit are H2. Slot ids are stable (stored in fh_plot_slots).
+-- the build flow and the money/item debit are H2 (server/build.lua). Slot ids are stable (stored in fh_plot_slots).
 local function V(x, y, z) if vector3 then return vector3(x, y, z) end return { x = x, y = y, z = z } end
 
 -- Slot template shared by every plot. tiers[n] = what building tier n costs and gives; tier 0 = not built.
---   cost   = { money = <dollars>, items = { <item> = <count> } }   (debit is H2)
+--   cost   = { money = <dollars>, items = { <item> = <count> } }   (debit: server/build.lua, items from the plot chest)
 --   comfort= comfort points that tier adds (build_rules.totalComfort sums every built tier)
 --   unlocks= { chests = {slot ids}, safeRadiusBonus = m, stationType = id, trophyComfort = bool }
 --   requires = { [slotId] = minTier } prerequisite slots
@@ -15,44 +15,44 @@ local function slotTemplate()
         cabin = {
             kind = 'cabin', maxTier = 2,
             tiers = {
-                [1] = { cost = { money = 150, items = { wood = 20 } }, comfort = 10, unlocks = { chests = { 'chest_2' } } },
-                [2] = { cost = { money = 400, items = { wood = 40, nails = 20 } }, comfort = 15, unlocks = { chests = { 'chest_3' } } },
+                [1] = { cost = { money = 150, items = { lumber = 20 } }, comfort = 10, unlocks = { chests = { 'chest_2' } } },
+                [2] = { cost = { money = 400, items = { lumber = 40, nails = 20 } }, comfort = 15, unlocks = { chests = { 'chest_3' } } },
             },
             prop = { model = 'p_chest01x', offset = { x = -8.0, y = 0.0, z = 0.0 } }, -- TODO-verify: real cabin prop
         },
         fence = {
             kind = 'fence', maxTier = 1,
-            tiers = { [1] = { cost = { money = 100, items = { wood = 15 } }, comfort = 5, unlocks = { safeRadiusBonus = 10.0 } } },
+            tiers = { [1] = { cost = { money = 100, items = { lumber = 15 } }, comfort = 5, unlocks = { safeRadiusBonus = 10.0 } } },
             prop = { model = 'p_chest01x', offset = { x = 0.0, y = 12.0, z = 0.0 } }, -- TODO-verify
         },
         station_1 = {
             kind = 'station', stationType = 'workbench', maxTier = 1,
-            tiers = { [1] = { cost = { money = 60, items = { wood = 10 } }, comfort = 3, unlocks = { stationType = 'workbench' } } },
+            tiers = { [1] = { cost = { money = 60, items = { lumber = 10 } }, comfort = 3, unlocks = { stationType = 'workbench' } } },
             prop = { model = 'p_chest01x', offset = { x = 6.0, y = 4.0, z = 0.0 } }, -- TODO-verify
         },
         station_2 = {
             kind = 'station', stationType = 'campfire', maxTier = 1,
-            tiers = { [1] = { cost = { money = 25, items = { wood = 5 } }, comfort = 3, unlocks = { stationType = 'campfire' } } },
+            tiers = { [1] = { cost = { money = 25, items = { lumber = 5 } }, comfort = 3, unlocks = { stationType = 'campfire' } } },
             prop = { model = 'p_chest01x', offset = { x = 6.0, y = -4.0, z = 0.0 } }, -- TODO-verify
         },
         station_3 = {
             kind = 'station', stationType = 'tanning_rack', maxTier = 1,
-            tiers = { [1] = { cost = { money = 80, items = { wood = 12 } }, comfort = 3, unlocks = { stationType = 'tanning_rack' } } },
+            tiers = { [1] = { cost = { money = 80, items = { lumber = 12 } }, comfort = 3, unlocks = { stationType = 'tanning_rack' } } },
             prop = { model = 'p_chest01x', offset = { x = 10.0, y = 0.0, z = 0.0 } }, -- TODO-verify
         },
         trophy_wall = {
             kind = 'trophy_wall', maxTier = 1,
-            tiers = { [1] = { cost = { money = 120, items = { wood = 10 } }, comfort = 5, unlocks = { trophyComfort = true } } },
+            tiers = { [1] = { cost = { money = 120, items = { lumber = 10 } }, comfort = 5, unlocks = { trophyComfort = true } } },
             prop = { model = 'p_chest01x', offset = { x = -8.0, y = 4.0, z = 0.0 } }, -- TODO-verify
         },
         chest_2 = {
             kind = 'chest', maxTier = 1, requires = { cabin = 1 },
-            tiers = { [1] = { cost = { money = 40, items = { wood = 8 } }, comfort = 2, unlocks = {} } },
+            tiers = { [1] = { cost = { money = 40, items = { lumber = 8 } }, comfort = 2, unlocks = {} } },
             prop = { model = 'p_chest01x', offset = { x = -4.0, y = 0.0, z = 0.0 } }, -- TODO-verify
         },
         chest_3 = {
             kind = 'chest', maxTier = 1, requires = { cabin = 2 },
-            tiers = { [1] = { cost = { money = 60, items = { wood = 10 } }, comfort = 2, unlocks = {} } },
+            tiers = { [1] = { cost = { money = 60, items = { lumber = 10 } }, comfort = 2, unlocks = {} } },
             prop = { model = 'p_chest01x', offset = { x = -4.0, y = 4.0, z = 0.0 } }, -- TODO-verify
         },
     }
@@ -66,6 +66,14 @@ FhHomesteadConfig = {
     -- (best-valued first) count per wall tier.
     trophyComfortCap = 20,
     trophyMaxByWallTier = { [1] = 6 },
+    -- H2: build materials, registered with exports.fh_core:registerItems from fh_homestead ONLY (full §4.1 defs).
+    -- Materials are taken from the plot's main chest (fh:chest:<plot>:1) when a slot is built. Weights in grams.
+    buildItems = {
+        lumber = { label = 'Lumber', weight = 500, size_class = 'pocket', stackable = true, value_base = 2,
+            illicit = false, image = 'resource_wood.png', useable = false, description = 'Sawn planks for building.' },
+        nails = { label = 'Nails', weight = 10, size_class = 'pocket', stackable = true, value_base = 1,
+            illicit = false, image = 'nails.png', useable = false, description = 'A handful of iron nails.' },
+    },
     plots = {
         heartlands_01 = {
             id = 'heartlands_01',
