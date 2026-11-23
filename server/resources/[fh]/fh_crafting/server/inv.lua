@@ -78,7 +78,7 @@ end
 ---All-or-nothing for that item across the carried sections (equipped first). A failed section take puts back what
 ---earlier sections gave (without item info: inputs are plain stackables).
 ---@return boolean ok
----@return string|nil reason 'bad_amount' | 'not_enough' | 'no_remove' | fh_core reason
+---@return string|nil reason 'bad_item' | 'bad_amount' | 'not_enough' | 'no_remove' | fh_core reason
 ---@return table|nil info transact info on a step failure (rollbackFailed lists anything not put back)
 function FhCraftInv.take(src, item, amount)
     if type(item) ~= 'string' or item == '' then return false, 'bad_item' end
@@ -94,8 +94,12 @@ end
 ---Add to the first carried section that accepts the whole amount (equipped, then backpack).
 ---@param info table|nil item info (e.g. stars, condition)
 ---@return boolean ok
----@return string|nil reason 'no_add' | fh_core reason of the last section tried
+---@return string|nil reason 'bad_item' | 'bad_amount' | 'no_add' | fh_core reason of the last section tried
 function FhCraftInv.give(src, item, amount, info)
+    if type(item) ~= 'string' or item == '' then return false, 'bad_item' end
+    if type(amount) ~= 'number' or amount < 1 or amount ~= math.floor(amount) or amount == math.huge then
+        return false, 'bad_amount'
+    end
     local reason
     for _, ref in ipairs(sections(src)) do
         local ok, why = FhCraftInv.addItem(ref, item, amount, info)

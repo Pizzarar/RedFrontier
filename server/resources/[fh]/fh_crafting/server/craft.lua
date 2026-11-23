@@ -32,7 +32,7 @@ end
 ---  no_add | not_enough | error | fh_core reasons
 ---@return table|nil info see FhCraftFlow.craft
 function FhCraft.craft(src, recipeId)
-    if type(src) ~= 'number' or src <= 0 then return false, 'no_player' end
+    if type(src) ~= 'number' or not (src > 0) then return false, 'no_player' end -- NaN fails src > 0
     if busy[src] then return false, 'busy' end
     busy[src] = true
     local called, ok, reason, info = pcall(flow.craft, src, recipes.get(recipeId), deps())

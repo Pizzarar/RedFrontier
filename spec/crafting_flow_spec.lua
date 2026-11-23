@@ -12,7 +12,8 @@ local recipe = { id = 'ammo', station_type = 'reload',
     outputs = { { item = 'ammo_box', amount = 1 }, { item = 'scrap', amount = 1 } } }
 
 -- Fake carried inventory. opts: near (bool), nearReason, failTake = { [item] = reason }, failGive = { [item] = reason },
--- failTakeAfter = n (the n+1-th take fails), throwGive = item.
+-- failTakeAfter = n (the n+1-th take fails), throwGive = item, throwTake = item,
+-- takeInfo = { [item] = info } (returned as the 3rd value of a failing take, like a split FhCraftInv.take).
 local function fakeInv(start, opts)
     opts = opts or {}
     local inv, calls = {}, {}
@@ -29,7 +30,10 @@ local function fakeInv(start, opts)
         take = function(src, item, n)
             calls[#calls + 1] = 'take:' .. item .. ':' .. n
             takes = takes + 1
-            if opts.failTake and opts.failTake[item] then return false, opts.failTake[item] end
+            if opts.throwTake == item then error('boom') end
+            if opts.failTake and opts.failTake[item] then
+                return false, opts.failTake[item], opts.takeInfo and opts.takeInfo[item]
+            end
             if opts.failTakeAfter and takes > opts.failTakeAfter then return false, 'not_enough' end
             if (inv[item] or 0) < n then return false, 'not_enough' end
             inv[item] = inv[item] - n
@@ -88,6 +92,23 @@ describe('craft flow: refusals before any change', function()
         same({ { item = 'lead', need = 2, have = 1 } }, info.missing)
         same({ 'near:reload' }, calls); same({ powder = 1, lead = 1, casings = 2 }, inv)
     end)
+    it('lists every short item once, in recipe order', function()
+        local deps, inv, calls = fakeInv({ lead = 1, casings = 2 })
+        local ok, reason, info = F.craft(1, recipe, deps)
+        eq(false, ok); eq('missing_inputs', reason)
+        same({ { item = 'powder', need = 1, have = 0 }, { item = 'lead', need = 2, have = 1 } }, info.missing)
+        same({ 'near:reload' }, calls); same({ lead = 1, casings = 2 }, inv)
+    end)
+    it('a duplicate-line shortfall is listed alongside a per-line shortfall', function()
+        local dup = { id = 'd', station_type = 'reload',
+            inputs = { { item = 'lead', amount = 2 }, { item = 'powder', amount = 1 }, { item = 'lead', amount = 2 } },
+            outputs = { { item = 'x', amount = 1 } } }
+        local deps, inv = fakeInv({ lead = 3 })
+        local ok, reason, info = F.craft(1, dup, deps)
+        eq(false, ok); eq('missing_inputs', reason)
+        same({ { item = 'lead', need = 4, have = 3 }, { item = 'powder', need = 1, have = 0 } }, info.missing)
+        same({ lead = 3 }, inv)
+    end)
     it('item listed on two input lines needs the sum', function()
         local dup = { id = 'd', station_type = 'reload', inputs = { { item = 'lead', amount = 2 }, { item = 'lead', amount = 2 } },
             outputs = { { item = 'x', amount = 1 } } }
@@ -129,6 +150,21 @@ describe('craft flow: rollback', function()
         eq(false, ok); eq('step_error', reason); eq(4, info.index)
         same(full, inv)
     end)
+    it('a throwing take counts as failed and gives back earlier inputs', function()
+        local deps, inv, calls = fakeInv(full, { throwTake = 'lead' })
+        local ok, reason, info = F.craft(1, recipe, deps)
+        eq(false, ok); eq('step_error', reason); eq(2, info.index); eq(0, #info.rollbackFailed)
+        same(full, inv)
+        same({ 'near:reload', 'take:powder:1', 'take:lead:2', 'give:powder:1' }, calls)
+    end)
+    it('a failing split take surfaces its own rollback leftovers', function()
+        local inner = { step = { op = 'remove', ref = { type = 'equipped', id = 1 }, item = 'lead', amount = 1 }, reason = 'no_room' }
+        local deps, inv = fakeInv(full, { failTake = { lead = 'no_remove' }, takeInfo = { lead = { rollbackFailed = { inner } } } })
+        local ok, reason, info = F.craft(1, recipe, deps)
+        eq(false, ok); eq('no_remove', reason); eq(2, info.index)
+        eq(1, #info.rollbackFailed); same(inner, info.rollbackFailed[1])
+        same(full, inv) -- powder was given back
+    end)
     it('an undo that fails is reported, the rest still rolls back', function()
         -- casings take fails; giving lead back also fails -> reported; powder still given back
         local deps, inv = fakeInv(full, { failTake = { casings = 'not_enough' }, failGive = { lead = 'no_room' } })
@@ -157,6 +193,27 @@ describe('craft flow: transact', function()
             function(s) if s.n == 2 then return nil end return true end,
             function(s) undone[#undone + 1] = s.n; return true end)
         eq(false, ok); eq('step_failed', reason); eq(2, info.index); same({ 1 }, undone)
+    end)
+    it('a failing step that returns rollbackFailed info surfaces it', function()
+        local inner = { step = { op = 'remove', item = 'lead', amount = 1 }, reason = 'no_room' }
+        local undone = {}
+        local ok, reason, info = F.transact({ { n = 1 }, { n = 2 } },
+            function(s)
+                if s.n == 2 then return false, 'no_remove', { rollbackFailed = { inner } } end
+                return true
+            end,
+            function(s) undone[#undone + 1] = s.n; return true end)
+        eq(false, ok); eq('no_remove', reason); same({ 1 }, undone)
+        eq(1, #info.rollbackFailed); same(inner, info.rollbackFailed[1])
+    end)
+    it('an undo that returns rollbackFailed info is merged after its own failure', function()
+        local inner = { step = { op = 'add', item = 'x', amount = 1 }, reason = 'no_remove' }
+        local ok, _, info = F.transact({ { n = 1 }, { n = 2 } },
+            function(s) return s.n == 1 end,
+            function() return false, 'not_enough', { rollbackFailed = { inner } } end)
+        eq(false, ok); eq(2, #info.rollbackFailed)
+        same({ n = 1 }, info.rollbackFailed[1].step); eq('not_enough', info.rollbackFailed[1].reason)
+        same(inner, info.rollbackFailed[2])
     end)
     it('a throwing undo is reported as undo_error', function()
         local ok, _, info = F.transact({ { n = 1 }, { n = 2 } },

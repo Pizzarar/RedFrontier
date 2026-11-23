@@ -17,23 +17,33 @@ local function copyStep(s)
     return c
 end
 
+---Append a nested transaction's rollbackFailed entries (if any) to list.
+local function mergeLeftovers(list, info)
+    if type(info) ~= 'table' or type(info.rollbackFailed) ~= 'table' then return end
+    for _, f in ipairs(info.rollbackFailed) do list[#list + 1] = f end
+end
+
 ---Apply steps in order, all-or-nothing. On the first failure (false/nil result or a thrown error) undo every applied
----step in reverse order. apply(step) / undo(step) -> ok, reason; undo receives the step as it was applied.
+---step in reverse order. apply(step) / undo(step) -> ok, reason, info?; undo receives the step as it was applied.
+---A step that is itself a transaction (FhCraftInv.take) may return info.rollbackFailed: those leftovers are merged
+---into this transaction's rollbackFailed (the failed step's own first, then the undo results) so none is lost.
 ---@return boolean ok
 ---@return string|nil reason first failure reason ('step_error' when apply threw)
 ---@return table info ok: { applied = n }; failure: { index = i, step = failedStep, rollbackFailed = { { step, reason } } }
 function M.transact(steps, apply, undo)
     local done = {}
     for i, step in ipairs(steps) do
-        local called, ok, reason = pcall(apply, step)
-        if not called then ok, reason = false, 'step_error' end
+        local called, ok, reason, stepInfo = pcall(apply, step)
+        if not called then ok, reason, stepInfo = false, 'step_error', nil end
         if ok ~= true then
             local failedUndo = {}
+            mergeLeftovers(failedUndo, stepInfo)
             for j = #done, 1, -1 do
                 local s = done[j]
-                local uCalled, uOk, uReason = pcall(undo, s)
-                if not uCalled then uOk, uReason = false, 'undo_error' end
+                local uCalled, uOk, uReason, uInfo = pcall(undo, s)
+                if not uCalled then uOk, uReason, uInfo = false, 'undo_error', nil end
                 if uOk ~= true then failedUndo[#failedUndo + 1] = { step = s, reason = uReason or 'undo_failed' } end
+                mergeLeftovers(failedUndo, uInfo)
             end
             return false, reason or 'step_failed', { index = i, step = step, rollbackFailed = failedUndo }
         end
@@ -75,16 +85,20 @@ function M.craft(src, recipe, deps)
 
     local totals, counts = M.inputTotals(recipe), {}
     for item in pairs(totals) do counts[item] = tonumber(deps.count(src, item)) or 0 end
-    -- canCraft checks per input line; an item listed on two lines is caught by the totals check after it.
-    local ok, missing = deps.canCraft(counts, recipe)
-    if ok then
-        missing = {}
-        for item, need in pairs(totals) do
-            if counts[item] < need then missing[#missing + 1] = { item = item, need = need, have = counts[item] } end
+    -- canCraft checks per input line; the totals check always runs too (an item on two lines needs the sum), so
+    -- info.missing lists every short item once, in recipe order. Both refuse before any mutation.
+    local rulesOk, ruleMissing = deps.canCraft(counts, recipe)
+    local missing, seen = {}, {}
+    for _, e in ipairs(recipe.inputs) do
+        if not seen[e.item] then
+            seen[e.item] = true
+            if counts[e.item] < totals[e.item] then
+                missing[#missing + 1] = { item = e.item, need = totals[e.item], have = counts[e.item] }
+            end
         end
-        ok = #missing == 0
     end
-    if not ok then return false, 'missing_inputs', { missing = missing } end
+    if not rulesOk and #missing == 0 then missing = ruleMissing or {} end
+    if #missing > 0 or not rulesOk then return false, 'missing_inputs', { missing = missing } end
 
     local function apply(s)
         if s.op == 'remove' then return deps.take(src, s.item, s.amount) end
