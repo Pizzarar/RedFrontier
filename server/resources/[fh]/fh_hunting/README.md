@@ -1,7 +1,7 @@
 # fh_hunting: pelts and hunting (spec L8)
 
 H1 (data and rules), H2 (skin flow) and H3 (trapper sell point) are built: animal table, pelt items, quality rules, price
-rules, skinning, selling. Legendary Bear (H4) and trophy comfort contract (H5) come in later blocks. Pure logic lives in `shared/`
+rules, skinning, selling. The trophy comfort contract (H5) is done; the Legendary Bear (H4) comes in a later block. Pure logic lives in `shared/`
 and is specced with `python tools/run-specs.py` (`spec/hunting_*_spec.lua`); nothing here is runtime-tested yet.
 
 ## Config flag

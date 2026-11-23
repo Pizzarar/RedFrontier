@@ -27,3 +27,5 @@ describe('hunting trophy comfort', function()
         eq(nil, Tr.getComfort(true))
     end)
 end)
+
+T.finish()
