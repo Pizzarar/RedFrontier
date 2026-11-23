@@ -1,0 +1,89 @@
+-- Run from repo root: `lua spec/ui_relay_spec.lua` (or via tools/run-specs.py).
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+local case = T.it
+local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
+
+local function msg(screen, action, payload) return { screen = screen, action = action, payload = payload } end
+local function why(...) local ok, r = ...; return not ok and r or nil end
+
+case('whitelist: known screen accepted, owner lane resolved', function()
+    local ok, lane, action = R.validate(msg('insurance', 'buy', {}))
+    assert(ok and lane == 'death' and action == 'buy')
+    assert(select(2, R.validate(msg('heat', 'x'))) == 'heat')
+end)
+case('whitelist: unknown / non-string / missing screen rejected', function()
+    T.eq('unknown_screen', why(R.validate(msg('admin', 'give', {}))))
+    T.eq('bad_screen', why(R.validate(msg(nil, 'give', {}))))
+    T.eq('bad_screen', why(R.validate(msg({}, 'give', {}))))
+    T.eq('bad_message', why(R.validate('x')))
+    T.eq('unknown_screen', why(R.validate(msg('__index', 'a', {}))))
+end)
+case('action pattern: ^[a-z_]{1,32}$', function()
+    assert(R.validate(msg('heat', 'pay_off')))
+    assert(R.validate(msg('heat', ('a'):rep(32))))
+    for _, a in ipairs({ '', ('a'):rep(33), 'Pay', 'pay-off', 'pay off', 'a1', 'a\nb', 5, true }) do
+        T.eq('bad_action', why(R.validate(msg('heat', a, {}))), tostring(a))
+    end
+    T.eq('bad_action', why(R.validate(msg('heat', nil, {}))))
+end)
+case('payload: nil becomes {}, non-table rejected', function()
+    local ok, _, _, p = R.validate(msg('heat', 'a'))
+    assert(ok and type(p) == 'table')
+    T.eq('bad_payload', why(R.validate(msg('heat', 'a', 'str'))))
+    T.eq('bad_payload', why(R.validate(msg('heat', 'a', 5))))
+end)
+case('payload: size cap', function()
+    assert(R.validate(msg('heat', 'a', { s = ('x'):rep(1000) })))
+    T.eq('too_big', why(R.validate(msg('heat', 'a', { s = ('x'):rep(3000) }))))
+    local many = {}
+    for i = 1, 500 do many[i] = i end
+    T.eq('too_big', why(R.validate(msg('heat', 'a', many))))
+end)
+case('payload: depth cap and bad data', function()
+    assert(R.validate(msg('heat', 'a', { a = { b = { c = 1 } } })))               -- depth 3
+    assert(R.validate(msg('heat', 'a', { a = { b = { c = { d = 1 } } } })))     -- depth 4 (limit)
+    T.eq('too_deep', why(R.validate(msg('heat', 'a', { a = { b = { c = { d = { e = 1 } } } } }))))
+    local cyc = {}
+    cyc.self = cyc
+    T.eq('too_deep', why(R.validate(msg('heat', 'a', cyc))))
+    T.eq('bad_type', why(R.validate(msg('heat', 'a', { f = print }))))
+    T.eq('bad_number', why(R.validate(msg('heat', 'a', { n = 0 / 0 }))))
+    T.eq('bad_key', why(R.validate(msg('heat', 'a', { [true] = 1 }))))
+end)
+case('rate limit: burst then refill with a fake clock, per player', function()
+    local lim = R.newLimiter(5, 10)
+    for _ = 1, 10 do assert(R.take(lim, 1, 100)) end
+    assert(not R.take(lim, 1, 100))
+    assert(R.take(lim, 2, 100), 'other player unaffected')
+    assert(not R.take(lim, 1, 100.1))                 -- 0.5 token
+    assert(R.take(lim, 1, 100.2))                     -- 1.0 token
+    assert(not R.take(lim, 1, 100.2))
+    for _ = 1, 10 do R.take(lim, 1, 200) end          -- long idle caps at burst
+    assert(not R.take(lim, 1, 200))
+    R.forget(lim, 1)
+    assert(R.take(lim, 1, 200))
+end)
+case('relay: re-emit name fh:<lane>:ui_<action>, payload passed through', function()
+    local lim = R.newLimiter()
+    local p = { id = 'c1' }
+    local ok, name, ev = R.relay(lim, 7, msg('insurance', 'buy', p), 0)
+    assert(ok)
+    T.eq('fh:death:ui_buy', name)
+    T.eq(7, ev.src)
+    T.eq('insurance', ev.screen)
+    T.eq('buy', ev.action)
+    assert(ev.payload == p)
+    T.eq('fh:trade:ui_accept', select(2, R.relay(lim, 7, msg('contracts', 'accept', {}), 0)))
+    T.eq('fh:fence:ui_sell', select(2, R.relay(lim, 7, msg('fence', 'sell', {}), 0)))
+    T.eq('fh:death:ui_close', R.eventName('death', 'close'))
+end)
+case('relay: invalid is dropped with a reason; rate limit counts bad traffic', function()
+    local lim = R.newLimiter(5, 3)
+    T.eq('unknown_screen', select(2, R.relay(lim, 1, msg('nope', 'a', {}), 0)))
+    T.eq('bad_action', select(2, R.relay(lim, 1, msg('heat', 'A', {}), 0)))
+    T.eq('bad_action', select(2, R.relay(lim, 1, msg('heat', 'A', {}), 0)))
+    T.eq('rate_limited', select(2, R.relay(lim, 1, msg('heat', 'a', {}), 0)))
+end)
+
+T.finish()

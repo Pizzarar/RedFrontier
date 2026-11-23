@@ -1,0 +1,17 @@
+/* Hypnospace-light: one surreal accent (slow drifting sepia gradient on panel headers). Readability wins:
+   high-contrast body text, min 14px, no motion on numbers. */
+:root { --ink: #1b1209; --paper: #f3e9d2; --sepia-a: #8a5a2b; --sepia-b: #c9a26b; --edge: #3a2a14; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times New Roman', serif; color: var(--ink); }
+.screen[hidden] { display: none; }
+.panel { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); min-width: 360px; max-width: 70vw;
+  background: var(--paper); border: 2px solid var(--edge); box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+.title { margin: 0; padding: 8px 14px; font-size: 18px; color: #fff8e8; text-shadow: 0 1px 0 #000;
+  background: linear-gradient(100deg, var(--sepia-a), var(--sepia-b), var(--sepia-a)); background-size: 300% 100%;
+  animation: drift 40s ease-in-out infinite alternate; }
+.body { margin: 0; padding: 14px; font-size: 16px; }
+.btn { margin: 0 0 12px 14px; padding: 6px 14px; font: inherit; font-size: 14px; color: var(--ink);
+  background: #e6d3a8; border: 2px solid var(--edge); cursor: pointer; }
+.btn:hover, .btn:focus { background: #f6e6bd; outline: 2px solid var(--sepia-a); }
+@keyframes drift { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { .title { animation: none; } }
