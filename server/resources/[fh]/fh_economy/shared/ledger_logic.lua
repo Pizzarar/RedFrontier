@@ -52,26 +52,88 @@ function logic.canAfford(balance, amount)
     return isFinite(balance) and isFinite(amount) and balance >= amount
 end
 
+---Per-key in-flight guard (B7 fix). Runs `fn(...)` while `locks[key]` is held; a second call for the same key while
+---the first is still in flight (it yields on MySQL awaits) does not wait: it returns `false, busyErr` at once and
+---touches nothing. The lock is released on every exit, including an error thrown by `fn` (re-raised after release).
+---@return any ... fn's results, or false, busyErr
+function logic.serialized(locks, key, busyErr, fn, ...)
+    if locks[key] then return false, busyErr end
+    locks[key] = true
+    local res = table.pack(pcall(fn, ...))
+    locks[key] = nil
+    if not res[1] then error(res[2], 0) end
+    return table.unpack(res, 2, res.n)
+end
+
+local function voidOrWarn(io, id, why)
+    if not io.void(id) then io.warn(id, why) end
+end
+
 ---The charge sequence, with every side effect injected so the order and the rollback are specced:
----  1. balance covers amount, else `fh_insufficient_funds` (nothing written)
+---  1. the player is loaded and covers amount, else `no_player` / `fh_insufficient_funds` (nothing written)
 ---  2. ledger row FIRST (kind='charge'), as pay does; no row -> `ledger_failed` (no money taken)
----  3. re-check the balance (the insert yielded) and remove the money with no yield in between, so the balance can
+---  3. the insert yielded: look the player up AGAIN (`io.player()`); the handle from before the yield is never used
+---     after it. Gone or another character -> that error, row voided, no money taken from anyone.
+---  4. re-check the balance on the fresh handle and remove the money with no yield in between, so the balance can
 ---     never go negative even if rsg-core's DontAllowMinus changes; short or refused -> void our own row again
 ---Never money taken without a row, never a row without the money taken (a failed void is warned, as in pay).
----io = { balance = fun():number|nil, insert = fun():id|nil, remove = fun():boolean, void = fun(id):boolean,
----       warn = fun(id) }
+---Callers serialize it per citizenid (logic.serialized) so two charges never interleave steps 1-4.
+---io = { player = fun():handle|nil, string?  -- fresh lookup on every call; nil + err when gone / switched
+---       balance = fun(handle):number|nil, insert = fun():id|nil, remove = fun(handle):boolean,
+---       void = fun(id):boolean, warn = fun(id, err) }
 ---@return boolean ok, string? err, integer? ledgerId
 function logic.runCharge(io, amount)
-    if not logic.canAfford(io.balance(), amount) then return false, 'fh_insufficient_funds' end
+    local p, why = io.player()
+    if not p then return false, why or 'no_player' end
+    if not logic.canAfford(io.balance(p), amount) then return false, 'fh_insufficient_funds' end
     local id = io.insert()
     if not id then return false, 'ledger_failed' end
-    local short = not logic.canAfford(io.balance(), amount)
-    if short or not io.remove() then
-        if not io.void(id) then io.warn(id) end
-        if short or not logic.canAfford(io.balance(), amount) then return false, 'fh_insufficient_funds' end
-        return false, 'removemoney_refused'
+    p, why = io.player()
+    local err
+    if not p then
+        err = why or 'no_player'
+    elseif not logic.canAfford(io.balance(p), amount) then
+        err = 'fh_insufficient_funds'
+    elseif not io.remove(p) then
+        err = 'removemoney_refused'
+    end
+    if err then
+        voidOrWarn(io, id, err)
+        return false, err
     end
     return true, nil, id
+end
+
+---The pay sequence (same shape as runCharge): player loaded, ledger row FIRST, look the player up AGAIN after the
+---insert yield, then add the money on the fresh handle. Gone / switched / refused -> void our own row (warn if the
+---void fails); money is never added to a Player object captured before the yield.
+---io = { player = fun():handle|nil, string?, insert = fun():id|nil, add = fun(handle):boolean,
+---       void = fun(id):boolean, warn = fun(id, err) }
+---@return boolean ok, string? err, integer? ledgerId
+function logic.runPay(io)
+    local p, why = io.player()
+    if not p then return false, why or 'no_player' end
+    local id = io.insert()
+    if not id then return false, 'ledger_failed' end
+    p, why = io.player()
+    local err
+    if not p then
+        err = why or 'no_player'
+    elseif not io.add(p) then
+        err = 'addmoney_refused'
+    end
+    if err then
+        voidOrWarn(io, id, err)
+        return false, err
+    end
+    return true, nil, id
+end
+
+---citizenid accepted by getRep's offline read: 1-50 chars (fh_rep.citizenid is varchar(50)) of letters, digits,
+---`_` or `-`, and not all digits (that is a mistyped server id). Padded / blank / junk strings are refused instead of
+---silently reading "no row" = 0.
+function logic.validCitizenid(s)
+    return type(s) == 'string' and #s <= 50 and s:match('^[%w_%-]+$') ~= nil and s:match('^%d+$') == nil
 end
 
 ---fh_rep.value as read from the DB -> integer rep (0 when there is no row). Rounded down: a threshold check

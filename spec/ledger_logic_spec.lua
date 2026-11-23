@@ -92,30 +92,51 @@ case('canAfford: exact covers, short and junk balances do not', function()
     assert(logic.canAfford(nil, 1) == false and logic.canAfford(0/0, 1) == false and logic.canAfford('10', 1) == false)
 end)
 
--- A fake wallet + ledger that records the order of side effects.
+-- A fake wallet + ledger that records the order of side effects. `w.handle` is what io.player() hands out; the
+-- `*DuringInsert` options act while the insert "yields" (spend, drop the player, switch character).
 local function wallet(balance, opts)
     opts = opts or {}
-    local w = { balance = balance, rows = {}, log = {}, nextId = 1 }
+    local w = { balance = balance, rows = {}, log = {}, nextId = 1, removedFrom = {} }
+    w.handle = { cid = 'CID1' }
     w.io = {
-        balance = function() return w.balance end,
+        player = function()
+            if w.gone then return nil, w.gone end
+            return w.handle
+        end,
+        balance = function(h)
+            assert(h == w.handle, 'balance read on a stale handle')
+            return w.balance
+        end,
         insert = function()
             w.log[#w.log + 1] = 'insert'
             if opts.insertFails then return nil end
             local id = w.nextId; w.nextId = id + 1
             w.rows[id] = { kind = 'charge' }
             if opts.spendDuringInsert then w.balance = w.balance - opts.spendDuringInsert end -- the insert yields
+            if opts.dropDuringInsert then w.gone = 'no_player' end
+            if opts.switchDuringInsert then w.gone = 'player_changed' end
+            if opts.newHandleDuringInsert then w.handle = { cid = 'CID1' } end -- same character, re-fetched object
             return id
         end,
-        remove = function()
+        remove = function(h)
             w.log[#w.log + 1] = 'remove'
+            w.removedFrom[#w.removedFrom + 1] = h
             if opts.removeRefuses then return false end
             w.balance = w.balance - w.amount
             return true
         end,
+        add = function(h)
+            w.log[#w.log + 1] = 'add'
+            w.addedTo = h
+            if opts.addRefuses then return false end
+            w.balance = w.balance + w.amount
+            return true
+        end,
         void = function(id) w.log[#w.log + 1] = 'void'; if opts.voidFails then return false end; w.rows[id] = nil; return true end,
-        warn = function(id) w.warned = id end,
+        warn = function(id, why) w.warned, w.warnedWhy = id, why end,
     }
     w.charge = function(amount) w.amount = amount; return logic.runCharge(w.io, amount) end
+    w.pay = function(amount) w.amount = amount; return logic.runPay(w.io) end
     return w
 end
 local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
@@ -139,6 +160,11 @@ case('charge short: fh_insufficient_funds, no row, no money taken', function()
     assert(ok == false and err == 'fh_insufficient_funds' and id == nil)
     assert(w.balance == 5 and count(w.rows) == 0 and #w.log == 0)
 end)
+case('charge: no player at the start -> no_player, nothing written', function()
+    local w = wallet(50); w.gone = 'no_player'
+    local ok, err = w.charge(20)
+    assert(ok == false and err == 'no_player' and #w.log == 0 and w.balance == 50)
+end)
 case('charge: ledger insert fails -> ledger_failed, no money taken', function()
     local w = wallet(50, { insertFails = true })
     local ok, err = w.charge(20)
@@ -151,15 +177,91 @@ case('charge: spent during the insert yield -> short, row voided, balance untouc
     assert(ok == false and err == 'fh_insufficient_funds' and w.balance == 10 and count(w.rows) == 0)
     T.same({ 'insert', 'void' }, w.log)
 end)
+case('charge: player dropped during the insert yield -> no_player, row voided, no money taken', function()
+    local w = wallet(50, { dropDuringInsert = true })
+    local ok, err = w.charge(20)
+    assert(ok == false and err == 'no_player' and w.balance == 50 and count(w.rows) == 0)
+    T.same({ 'insert', 'void' }, w.log)
+end)
+case('charge: character switched during the insert yield -> player_changed, row voided, no money taken', function()
+    local w = wallet(50, { switchDuringInsert = true })
+    local ok, err = w.charge(20)
+    assert(ok == false and err == 'player_changed' and w.balance == 50 and count(w.rows) == 0)
+    T.same({ 'insert', 'void' }, w.log)
+end)
+case('charge: money is removed from the handle fetched after the yield, never the pre-yield one', function()
+    local w = wallet(50, { newHandleDuringInsert = true })
+    local before = w.handle
+    assert(w.charge(20) == true)
+    assert(#w.removedFrom == 1 and w.removedFrom[1] == w.handle and w.removedFrom[1] ~= before)
+end)
 case('charge: RemoveMoney refused with funds -> removemoney_refused, row voided', function()
     local w = wallet(50, { removeRefuses = true })
     local ok, err = w.charge(20)
     assert(ok == false and err == 'removemoney_refused' and w.balance == 50 and count(w.rows) == 0)
     T.same({ 'insert', 'remove', 'void' }, w.log)
 end)
-case('charge: void fails -> warned with the row id', function()
+case('charge: void fails -> warned with the row id and the reason', function()
     local w = wallet(50, { removeRefuses = true, voidFails = true })
-    assert(w.charge(20) == false and w.warned == 1)
+    assert(w.charge(20) == false and w.warned == 1 and w.warnedWhy == 'removemoney_refused')
+    local d = wallet(50, { dropDuringInsert = true, voidFails = true })
+    local ok, err = d.charge(20)
+    assert(ok == false and err == 'no_player' and d.warned == 1 and d.warnedWhy == 'no_player' and d.balance == 50)
+end)
+
+-- B7 fix: pay re-fetches the player after the insert yield too ---------------------------------------------------
+case('pay ok: ledger row first, then money on the fresh handle', function()
+    local w = wallet(0, { newHandleDuringInsert = true })
+    local before = w.handle
+    local ok, err, id = w.pay(15)
+    assert(ok == true and err == nil and id == 1 and w.balance == 15 and count(w.rows) == 1)
+    assert(w.addedTo == w.handle and w.addedTo ~= before)
+    T.same({ 'insert', 'add' }, w.log)
+end)
+case('pay: player dropped / switched during the insert yield -> fails closed, row voided, nothing added', function()
+    for opt, code in pairs({ dropDuringInsert = 'no_player', switchDuringInsert = 'player_changed' }) do
+        local w = wallet(0, { [opt] = true })
+        local ok, err = w.pay(15)
+        assert(ok == false and err == code and w.balance == 0 and count(w.rows) == 0 and w.addedTo == nil, opt)
+        T.same({ 'insert', 'void' }, w.log)
+    end
+end)
+case('pay: AddMoney refused -> addmoney_refused, row voided; a failed void is warned', function()
+    local w = wallet(0, { addRefuses = true })
+    local ok, err = w.pay(15)
+    assert(ok == false and err == 'addmoney_refused' and count(w.rows) == 0)
+    local v = wallet(0, { addRefuses = true, voidFails = true })
+    assert(v.pay(15) == false and v.warned == 1 and v.warnedWhy == 'addmoney_refused')
+end)
+case('pay: ledger insert fails -> ledger_failed, nothing added', function()
+    local w = wallet(0, { insertFails = true })
+    local ok, err = w.pay(15)
+    assert(ok == false and err == 'ledger_failed' and w.balance == 0)
+    T.same({ 'insert' }, w.log)
+end)
+
+-- B7 fix: per-key serialization -----------------------------------------------------------------------------------
+case('serialized: a second call for a held key fails with the busy error and does not run', function()
+    local locks, ran = {}, 0
+    local co = coroutine.create(function()
+        return logic.serialized(locks, 'CID1', 'fh_charge_busy', function(x)
+            ran = ran + 1; coroutine.yield(); return true, nil, x
+        end, 7)
+    end)
+    assert(coroutine.resume(co)) -- first caller is now in flight (yielded)
+    assert(locks.CID1 == true)
+    local ok, err = logic.serialized(locks, 'CID1', 'fh_charge_busy', function() ran = ran + 10 end)
+    assert(ok == false and err == 'fh_charge_busy' and ran == 1)
+    -- another key is independent
+    assert(logic.serialized(locks, 'CID2', 'fh_charge_busy', function() return 'other' end) == 'other')
+    local _, a, b, c = coroutine.resume(co)
+    assert(a == true and b == nil and c == 7 and locks.CID1 == nil)
+    assert(logic.serialized(locks, 'CID1', 'fh_charge_busy', function() return 'again' end) == 'again')
+end)
+case('serialized: the lock is released when fn throws (error re-raised)', function()
+    local locks = {}
+    local ok, e = pcall(logic.serialized, locks, 'CID1', 'busy', function() error('boom', 0) end)
+    assert(ok == false and e == 'boom' and locks.CID1 == nil)
 end)
 
 -- B7 getRep -----------------------------------------------------------------------------------------------------
@@ -168,6 +270,13 @@ case('repValue: no row -> 0, row -> integer (floored)', function()
     assert(logic.repValue(42) == 42 and math.type(logic.repValue(42.0)) == 'integer')
     assert(logic.repValue(7.9) == 7 and logic.repValue(-2.5) == -3)
     assert(logic.repValue('15') == 15 and logic.repValue(0/0) == 0 and logic.repValue('x') == 0)
+end)
+case('validCitizenid: rsg-style ids pass; digits-only, padded, blank, junk, too long and non-strings do not', function()
+    for _, good in ipairs({ 'ABC12345', 'CID1', 'a_b-c' }) do assert(logic.validCitizenid(good) == true, good) end
+    for _, bad in ipairs({ '12', '', ' ', ' ABC12345', 'ABC12345 ', 'AB C', "x'--", string.rep('A', 51), 12, true }) do
+        assert(logic.validCitizenid(bad) == false, tostring(bad))
+    end
+    assert(logic.validCitizenid(nil) == false and logic.validCitizenid(string.rep('A', 50)) == true)
 end)
 
 T.finish()

@@ -12,45 +12,83 @@ local function getPlayer(src)
 end
 
 local INSERT_LEDGER = 'INSERT INTO fh_ledger (citizenid, kind, amount, reason, region_id) VALUES (?, ?, ?, ?, ?)'
+local VOID_LEDGER = 'DELETE FROM fh_ledger WHERE id = ?'
 
----Pay: ledger row FIRST, then AddMoney. If the money step fails the row is deleted again
----(it is our own just-inserted row), so there is never money without a row nor a row without money.
+---Fresh lookup of the character a call started for. Every MySQL await yields, and during the yield the player can
+---drop or switch character: after a yield, call this again and never touch the Player object from before it.
+---@return table|nil Player, string? err  'no_player' (gone) | 'player_changed' (another character on this src)
+local function playerFor(src, citizenid)
+    local Player = getPlayer(src)
+    if not Player then return nil, 'no_player' end
+    if type(Player.PlayerData) ~= 'table' or Player.PlayerData.citizenid ~= citizenid then return nil, 'player_changed' end
+    return Player
+end
+
+-- Our own just-inserted row (the only DELETE on fh_ledger), true when it went through.
+local function voidRow(rowId) return (pcall(MySQL.update.await, VOID_LEDGER, { rowId })) end
+
+local function warnVoid(rowId, why)
+    print(('[fh_economy] WARNING: could not void ledger row %s after a failed money step (%s)'):format(rowId, why))
+end
+
+-- citizenid of the character loaded on src, looked up once before any yield; nil when none is loaded.
+local function loadedCitizenid(src)
+    local Player = getPlayer(src)
+    local citizenid = Player and type(Player.PlayerData) == 'table' and Player.PlayerData.citizenid
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    return citizenid
+end
+
+---Pay: ledger row FIRST, then AddMoney on a Player looked up again after the insert yield. If the player left or
+---switched character during the yield, or AddMoney fails, our own just-inserted row is deleted again, so there is
+---never money without a row nor a row without money. Sequence: FhLedgerLogic.runPay.
 ---@return boolean ok, string? err, integer? ledgerId
 local function pay(src, amount, reason, region_id)
     local ok, err = logic.validatePay({ amount = amount, reason = reason, region_id = region_id }, ctx)
     if not ok then return false, err end
-    local Player = getPlayer(src)
-    if not Player then return false, 'no_player' end
-    local citizenid = Player.PlayerData.citizenid
+    local citizenid = loadedCitizenid(src)
+    if not citizenid then return false, 'no_player' end
 
-    local inserted, id = pcall(MySQL.insert.await, INSERT_LEDGER, { citizenid, 'pay', amount, reason, region_id })
-    if not inserted or not id then return false, 'ledger_failed' end
-
-    -- Player.Functions.AddMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:353)
-    local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
-    if not called or not added then
-        local voided = pcall(MySQL.update.await, 'DELETE FROM fh_ledger WHERE id = ?', { id })
-        if not voided then print(('[fh_economy] WARNING: could not void ledger row %s after failed AddMoney'):format(id)) end
-        return false, 'addmoney_refused'
-    end
+    local done, why, id = logic.runPay({
+        player = function() return playerFor(src, citizenid) end,
+        insert = function()
+            local inserted, newId = pcall(MySQL.insert.await, INSERT_LEDGER, { citizenid, 'pay', amount, reason, region_id })
+            return inserted and newId or nil
+        end,
+        -- Player.Functions.AddMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:353)
+        add = function(Player)
+            local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
+            return called and added == true
+        end,
+        void = voidRow,
+        warn = warnVoid,
+    })
+    if not done then return false, why end
 
     TriggerEvent('fh:economy:paid', { src = src, citizenid = citizenid, amount = amount,
         reason = reason, region_id = region_id, ledger_id = id })
     return true, nil, id
 end
 
----Charge (debit, B7): mirror of pay. Balance check, ledger row (kind='charge') FIRST, then RemoveMoney; a refused
----RemoveMoney deletes our own just-inserted row again. Never goes negative. Sequence: FhLedgerLogic.runCharge.
+-- citizenid -> true while a charge for that character is in flight (see charge).
+local chargeLocks = {}
+
+---Charge (debit, B7): mirror of pay. Balance check, ledger row (kind='charge') FIRST, then a fresh Player lookup
+---(same citizenid, else fail closed and void the row), balance re-check and RemoveMoney with no yield between them;
+---a refused RemoveMoney deletes our own just-inserted row again. Never goes negative. Sequence:
+---FhLedgerLogic.runCharge. Serialized per citizenid: while one charge for a character is in flight, a second one
+---returns `false, 'fh_charge_busy'` at once (no row, no money); the caller may retry.
 ---@return boolean ok, string? err, integer? ledgerId
 local function charge(src, amount, reason, region_id)
     local ok, err = logic.validateCharge({ amount = amount, reason = reason, region_id = region_id }, ctx)
     if not ok then return false, err end
-    local Player = getPlayer(src)
-    if not Player then return false, 'no_player' end
-    local citizenid = Player.PlayerData.citizenid
+    local citizenid = loadedCitizenid(src)
+    if not citizenid then return false, 'no_player' end
 
-    local done, why, id = logic.runCharge({
-        balance = function()
+    -- No yield between the lookup above and taking the lock.
+    local done, why, id = logic.serialized(chargeLocks, citizenid, 'fh_charge_busy', logic.runCharge, {
+        player = function() return playerFor(src, citizenid) end,
+        balance = function(Player)
             local money = Player.PlayerData.money
             return type(money) == 'table' and tonumber(money[cfg.moneyType]) or nil
         end,
@@ -59,14 +97,12 @@ local function charge(src, amount, reason, region_id)
             return inserted and newId or nil
         end,
         -- Player.Functions.RemoveMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:368)
-        remove = function()
+        remove = function(Player)
             local called, removed = pcall(Player.Functions.RemoveMoney, cfg.moneyType, amount, reason)
             return called and removed == true
         end,
-        void = function(rowId) return (pcall(MySQL.update.await, 'DELETE FROM fh_ledger WHERE id = ?', { rowId })) end,
-        warn = function(rowId)
-            print(('[fh_economy] WARNING: could not void ledger row %s after failed RemoveMoney'):format(rowId))
-        end,
+        void = voidRow,
+        warn = warnVoid,
     }, amount)
     if not done then return false, why end
 
@@ -76,19 +112,18 @@ local function charge(src, amount, reason, region_id)
 end
 
 ---Rep value for a character in a region: integer, 0 when there is no row. `who` = player server id, or a
----citizenid string (offline reads, e.g. fh_progression's loader).
+---citizenid string (offline reads, e.g. fh_progression's loader; FhLedgerLogic.validCitizenid, else no_player).
 ---@return integer|nil rep, string? err
 local function getRep(who, region_id)
     if not regions.isKnownRegion(region_id) then return nil, 'unknown_region' end
     local citizenid
     if type(who) == 'string' then
-        -- an all-digit string is a mistyped server id, not a citizenid: refuse instead of reading "no row" = 0
-        if not who:match('%S') or who:match('^%s*%d+%s*$') then return nil, 'no_player' end
+        -- all-digit = a mistyped server id; padded / blank / junk would silently read "no row" = 0: refuse them
+        if not logic.validCitizenid(who) then return nil, 'no_player' end
         citizenid = who
     else
-        local Player = getPlayer(who)
-        if not Player then return nil, 'no_player' end
-        citizenid = Player.PlayerData.citizenid
+        citizenid = loadedCitizenid(who)
+        if not citizenid then return nil, 'no_player' end
     end
     local readOk, value = pcall(MySQL.scalar.await, 'SELECT `value` FROM fh_rep WHERE citizenid = ? AND region_id = ?',
         { citizenid, region_id })

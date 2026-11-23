@@ -9,19 +9,31 @@ Money & rep ledger (spec 4.6). All payouts and rep changes go through here; ever
   Atomic: clamped `value = value + delta` upsert and the ledger insert share one transaction.
 - `exports.fh_economy:charge(src, amount, reason, region_id)` -> `ok, err, ledgerId` (B7)
   Debit, the mirror of `pay`: balance check, ledger row `kind='charge'` (amount = the positive sum taken) FIRST, then
-  RSGCore `Player.Functions.RemoveMoney`; a refused RemoveMoney deletes that just-inserted row again. Never takes
-  the balance below 0: short -> `fh_insufficient_funds`, nothing written. Emits `fh:economy:charged`.
+  RSGCore `Player.Functions.RemoveMoney` on a Player looked up again after the insert. Never takes the balance
+  below 0. Short at the first check -> `fh_insufficient_funds`, nothing written; short at the re-check after the
+  insert (money spent meanwhile) -> `fh_insufficient_funds` and the just-inserted row is deleted again, as for a
+  refused RemoveMoney. Emits `fh:economy:charged` on success.
+  **One at a time per character:** while a charge for a citizenid is in flight, another charge for the same
+  character returns `false, 'fh_charge_busy'` at once (no row, no money). It does not queue; retry if you need to.
 - `exports.fh_economy:getRep(who, region_id)` -> `rep` or `nil, err` (B7)
   Integer rep, 0 when there is no row. `who` = a player server id (number, character loaded) or a citizenid string
-  for offline reads. An all-digit (or blank) string is treated as a mistyped server id and refused with `no_player`.
+  for offline reads: 1-50 letters, digits, `_` or `-`. An all-digit string (a mistyped server id), a blank, padded
+  or otherwise malformed string, and any other type are refused with `no_player` instead of reading 0.
 
-`pay` writes the ledger row first, then `AddMoney`; if `AddMoney` fails the row is deleted again
-(the only DELETE, on its own just-inserted row), so there is never money without a row or a row without money.
-`src` must be a number and a character must be loaded in rsg-core.
+`pay` and `charge` write the ledger row first, then move the money; if that fails the row is deleted again
+(the only DELETE, on its own just-inserted row), so there is never money without a row or a row without money. If
+that DELETE itself fails, the server console logs `[fh_economy] WARNING: could not void ledger row <id> ...`
+(audit that row by hand). `src` must be a number and a character must be loaded in rsg-core.
+The ledger insert yields: after it, both re-fetch the player by `src` and check it is still the same citizenid.
+If the player dropped -> `no_player`; if another character is now loaded on `src` -> `player_changed`. Either way
+the row is deleted again and no money moves (the Player object from before the insert is never used).
 
 Refused (returns `false, code`): `invalid_amount`, `amount_too_large`, `invalid_delta`, `delta_too_large`,
-`invalid_reason` (empty or longer than `maxReason`), `unknown_region`, `no_player`, `ledger_failed`, `addmoney_refused`. Validation lives in `shared/ledger_logic.lua` (pure, tested).
-`charge` adds: `amount_too_large` (over `maxCharge`), `fh_insufficient_funds`, `removemoney_refused`.
+`invalid_reason` (empty or longer than `maxReason`), `unknown_region`, `no_player`, `ledger_failed`. Validation lives
+in `shared/ledger_logic.lua` (pure, tested).
+`pay` adds: `player_changed`, `addmoney_refused`.
+`charge` adds: `amount_too_large` (over `maxCharge`), `fh_insufficient_funds`, `fh_charge_busy`, `player_changed`,
+`removemoney_refused`.
 `getRep` returns `nil` with `unknown_region`, `no_player` or `ledger_failed` (DB read failed).
 
 ## Events
