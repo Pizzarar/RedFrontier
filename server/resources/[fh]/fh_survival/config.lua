@@ -18,12 +18,22 @@ FhSurvivalConfig = {
     -- 'zones' (default, safe): server checks the ped against WaterZones. 'native': client reports IsEntityInWater
     -- (unverified in game, trusts the client; cooldown still applies). See fh_core/docs/natives.md.
     WaterCheck = 'zones',
-    -- Standing-in-water spots for refill/wash: { x = , y = , z = (optional), radius = (default 6.0) }. Owner fills these
-    -- from in-game coords; empty means refill/wash only work with WaterCheck = 'native'.
-    WaterZones = {},
+    -- Standing-in-water spots for refill/wash: { x = , y = , z = (optional), radius = (default 6.0) }. An empty list
+    -- means refill/wash only work with WaterCheck = 'native'.
+    -- SEEDED DEFAULTS, owner-verifiable: positions are APPROXIMATE (same as fh_core/shared/regions.lua), taken
+    -- relative to the heartlands homestead (-300,790,118) and outlaw camp (-145,845,117). Wide radii on purpose;
+    -- stand in the Dakota River near Valentine, read coords, then tighten or replace.
+    WaterZones = {
+        { x = -250.0, y = 760.0, radius = 40.0 }, -- Dakota River, between the homestead and Valentine (approximate)
+        { x = -140.0, y = 790.0, radius = 40.0 }, -- Dakota River, south of the outlaw camp (approximate)
+    },
     -- Campfires / heat sources that give `warm`: { x = , y = , z = (optional), radius = (default HeatRadius) }.
     -- Other resources can add live ones with exports.fh_survival:setHeatSource.
-    Campfires = {},
+    -- SEEDED, owner-verifiable (approximate): one fire at the homestead plot, one at the outlaw camp centre.
+    Campfires = {
+        { x = -300.0, y = 790.0, radius = 8.0 }, -- heartlands homestead
+        { x = -145.0, y = 845.0, radius = 8.0 }, -- heartlands outlaw camp
+    },
     HeatRadius = 4.0,
     HeatCheckSeconds = 10,         -- warm is re-applied (full duration) this often while near heat
     -- == S4 rest / comfort ==

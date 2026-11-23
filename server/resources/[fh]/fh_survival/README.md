@@ -45,7 +45,7 @@ Warm is only a bonus: `ColdRegions` stays `{}`.
 - Consumes: `RSGCore:Server:PlayerLoaded` (restore), `RSGCore:Server:OnPlayerUnload` and `playerDropped` (save),
   `onResourceStart` (boot check, pick up online players), `onResourceStop` and `txAdmin:events:serverShuttingDown`
   (save everyone, non-yielding), `fh:buffs:applied` (refresh the cached snapshot used on drop).
-- Reads (not events): `exports.fh_buffs:get(src)`; writes: `exports.fh_buffs:apply(src, id, magnitude, duration)` on restore only.
+- Reads (not events): `exports.fh_buffs:get(src)`; writes: `exports.fh_buffs:apply(src, id, magnitude, duration)` on restore (S2) and for food/canteen/wash/campfire (S3: `well_fed`, `hydrated`, `clean`, `warm`).
 - Buffs show in the U2 HUD via `fh:buffs:sync` already.
 
 ## Persistence
@@ -66,8 +66,10 @@ Lifecycle rules (Tier A):
 
 ## Config keys (`config.lua`, `FhSurvivalConfig`)
 `TickSeconds` (15), `LoginGraceSeconds` (600), `Durations`, `ColdRegions` (`{ region_id = true }`, empty: no cold region exists yet),
-`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`, used from S5). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` (`{x,y,z?,radius?}` list, empty:
-owner fills from in-game coords, else refill/wash only work in native mode), `Campfires` (same shape), `HeatRadius` (4.0), `HeatCheckSeconds` (10). Sections reserved for S4/S5.
+`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`, used from S5). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). Sections reserved for S4/S5.
+Seeded defaults (approximate, owner-verifiable, all 2D): `WaterZones` (-250,760,r40) and (-140,790,r40) on the Dakota River near the
+heartlands homestead (-300,790,118) / outlaw camp (-145,845,117); `Campfires` (-300,790,r8) homestead and (-145,845,r8) camp.
+Native mode never runs unless `WaterCheck = 'native'`: the client does not call `IsEntityInWater` in zones mode.
 The player's region is `FhRegions.territoryAt(x, y).region` from the server-side ped position; outside every territory it is nil (no warmth need).
 
 ## DB tables

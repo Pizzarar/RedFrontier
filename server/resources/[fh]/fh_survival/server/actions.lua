@@ -3,6 +3,7 @@
 -- Never touches health. Water is checked server-side against config zones unless WaterCheck = 'native'.
 local cfg = FhSurvivalConfig
 local I = FhSurvivalItems
+local DUR = FhSurvivalNeeds.durations(cfg.Durations) -- validated, defaults filled
 
 local function now() return GetGameTimer() / 1000.0 end
 
@@ -52,17 +53,16 @@ local function onUse(src, item)
     lastUse[src] = t
     local live = itemAt(src, item.name, item.slot)
     if not live then return end -- not actually in the inventory
+    -- Apply first: if fh_buffs refuses (e.g. no cap for `hydrated` yet) nothing is consumed and nothing is promised.
     if eff.kind == 'food' then
-        local pok, removed = pcall(function() return exports['rsg-inventory']:RemoveItem(src, item.name, 1, live.slot, 'survival use') end)
-        if not (pok and removed) then return end
-        applyBuff(src, eff.buff_id, eff.magnitude, eff.duration)
+        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then notify(src, 'You cannot eat right now.') return end
+        pcall(function() return exports['rsg-inventory']:RemoveItem(src, item.name, 1, live.slot, 'survival use') end)
         notify(src, 'You feel fed.')
     else -- canteen
         local ok, res = I.useCanteen(live.info, cfg.CanteenMax)
         if not ok then notify(src, res == 'empty' and 'The canteen is empty. Refill it at water.' or 'The canteen is damaged.') return end
-        local pok, saved = pcall(function() return exports['rsg-inventory']:SetItemInfo(src, live.slot, res) end)
-        if not (pok and saved) then return end
-        applyBuff(src, eff.buff_id, eff.magnitude, eff.duration)
+        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then notify(src, 'You cannot drink right now.') return end
+        pcall(function() return exports['rsg-inventory']:SetItemInfo(src, live.slot, res) end)
         notify(src, ('You drink. %d charges left.'):format(res.charges))
     end
 end
@@ -113,7 +113,7 @@ RegisterNetEvent('fh:survival:wash', function(clientInWater)
     local t = now()
     local ok, rem = I.washReady(lastWash[src], t, cfg.WashCooldownSeconds)
     if not ok then notify(src, ('You washed recently. Try again in %d s.'):format(math.ceil(rem or 0))) return end
-    if applyBuff(src, 'clean', 1.0, cfg.Durations.clean or 5400) then
+    if applyBuff(src, 'clean', 1.0, DUR.clean) then
         lastWash[src] = t -- cooldown starts only on a successful wash
         notify(src, 'You wash off the grime.')
     end
@@ -146,7 +146,7 @@ CreateThread(function()
                 local src = tonumber(id)
                 local pos = src and coordsOf(src)
                 if pos and I.nearHeat(pos, sources, cfg.HeatRadius) then
-                    applyBuff(src, 'warm', 1.0, cfg.Durations.warm or 1200)
+                    applyBuff(src, 'warm', 1.0, DUR.warm)
                 end
             end
         end
