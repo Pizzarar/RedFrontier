@@ -191,6 +191,22 @@ case('backward clock skew: saved remaining beyond max is clamped on restore', fu
     by = {}
     for _, r in ipairs(list) do by[r.buff_id] = r end
     assert(by.well_fed.duration == 60 and by.rested.duration == 7300, 'clamp to cfg max, never extend past saved')
+case('stateChanged compares level and missing list', function()
+    assert(N.stateChanged(nil, 0, {}) == true)
+    assert(N.stateChanged({ level = 0, missing = {} }, 0, {}) == false)
+    assert(N.stateChanged({ level = 1, missing = { 'food' } }, 1, { 'food' }) == false)
+    assert(N.stateChanged({ level = 1, missing = { 'food' } }, 2, { 'food' }) == true)
+    assert(N.stateChanged({ level = 1, missing = { 'food' } }, 1, { 'water' }) == true)
+    assert(N.stateChanged({ level = 1, missing = { 'food' } }, 1, { 'food', 'water' }) == true)
+end)
+
+case('pickSnapshot prefers live, falls back to cache, saved entries stay filtered', function()
+    local live, cache = snap({ well_fed = 50 }), snap({ well_fed = 40, rested = 10 })
+    assert(N.pickSnapshot(live, cache) == live)
+    assert(N.pickSnapshot({}, cache) == cache)
+    assert(next(N.pickSnapshot(nil, nil)) == nil)
+    local saved = N.saveRemaining(N.pickSnapshot({}, snap({ rested = -5, clean = 30 })), NOW)
+    assert(saved.rest == nil and saved.clean.remaining == 30)
 end)
 
 T.finish()

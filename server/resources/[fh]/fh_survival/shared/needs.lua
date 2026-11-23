@@ -150,6 +150,23 @@ function N.restore(saved, durationCfg)
     return out
 end
 
+---Has the client-visible state changed? `prev` = { level, missing } or nil; missing is compared in order.
+function N.stateChanged(prev, level, missing)
+    if type(prev) ~= 'table' or prev.level ~= level then return true end
+    local pm = prev.missing or {}
+    if #pm ~= #missing then return true end
+    for i = 1, #missing do if pm[i] ~= missing[i] then return true end end
+    return false
+end
+
+---Which snapshot to save on drop: the live one if it still has entries, else the last cached tick
+---snapshot (fh_buffs may already have cleared its state when playerDropped reaches us). Cached
+---entries are re-filtered by saveRemaining against `now`, so expired ones are never saved.
+function N.pickSnapshot(live, cached)
+    if type(live) == 'table' and next(live) ~= nil then return live end
+    return type(cached) == 'table' and cached or {}
+end
+
 -- FXServer loads shared scripts as plain chunks; expose a global there, module under specs.
 if _G.GetCurrentResourceName then _G.FhSurvivalNeeds = N end
 return N
