@@ -477,24 +477,24 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
 Preconditions: the station API is a pending contract (@homestead H3, so until it lands turn on `fh_dev 1` and use the dev
 stations; a built gunsmith station on your plot arrives with H3), item moves need @core B7 `removeItem` and idea-615
 (carried-inventory add/remove refuses, so crafting, restore and tonics refuse safely instead of eating items), the tonic
-buff needs idea-612 (caps in fh_buffs), and `/fh_restore` needs an @core `setInfo` contract (`invSetInfo` refuses
-`no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+buff needs idea-612 (caps in fh_buffs), and `/fh_restore` needs an @core `setItemInfo` contract (idea-689, not built
+yet: it refuses `no_set_info`). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle
    (condition 20-45)"). It is `bulky`, so the backpack and the hotbar refuse it; it fits saddlebag and chest.
    RESULT:
-2. Get the rifle into a slot `/fh_restore` can read. The command reads carried slots only: equipped (slots 1-5) and
-   backpack, never saddlebag/wagon/chest. Move the rifle into one of those (backpack or hotbar).
-   Expected: KNOWN GAP: both carried sections refuse `bulky`, so this may be impossible today; if the move is refused,
-   record `FAIL blocked: bulky rifle cannot reach a carried slot` and skip steps 4-6 (the restore math is covered by
-   `spec/gunsmith_spec.lua`). Otherwise note the slot number for step 4.
+2. Put the rifle where `/fh_restore` can read it: a chest, wagon or saddlebag near the bench. Open that container (press
+   E) and note the rifle's slot inside it for step 4.
+   Expected: the rifle is `bulky`, so the backpack and hotbar refuse it; it fits a saddlebag, wagon or chest. With the
+   container open, the rifle shows in one of its slots.
    RESULT:
-3. Stand at a gunsmith station: build one on your plot (needs @homestead H3), or with `fh_dev 1` stand at the dev
-   gunsmith (-280.0, 805.0, 119.0). Run `fh_give <yourId> gun_parts 5`.
+3. Have the open container (from step 2) within reach of a gunsmith station: build one on your plot (needs @homestead
+   H3), or with `fh_dev 1` place the container near the dev gunsmith (-280.0, 805.0, 119.0). Run
+   `fh_give <yourId> gun_parts 5`.
    Expected: 5 Gun Parts in the backpack. Nothing says `no_station` anymore.
    RESULT:
-4. Run `/fh_restore <slot>` (slot from step 2) with 5 gun parts.
+4. With the container still open, run `/fh_restore <slot>` (the rifle's slot from step 2) with 5 gun parts.
    Expected: chat `Restored to 60% condition using N gun parts.` (a worn rifle has no stars, so its cap is 60); the
    slot's condition info reads 60 and you hold `5 - N` parts. N is `ceil((60 - condition) / 20)`, e.g. condition 45 ->
    1 part, condition 20 -> 2 parts.
@@ -522,9 +522,10 @@ buff needs idea-612 (caps in fh_buffs), and `/fh_restore` needs an @core `setInf
    Expected: the printed result keeps magnitude 1.15 (same-buff refresh uses `max(old, new)`), proving the drink applied
    it; the printed active list shows `tonic_vigor` with an expiry about 600 s out. Without idea-612 the list is empty.
    RESULT:
-10. Failure path, no station. Walk 10+ m away from every station, then run `/fh_craft ammo_rifle` and `/fh_restore <slot>`
-    on a weapon slot.
-    Expected: `You need to be at the right station.` and `You need to be at a gunsmith station.`; no items move.
+10. Failure path, no station. Walk 10+ m away from every station with the container still open, then run
+    `/fh_craft ammo_rifle` and `/fh_restore <slot>`.
+    Expected: `You need to be at the right station.` and `You need to be at a gunsmith station.` (the container is too
+    far from the bench); no items move.
     RESULT:
 11. Failure path, missing input and unknown recipe. With no lead in the pack run `/fh_craft ammo_rifle`; then run
     `/fh_craft nonsense`.
@@ -532,12 +533,12 @@ buff needs idea-612 (caps in fh_buffs), and `/fh_restore` needs an @core `setInf
     listed, in recipe order) and `Unknown recipe.`; nothing is consumed. With no parts run `/fh_restore <slot>`: `You
     need gun parts.`
     RESULT:
-12. Failure path, wrong slot. Run `/fh_restore 99` (empty), `/fh_restore x`, and `/fh_restore <slot>` on a slot holding
-    an item without condition (e.g. Gun Parts).
+12. Failure path, wrong slot. Run `/fh_restore 99` (empty), `/fh_restore x`, and `/fh_restore <slot>` on a container
+    slot holding an item without condition.
     Expected: `Nothing in that slot.`, `Usage: /fh_restore <slot>`, and `That item has no condition to restore.`
     RESULT:
-13. Failure path, wrong station type. At the reload station run `/fh_restore <slot>`; at the gunsmith run
-    `/fh_craft ammo_rifle`.
+13. Failure path, wrong station type. With the open container near the reload station (not the gunsmith), run
+    `/fh_restore <slot>`; at the gunsmith run `/fh_craft ammo_rifle`.
     Expected: both `no_station` messages (`You need to be at a gunsmith station.` / `You need to be at the right
     station.`); the station types do not substitute for each other.
     RESULT:

@@ -4,6 +4,7 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local describe, it, eq = T.describe, T.it, T.eq
 local R = dofile(here .. '../server/resources/[fh]/fh_crafting/shared/craft_rules.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_gunsmith/shared/restore_flow.lua')
+local Containers = dofile(here .. '../server/resources/[fh]/fh_core/shared/containers.lua')
 
 local function w(cond, stars) return { name = 'worn_rifle', info = { condition = cond, stars = stars } } end
 
@@ -40,10 +41,21 @@ local function mkDeps(o)
     o = o or {}
     local d = { log = {}, item = o.item or w(30, 2), parts = o.parts or 10 }
     d.rules = R
-    d.near = function() if o.far then return false, 'no_station' end return true end
-    d.slot = function() return d.item end
+    d.containers = Containers
+    d.open = function()
+        if o.nothingOpen then return nil, nil, 'fh_nothing_open' end
+        local ref = { type = o.type or 'chest', id = o.id or 'fh:chest:test:1' }
+        local view = { coords = o.coords or { x = 0, y = 0, z = 0 }, slots = o.slots or 20, items = {} }
+        view.items[o.slot or 1] = d.item
+        return ref, view
+    end
+    d.nearStation = function()
+        if o.tooFar then return false, 'no_station' end
+        return true
+    end
     d.count = function() return d.parts end
     d.setInfo = function(_, _, info)
+        if o.setWhy then return false, o.setWhy end
         if o.setFails then return false, 'write_failed' end
         d.log[#d.log + 1] = 'set' .. info.condition; return true
     end
@@ -55,16 +67,31 @@ local function mkDeps(o)
 end
 
 describe('gunsmith flow', function()
-    it('writes condition then consumes parts', function()
+    it('success on a chest: writes condition then consumes parts', function()
         local d = mkDeps()
         local ok, res = F.run(d, 1, 1)
         eq(true, ok); eq(80, res.to); eq(3, res.parts)
         eq('set80,take3', table.concat(d.log, ','))
     end)
-    it('refuses away from a station without touching anything', function()
-        local d = mkDeps({ far = true })
+    it('refuses with nothing open without touching anything', function()
+        local d = mkDeps({ nothingOpen = true })
+        local ok, why = F.run(d, 1, 1)
+        eq(false, ok); eq('fh_nothing_open', why); eq(0, #d.log)
+    end)
+    it('refuses a non-bulky container type without touching anything', function()
+        local d = mkDeps({ type = 'backpack' })
+        local ok, why = F.run(d, 1, 1)
+        eq(false, ok); eq('fh_size_class', why); eq(0, #d.log)
+    end)
+    it('refuses a container too far from the bench without touching anything', function()
+        local d = mkDeps({ tooFar = true })
         local ok, why = F.run(d, 1, 1)
         eq(false, ok); eq('no_station', why); eq(0, #d.log)
+    end)
+    it('refuses when the setInfo contract is missing, before taking any parts', function()
+        local d = mkDeps({ setWhy = 'no_set_info' })
+        local ok, why = F.run(d, 1, 1)
+        eq(false, ok); eq('no_set_info', why); eq(0, #d.log)
     end)
     it('failed write consumes nothing', function()
         local d = mkDeps({ setFails = true })
