@@ -123,11 +123,16 @@ describe('quests jobtypes: camp_clear verdicts', function()
         local def, st = accepted('camp_clear', offer, cid)
         return feed('camp_clear', def, st, 'fh:zones:camp_cleared', payload).status
     end
-    it('credits the participants list', function()
-        eq('done', run({ camp_id = 'heartlands_t1_01', region_id = REGION, participants = { OTHER, ME } }))
+    local LOOT = { { name = 'bread', amount = 1 } }
+    it('credits each participant in the real camp_cleared payload', function()
+        eq('done', run({ camp_id = 'heartlands_t1_01', region_id = REGION, loot = LOOT,
+            participants = { OTHER, ME } }))
     end)
-    it('without participants (Q0a not landed) it credits nobody', function()
-        eq('active', run({ camp_id = 'heartlands_t1_01', region_id = REGION, loot = {} }))
+    it('an empty participants table credits nobody and does not error', function()
+        eq('active', run({ camp_id = 'heartlands_t1_01', region_id = REGION, loot = LOOT, participants = {} }))
+    end)
+    it('no participants field (an older emitter) credits nobody', function()
+        eq('active', run({ camp_id = 'heartlands_t1_01', region_id = REGION, loot = LOOT }))
     end)
     it('a wrong citizen (not in participants) is ignored', function()
         eq('active', run({ camp_id = 'heartlands_t1_01', participants = { OTHER } }))

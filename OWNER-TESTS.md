@@ -239,3 +239,103 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 14. `restart fh_ui` while a screen is open.
     Expected: the screen disappears, the mouse is released, movement works.
     RESULT:
+
+## Q5: quests (fh_quests)
+
+Server console lines start with `[fh_quests]`. Needs the `fh_quest_state` table (`server/migrations/0007_quest_state.sql`,
+applied by `tools/setup-server.ps1`); `server.cfg` now ensures `fh_quests` after `fh_hunting`. `/jobs` opens the ox_lib fallback
+board (the @ui board later). All coordinates, models and camp ids in it are guesses (TODO-verify-in-game). The ledger check means
+the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step that needs another lane says so: mark it
+`SKIP expected-blocked on <lane/block>`, not `FAIL`.
+
+1. Boot with `ensure fh_quests` in `server.cfg` and join.
+   Expected: no `[fh_quests] fh_quest_state missing` line, no `family ... rejected`/`failed to load`, no `built-in job type ...
+   not registered`; `fh_quest_state` exists in the DB. `/jobs` opens the "Jobs board" menu (a missing table would answer
+   `Board unavailable: fh_not_ready`).
+   RESULT:
+2. Board. Run `/jobs` (it works anywhere; the board spot/prop is at about -297, 795, 118).
+   Expected: 3-5 Heartlands offers (pelt requests, "Clear out: Heartlands outlaw camp", wanted NPCs), each with a reward, plus
+   "My active jobs" at the bottom. Accept a hunt offer: `Accepted: ...`; it comes back checked/disabled and shows under My active
+   jobs. Abandon it there (confirm the dialog): `Job abandoned.`, and it is selectable on the board again.
+   RESULT:
+3. hunt_request. Take a pelt offer from step 2 and note its title (animal and stars, e.g. 2-star wolf). Sell a pelt of that animal
+   and quality (or better) at the trapper (until @hunting H3 puts `animal` in the sold payload, any pelt of that quality counts).
+   Expected: the job leaves My active jobs and pays its money once (+1 rep); the newest `fh_ledger` pay row has reason
+   `quest:job:hunt_request:<animal>_<stars>star` (e.g. `quest:job:hunt_request:wolf_2star`). Sell a second matching pelt: no
+   second payment and no second `quest:` row (no double reward). If this build has no trapper sell point yet (@hunting H3 not
+   landed), the pelt cannot be sold: `RESULT: SKIP expected-blocked on @hunting H3`, and rerun this step then.
+   RESULT:
+4. bounty. Find a "Wanted: ..." offer, accept it and ride to the wanted NPC (Silas Crow about -128, 826, 117; Mabel Teague about
+   -170, 860, 118).
+   Expected: the NPC is there, visible and hostile. Kill it: the job completes for you, the acceptor, paid once; ledger reason
+   `quest:job:bounty:bounty_<name_key>`. Then take the other bounty if it is on the board, confirm its NPC spawns, and abandon it
+   from My active jobs: the NPC disappears and the job is gone with no payment.
+   RESULT:
+5. Bounty rearm: relog. Accept a bounty ("Wanted: ..."; if step 4 used both, wait for the next rotation in step 8), note where
+   the NPC stands, do NOT kill it, then quit and rejoin.
+   Expected: while you are offline the NPC is gone (a second client sees it disappear), and about 3 s after your character loads
+   a fresh NPC stands at the same spot (console has no `not re-armed` line). Kill it: the job completes for you and pays once,
+   same `quest:job:bounty:bounty_<name_key>` ledger reason.
+   RESULT:
+6. Bounty rearm: disconnect. Accept a bounty you have not taken yet and note its spot, then quit and stay offline. As a second
+   character/client, go to the spot and open the board.
+   Expected: the NPC is gone, and that bounty is offered again: accepting it spawns a new NPC, with no `fh_bounty_taken`
+   ("Somebody is already after that one."). Rejoin while that player still holds the offer: your old job row stays active
+   without an NPC (console `not re-armed`); abandon it from My active jobs, which is the designed outcome. If they already
+   finished or abandoned it, your NPC re-arms instead and the job plays normally.
+   RESULT:
+7. camp_clear. Accept "Clear out: Heartlands outlaw camp" and clear the camp (about -145, 845, 117) while standing inside it.
+   Expected: console `camp heartlands_t1_01 cleared` and the job completes: you are within `activationRadius`, so you are in
+   `payload.participants`; paid once, ledger reason `quest:job:camp_clear:camp_heartlands_t1_01`. No 0/1 no-op. Clearing it from
+   outside the radius credits nobody (empty `participants`), which is specified.
+   RESULT:
+8. Board rotation. Note the current offer titles, keep the server up across the next hour boundary (rotation is a fixed 60 min
+   board epoch) and run `/jobs` again.
+   Expected: 3-5 offers again with a different set of titles (some may repeat); active jobs are untouched. A restart inside the
+   same hour gives the same board. If you cannot wait out the boundary, `RESULT: SKIP` with the offers you saw.
+   RESULT:
+9. Giver reach and ped behaviour. Use Whitlock (his line is still unstarted) at about -315, 780, 118. Press E and let the intro
+   lines run to "Will you take the job?", then move 6+ m away and confirm "I will".
+   Expected: a `fh_too_far` notify (no `Quest started.`) and the line does not start: back within 5 m, E shows the intro and the
+   start offer again. (The target prompt itself only reaches ~2.5 m, so this is the only by-hand path; if the open dialog pins
+   your movement, mark `SKIP` with that note.) Then shoot the giver from close range, fire a shot beside him, sprint into him and
+   wait a few seconds: he stays in place, does not flee or fight, takes no damage and cannot be killed.
+   RESULT:
+10. Givers, Hale. Find Ruth Hale (`u_f_m_tumgeneralstoreowner_01`) at about -296, 788, 118 and press E ("Talk to Ruth Hale").
+    Expected: two intro lines, then "Will you take the job?" -> "I will" -> `Quest started.`; pressing E again says "Nothing more
+    to say right now." until the steps are done. Claim a plot (`fh_claim`, about -300, 790, 118), earn $15+ in one payment (a
+    sale, or console `fh_pay <yourId> 20`), then talk to her again: two closing lines and the reward. Cash +$40, +5 rep, ledger
+    reason `quest:family_hale` exactly once; talking again pays nothing.
+    RESULT:
+11. Givers, Marrow. Sheriff Dell Marrow (`u_m_m_valsheriff_01`) at about -280, 805, 118. Same talk flow; the line starts on
+    "Clear an outlaw camp."
+    Expected: clear a camp from inside it (you must be in `payload.participants`) -> step 1 advances; sell 2 pelts, report back:
+    $60, +8 rep, reason `quest:family_marrow` once. If this build has no trapper sell point yet (@hunting H3 not landed), mark
+    the pelt half `SKIP expected-blocked on @hunting H3` and keep the step 1 result.
+    RESULT:
+12. Givers, Whitlock. Eli Whitlock (`cs_mp_oldtimer`) at about -315, 780, 118. Same talk flow (start the line now: step 9 only
+    proved the far refusal); step 1 (sell a 2+ star pelt, @hunting H3) advances.
+    Expected: step 2 is EXPECTED-BLOCKED until @hunting H4 ships `fh:hunting:chain_complete` with `chain_id = legendary_bear`. If it
+    has landed, finish the Legendary Bear hunt and report back: $120, +12 rep, reason `quest:family_whitlock` once. Otherwise
+    `RESULT: SKIP expected-blocked on @hunting H4` after confirming step 1 advances and the line parks on step 2.
+    RESULT:
+13. Re-fire, relog, restart. With an active line mid-step (Marrow's pelt step, or Whitlock step 1) note its count; after a
+    completed family line note your cash and rep. Quit and rejoin, then restart the server and rejoin.
+    Expected: the `fh_quest_state` row (your citizenid + quest id) still has the same `step` and `progress.count`, and the line
+    keeps going (family lines are not in `/jobs`; talking to the giver offers no new start). A done one-time line stays `done`
+    and offers nothing to restart. Cash and rep unchanged and the ledger has no second `quest:` row: no double reward on relog
+    or restart.
+    RESULT:
+14. TODO-verify-in-game (report values, not failures). Giver points/models: Hale -296, 788, 118.2 / `u_f_m_tumgeneralstoreowner_01`;
+    Marrow -280, 805, 118.5 / `u_m_m_valsheriff_01`; Whitlock -315, 780, 118 / `cs_mp_oldtimer`. Board prop `p_notice_board01x`
+    at -297, 795, 118 (the sphere target sits at the same point). Bounty model `g_m_m_unibanditos_01`; camp id
+    `heartlands_t1_01`. Also the built-in job types registering through fh_quests' own export with same-resource function hooks:
+    the boot console has no `built-in job type ... not registered`, the board listing all three types proves registration, and
+    one bounty accept -> kill -> abandon runs the `accept`, `onEvent` and `abandon` hooks. Note any model or coordinate that
+    needed changing.
+    RESULT:
+
+Known limits (not failures):
+- Item rewards stay owed: fh_core refuses `backpack`/`equipped` item adds (idea-643), so a quest with `items` keeps
+  `reward_pending`, pays money/rep once, retries on each load, and a repeatable with items cannot be taken again
+  (`fh_reward_pending`). No shipped content uses item rewards yet.
