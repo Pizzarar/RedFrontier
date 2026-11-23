@@ -19,4 +19,5 @@ FhHeatConfig = {
     -- Bounty payoff: money per heat point, rounded up per payoff. Charged through fh_economy.charge.
     bountyPerPoint = 4,
     payoffReason = 'heat_bounty',
+    refundReason = 'heat_bounty_refund', -- fh_economy.pay credit when the heat reset fails after the charge
 }

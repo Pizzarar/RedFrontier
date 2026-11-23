@@ -26,7 +26,9 @@ Per-character, per-faction heat 0-100 (factions from fh_core `shared/regions.lua
 
 Errors: `fh_unknown_faction`, `fh_no_character`, `fh_bad_amount`, `fh_unknown_source`, `fh_no_heat`,
 `fh_insufficient_funds`, `fh_economy_unavailable`, `fh_unknown_region`, `fh_payoff_busy`, `fh_payoff_error`,
-`fh_payoff_commit_failed` (charged but the heat reset failed: logged with ERROR for a manual fix);
+`fh_payoff_refunded` (the heat reset failed after the charge; the exact amount was credited back, safe to retry),
+`fh_payoff_refund_failed` (charged, heat reset AND refund failed: `[fh_heat] ERROR payoff cid=.. faction=.. amount=..`
+logged for a manual fix; do not retry);
 fh_economy `charge` codes pass through.
 
 ## Events
@@ -56,7 +58,15 @@ with a message and nothing is charged (`rules.parsePoints`).
   (`rules.chargeRegion`). `charge` lands with @core B7; until then payoff fails gracefully with `fh_economy_unavailable`.
 - **One at a time**: a payoff holds an in-flight lock per (citizenid, faction) across the charge and the heat reset
   (`rules.runPayoff`). A second request while one is in flight gets `fh_payoff_busy` and is never charged. The lock is
-  always released (success, refusal, early return, error).
+  always released (success, refusal, early return, error), and only after any refund resolved.
+- **Persisted or refunded**: the heat reset is written with `MySQL.query.await`; the payoff succeeds only once that
+  write landed. If the write fails (memory is rolled back) or anything after the charge throws, the exact charged
+  amount is credited back with `exports.fh_economy:pay(src, amount, refundReason, region_id)` (same region as the
+  charge) while the lock is still held -> `fh_payoff_refunded`. If that also fails -> `fh_payoff_refund_failed` +
+  ERROR log. A refund needs the player online (fh_economy `no_player`), so a drop mid-payoff can end there.
+  Other heat changes (gains, decay, admin set) stay fire-and-forget writes.
+- If the player dropped while the payoff yielded, its cache entry is cleared afterwards (all payoff changes are
+  persisted), unless the character is online again.
 
 ## Decay loop
 

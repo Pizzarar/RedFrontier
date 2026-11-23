@@ -83,7 +83,7 @@ case('runPayoff lock: concurrent payoff while the first charge is in flight -> e
                 coroutine.yield('charging') -- the real charge awaits the DB here
                 return true
             end,
-            commit = function(paid) heat = heat - paid end }
+            commit = function(paid) heat = heat - paid; return true end }
     end
     local first = coroutine.create(function() return R.runPayoff(deps()) end)
     local _, state = coroutine.resume(first)
@@ -104,7 +104,8 @@ case('runPayoff lock: always released on refusal, early return and error', funct
     local locks, key = R.newLocks(), R.lockKey('C', 'outlaws')
     local base = function(over)
         local d = { locks = locks, key = key, heat = function() return 40 end, perPoint = 4,
-            charge = function() return true end, commit = function() end }
+            charge = function() return true end, commit = function() return true end,
+            refund = function() return true end }
         for k, v in pairs(over) do d[k] = v end
         return d
     end
@@ -119,7 +120,7 @@ case('runPayoff lock: always released on refusal, early return and error', funct
     assert(not ok and err == 'fh_payoff_error' and not locks.held(key) and logged, 'error before charge releases')
     local wasCharged
     ok, err = R.runPayoff(base({ commit = function() error('boom') end, onError = function(_, c) wasCharged = c end }))
-    assert(not ok and err == 'fh_payoff_commit_failed' and wasCharged == true and not locks.held(key),
+    assert(not ok and err == 'fh_payoff_refunded' and wasCharged == true and not locks.held(key),
         'error after charge releases and reports charged')
     ok = R.runPayoff(base({})); assert(ok == true, 'next payoff goes through after all of the above')
 end)
@@ -165,6 +166,100 @@ case('safeTick: an erroring tick is logged and the loop keeps running', function
     T.eq(3, ticks, 'ticks after the error still ran'); T.eq(1, #logged)
     assert(logged[1]:find('boom'), 'error message logged')
     assert(R.safeTick(tick, function() error('logger broke') end, 'bad') == false, 'a broken logger cannot kill it')
+end)
+
+-- ---------------------------------------------------------------- R5 round 2: refund on post-charge failure
+
+-- Fake economy + heat store: charge/refund move a balance; commit persists only when `dbUp`.
+local function payoffWorld(opts)
+    local w = { balance = 1000, heat = 40, charges = 0, refunds = {}, errors = {}, dbUp = true,
+        refundOk = true, locks = R.newLocks() }
+    w.key = R.lockKey('CID1', 'outlaws')
+    w.deps = function()
+        return { locks = w.locks, key = w.key, heat = function() return w.heat end, perPoint = 4, points = nil,
+            charge = function(amount)
+                if w.balance < amount then return false, 'fh_insufficient_funds' end
+                w.charges = w.charges + 1; w.balance = w.balance - amount
+                if opts and opts.yieldIn == 'charge' then coroutine.yield('charging') end
+                return true
+            end,
+            commit = function(paid)
+                if opts and opts.commitThrows then error('db exploded') end
+                if not w.dbUp then return false end -- awaited write failed: nothing persisted
+                w.heat = w.heat - paid; return true
+            end,
+            refund = function(amount)
+                w.refunds[#w.refunds + 1] = amount
+                assert(w.locks.held(w.key), 'lock still held while the refund runs')
+                if opts and opts.yieldIn == 'refund' then coroutine.yield('refunding') end
+                if not w.refundOk then return false, 'no_player' end
+                w.balance = w.balance + amount; return true
+            end,
+            onError = function(msg, charged, amount) w.errors[#w.errors + 1] = { msg = msg, charged = charged, amount = amount } end }
+    end
+    return w
+end
+
+case('refund: charge ok + commit fails -> exactly one refund of the exact amount, heat unchanged, retry charges once', function()
+    local w = payoffWorld()
+    w.dbUp = false
+    local ok, err, cost = R.runPayoff(w.deps())
+    assert(ok == false and err == 'fh_payoff_refunded' and cost == 160)
+    T.eq(1, w.charges); T.eq(1, #w.refunds); T.eq(160, w.refunds[1], 'refund = exact charged amount')
+    T.eq(40, w.heat, 'heat unchanged'); T.eq(1000, w.balance, 'net nothing charged')
+    assert(not w.locks.held(w.key), 'released after the refund')
+    w.dbUp = true
+    ok, err, cost = R.runPayoff(w.deps())
+    assert(ok == true and err == 40 and cost == 160)
+    T.eq(2, w.charges, 'retry charged exactly once more'); T.eq(1, #w.refunds, 'no refund on success')
+    T.eq(0, w.heat); T.eq(840, w.balance)
+end)
+
+case('refund: commit throwing after the charge is refunded too', function()
+    local w = payoffWorld({ commitThrows = true })
+    local ok, err = R.runPayoff(w.deps())
+    assert(ok == false and err == 'fh_payoff_refunded')
+    T.eq(1, #w.refunds); T.eq(160, w.refunds[1]); T.eq(40, w.heat); T.eq(1000, w.balance)
+end)
+
+case('refund: refund also fails -> distinct reason, error carries the amount, lock released', function()
+    local w = payoffWorld()
+    w.dbUp, w.refundOk = false, false
+    local ok, err, cost = R.runPayoff(w.deps())
+    assert(ok == false and err == 'fh_payoff_refund_failed' and cost == 160)
+    T.eq(1, #w.refunds); T.eq(40, w.heat); T.eq(840, w.balance, 'charged, not refunded')
+    local last = w.errors[#w.errors]
+    assert(last.msg:find('REFUND FAILED') and last.charged == true and last.amount == 160)
+    assert(not w.locks.held(w.key))
+    local _, err2 = R.runPayoff(payoffWorld().deps()); assert(err2 ~= 'fh_payoff_busy', 'fresh lock set not stuck')
+end)
+
+case('refund: a missing refund fn counts as refund failed (never silently success)', function()
+    local w = payoffWorld()
+    w.dbUp = false
+    local d = w.deps(); d.refund = nil
+    local ok, err = R.runPayoff(d)
+    assert(ok == false and err == 'fh_payoff_refund_failed' and not w.locks.held(w.key))
+end)
+
+case('refund: no refund when nothing was charged (refused charge, no heat, bad points)', function()
+    local w = payoffWorld(); w.balance = 10
+    local ok, err = R.runPayoff(w.deps()); assert(not ok and err == 'fh_insufficient_funds')
+    w = payoffWorld(); w.heat = 0
+    ok, err = R.runPayoff(w.deps()); assert(not ok and err == 'fh_no_heat')
+    T.eq(0, #w.refunds); T.eq(0, w.charges)
+end)
+
+case('refund: lock held while the refund yields; a concurrent request is busy and charges nothing', function()
+    local w = payoffWorld({ yieldIn = 'refund' })
+    w.dbUp = false
+    local first = coroutine.create(function() return R.runPayoff(w.deps()) end)
+    local _, state = coroutine.resume(first); T.eq('refunding', state)
+    local d2 = w.deps(); d2.charge = function() error('must not be called') end
+    local ok2, err2 = R.runPayoff(d2); assert(ok2 == false and err2 == 'fh_payoff_busy')
+    local _, ok1, err1 = coroutine.resume(first)
+    assert(ok1 == false and err1 == 'fh_payoff_refunded' and not w.locks.held(w.key))
+    T.eq(1, w.charges); T.eq(1, #w.refunds); T.eq(1000, w.balance)
 end)
 
 T.finish()

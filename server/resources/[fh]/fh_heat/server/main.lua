@@ -34,24 +34,43 @@ local function load(cid)
     return byCid[cid]
 end
 
-local function save(cid, faction, value)
-    MySQL.query('INSERT INTO fh_heat (citizenid, faction, heat) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE heat = VALUES(heat)',
-        { cid, faction, value })
+local UPSERT = 'INSERT INTO fh_heat (citizenid, faction, heat) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE heat = VALUES(heat)'
+
+-- Fire-and-forget write (heat gains, decay, admin set: a lost write only costs heat accuracy, never money).
+local function save(cid, faction, value) MySQL.query(UPSERT, { cid, faction, value }) end
+
+-- Awaited write for money-backed changes (bounty payoff): true only once the row is written.
+local function saveAwait(cid, faction, value)
+    local ok, res = pcall(MySQL.query.await, UPSERT, { cid, faction, value })
+    if not ok then log('ERROR heat write %s %s: %s', tostring(cid), faction, tostring(res)) end
+    return ok and res ~= nil
 end
 
 -- Every change goes through here: persists, emits fh:heat:changed and (on a level change) fh:heat:threshold
 -- (R6 hook point). One table payload each, built by rules.changeEvents.
-local function apply(src, cid, faction, new, reason)
+-- durable = await the DB write; on failure the in-memory change is rolled back, no events fire, persisted = false.
+-- Events fire only after the write and are pcall-guarded, so nothing after a persisted write can throw.
+---@return number old, number new, boolean persisted
+local function apply(src, cid, faction, new, reason, durable)
     local heats = load(cid)
     local old = heats[faction] or 0
     new = rules.clamp(new, cfg.min, cfg.max)
-    if new == old then return old, new end
+    if new == old then return old, new, true end
     heats[faction] = new
-    save(cid, faction, new)
-    for _, ev in ipairs(rules.changeEvents(src, cid, faction, old, new, cfg.thresholds, reason)) do
-        TriggerEvent(ev[1], ev[2])
+    if durable then
+        if not saveAwait(cid, faction, new) then
+            -- undo only our delta: other changes may have landed on this table while the write awaited
+            heats[faction] = rules.clamp((heats[faction] or 0) + (old - new), cfg.min, cfg.max)
+            return old, old, false
+        end
+    else
+        save(cid, faction, new)
     end
-    return old, new
+    for _, ev in ipairs(rules.changeEvents(src, cid, faction, old, new, cfg.thresholds, reason)) do
+        local ok, e = pcall(TriggerEvent, ev[1], ev[2])
+        if not ok then log('ERROR emitting %s: %s', ev[1], tostring(e)) end
+    end
+    return old, new, true
 end
 
 local function resolve(src, faction)
@@ -129,13 +148,13 @@ end
 -- Bounty payoff. points nil = all heat with that faction (capped to current heat).
 -- One payoff per (citizenid, faction) at a time: the charge yields (DB await), so without the lock two requests
 -- could both read the same heat and both charge. A second request while one is in flight gets fh_payoff_busy and is
--- never charged. rules.runPayoff always releases the lock (success, refusal, early return, error).
+-- never charged. rules.runPayoff always releases the lock (success, refusal, early return, error), after any refund.
 local function payoff(src, faction, points)
     local cid, err = resolve(src, faction)
     if not cid then return false, err end
     local region = chargeRegion(src, faction)
     if not region then return false, 'fh_unknown_region' end
-    return rules.runPayoff({
+    local result = table.pack(rules.runPayoff({
         locks = payoffLocks,
         key = rules.lockKey(cid, faction),
         heat = function() return load(cid)[faction] or 0 end,
@@ -145,15 +164,38 @@ local function payoff(src, faction, points)
         charge = function(amount)
             if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
             local ok, a, b = pcall(function() return exports.fh_economy:charge(src, amount, cfg.payoffReason, region) end)
-            if not ok then return false, 'fh_economy_unavailable' end -- export missing until B7 merges
+            if not ok then -- export missing until B7 merges, or it threw
+                log('ERROR fh_economy:charge %s %s amount=%s: %s', tostring(cid), faction, tostring(amount), tostring(a))
+                return false, 'fh_economy_unavailable'
+            end
             return a, b
         end,
-        -- subtract the points paid from the CURRENT heat so heat gained during the (yielding) charge is not wiped
-        commit = function(paid) apply(src, cid, faction, (load(cid)[faction] or 0) - paid, 'bounty_payoff') end,
-        onError = function(msg, charged)
-            log('ERROR payoff %s %s (charged=%s): %s', tostring(cid), faction, tostring(charged), msg)
+        -- post-charge failure: credit the exact amount back (fh_economy.pay, same region). Runs under the lock.
+        refund = function(amount)
+            if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
+            local ok, a, b = pcall(function() return exports.fh_economy:pay(src, amount, cfg.refundReason, region) end)
+            if not ok then return false, 'fh_economy_error: ' .. tostring(a) end
+            return a, b
         end,
-    })
+        -- subtract the points paid from the CURRENT heat so heat gained during the (yielding) charge is not wiped.
+        -- Awaited write: the payoff succeeds only once the reset is persisted.
+        commit = function(paid)
+            local _, _, persisted = apply(src, cid, faction, (load(cid)[faction] or 0) - paid, 'bounty_payoff', true)
+            return persisted
+        end,
+        onError = function(msg, charged, amount)
+            log('ERROR payoff cid=%s faction=%s amount=%s charged=%s: %s', tostring(cid), faction, tostring(amount),
+                tostring(charged), msg)
+        end,
+    }))
+    -- the player may have dropped while the charge / write yielded: playerDropped already cleared the cache, but the
+    -- commit's load() refilled it. Every payoff change is persisted, so drop it unless the character is online again.
+    if cidOf[src] ~= cid then
+        local online = false
+        for _, c in pairs(cidOf) do if c == cid then online = true break end end
+        if not online then byCid[cid] = nil end
+    end
+    return table.unpack(result, 1, result.n)
 end
 
 exports('get', get)
@@ -191,7 +233,9 @@ RegisterCommand('paybounty', function(src, args)
     local msgs = { fh_insufficient_funds = 'You cannot afford that bounty.', fh_no_heat = 'No heat with them.',
         fh_unknown_faction = 'Unknown faction.', fh_economy_unavailable = 'Bounty payoff is not available yet.',
         fh_payoff_busy = 'A bounty payment is already being processed.', fh_bad_amount = 'Invalid points.',
-        fh_unknown_region = 'Bounty payoff is not available here.' }
+        fh_unknown_region = 'Bounty payoff is not available here.',
+        fh_payoff_refunded = 'Bounty payment failed and you were not charged. Try again.',
+        fh_payoff_refund_failed = 'Bounty payment failed after you were charged. Do not retry; contact an admin.' }
     reply(src, msgs[a] or ('Could not pay bounty (' .. tostring(a) .. ').'))
 end, false)
 

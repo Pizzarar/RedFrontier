@@ -123,29 +123,55 @@ end
 function M.lockKey(citizenid, faction) return tostring(citizenid) .. '\0' .. tostring(faction) end
 
 ---Bounty payoff under the (citizenid, faction) in-flight lock. A second request while one is in flight is refused
----with fh_payoff_busy and charges nothing. The lock is ALWAYS released: on success, refusal, early return or error.
----d = { locks, key, heat = fn() -> current heat, perPoint, points, charge = fn(cost) -> ok, err,
----      commit = fn(paid) (subtracts paid from the CURRENT heat), onError = fn(msg)? }
+---with fh_payoff_busy and charges nothing. The lock is ALWAYS released, and only once the whole sequence resolved:
+---  plan -> charge -> commit (heat reset PERSISTED) -> success
+---  charge ok, then commit fails / returns false / throws -> refund(exact charged amount), still under the lock:
+---    refund ok -> fh_payoff_refunded (net nothing charged, heat unchanged, safe to retry)
+---    refund fails -> fh_payoff_refund_failed (charged, heat unchanged: onError reports it, do NOT retry)
+---d = { locks, key, heat = fn() -> current heat, perPoint, points,
+---      charge = fn(cost) -> ok, err,  refund = fn(amount) -> ok, err,
+---      commit = fn(paid) -> true only once the reset is persisted (subtracts paid from the CURRENT heat),
+---      onError = fn(msg, charged:boolean, amount:number|nil)? }
 ---@return boolean ok, number|string paidOrErr, integer|nil cost
 function M.runPayoff(d)
     if not d.locks.acquire(d.key) then return false, 'fh_payoff_busy' end
-    local charged = false
+    local function report(msg, amount)
+        if d.onError then pcall(d.onError, msg, amount ~= nil, amount) end
+    end
+    local charged -- the amount actually taken; set only once charge() reported success
     local called, ok, paid, cost, err = pcall(function()
-        local o, p, c, e = M.payoff(d.heat(), d.perPoint, d.points, function(amount)
+        return M.payoff(d.heat(), d.perPoint, d.points, function(amount)
             local cok, cerr = d.charge(amount)
-            charged = cok and true or false
+            if cok then charged = amount end
             return cok, cerr
         end)
-        if o then d.commit(p) end
-        return o, p, c, e
     end)
-    d.locks.release(d.key)
-    if not called then
-        if d.onError then d.onError(tostring(ok), charged) end
-        return false, charged and 'fh_payoff_commit_failed' or 'fh_payoff_error'
+    if charged == nil then -- nothing was taken: plain refusal or error, no refund needed
+        d.locks.release(d.key)
+        if not called then
+            report(tostring(ok), nil)
+            return false, 'fh_payoff_error'
+        end
+        if not ok then return false, err, cost end
+        return false, 'fh_payoff_error' -- unreachable: success always charges
     end
-    if not ok then return false, err, cost end
-    return true, paid, cost
+    cost = cost or charged
+    if called and ok then
+        local cCalled, committed, cerr = pcall(d.commit, paid)
+        if cCalled and committed then
+            d.locks.release(d.key)
+            return true, paid, cost
+        end
+        report('commit failed: ' .. tostring(cCalled and (cerr or 'heat reset not persisted') or committed), charged)
+    else
+        report('failed after charge: ' .. tostring(called and err or ok), charged)
+    end
+    -- post-charge failure: give the exact amount back before anyone can retry
+    local rCalled, refunded, rerr = pcall(d.refund, charged)
+    d.locks.release(d.key)
+    if rCalled and refunded then return false, 'fh_payoff_refunded', cost end
+    report('REFUND FAILED: ' .. tostring(rCalled and (rerr or 'refused') or refunded), charged)
+    return false, 'fh_payoff_refund_failed', cost
 end
 
 ---Event payloads (fh_core/docs/events.md: ONE table argument, src first). Returns a list of { name, payload }:
