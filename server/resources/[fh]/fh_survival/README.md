@@ -53,7 +53,7 @@ Lifecycle rules (Tier A):
 The player's region is `FhRegions.territoryAt(x, y).region` from the server-side ped position; outside every territory it is nil (no warmth need).
 
 ## DB tables
-`fh_survival_needs(citizenid PK, needs JSON text, updated_at unix s)` from `server/migrations/0006_survival_needs.sql`.
+`fh_survival_needs(citizenid PK, needs JSON text, updated_at unix s)` from `server/migrations/0012_survival_needs.sql`.
 
 ## Tests
 `python tools/run-specs.py spec/survival_needs_spec.lua` (pure logic). Syntax: `python tools/run-specs.py --syntax "server/resources/[fh]/fh_survival"`.
