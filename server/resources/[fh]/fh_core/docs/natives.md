@@ -124,7 +124,7 @@ Models `a_c_horse_morgan_bay` (fh_spawn_horse default) and `g_m_m_unibanditos_01
 | `GetPlayerIdentifierByType(src, 'license' \| 'discord')` | `fh_core/server/access.lua` (playerConnecting) | server | Called on the temporary connecting `source`; assumed to return `license:<hex>` / `discord:<id>` there (rsg-core does the same at events.lua:148) |
 | `IsPlayerAceAllowed(src, 'fh.allowlist')` | `fh_core/server/access.lua` (reject line) | server | Same check rsg-core's whitelist makes; assumed to see `identifier.*` principals for a connecting player |
 | `ExecuteCommand('add_principal ...')` | `fh_core/server/access.lua` (auto-admin, `fh_allow`) | server | Cfx runtime; the identifier is validated as hex/digits first (`FhAccessRules.parseIdentifier`) |
-| `deferrals.defer` / `deferrals.done` | `fh_core/server/access.lua` (reject message) | server | Cfx runtime; `Wait(0)` between them; first `done` wins over rsg-core's own |
+| `deferrals` | not used by fh_core | server | fh_core never defers; only rsg-core's whitelist check (`deferrals.done(locale('error.not_whitelisted'))`, events.lua:141-144) rejects, so the player sees that locale text |
 | `GetConvar`, `GetResourcePath`, `GetResourceState`, Lua `io.open` | `fh_core/server/access.lua` | server | Cfx runtime; writes `admins.cfg` / `allowlist.cfg` next to `server.cfg` |
 
 ## Spikes

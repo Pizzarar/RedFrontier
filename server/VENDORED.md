@@ -18,4 +18,5 @@ Config order follows the same recipe's server.cfg. FXServer/MariaDB are fetched 
 
 Not vendored on purpose (skipped from the recipe for the B1 minimum): rsg-hud, rsg-banking, rsg-wardrobe, rsg-menubase, PolyZone, menu_base, rNotify, rsg-voice, xsound, etc.
 Local edit (B-access): `rsg-core/shared/config.lua` sets `RSGConfig.Server.Whitelist = true` and `WhitelistPermission = 'fh.allowlist'` (was `false` / `'admin'`); see fh_core README "Access".
+Local edit (B-access): `rsg-core/locales/en.json` `error.not_whitelisted` now reads "You're not on this private server's allowlist. Ask the owner to add you: they can see your ID in the server console." (was "[RSGCORE] - You're not whitelisted for this server"); it is the only reject message a non-allowlisted player sees (JSON has no comments, so it is recorded here).
 rsg-core guards its optional rsg-banking call with GetResourceState. Add more as later blocks need them.

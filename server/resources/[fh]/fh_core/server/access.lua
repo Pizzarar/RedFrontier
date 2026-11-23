@@ -1,14 +1,16 @@
 -- Private-server access (B-access): first-joiner auto-admin and the friend allowlist. Rules: shared/access_rules.lua.
 -- Natives / Cfx functions: GetPlayerIdentifierByType, GetPlayerName, IsPlayerAceAllowed, ExecuteCommand, GetConvar,
--- GetResourcePath, deferrals (see docs/natives.md: unverified in-game). Lua io writes admins.cfg / allowlist.cfg in the
+-- GetResourcePath (see docs/natives.md: unverified in-game). Lua io writes admins.cfg / allowlist.cfg in the
 -- server dir (the cwd that server.cfg `exec`s them from).
 --
 -- Connect order: the playerConnecting handler below does the grant (ExecuteCommand + verified write) synchronously,
 -- before any yield. rsg-core's handler yields (Wait(0), rsg-core/server/events.lua:139) before its whitelist check
 -- (events.lua:141), so whichever handler the runtime calls first, the grant lands before rsg-core checks.
+-- Rejection is rsg-core's alone (deferrals.done(locale 'error.not_whitelisted')); this handler never defers, it only
+-- prints the `allowlist: rejected` console line so the owner can copy the ID.
 -- Only server events trigger a grant; there is no net event.
 local R = FhAccessRules
-local state = { locked = false, pending = nil }
+local state
 local serverDir
 
 local function dir()
@@ -37,7 +39,7 @@ local function persistLine(name, line)
         f:close()
         if not ok then return false end
     end
-    return R.hasLine(readFile(name) or '', line)
+    return R.persistVerified(readFile(name), line) -- a failed re-read is a failed persist
 end
 
 local function convars()
@@ -52,12 +54,16 @@ local function rsgWhitelist()
     return cfg.Whitelist == true, cfg.WhitelistPermission
 end
 
-state.locked = R.hasAdminLine(readFile('admins.cfg') or '')
+do
+    local err
+    state, err = R.initialState(readFile('admins.cfg')) -- nil (missing/unreadable) fails closed: locked, no grant
+    if err then print('[fh_core] ' .. err .. ' (path: ' .. dir() .. '/admins.cfg)') end
+end
 
-AddEventHandler('playerConnecting', function(name, _, deferrals)
+AddEventHandler('playerConnecting', function(name)
     local src = source
     local whitelistOn, ace = rsgWhitelist()
-    local res = R.onConnect(state, convars(), {
+    R.onConnect(state, convars(), {
         license = GetPlayerIdentifierByType(src, 'license'),
         discord = GetPlayerIdentifierByType(src, 'discord'),
         name = name,
@@ -68,11 +74,6 @@ AddEventHandler('playerConnecting', function(name, _, deferrals)
         isAllowed = function() return ace ~= nil and IsPlayerAceAllowed(src, ace) end,
         log = function(msg) print(msg) end,
     })
-    if not res.allowed then
-        deferrals.defer()
-        Wait(0)
-        deferrals.done(R.REJECT_MESSAGE)
-    end
 end)
 
 local function reply(src, msg)

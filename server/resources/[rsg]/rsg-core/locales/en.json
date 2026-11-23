@@ -12,7 +12,7 @@
     "error.invalid_permission": "Invalid permission level",
     "error.duplicate_license": "[RSGCORE] - Duplicate Rockstar License Found",
     "error.no_valid_license": "[RSGCORE] - No Valid Rockstar License Found",
-    "error.not_whitelisted": "[RSGCORE] - You're not whitelisted for this server",
+    "error.not_whitelisted": "You're not on this private server's allowlist. Ask the owner to add you: they can see your ID in the server console.",
     "error.server_already_open": "The server is already open",
     "error.server_already_closed": "The server is already closed",
     "error.no_permission": "You don't have permissions for this..",
