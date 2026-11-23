@@ -337,6 +337,32 @@ function M.repairStep(s, now, playerCoords, wagonCoords, reach)
     return 'continue'
 end
 
+---Final re-check on the repair done tick, before consuming anything. c = { broken, wagonCoords, hasHammer, hasWheel }.
+---@return boolean ok, string|nil reason
+function M.repairFinalCheck(c)
+    if type(c) ~= 'table' then return false, 'fh_bad_request' end
+    if c.wagonCoords == nil then return false, 'fh_no_wagon' end -- wagon gone/unloaded: cancel, consume nothing
+    if c.broken ~= true then return false, 'fh_wheel_ok' end
+    if not c.hasHammer then return false, 'fh_need_hammer' end
+    if not c.hasWheel then return false, 'fh_not_enough' end
+    return true
+end
+
+---What the owner's client does with a wheel_state message st = { broken, speedLimit, native }.
+---native (= fh_spike_gated is false) gates every wheel native: the break and SET_VEHICLE_FIXED. The speed cap is
+---not a wheel native, so it applies (and is reset on repair) in both modes.
+---@return table plan { cap = number|nil, resetCap = boolean, breakNative = boolean, fixNative = boolean }
+function M.clientWheelPlan(st)
+    local broken = type(st) == 'table' and st.broken == true
+    local native = type(st) == 'table' and st.native == true
+    return {
+        cap = broken and tonumber(st.speedLimit) or nil,
+        resetCap = not broken,
+        breakNative = broken and native,
+        fixNative = (not broken) and native,
+    }
+end
+
 ---First of `refs` whose snapshot (snaps[i], slot -> { name, amount }) holds `amount` of `item`, else nil.
 function M.findHolder(refs, snaps, item, amount)
     amount = int(amount)

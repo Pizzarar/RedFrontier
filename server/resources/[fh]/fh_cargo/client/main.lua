@@ -9,15 +9,15 @@ local capped = {} -- [netId] = speed limit m/s while broken
 
 RegisterNetEvent('fh:cargo:wheel_state', function(st)
     if type(st) ~= 'table' or type(st.netId) ~= 'number' then return end
+    local plan = FhCargoRules.clientWheelPlan(st)
+    capped[st.netId] = plan.cap -- nil on repair/clear: no leaked entry
     local veh = NetworkGetEntityFromNetworkId(st.netId)
     if not veh or veh == 0 or not DoesEntityExist(veh) then return end
-    if st.broken then
-        capped[st.netId] = tonumber(st.speedLimit)
-        if st.native then Citizen.InvokeNative(N_BREAK_OFF_DRAFT_WHEEL, veh, 0, 1000.0) end
-    else
-        capped[st.netId] = nil
-        Citizen.InvokeNative(N_SET_FIXED, veh) -- TODO(spk_wheel RESULT): confirm this restores a native-broken wheel
-    end
+    if plan.breakNative then Citizen.InvokeNative(N_BREAK_OFF_DRAFT_WHEEL, veh, 0, 1000.0) end
+    -- SET_VEHICLE_FIXED only on the ungated native path (it would also touch unrelated damage when gated).
+    if plan.fixNative then Citizen.InvokeNative(N_SET_FIXED, veh) end -- TODO(spk_wheel RESULT): confirm it restores a native-broken wheel
+    -- Undo the break's speed cap. TODO(natives): 0.0 as "no modifier" is unverified (same as the cap itself).
+    if plan.resetCap then Citizen.InvokeNative(N_MODIFY_TOP_SPEED, veh, 0.0) end
 end)
 
 -- Cap the speed of a broken wagon. TODO(natives): MODIFY_VEHICLE_TOP_SPEED semantics unverified; fall back to
@@ -27,8 +27,10 @@ CreateThread(function()
         Wait(250)
         for netId, limit in pairs(capped) do
             local veh = NetworkGetEntityFromNetworkId(netId)
-            if veh and veh ~= 0 and DoesEntityExist(veh) and limit then
-                Citizen.InvokeNative(N_MODIFY_TOP_SPEED, veh, limit)
+            if veh and veh ~= 0 and DoesEntityExist(veh) then
+                if limit then Citizen.InvokeNative(N_MODIFY_TOP_SPEED, veh, limit) end
+            else
+                capped[netId] = nil -- wagon deleted/despawned: drop the entry (assigning nil to a visited key is safe)
             end
         end
     end
@@ -36,3 +38,7 @@ end)
 
 -- TODO(R2 off-road): detect road vs off-road with a verified native, then TriggerServerEvent('fh:cargo:offroad_hint', bool).
 -- Until then the hint is never sent and the server treats every wagon as on-road.
+
+AddEventHandler('onClientResourceStop', function(res)
+    if res == GetCurrentResourceName() then capped = {} end
+end)

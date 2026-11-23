@@ -293,7 +293,7 @@ end
 
 local function repairWheel(w, src)
     w.broken = false
-    pushState(w, src, false)
+    pushState(w, src, rules.nativeBreakAllowed(gated())) -- native=true only ungated: client then runs SET_VEHICLE_FIXED
     TriggerEvent('fh:cargo:wheel_repaired', { src = src, citizenid = w.owner, wagon = w.id, tier = w.tier })
 end
 
@@ -365,11 +365,21 @@ local function startRepair(src)
             Wait(250)
             local p = GetPlayerPed(src)
             local c = p ~= 0 and GetEntityCoords(p) or nil
+            local wc = wagonCoords(w)
             local state, reason = 'cancel', 'fh_no_player'
-            if c then state, reason = rules.repairStep(st, GetGameTimer(), c, wagonCoords(w), cfg.Reach) end
+            if wagons[w.id] ~= w or not wc then state, reason = 'cancel', 'fh_no_wagon' -- gone/unloaded: consume nothing
+            elseif c then state, reason = rules.repairStep(st, GetGameTimer(), c, wc, cfg.Reach) end
             if state == 'continue' and not w.broken then state, reason = 'cancel', 'fh_wheel_ok' end
             if state == 'done' then
                 repairs[src] = nil
+                local rrefs, rsnaps = holdRefs(src), {}
+                for i, r in ipairs(rrefs) do rsnaps[i] = exports.fh_core:snapshot(r) end
+                local fok, fwhy = rules.repairFinalCheck({
+                    broken = w.broken, wagonCoords = wagons[w.id] == w and wc or nil,
+                    hasHammer = rules.findHolder(rrefs, rsnaps, 'hammer', 1) ~= nil,
+                    hasWheel = rules.findHolder(rrefs, rsnaps, 'wagon_wheel', 1) ~= nil,
+                })
+                if not fok then return reply(src, 'fh_repair: cancelled (' .. tostring(fwhy) .. ')') end
                 local used, uwhy = consumeWheel(src) -- re-checked now: nothing repairs unless the wheel was consumed
                 if not used then return reply(src, 'fh_repair: ' .. tostring(uwhy)) end
                 repairWheel(w, src)

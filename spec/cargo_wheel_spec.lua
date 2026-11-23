@@ -101,6 +101,32 @@ case('repairStep: continue, done after the duration, cancelled when the player w
     assert(w == 'cancel' and reason == 'fh_out_of_reach', 'wagon out of reach cancels')
 end)
 
+case('repairFinalCheck: nil wagon coords cancel (nothing consumed); rechecks broken, hammer, wheel', function()
+    local function c(o) local t = { broken = true, wagonCoords = me, hasHammer = true, hasWheel = true }
+        for k, v in pairs(o or {}) do t[k] = v end return t end
+    assert(R.repairFinalCheck(c()))
+    local ok, r = R.repairFinalCheck({ broken = true, hasHammer = true, hasWheel = true })
+    assert(ok == false and r == 'fh_no_wagon')
+    ok, r = R.repairFinalCheck(c({ broken = false })); assert(ok == false and r == 'fh_wheel_ok')
+    ok, r = R.repairFinalCheck(c({ hasHammer = false })); assert(ok == false and r == 'fh_need_hammer')
+    ok, r = R.repairFinalCheck(c({ hasWheel = false })); assert(ok == false and r == 'fh_not_enough')
+    ok, r = R.repairFinalCheck(nil); assert(ok == false)
+end)
+
+case('clientWheelPlan: SET_VEHICLE_FIXED and native break only when ungated; cap reset on repair', function()
+    local gatedBreak = R.clientWheelPlan({ broken = true, speedLimit = 3.5, native = false })
+    assert(gatedBreak.cap == 3.5 and not gatedBreak.breakNative and not gatedBreak.fixNative and not gatedBreak.resetCap)
+    local gatedFix = R.clientWheelPlan({ broken = false, native = false })
+    assert(not gatedFix.fixNative, 'gated: never SET_VEHICLE_FIXED')
+    assert(gatedFix.resetCap and gatedFix.cap == nil, 'cap reset + entry cleared even when gated')
+    local ugBreak = R.clientWheelPlan({ broken = true, speedLimit = 3.5, native = true })
+    assert(ugBreak.breakNative and not ugBreak.fixNative)
+    local ugFix = R.clientWheelPlan({ broken = false, native = true })
+    assert(ugFix.fixNative and ugFix.resetCap and ugFix.cap == nil)
+    local junk = R.clientWheelPlan(nil)
+    assert(not junk.breakNative and not junk.fixNative)
+end)
+
 case('findHolder: first container with enough of the item', function()
     local refs = { { type = 'equipped', id = 1 }, { type = 'backpack', id = 1 } }
     local snaps = { [1] = { [1] = { name = 'hammer', amount = 1 } }, [2] = { [3] = { name = 'wagon_wheel', amount = 2 } } }
