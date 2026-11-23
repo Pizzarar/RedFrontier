@@ -13,6 +13,7 @@ shared_scripts {
 }
 
 server_scripts {
+    'shared/craft_flow.lua',
     'server/stations.lua',
     'server/inv.lua',
     'server/craft.lua',
@@ -22,4 +23,5 @@ server_scripts {
 
 dependencies { 'fh_core' }
 
-server_exports { 'getRecipes', 'isNearStation', 'invCount', 'invTake', 'invGive', 'invSlot', 'invSetInfo' }
+server_exports { 'getRecipes', 'isNearStation', 'invCount', 'invTake', 'invGive', 'invSlot', 'invSetInfo',
+    'getStations', 'stationAt', 'craft' }
