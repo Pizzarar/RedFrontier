@@ -10,7 +10,7 @@ M.screens = {
     heat        = 'heat',      -- heat indicator (passive)
     bags        = 'death',     -- own drop-bag countdown (passive, U2)
     insurance   = 'death',     -- tracker insurance dialog (L4 Death & Insurance)
-    contracts   = 'trade',     -- contract board (L6 Cargo/Trade)
+    jobs        = 'quests',    -- jobs board: contracts, bounties, hunts (@quests lane)
     station     = 'homestead', -- station menus (L1 stations; L5 crafting may take over later)
     fence       = 'fence',     -- fence shop (fh_fence owns it)
 }

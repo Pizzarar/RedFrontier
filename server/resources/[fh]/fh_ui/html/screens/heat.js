@@ -7,7 +7,7 @@ FH_UI.register('heat', {
     const box = D.h('div', 'hud');
     box.appendChild(D.h('h2', 'title small', 'Heat'));
     const body = D.h('div', 'body');
-    ((data && data.factions) || []).forEach(function (f) {
+    FH_DOM.asList(data && data.factions).forEach(function (f) {
       const lvl = Math.max(0, Math.min(100, Number(f.level) || 0));
       const row = D.h('div', 'row');
       row.appendChild(D.h('span', 'grow', f.label || f.id));

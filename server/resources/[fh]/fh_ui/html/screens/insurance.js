@@ -1,8 +1,9 @@
 // insurance (dialog): data { title, fee, delay_minutes, target_chest, note? }. Actions: confirm {}, cancel {}; Esc -> close.
 (function () {
-  let stopEnter = null;
+  let stopEnter = null, isOpen = false;
   FH_UI.register('insurance', {
     open: function (el, data) {
+      isOpen = true;
       const D = FH_DOM; data = data || {};
       D.clear(el);
       const p = D.h('div', 'panel');
@@ -21,7 +22,7 @@
       stopEnter = D.onEnter(function () { FH_UI.action('insurance', 'confirm', {}); });
       confirm.focus();
     },
-    update: function (el, data) { this.open(el, data); },
-    close: function (el) { if (stopEnter) { stopEnter(); stopEnter = null; } FH_DOM.clear(el); },
+    update: function (el, data) { if (isOpen) this.open(el, data); },
+    close: function (el) { isOpen = false; if (stopEnter) { stopEnter(); stopEnter = null; } FH_DOM.clear(el); },
   });
 })();

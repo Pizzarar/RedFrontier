@@ -10,8 +10,9 @@ FH_UI.register('fence', {
     const body = D.h('div', 'body');
     function section(name, rows, verb, action, showRare) {
       body.appendChild(D.h('h2', 'sub', name));
-      if (!rows || !rows.length) body.appendChild(D.h('p', 'note', 'Nothing.'));
-      (rows || []).forEach(function (r) {
+      rows = D.asList(rows);
+      if (!rows.length) body.appendChild(D.h('p', 'note', 'Nothing.'));
+      rows.forEach(function (r) {
         const row = D.h('div', 'row card');
         const info = D.h('div', 'grow');
         info.appendChild(D.h('strong', '', r.label));
@@ -33,7 +34,6 @@ FH_UI.register('fence', {
     p.appendChild(body);
     p.appendChild(D.btn('Close', function () { FH_UI.close('fence'); }));
     el.appendChild(p);
-    const first = p.querySelector('button:not([disabled])'); if (first) first.focus();
   },
   close: function (el) { FH_DOM.clear(el); },
 });

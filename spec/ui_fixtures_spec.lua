@@ -5,7 +5,7 @@ local case = T.it
 local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_ui/shared/fixtures.lua')
 
-local expectLane = { heat = 'heat', insurance = 'death', contracts = 'trade', station = 'homestead', fence = 'fence' }
+local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', station = 'homestead', fence = 'fence' }
 local passive = { heat = true }
 
 case('every fixture validates against its schema', function()
@@ -31,9 +31,14 @@ case('every fixture screen is whitelisted with the right lane and focus', functi
     end
 end)
 case('fixture actions relay (confirm/cancel/accept/craft/buy/sell/close)', function()
-    for screen, act in pairs({ insurance = 'confirm', contracts = 'accept', station = 'craft', fence = 'buy' }) do
+    for screen, act in pairs({ insurance = 'confirm', jobs = 'accept', station = 'craft', fence = 'buy' }) do
         assert(R.validate({ screen = screen, action = act, payload = { id = 'x', qty = 1 } }), screen)
     end
+end)
+case('jobs fixture shows one row of each kind', function()
+    local seen = {}
+    for _, j in ipairs(F.fixtures.jobs.jobs) do seen[j.kind] = true end
+    assert(seen.contract and seen.bounty and seen.hunt)
 end)
 case('parseDemo', function()
     T.same({ action = 'open', screen = 'fence' }, F.parseDemo({ 'Fence' }))

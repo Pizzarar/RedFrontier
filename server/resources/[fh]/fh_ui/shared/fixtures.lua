@@ -1,4 +1,4 @@
--- Fixture data + pure helpers for the U3 screens (heat, insurance, contracts, station, fence). No natives, specced
+-- Fixture data + pure helpers for the U3 screens (heat, insurance, jobs, station, fence). No natives, specced
 -- under busted (spec/ui_fixtures_spec.lua). The producing lanes do not exist yet, so `fh_ui_demo <screen>` opens these.
 local M = {}
 
@@ -18,16 +18,16 @@ M.fixtures = {
         target_chest = 'Homestead stash chest',
         note = 'Pay now; if you die your pack is delivered to the chest after the delay.',
     },
-    contracts = {
-        title = 'Contract Board',
+    jobs = {
+        title = 'Jobs Board',
         region = 'Heartlands',
-        contracts = {
-            { id = 'c1', cargo = 'Crated rifles', origin = 'Heartlands', destination = 'Big Valley', pay = 240,
-              deadline_minutes = 45, risk = 'high' },
-            { id = 'c2', cargo = 'Flour sacks', origin = 'Heartlands', destination = 'Roanoke Ridge', pay = 90,
-              deadline_minutes = 90, risk = 'low' },
-            { id = 'c3', cargo = 'Medicine crate', origin = 'Heartlands', destination = 'Tall Trees', pay = 160,
-              deadline_minutes = 60, risk = 'medium' },
+        jobs = {
+            { id = 'j1', kind = 'contract', title = 'Haul crated rifles to Big Valley', region_id = 'heartlands',
+              payout = 240, risk = 'high' },
+            { id = 'j2', kind = 'bounty', title = 'Hollis Gang lookout', region_id = 'big_valley', payout = 150,
+              risk = 'medium' },
+            { id = 'j3', kind = 'hunt', title = 'Pelts for the Tall Trees tannery', region_id = 'tall_trees',
+              payout = 70, risk = 'low' },
         },
     },
     station = {
@@ -60,10 +60,10 @@ S.heat = {
 }
 S.insurance = { title = 'string', fee = 'number', delay_minutes = 'number', target_chest = 'string', note = 'string?' }
 local item = { list = { item = 'string', qty = 'number' } }
-S.contracts = {
+S.jobs = {
     title = 'string?', region = 'string?',
-    contracts = { list = { id = 'string', cargo = 'string', origin = 'string', destination = 'string', pay = 'number',
-        deadline_minutes = 'number', risk = 'string' } },
+    jobs = { list = { id = 'string', kind = 'string', title = 'string', region_id = 'string', payout = 'number',
+        risk = 'string' } },
 }
 S.station = {
     title = 'string',

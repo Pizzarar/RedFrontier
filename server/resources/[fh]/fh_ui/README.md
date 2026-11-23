@@ -33,7 +33,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `heat` | `heat` | passive |
 | `bags` | `death` | passive (U2) |
 | `insurance` | `death` | interactive |
-| `contracts` | `trade` | interactive |
+| `jobs` | `quests` | interactive |
 | `station` | `homestead` | interactive |
 | `fence` | `fence` | interactive |
 
@@ -90,9 +90,10 @@ Fed by `fh:death:bags` plus the `fh:death:bags` callback fetch at start. `open/u
 `open` data `{ title, fee, delay_minutes, target_chest, note? }`. Actions: `confirm` `{}` (button or Enter), `cancel` `{}`; Esc relays `close`.
 Lane revalidates fee and chest ownership.
 
-### contracts (owner `trade`)
-`open/update` data `{ title?, region?, contracts = { { id, cargo, origin, destination, pay, deadline_minutes, risk } } }`
-(`risk` is free text: low/medium/high). Actions: `accept` `{ id }`, `close` `{}`.
+### jobs (owner `quests`)
+Jobs board: contracts, bounties and hunting requests (rows come from the future @quests lane).
+`open/update` data `{ title?, region?, jobs = { { id, kind, title, region_id, payout, risk } } }`
+(`kind` is `contract|bounty|hunt`; `risk` is a tier: low/medium/high). Actions: `accept` `{ id }` (relays `fh:quests:ui_accept`), `close` `{}`.
 
 ### station (owner `homestead`)
 `open/update` data `{ title, options = { { id, label, inputs = { { item, qty } }, outputs = { { item, qty } }, time_seconds, can_craft } } }`.
@@ -103,6 +104,6 @@ Actions: `craft` `{ id }` (button disabled when `can_craft` is false; the lane r
 Actions: `buy` `{ id, qty }`, `sell` `{ id, qty }` (qty clamped client-side to 1..listed qty; lane revalidates), `close` `{}`.
 
 ### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|contracts|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
-`/fh_ui_demo close [screen]` closes. Gated like fh_core admin commands (`group.admin`, command ACE). Fixture actions relay to
+`/fh_ui_demo <heat|insurance|jobs|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.

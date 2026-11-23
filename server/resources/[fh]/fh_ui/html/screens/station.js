@@ -8,7 +8,7 @@ FH_UI.register('station', {
     const p = D.h('div', 'panel wide');
     p.appendChild(D.h('h1', 'title', data.title || 'Station'));
     const body = D.h('div', 'body');
-    const opts = data.options || [];
+    const opts = D.asList(data.options);
     if (!opts.length) body.appendChild(D.h('p', 'note', 'Nothing to make here.'));
     opts.forEach(function (o) {
       const row = D.h('div', 'row card' + (o.can_craft ? '' : ' disabled'));
@@ -27,7 +27,6 @@ FH_UI.register('station', {
     p.appendChild(body);
     p.appendChild(D.btn('Close', function () { FH_UI.close('station'); }));
     el.appendChild(p);
-    const first = p.querySelector('button:not([disabled])'); if (first) first.focus();
   },
   close: function (el) { FH_DOM.clear(el); },
 });

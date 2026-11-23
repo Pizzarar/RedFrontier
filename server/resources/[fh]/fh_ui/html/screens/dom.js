@@ -6,6 +6,7 @@ window.FH_DOM = {
     if (text !== undefined && text !== null) e.textContent = String(text);
     return e;
   },
+  asList: function (x) { return Array.isArray(x) ? x : []; }, // empty Lua {} arrives as JSON {}
   clear: function (el) { while (el.firstChild) el.removeChild(el.firstChild); },
   btn: function (label, onclick, cls) {
     const b = document.createElement('button');
