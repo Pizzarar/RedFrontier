@@ -138,6 +138,10 @@ local core = function(name) return safe(function(...) return exports.fh_core[nam
 local trader = FhFenceTrade.new(cfg, logic, {
     citizenOf = citizenOf,
     stopFor = stopFor,
+    currentStop = function()
+        local sc = schedule()
+        return sc and cfg.stops[sc.stop] or nil
+    end,
     visibleStock = visibleStock,
     ensureStash = safe(ensureStash),
     snapshot = core('snapshot'),
@@ -195,6 +199,29 @@ RegisterCommand('fh_fence_next', function(source)
         pcall(tick) -- apply at once instead of waiting for the 5 s poll
         local s = schedule()
         msg = ('fh_fence_next: now at %s (next %s)'):format(s and s.stop or '?', s and s.nextStop or '?')
+    end
+    if source == 0 then print('[fh_fence] ' .. msg)
+    else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end
+end, true)
+
+-- `fh_fence_settle <serverId>`: clears a player's `fence_pending` stash (left by a failed partial delivery / restore,
+-- see the WARNING lines). Runs through trader.settle, i.e. under the same per-citizenid lock as buy / sell: a trade in
+-- flight gives `fence_busy`. Goods go to the player all-or-nothing (`no_room`: nothing changed); fence-owned leftovers
+-- are swept instead. Restricted: console, or ACE `command.fh_fence_settle` (server.cfg: add_ace group.admin command allow).
+RegisterCommand('fh_fence_settle', function(source, args)
+    if source ~= 0 and not IsPlayerAceAllowed(source, 'command.fh_fence_settle') then return end
+    local target, err = logic.parseSettleArgs(args)
+    local msg
+    if not target then
+        msg = 'fh_fence_settle: ' .. err
+    else
+        local ok, a, b = trader.settle(target)
+        if ok then
+            msg = b == 'swept' and ('fh_fence_settle: ok (%d: fence-owned leftovers swept)'):format(target)
+                or ('fh_fence_settle: ok (%d units to %d)'):format(a, target)
+        else
+            msg = 'fh_fence_settle: ' .. tostring(a)
+        end
     end
     if source == 0 then print('[fh_fence] ' .. msg)
     else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end

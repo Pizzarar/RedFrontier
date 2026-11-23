@@ -108,6 +108,15 @@ function M.sellOutcome(payOk, payErr, restore, who)
             reason, tostring(err or 'restore_failed'), tostring(who.citizenid), tostring(who.item), tostring(who.qty)) }
 end
 
+---Admin `fh_fence_settle <serverId>` argument parsing: one whole positive server id.
+---@return number|nil target, string|nil err
+function M.parseSettleArgs(args)
+    args = type(args) == 'table' and args or {}
+    local t = tonumber(args[1])
+    if not t or t ~= t or t <= 0 or t % 1 ~= 0 or t == math.huge or args[2] ~= nil then return nil, 'fh_bad_target' end
+    return math.tointeger(t) or t
+end
+
 ---Player-facing text per refusal code (client menu). Covers every core B7 charge / pay error so none shows as a raw
 ---code; a code not listed shows as "Refused: <code>". Nothing was taken for any buy refusal listed here.
 M.messages = {

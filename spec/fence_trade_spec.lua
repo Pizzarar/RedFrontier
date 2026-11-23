@@ -35,12 +35,12 @@ local SLOTS = 10
 local function put(box, name, amount, info)
     local stack = cfg.items[name] == nil or cfg.items[name].stackable ~= false
     if stack then
-        for _, it in pairs(box) do
-            if it.name == name then it.amount = it.amount + amount; return end
+        for s, it in pairs(box) do
+            if it.name == name then it.amount = it.amount + amount; return s end
         end
     end
     for s = 1, SLOTS do
-        if not box[s] then box[s] = { name = name, amount = amount, info = info }; return end
+        if not box[s] then box[s] = { name = name, amount = amount, info = info }; return s end
     end
     error('fake box full')
 end
@@ -77,6 +77,7 @@ local function world(o)
             step('stopFor')
             return cfg.stops.heartlands_road, 'heartlands_road'
         end,
+        currentStop = function() step('currentStop'); return cfg.stops.heartlands_road end,
         visibleStock = function(_, id)
             step('visibleStock')
             return logic.filterStock(cfg.stock[id], true, true)
@@ -127,7 +128,7 @@ local function world(o)
         transferAll = function(from, to)
             step('transferAll')
             if W.fail.transferAll then return false, W.fail.transferAll end
-            local src, dst, moved = box(from), box(to), {}
+            local src, dst, moved, leftovers = box(from), box(to), {}, {}
             local slots = {}
             for s in pairs(src) do slots[#slots + 1] = s end
             table.sort(slots)
@@ -135,25 +136,28 @@ local function world(o)
                 local it = src[s]
                 local n = it.amount
                 if to.type == 'backpack' then n = math.min(n, P(to.id).room) end
-                if n > 0 then
-                    put(dst, it.name, n, it.info)
+                if n > 0 then -- plan steps like fh_inventory's: name, amount, fromSlot, toSlot
+                    local toSlot = put(dst, it.name, n, it.info)
                     if to.type == 'backpack' then P(to.id).room = P(to.id).room - n end
                     it.amount = it.amount - n
                     if it.amount == 0 then src[s] = nil end
-                    moved[#moved + 1] = { name = it.name, amount = n }
+                    moved[#moved + 1] = { name = it.name, amount = n, fromSlot = s, toSlot = toSlot }
                 end
+                if it.amount > 0 then leftovers[#leftovers + 1] = { slot = s, name = it.name, amount = it.amount } end
             end
-            return true, moved, {}
+            return true, moved, leftovers
         end,
         move = function(from, to, fromSlot, toSlot, amount) -- name-agnostic, like the real one
             step('move')
             local s, d = box(from)[fromSlot], box(to)
             if not s or s.amount < amount then return false, 'fh_no_item' end
-            if d[toSlot] then return false, 'fh_slot_taken' end
-            d[toSlot] = { name = s.name, amount = amount, info = s.info }
+            if d[toSlot] and d[toSlot].name ~= s.name then return false, 'fh_slot_taken' end
+            if d[toSlot] then d[toSlot].amount = d[toSlot].amount + amount
+            else d[toSlot] = { name = s.name, amount = amount, info = s.info } end
             s.amount = s.amount - amount
             if s.amount == 0 then box(from)[fromSlot] = nil end
             if from.type == 'backpack' then P(from.id).room = P(from.id).room + amount end
+            if to.type == 'backpack' then P(to.id).room = P(to.id).room - amount end
             return true
         end,
         charge = function(src, amount)
@@ -617,6 +621,82 @@ case('sell: nothing to sell -> not_enough_items, nothing moved, lock free', func
     local W = world()
     T.same({ false, 'not_enough_items', n = 2 }, table.pack(W.T.sell(1, GUN, 2)))
     T.eq(nil, W.calls.pay); T.eq(0, size(W.stash())); assert(not W.T.locks.held('C1'))
+end)
+
+-- ---------------------------------------------------------------- admin settle (fh_fence_settle)
+
+---Leaves C1's stash fence_pending the way production does: partial delivery whose removal failed (2 paid units).
+local function pendingWorld()
+    local W = world()
+    W.hooks.charge = function() W.C1.room = 1; W.fail.removeItem = 'fh_inventory_down' end
+    T.same({ false, 'delivery_incomplete', n = 2 }, table.pack(W.T.buy(1, GUN, 3)))
+    W.hooks.charge, W.fail.removeItem, W.C1.room = nil, nil, 10
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1)))
+    W.calls = {}
+    return W
+end
+
+case('settle: success -> pending goods to the player, stash empty, trading works again', function()
+    local W = pendingWorld()
+    T.same({ true, 2, 'delivered', n = 3 }, table.pack(W.T.settle(1)))
+    T.eq(3, count(W.C1.bag, GUN)); T.eq(0, size(W.stash())); T.eq(1000 - 3 * PRICE, W.C1.money)
+    T.eq(nil, W.calls.charge); T.eq(nil, W.calls.pay); assert(not W.T.locks.held('C1'))
+    assert(logged(W, 'settle: citizenid=C1'))
+    T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(1, GUN, 1))) -- no longer fence_pending
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
+end)
+
+case('settle: no room -> refused, nothing moves (pre-check)', function()
+    local W = pendingWorld()
+    W.C1.room = 1
+    T.same({ false, 'no_room', n = 2 }, table.pack(W.T.settle(1)))
+    T.eq(2, count(W.stash(), GUN)); T.eq(1, count(W.C1.bag, GUN)); T.eq(nil, W.calls.transferAll)
+    assert(not W.T.locks.held('C1'))
+    W.C1.room = 10
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1))) -- still pending, untouched
+end)
+
+case('settle: room vanishes during the transfer -> moved units put back, nothing changed', function()
+    local W = pendingWorld()
+    W.stashes[STASH] = { [1] = { name = GUN, amount = 1 }, [2] = { name = 'bread', amount = 2 } }
+    W.hooks.transferAll = function() W.C1.room = 1 end -- after the pre-check: only the first unit fits
+    T.same({ false, 'no_room', n = 2 }, table.pack(W.T.settle(1)))
+    T.eq(1, count(W.stash(), GUN)); T.eq(2, count(W.stash(), 'bread'))
+    T.eq(1, count(W.C1.bag, GUN)); T.eq(0, count(W.C1.bag, 'bread')) -- the bag is as before the settle
+    T.eq(1, W.calls.move)
+end)
+
+case('settle: busy lock -> fence_busy, nothing moves; works once the trade is done', function()
+    local W = pendingWorld()
+    W.stashes[STASH] = {}
+    local a = start(function() return W.T.buy(1, GUN, 2) end, 'charge') -- a trade holds C1's lock
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.settle(2))) -- same citizen, other src
+    T.eq(nil, W.calls.transferAll); T.eq(2, count(W.stash(), GUN))
+    T.same({ true, 2, 0, n = 3 }, drain(a))
+    W.stashes[STASH] = { [1] = { name = GUN, amount = 1 } }
+    T.same({ true, 1, 'delivered', n = 3 }, table.pack(W.T.settle(1)))
+end)
+
+case('settle: a settle in flight holds the lock -> a trade is fence_busy', function()
+    local W = pendingWorld()
+    local a = start(function() return W.T.settle(1) end, 'transferAll')
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
+    T.same({ true, 2, 'delivered', n = 3 }, drain(a))
+end)
+
+case('settle: fence-owned leftovers (sweep flag) are swept, never given to the player', function()
+    local W = world()
+    W.fail.charge, W.fail.clear = 'fh_charge_busy', 'fh_inventory_down'
+    T.same({ false, 'fh_charge_busy', n = 2 }, table.pack(W.T.buy(1, GUN, 2))) -- unpaid stage left, sweepable
+    W.fail.charge, W.fail.clear = nil, nil
+    T.same({ true, 0, 'swept', n = 3 }, table.pack(W.T.settle(1)))
+    T.eq(0, count(W.C1.bag, GUN)); T.eq(0, size(W.stash())); T.eq(1000, W.C1.money)
+end)
+
+case('settle: unknown player -> no_player, nothing locked', function()
+    local W = pendingWorld()
+    T.same({ false, 'no_player', n = 2 }, table.pack(W.T.settle(99)))
+    T.eq(2, count(W.stash(), GUN))
 end)
 
 case('sell: no_player when the citizen is unknown; nothing locked', function()

@@ -22,6 +22,9 @@
 --  4. Sell: goods -> stash (verified by snapshot) -> pay -> removeItem(sold). Pay failure gives the goods back; if
 --     that fails the goods stay in the stash (still the player's, flagged for an admin), never lost, never paid twice.
 --     A failed removeItem after pay leaves the sold (fence's) goods flagged for the next trade's sweep.
+--  5. Settle (admin `fh_fence_settle`): runs under the same lock as a trade. A pending stash of player / paid-for goods
+--     goes to the player all-or-nothing (room pre-check; a short transfer is put back step by step); fence-owned
+--     leftovers (sweep flag) are swept, never given out. Afterwards the stash is empty and trades work again.
 local M = {}
 
 local function countOf(items, name)
@@ -89,7 +92,8 @@ end
 
 -- ---------------------------------------------------------------- trader
 
----deps (all may yield): citizenOf(src), stopFor(src) -> stop, stopId|reason, visibleStock(src, stopId),
+---deps (all may yield): citizenOf(src), stopFor(src) -> stop, stopId|reason, currentStop() -> stop|nil (no range check,
+---admin settle), visibleStock(src, stopId),
 ---ensureStash(ref, stop), snapshot(ref), view(ref), canFit(ref, item, qty), addItem(ref, item, qty, info),
 ---clear(ref), removeItem(ref, item, qty) (all-or-nothing, fh_not_enough), transferAll(from, to, src) -> ok, moved,
 ---leftovers, move(from, to, fromSlot, toSlot, amount, src),
@@ -340,7 +344,93 @@ function M.new(cfg, logic, deps)
         return true, sold, total
     end
 
+    -- ------------------------------------------------------------ admin settle
+
+    local function totalsOf(items)
+        local t, names = {}, {}
+        for _, it in pairs(items or {}) do
+            if not t[it.name] then names[#names + 1] = it.name end
+            t[it.name] = (t[it.name] or 0) + (tonumber(it.amount) or 1)
+        end
+        table.sort(names)
+        return t, names
+    end
+
+    local function describe(t, names)
+        local parts = {}
+        for _, n in ipairs(names) do parts[#parts + 1] = ('%sx%d'):format(n, t[n]) end
+        return table.concat(parts, ',')
+    end
+
+    ---Clear a fence_pending stash (invariant 5). @return true, units, 'delivered'|'swept' | false, reason
+    local function settle(tok, cid, src)
+        local stop = deps.currentStop()
+        if not stop then return false, 'no_schedule' end
+        local backpack, stash = { type = 'backpack', id = src }, M.stashRef(cid, cfg.fenceId)
+        local ok, err = deps.ensureStash(stash, stop)
+        if not ok then return false, err or 'fh_unavailable' end
+        local items = deps.snapshot(stash)
+        if not owned(tok) then return false, 'fence_busy' end
+        if not items then return false, 'fh_unavailable' end
+        if next(items) == nil then
+            pin(stash)
+            return false, 'nothing_pending'
+        end
+        local want, names = totalsOf(items)
+        if sweep[stash.id] then -- the fence's own (unpaid stage / goods already paid for): sweep, never give out
+            if not alive(tok) then return false, 'fence_busy' end
+            if not discard(stash, true, 'settle sweep') then return false, 'fh_unavailable' end
+            log('settle: swept fence-owned leftovers: citizenid=%s stash=%s items=[%s]', tostring(cid), stash.id,
+                describe(want, names))
+            return true, 0, 'swept'
+        end
+
+        -- 1. room pre-check: a refusal changes nothing
+        local units = 0
+        for _, name in ipairs(names) do
+            local fits = deps.canFit(backpack, name, want[name])
+            if not fits then return false, 'no_room' end
+            units = units + want[name]
+        end
+        if not alive(tok) then return false, 'fence_busy' end
+
+        -- 2. hand everything over; the stash is the truth
+        local tok2, moved = deps.transferAll(stash, backpack, src)
+        local left = deps.snapshot(stash)
+        if left and next(left) == nil then
+            pin(stash)
+            log('settle: citizenid=%s src=%s got [%s] from %s', tostring(cid), tostring(src), describe(want, names),
+                stash.id)
+            return true, units, 'delivered'
+        end
+
+        -- 3. short (backpack changed since the pre-check, or the transfer failed): put the moved steps back
+        pin(stash) -- whatever is left is still the player's: never swept
+        if not owned(tok) then
+            return reclaimed(tok, 'settle', ('short transfer, goods split between %s and the backpack'):format(stash.id))
+        end
+        if tok2 and type(moved) == 'table' then
+            for i = #moved, 1, -1 do
+                local st = moved[i]
+                if type(st) == 'table' and st.toSlot and st.fromSlot then
+                    deps.move(backpack, stash, st.toSlot, st.fromSlot, st.amount, src)
+                end
+            end
+        end
+        local now = deps.snapshot(stash)
+        local got = now and totalsOf(now) or nil
+        local same = got ~= nil
+        for _, name in ipairs(names) do if not got or got[name] ~= want[name] then same = false end end
+        for name in pairs(got or {}) do if want[name] == nil then same = false end end
+        if same then return false, 'no_room' end
+        log('WARNING settle short and not fully put back: citizenid=%s src=%s wanted [%s] from %s, stash now %s',
+            tostring(cid), tostring(src), describe(want, names), stash.id,
+            got and ('[' .. describe(got, (select(2, totalsOf(now)))) .. ']') or 'unreadable')
+        return false, 'settle_partial'
+    end
+
     function T.buy(src, item, qty) return run('buy', src, buy, src, item, qty) end
+    function T.settle(src) return run('settle', src, settle, src) end
     function T.sell(src, item, qty) return run('sell', src, sell, src, item, qty) end
     function T.dropped(src) locks.dropSrc(src) end
     return T
