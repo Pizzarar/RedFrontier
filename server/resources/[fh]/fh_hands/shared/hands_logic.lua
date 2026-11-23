@@ -49,14 +49,19 @@ end
 -- fh_economy charge errors (core B7). Nothing was debited for any of them.
 local RETRY = { fh_charge_busy = true, ledger_failed = true } -- transient on the economy side: try the tick again later
 local GONE = { no_player = true, player_changed = true }      -- owner left / switched character: stop, no strike
+-- The export call threw (fh_economy stopped / restarting): the outcome is unknown, so the tick is NOT handed back
+-- (never charged twice) and it is no strike either (not the owner's fault): that wage is skipped, owner's favour.
+local SKIP = { charge_unavailable = true }
 
 ---Classify a charge result. 'paid' | 'retry' (no strike, tick handed back) | 'gone' (owner left, tick handed back)
----| 'unpaid' (fh_insufficient_funds, charge_unavailable, removemoney_refused, anything else: a strike, no task).
+---| 'skip' (charge_unavailable: tick stays claimed, no strike, no task)
+---| 'unpaid' (fh_insufficient_funds, removemoney_refused, validation codes, anything else: a strike, no task).
 ---@return string outcome
 function M.chargeOutcome(ok, err)
     if ok == true then return 'paid' end
     if RETRY[err] then return 'retry' end
     if GONE[err] then return 'gone' end
+    if SKIP[err] then return 'skip' end
     return 'unpaid'
 end
 
@@ -103,6 +108,7 @@ end
 --   1. claim: CAS last_tick from -> target in the DB (the row, not memory, says the tick is taken)
 --   2. charge, right after a synchronous online() check (charge reads the citizenid on src before its first yield)
 --   3. retry/gone: nothing was debited, CAS the tick back (target -> from) so it is charged later, no strike
+--      skip (charge outcome unknown): keep the claim, no strike, no task, stop this owner's run
 --   4. paid/unpaid: step the state machine, persist unpaid/status (CAS on last_tick = target), run the task
 -- Returns 'ok' or 'gone' (owner no longer loaded: the caller stops this owner).
 local function runHand(e, kind, h, def, cfg, now, io)
@@ -144,7 +150,15 @@ local function runHand(e, kind, h, def, cfg, now, io)
             end
             return outcome == 'gone' and 'gone' or 'ok'
         end
-        if outcome == 'unpaid' then io.emit('fh:hands:unpaid', { hand_kind = kind, reason = err }) end
+        if outcome == 'skip' then
+            io.log(('charge %s/%s tick %s: %s, wage skipped (claim kept, no strike)'):format(e.citizenid, kind,
+                tostring(target), tostring(err)))
+            return 'ok'
+        end
+        if outcome == 'unpaid' then
+            io.log(('unpaid %s/%s: %s'):format(e.citizenid, kind, tostring(err))) -- the line OWNER-TESTS checks
+            io.emit('fh:hands:unpaid', { hand_kind = kind, reason = err })
+        end
         local nextState, run = M.step(h, outcome == 'paid', cfg.quitAfterUnpaid)
         h.unpaid, h.status = nextState.unpaid, nextState.status
         if h.status == 'quit' then

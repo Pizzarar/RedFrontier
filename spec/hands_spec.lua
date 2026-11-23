@@ -166,6 +166,10 @@ local function world(rows)
             log = function(m) W.logs[#W.logs + 1] = m end,
         }
     end
+    function W.logged(needle)
+        for _, m in ipairs(W.logs) do if m:find(needle, 1, true) then return true end end
+        return false
+    end
     function W.count(name) local n = 0; for _, ev in ipairs(W.events) do if ev.name == name then n = n + 1 end end; return n end
     function W.lockOpts(timeout)
         return { wait = y, clock = function() W.clock = W.clock + 1; return W.clock end, timeoutMs = timeout }
@@ -327,15 +331,29 @@ case('fh_insufficient_funds x3: idle, unpaid events, then quit and row deleted',
     T.eq('fh_insufficient_funds', W.events[1].p.reason)
 end)
 
-case('charge_unavailable (no export) and unknown refusals are unpaid strikes, no task', function()
-    for _, why in ipairs({ 'charge_unavailable', 'removemoney_refused', 'charge_refused' }) do
+case('removemoney_refused, validation codes and unknown refusals are unpaid strikes, no task, logged', function()
+    for _, why in ipairs({ 'removemoney_refused', 'amount_too_large', 'unknown_region', 'charge_refused' }) do
         local W = world({ ranch_hand = { last_tick = 0 } })
         W.script = { { false, why } }
         local e = W.load()
         logic.runOwner(e, tcfg, IV, W.io(e))
         T.eq(1, W.count('fh:hands:unpaid')); T.eq(1, W.db.ranch_hand.unpaid); T.eq(IV, W.db.ranch_hand.last_tick)
         T.eq(0, W.tasks)
+        assert(W.logged('unpaid ' .. e.citizenid .. '/ranch_hand: ' .. why), why)
     end
+end)
+
+case('charge_unavailable (export threw, outcome unknown): claim kept, never retried, no strike, no task', function()
+    local W = world({ ranch_hand = { last_tick = 0 } })
+    W.script = { { false, 'charge_unavailable' } }
+    local e = W.load()
+    T.eq('done', logic.runOwner(e, tcfg, 3 * IV, W.io(e)))
+    -- this hand stops at its first tick (economy down); the other due ticks wait for the next poll
+    T.eq(0, #W.charges); T.eq(0, #W.script)
+    T.eq(IV, W.db.ranch_hand.last_tick); T.eq(0, W.db.ranch_hand.unpaid); T.eq('working', W.db.ranch_hand.status)
+    T.eq(0, W.count('fh:hands:unpaid')); T.eq(0, W.tasks); assert(W.logged('wage skipped (claim kept, no strike)'))
+    logic.runOwner(e, tcfg, 3 * IV, W.io(e)) -- next poll: only ticks 2 and 3; the skipped tick is never re-charged
+    T.eq(2, #W.charges); T.eq(3 * IV, W.db.ranch_hand.last_tick); T.eq(2, W.tasks)
 end)
 
 case('quit whose delete fails is marked quit; the loader skips it and reports it for deletion', function()
@@ -448,7 +466,8 @@ case('chargeOutcome classifies every charge contract error', function()
     T.eq('gone', logic.chargeOutcome(false, 'no_player'))
     T.eq('gone', logic.chargeOutcome(false, 'player_changed'))
     T.eq('unpaid', logic.chargeOutcome(false, 'fh_insufficient_funds'))
-    T.eq('unpaid', logic.chargeOutcome(false, 'charge_unavailable'))
+    T.eq('skip', logic.chargeOutcome(false, 'charge_unavailable'))
+    T.eq('unpaid', logic.chargeOutcome(false, 'removemoney_refused'))
     T.eq('unpaid', logic.chargeOutcome(nil, nil))
 end)
 

@@ -116,8 +116,8 @@ local function ioFor(e)
         remove = function(kind)
             return (dbUpdate('DELETE FROM fh_hands WHERE citizenid = ? AND hand_kind = ?', { cid, kind }) or 0) >= 1
         end,
-        -- Unpaid path: 'fh_insufficient_funds' (broke owner) and 'charge_unavailable' (no fh_economy charge export)
-        -- leave the wage unpaid: the hand idles and eventually quits. Never a negative balance.
+        -- B7 charge via server/charge.lua; FhHandsLogic.chargeOutcome maps its errors (fh_insufficient_funds = unpaid
+        -- strike: the hand idles and eventually quits). Never a negative balance.
         charge = function(amount, reason) return charger.charge(e.src, amount, reason, cfg.regionId) end,
         runTask = function(task, kind) return runTask(task, { src = e.src, citizenid = cid, hand_kind = kind }) end,
         emit = function(name, p)
