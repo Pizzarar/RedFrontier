@@ -51,13 +51,16 @@ end
 
 local function posInt(n, max) return math.type(n) == 'integer' and n >= 1 and (not max or n <= max) end
 
+-- A proper sequence: keys are exactly 1..n. Counting keys matters: for a table with holes ({ [1] = a, [3] = b })
+-- `#t` may legally be 3, so a bounds check alone would accept it and ipairs would then stop at the hole.
 local function isList(t)
     if type(t) ~= 'table' then return false end
-    local n = #t
+    local n, keys = #t, 0
     for k in pairs(t) do
         if math.type(k) ~= 'integer' or k < 1 or k > n then return false end
+        keys = keys + 1
     end
-    return true
+    return keys == n
 end
 
 local function copy(state)
@@ -148,7 +151,8 @@ function M.validate(def, opts)
             return false, 'fh_bad_repeat'
         end
     end
-    if not isList(def.steps) or #def.steps == 0 then return false, 'fh_no_steps' end
+    if type(def.steps) ~= 'table' or next(def.steps) == nil then return false, 'fh_no_steps' end
+    if not isList(def.steps) then return false, 'fh_bad_steps' end -- holes or non-integer keys
     if #def.steps > M.LIMITS.steps then return false, 'fh_too_many_steps' end
     local events = opts.events or INTAKE_SET
     for i, raw in ipairs(def.steps) do
@@ -286,15 +290,22 @@ end
 ---Feed one intake event to one quest state. Ignored (state unchanged, no effects) unless the quest is
 ---active, the event is the current step's `on`, the payload credits this state's citizenid, and `where` matches.
 ---@return table state, table effects
+---Is this event about this state's holder at all? Active quest, payload credits the holder, and not a quest
+---payout echo (a quest's own fh:economy:paid / rep_changed must never advance a quest). Step-independent: also
+---the gate for registerJobType hooks.onEvent.
+function M.eligible(state, eventName, payload)
+    if type(state) ~= 'table' or state.status ~= 'active' or type(payload) ~= 'table' then return false end
+    if not match().credits(payload, state.citizenid) then return false end
+    if ECONOMY[eventName] and type(payload.reason) == 'string' and payload.reason:sub(1, 6) == 'quest:' then
+        return false
+    end
+    return true
+end
+
 function M.onEvent(def, state, eventName, payload, now)
-    if type(state) ~= 'table' or state.status ~= 'active' then return state, {} end
+    if not M.eligible(state, eventName, payload) then return state, {} end
     local step = M.stepOf(def, state.step)
     if not step or step.on ~= eventName then return state, {} end
-    if not match().credits(payload, state.citizenid) then return state, {} end
-    -- A quest's own payout fires fh:economy:paid / rep_changed: never let a reward advance a quest.
-    if ECONOMY[eventName] and type(payload.reason) == 'string' and payload.reason:sub(1, 6) == 'quest:' then
-        return state, {}
-    end
     if not match().where(step.where, payload) then return state, {} end
     return M.apply(def, state, 'progress', now)
 end

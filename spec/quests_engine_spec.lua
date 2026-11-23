@@ -110,6 +110,19 @@ describe('quests engine: validate', function()
         bad(function(d) d.rewards.items = { { amount = 1 } } end, 'fh_bad_item')
         bad(function(d) d.rewards.gold = 1 end, 'fh_unknown_reward:gold')
     end)
+    it('rejects a sparse steps list (holes), whatever # reports for it', function()
+        -- { [1] = a, [3] = b }: # may be 1 or 3, ipairs would silently stop at the hole. Must fail validate.
+        bad(function(d) d.steps = { [1] = d.steps[1], [3] = d.steps[3] } end, 'fh_bad_steps')
+        bad(function(d) d.steps[2] = nil end, 'fh_bad_steps')
+        bad(function(d) d.steps = { [2] = d.steps[2] } end, 'fh_bad_steps')
+        bad(function(d) d.steps.extra = d.steps[1] end, 'fh_bad_steps')
+        bad(function(d) d.steps[0] = d.steps[1] end, 'fh_bad_steps')
+        -- the same strict sequence rule covers the other lists
+        bad(function(d) d.prereq = { [1] = 'a', [3] = 'b' } end, 'fh_bad_prereq')
+        bad(function(d) d.rewards.items = { [1] = { name = 'bread', amount = 1 }, [3] = { name = 'bread', amount = 1 } } end,
+            'fh_bad_items')
+        bad(function(d) d.steps[3].talk.lines = { [1] = 'a', [3] = 'b' } end, 'fh_bad_talk_lines@step3')
+    end)
     it('the intake whitelist holds the contract events and nothing else', function()
         for _, n in ipairs({ 'fh:zones:camp_cleared', 'fh:hunting:pelt_skinned', 'fh:hunting:pelt_sold',
             'fh:hunting:chain_complete', 'fh:homestead:claimed', 'fh:economy:paid', 'fh:economy:rep_changed',
