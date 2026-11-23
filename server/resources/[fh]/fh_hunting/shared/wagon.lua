@@ -13,10 +13,14 @@ local function num(n) return type(n) == 'number' and n == n and n > -math.huge a
 ---@return number|nil x, number|nil y, number|nil z
 function M.xyz(v)
     if v == nil then return nil end
-    local ok, x, y, z, a, b, c = pcall(function() return v.x, v.y, v.z, v[1], v[2], v[3] end)
+    local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
     if not ok then return nil end
     if num(x) and num(y) and num(z) then return x, y, z end
-    if x == nil and y == nil and z == nil and num(a) and num(b) and num(c) then return a, b, c end
+    if x ~= nil or y ~= nil or z ~= nil then return nil end
+    -- Only when x, y, z are all absent: a plain array. Own pcall, so a strict-metatable userdata that errors on
+    -- integer keys was already accepted above through x/y/z.
+    local ok2, a, b, c = pcall(function() return v[1], v[2], v[3] end)
+    if ok2 and num(a) and num(b) and num(c) then return a, b, c end
     return nil
 end
 

@@ -71,6 +71,16 @@ describe('hunting wagon adapter: type() is vector3 (CfxLua 5.4 / LuaGLM)', funct
         _G.type = real
         if not ok then error(err, 0) end
     end)
+    it('strict metatable that errors on numeric keys but serves x/y/z is accepted', function()
+        local strict = setmetatable({}, { __index = function(_, k)
+            if type(k) == 'number' then error('no integer indexing') end
+            return ({ x = 1, y = 2, z = 3 })[k]
+        end })
+        eq(3, select(3, W.xyz(strict)))
+        eq(true, W.hasXyz(strict))
+        -- and an erroring x/y/z probe is still rejected
+        eq(nil, W.xyz(setmetatable({}, { __index = function() error('boom') end })))
+    end)
     it('plain arrays are readable, strings and numbers are not', function()
         eq(true, W.hasXyz({ 1, 2, 3 })); eq(false, W.hasXyz('abc')); eq(false, W.hasXyz(7)); eq(false, W.hasXyz(nil))
     end)
