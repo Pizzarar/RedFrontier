@@ -45,7 +45,7 @@ in `shared/ledger_logic.lua` (pure, tested).
 
 ## DB tables (`server/migrations/0002_fh_ledger.sql`)
 - `fh_ledger` (id, citizenid, kind pay|rep|charge, amount, reason, region_id, created_at): append-only.
-  `server/migrations/0005_fh_ledger_charge.sql` widens the `kind` enum with `charge` (B7); existing rows untouched.
+  `server/migrations/0006_fh_ledger_charge.sql` widens the `kind` enum with `charge` (B7); existing rows untouched.
 - `fh_rep` (citizenid, region_id, value), PK (citizenid, region_id).
 
 Region ids: fh_economy loads `@fh_core/shared/regions.lua` itself in its manifest (`shared_scripts`), so it
