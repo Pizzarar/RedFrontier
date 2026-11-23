@@ -14,9 +14,9 @@ dofile(fh .. 'fh_zones/config.lua')
 local PENDING = {
     lumber   = 'idea-716', nails = 'idea-716', lead = 'idea-716', casings = 'idea-716', -- trade post `supplies`
     gun_parts = 'idea-717',                                                             -- outlaw camp loot table
-    -- idea-718: source ruling pending (defined in rsg-core shared/items.lua, but nothing in-game yields them yet)
-    resource_gunpowder = 'idea-718', herb_american_ginseng = 'idea-718', herb_oregano = 'idea-718',
-    herb_red_sage = 'idea-718', herb_wild_mint = 'idea-718',
+    -- bought via the same trade post `supplies` list (idea-718 ruling); herb gathering is a parked later spike
+    resource_gunpowder = 'idea-716', herb_american_ginseng = 'idea-716', herb_oregano = 'idea-716',
+    herb_red_sage = 'idea-716', herb_wild_mint = 'idea-716',
 }
 
 -- External sources (outside [fh]). An entry needs a CONFIRMED in-game way to obtain the item (a gatherer, shop or
