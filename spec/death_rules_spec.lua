@@ -114,4 +114,15 @@ case('canOpen: refuses an expired bag (e.g. loaded after restart, before the fir
     assert(why(R.canOpen(bag, 'C1', at, 3.5, 50)) == 'fh_bag_busy')
 end)
 
+case('config: saddlebagOf asks fh_core and feeds sources()', function()
+    local asked
+    exports = { fh_core = { saddlebagOf = function(_, src) asked = src; return 'fh:saddle:C1' end } }
+    dofile(here .. '../server/resources/[fh]/fh_death/config.lua')
+    local id = FhDeathConfig.saddlebagOf(7, 'C1')
+    exports = nil
+    assert(asked == 7 and id == 'fh:saddle:C1')
+    local b = R.sources(7, id)
+    assert(#b == 2 and b[2].type == 'saddlebag' and b[2].id == 'fh:saddle:C1')
+end)
+
 T.finish()

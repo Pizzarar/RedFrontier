@@ -104,6 +104,20 @@ function Fh.Open(src, ref)
     return InvCore.OpenFor(src, id)
 end
 
+--- FhOpenRef(src) -> { type, id } | nil, reason: the fh container `src` currently has open next to their own
+--- inventory (a registered stash, or a drop bag with an fh type). Read-only; lets fh_core act on "the open pane"
+--- without trusting a client-named container.
+function Fh.OpenRef(src)
+    if not FromCore() then return nil, 'not_fh_core' end
+    local id = InvCore.OpenInv[tonumber(src)]
+    if type(id) ~= 'string' then return nil, 'fh_nothing_open' end
+    local meta = InvCore.FhMeta[id]
+    local inv = InvCore.Inventories[id]
+    local t = (meta and meta.fhType) or (inv and inv.type == 'drop' and inv.fhType) or nil
+    if not t then return nil, 'fh_nothing_open' end
+    return { type = t, id = id }
+end
+
 --- FhCreateDropBag(coords, items?, opts?) -> id, leftovers
 --- items = { { name, amount, info? }, ... }; anything the bag refuses (AddTo veto) comes back in leftovers.
 --- opts (owner, label) is accepted for fh_core's signature and not used yet.

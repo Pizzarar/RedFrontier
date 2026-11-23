@@ -28,6 +28,18 @@ M.Containers = {
     fence_stash = { slots = 20, maxWeight = 200000 },
 }
 
+-- Saddlebag (B6e). HorseModels: the server-side allowlist a horse entity's model must match (names or hashes; compared as
+-- unsigned 32-bit hashes). Include the fh_spawn_horse default (FhAdminArgs.DEFAULT_MODELS.horse). Names are GUESSES,
+-- unverified in-game: extend when a vanilla horse is refused.
+M.Saddlebag = {
+    HorseModels = {
+        'a_c_horse_morgan_bay', 'a_c_horse_morgan_flaxenchestnut', 'a_c_horse_americanpaint_overo',
+        'a_c_horse_arabian_white', 'a_c_horse_kentuckysaddle_black', 'a_c_horse_thoroughbred_brindle',
+        'a_c_horse_turkoman_gold', 'a_c_horse_mustang_wildbay',
+    },
+    OpenCooldownMs = 500, -- per source, for fh:saddlebag:open and fh:saddlebag:transfer
+}
+
 M.Access = {
     InteractDistance = 3.5,
 }

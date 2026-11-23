@@ -95,6 +95,42 @@ range count.
   move whole or not at all.
 - Nothing in `FhRules` mutates its arguments.
 
+## Saddlebag (B6e)
+
+One `saddlebag` container per character, stash id `fh:saddle:<citizenid>` (shared/saddlebag_rules.lua `stashId`).
+Capacity and size classes come from `FhConfig.Containers.saddlebag` (20 slots / 60 000 g; pocket + bulky, cargo refused).
+It is a world container, so fh_core registers it lazily (first open, or when fh_death reads it) and moves its coords
+to the horse (open) or the player (death). Contents persist in fh_inventory by stash id, like the plot chest.
+
+- **Open:** `/saddlebag` (client/saddlebag.lua) takes the horse you ride, else the nearest horse within 4 m, and sends
+  `fh:saddlebag:open { netId }` (rate limited per source, `FhConfig.Saddlebag.OpenCooldownMs`, 500 ms).
+- **Access rule (server-authoritative, `FhSaddlebagRules.canAccess`):** the netId must resolve to an existing entity
+  with `GetEntityType == 1` (ped), not a player ped, whose `GetEntityModel` (normalized to u32) is on
+  `FhConfig.Saddlebag.HorseModels` (includes the `fh_spawn_horse` default; names are guesses, **unverified in-game**),
+  and lie within `FhContainers.interactDistance('saddlebag')` (3.5 m) of the server-side player ped. `IsThisModelAHorse`
+  is client-only and is never called on the server. Mounted = distance ~0, so one check covers "on a horse" and
+  "next to one". Reasons: `fh_no_character`, `fh_no_horse`, `fh_not_a_horse`, `fh_no_player_coords`,
+  `fh_out_of_reach`. `fh_core.open` then re-checks reach against the horse coords.
+- **Transfer (bulky stash <-> saddlebag):** fh_inventory's open pane pairs a world container with the backpack/equipped,
+  which refuse bulky, so a bulky item could not move chest -> saddlebag. `/saddlebag in|out <slot> [amount]` sends
+  `fh:saddlebag:transfer { netId, dir, slot, amount }`. The server (never the client) names the container: it is the pane
+  `FhOpenRef(src)` says the player has open. `FhSaddlebagRules.planTransfer` checks the horse rule, reach to the open
+  container from its own coords, the direction, slot and amount, and picks the destination slot (existing stack, else
+  first free); then ONE `exports.fh_core:move` re-plans under the rules veto (size class, weight, slot) and fh_inventory
+  re-checks and applies it atomically: an item moves once or not at all. Reasons add `fh_nothing_open`,
+  `fh_same_container`, `fh_bad_dir`, `fh_bad_slot`, `fh_bad_amount`, `fh_no_item`, `fh_no_slot`, `fh_no_coords`.
+  Design choice: a toggle that swaps the player pane to the saddlebag was NOT built (the fork's move/use/drop/trash/give/
+  sort handlers and the refresh all assume the "player" side is the player's own inventory; follow-up if wanted).
+  Pane refresh: no new code. A successful move goes through fh_inventory's `MoveBetween`, which already calls `Refresh` on
+  both containers, and `Refresh` pushes the new contents to every player who has that container open, so the open
+  chest/camp pane should update by itself (the saddlebag has no open pane). **Unverified in-game**; if the pane does
+  not update, reopening the container (E) shows the truth.
+- **Export:** `exports.fh_core:saddlebagOf(src)` returns the stash id (registered at the player's position) for fh_death.
+- **Test horse:** the existing admin command `fh_spawn_horse [model]` (B4c spawn contract), no new command.
+- **TODO(horse milestone):** there is no horse ownership: any horse opens anyone's saddlebag, and the bag does not
+  follow a specific horse. The horse lane replaces this with `fh:saddle:<horse_id>` and an ownership check.
+- Pure rule specced in `spec/saddlebag_rules_spec.lua`; the natives side is **not runtime-tested** (no Cfx key).
+
 ## Server API
 
 A container ref is `{ type = <container type>, id = <id> }`: `id` is the player server id for `equipped` and
@@ -107,6 +143,9 @@ A container ref is `{ type = <container type>, id = <id> }`: `id` is the player 
 | `canFit(ref, item, amount, opts?)` | `ok, reason` (`item` may be a name; rsg shared items are looked up) |
 | `getWeight(ref)` | `grams` or `nil, reason` |
 | `snapshot(ref)` | deep copy `{ [slot] = item }` or `nil, reason` |
+| `view(ref)` | read-only `{ items, slots, maxWeight, coords, ... }` or `nil, reason` |
+| `openRef(src)` | the container ref the player has open (`{ type, id }`) or `nil, reason` (calls `FhOpenRef`) |
+| `saddlebagOf(src)` | the player's saddlebag stash id (registered at their position) or `nil`; used by fh_death |
 | `transferAll(fromRef, toRef, src?)` | `true, moved, leftovers` or `false, reason` |
 | `registerContainer(ref, { coords, slots?, maxWeight?, label? })` | `ok, reason` |
 | `setContainerCoords(ref, coords)` | `ok, reason` |
@@ -137,6 +176,7 @@ state before mutating.
 | `FhRegisterContainer(ref, { slots, maxWeight, coords, label })` | `ok, reason` |
 | `FhSetCoords(ref, coords)` | `ok, reason` |
 | `FhOpen(src, ref)` | `ok, reason` |
+| `FhOpenRef(src)` | `{ type, id }` of the fh container the player has open, or `nil, reason` |
 | `FhCreateDropBag(coords, items, opts)` | `id` or `nil, reason` |
 | `FhDeleteContainer(ref)` | `true, items` or `false, reason` (deletes memory, FhMeta and the `inventories` row; refused while open) |
 

@@ -346,6 +346,14 @@ exports('move', move)
 exports('canFit', canFit)
 exports('getWeight', getWeight)
 exports('snapshot', snapshot)
+-- B6e: read-only view of a container ({ items, slots, coords, ... }) and the pane the player has open
+exports('view', function(ref) return view(ref) end)
+exports('openRef', function(src)
+    if type(src) ~= 'number' then return nil, 'fh_no_player' end
+    local ref, why = inv('FhOpenRef', src)
+    if type(ref) ~= 'table' then return nil, why or 'fh_nothing_open' end
+    return ref
+end)
 exports('transferAll', transferAll)
 exports('registerContainer', registerContainer)
 exports('setContainerCoords', setContainerCoords)

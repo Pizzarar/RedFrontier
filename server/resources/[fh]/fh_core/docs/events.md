@@ -45,5 +45,7 @@ The emitting lane owns the name and documents it in its README.
 | `fh:zones:ped_dead` | fh_zones (client -> server) | `{ tag }`; a hint only: believed from a player within activation radius + 25 m of the camp, then the server re-reads the ped's health itself |
 | `fh:zones:open_loot` | fh_zones (client -> server request) | `{ camp_id }`; only honoured once the camp is cleared; `fh_core.open` re-checks reach server-side |
 | `fh:spawn:adopted` | fh_core (LOCAL client event, post-adopt hook) | `{ requestId, tag, owner, kind, netId, entity }`; fires on the spawning client when the server released the adopted entity (again after a re-request, on the new spawner). `tag`/`owner` ride on `fh:spawn:create` |
+| `fh:saddlebag:open` | fh_core (client -> server request) | `{ netId }`; the horse the player rides or stands next to. The server checks the entity exists, is a horse and is within reach of the server-side ped (`FhSaddlebagRules.canAccess`), then opens the character's saddlebag |
+| `fh:saddlebag:transfer` | fh_core (client -> server request) | `{ netId, dir = 'in' or 'out', slot, amount? }`; moves a stack between the container the server says the player has open and their saddlebag. The server re-checks the horse and reach; one `fh_core.move` applies it (events `fh:inventory:moved` / `refused` fire as for any move) |
 
 Payloads for events not emitted by B4b are a contract proposal; the emitting lane may extend them additively.

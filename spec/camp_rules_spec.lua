@@ -108,9 +108,9 @@ case('config loot: worn rifle carries a condition in range, safe is bulky', func
     eq('bulky', cfg.items.small_safe.size_class)
     assert(Items.validate(cfg.items.worn_rifle)); assert(Items.validate(cfg.items.small_safe))
 end)
-case('container rules: the bulky safe fits chest/saddlebag, not backpack/equipped/drop bag; cargo only wagon/chest', function()
+case('container rules: the bulky safe fits chest/saddlebag/drop bag, not backpack/equipped; cargo only wagon/chest', function()
     local safe = cfg.items.small_safe.size_class
-    for _, t in ipairs({ 'chest', 'saddlebag', 'wagon' }) do assert(Containers.accepts(t, safe), t) end
+    for _, t in ipairs({ 'chest', 'saddlebag', 'wagon', 'drop_bag' }) do assert(Containers.accepts(t, safe), t) end
     for _, t in ipairs({ 'backpack', 'equipped' }) do
         local ok, why = Containers.accepts(t, safe)
         assert(not ok and why == 'fh_size_class', t)
