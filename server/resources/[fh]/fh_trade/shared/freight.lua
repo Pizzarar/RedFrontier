@@ -38,7 +38,11 @@ local function t2cfg(cfg)
 end
 
 ---Offer tier, 1 when absent (offers generated before T2 existed). 1 and 2 are the only tiers.
-function M.tierOf(offer) return type(offer) == 'table' and offer.tier or 1 end
+---A present non-number tier (false, 0, '2', ...) is returned as-is so validateOffer reports bad_tier.
+function M.tierOf(offer)
+    if type(offer) ~= 'table' or offer.tier == nil then return 1 end
+    return offer.tier
+end
 
 ---fh_progression unlock id gating a tier, or nil (T1 is never gated).
 function M.unlockFor(cfg, tier)
@@ -82,11 +86,31 @@ function M.t2Deadline(cfg, distance)
     return clamp(s, 60, 86400)
 end
 
----T2 qty for a shortage level from the item's { min, max } template: min + ceil(level * (max - min)). nil = no template.
-local function t2Qty(t, item, level)
-    local r = t.qty and t.qty[item]
-    if type(r) ~= 'table' or not int(r.min) or not int(r.max) or r.min < 1 or r.max < r.min then return nil end
-    return clamp(r.min + math.ceil(clamp(level, 0, 1) * (r.max - r.min)), r.min, r.max)
+---Matching T1 qty for a shortage level: clamp(ceil(level * qtyPerLevel), minQty, maxQty). Shared by T1 generation and as
+---the reference quantity T2 pay scales from.
+local function t1Qty(d, level)
+    return clamp(math.ceil(clamp(level, 0, 1) * d.qtyPerLevel), d.minQty, d.maxQty)
+end
+
+---Matching T1 pay for a shortage level: floor(t1Qty * price * premium). T2 pays a multiple of this, so pay keeps
+---following the goods' value (whiskey > cloth > salt) instead of inverting on the bigger T2 quantities.
+local function t1Pay(d, level, price)
+    return math.floor(t1Qty(d, level) * price * d.premium)
+end
+
+---T2 qty for a shortage level: clamp(ceil(level * qtyPerLevel), minQty, min(maxQty, floor(maxLoad / weight))).
+---Capped by the t2 wagon's SLOTS (maxQty) and by the load in grams (maxLoad / weight), never by weight alone.
+---nil when the good is missing, too heavy to even carry minQty, or the T2 qty settings are unusable.
+local function t2Qty(t, good, level)
+    if type(t) ~= 'table' or not int(t.minQty) or not int(t.maxQty) or not int(t.qtyPerLevel) then return nil end
+    if t.minQty < 1 or t.maxQty < t.minQty or t.qtyPerLevel < 1 then return nil end
+    local cap = t.maxQty
+    local w = type(good) == 'table' and good.weight
+    if finite(w) and w > 0 and finite(t.maxLoad) and t.maxLoad > 0 then
+        cap = math.min(cap, math.floor(t.maxLoad / w))
+    end
+    if cap < t.minQty then return nil end
+    return clamp(math.ceil(clamp(finite(level) and level or 0, 0, 1) * t.qtyPerLevel), t.minQty, cap)
 end
 
 ---T2 offers for one route: one per shortage with a qty template, only on routes of at least minDistance.
@@ -97,23 +121,26 @@ local function t2Offers(cfg, d, fromRegion, to, list, out)
     if not dist or dist < (t.minDistance or 0) then return end
     local deadline = M.t2Deadline(cfg, dist)
     local cooldown = math.max(t.cooldownMin or d.cooldownMin, math.ceil(deadline / 60)) -- not re-takeable while one could be live
+    local payMult = math.min(t.payMultiple or 3, t.payCapMultiple or 4) -- ~3x the matching T1 pay, never more than the cap
     for _, s in ipairs(list) do
         local good = cfg.goods[s.item]
-        local qty = good and finite(s.level) and finite(s.price) and t2Qty(t, s.item, s.level)
-        if qty then
-            local reward = math.floor(qty * s.price * (t.premium or 1.5))
-            if reward >= 1 then
-                local label = good.label or s.item
-                out[#out + 1] = {
-                    key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true, unlock = M.unlockFor(cfg, 2),
-                    min_wagon_tier = M.minWagonTier(cfg, 2),
-                    title = ('[T2] Freight: %dx %s to %s'):format(qty, label, to),
-                    text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier 2 for T2 contracts and a wagon (t2) or bigger.')
-                        :format(qty, label, fromRegion, to, math.floor(dist)),
-                    region_id = fromRegion, from_region = fromRegion, to_region = to,
-                    item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = deadline, cooldown_min = cooldown,
-                    rewards = { money = reward, rep = { region_id = to, delta = t.repDelta or d.repDelta } },
-                }
+        if good and finite(s.level) and finite(s.price) then
+            local qty = t2Qty(t, good, s.level)
+            if qty then
+                local reward = math.floor(t1Pay(d, s.level, s.price) * payMult)
+                if reward >= 1 then
+                    local label = good.label or s.item
+                    out[#out + 1] = {
+                        key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true, unlock = M.unlockFor(cfg, 2),
+                        min_wagon_tier = M.minWagonTier(cfg, 2),
+                        title = ('[T2] Freight: %dx %s to %s'):format(qty, label, to),
+                        text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier 2 for T2 contracts and a wagon (t2) or bigger.')
+                            :format(qty, label, fromRegion, to, math.floor(dist)),
+                        region_id = fromRegion, from_region = fromRegion, to_region = to,
+                        item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = deadline, cooldown_min = cooldown,
+                        rewards = { money = reward, rep = { region_id = to, delta = t.repDelta or d.repDelta } },
+                    }
+                end
             end
         end
     end
@@ -181,13 +208,19 @@ function M.validateOffer(cfg, offer, isKnownRegion)
     if tier == 1 then
         if not int(offer.qty) or offer.qty < d.minQty or offer.qty > d.maxQty then return false, 'bad_qty' end
     else
-        local r = t.qty and t.qty[offer.item]
-        if type(r) ~= 'table' or not int(offer.qty) or offer.qty < r.min or offer.qty > r.max then return false, 'bad_qty' end
+        if not finite(offer.level) or offer.level <= 0 or offer.level > 1 then return false, 'bad_level' end
+        if not int(offer.qty) or offer.qty ~= t2Qty(t, good, offer.level) then return false, 'bad_qty' end
         local dist = M.routeDistance(cfg, offer.from_region, offer.to_region)
         if not dist or dist < (t.minDistance or 0) then return false, 'bad_route' end
         if offer.deadline_s ~= M.t2Deadline(cfg, dist) then return false, 'bad_deadline' end
     end
-    if not int(offer.reward) or offer.reward < 1 or offer.reward > offer.qty * good.base * d.rewardCap then return false, 'bad_reward' end
+    if tier == 1 then
+        if not int(offer.reward) or offer.reward < 1 or offer.reward > offer.qty * good.base * d.rewardCap then return false, 'bad_reward' end
+    else
+        -- T2 reward scales from the matching T1 pay: at most payCapMultiple x (T1 qty x base x rewardCap).
+        local q1 = t1Qty(d, offer.level)
+        if not int(offer.reward) or offer.reward < 1 or offer.reward > math.floor((t.payCapMultiple or 4) * q1 * good.base * d.rewardCap) then return false, 'bad_reward' end
+    end
     if not int(offer.deadline_s) or offer.deadline_s < 60 or offer.deadline_s > 86400 then return false, 'bad_deadline' end
     return true
 end

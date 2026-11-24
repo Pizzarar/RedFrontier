@@ -30,7 +30,8 @@ local function newEnv(opts)
     FhCargoRules = CARGO
     if opts.t2 then -- roads-02 R9: T2 contracts on a 500 m route; salt gets a weight so wagon fit is real
         FhTradeConfig.freight.t2 = { unlock = 'contracts_t2', minWagonTier = 2, minDistance = 400, deadlineBase = 900,
-            deadlinePerMeter = 1.0, premium = 1.5, repDelta = 4, maxOffers = 2, qty = { trade_salt = { min = 90, max = 190 } } }
+            deadlinePerMeter = 1.0, minQty = 10, maxQty = 30, qtyPerLevel = 30, maxLoad = 300000, payMultiple = 3, payCapMultiple = 4,
+            repDelta = 4, maxOffers = 2 }
         FhTradeConfig.freight.destinations.heartlands = { x = 0, y = 0, z = 0, radius = 40 }
         FhTradeConfig.goods.trade_salt.weight, FhTradeConfig.goods.trade_salt.stackable = 1500, true
     end
@@ -339,7 +340,7 @@ case('T2 accept allowed: canUnlock(src, contracts_t2) true + t2 wagon -> cargo a
     local ok, err = acceptWith(E, o, 't2')
     assert(ok == true, tostring(err))
     T.same({ { src = 7, id = 'contracts_t2' } }, E.unlockCalls)
-    T.eq(1, #E.addCalls); T.eq(140, E.addCalls[1].n); T.same({ freight = 'heartlands.dunes.trade_salt.t2' }, E.addCalls[1].info)
+    T.eq(1, #E.addCalls); T.eq(15, E.addCalls[1].n); T.same({ freight = 'heartlands.dunes.trade_salt.t2' }, E.addCalls[1].info)
     T.eq(1, #E.registered.getContracts(7))
 end)
 
@@ -379,7 +380,7 @@ end)
 
 case('T2 wagon fit: t1 cart too small, unknown tier fails closed, t3 fits; refusal adds nothing', function()
     local E = newEnv({ t2 = true })
-    local o = t2Offer(E, 1) -- 190 salt = 285 kg
+    local o = t2Offer(E, 1) -- 30 salt = 45 kg
     local ok, err = acceptWith(E, o, 't1')
     assert(ok == false and err == 'fh_freight_wagon_too_small', tostring(err))
     E.nearest = { type = 'wagon', id = 'fh:wagon:CID1:tx' }

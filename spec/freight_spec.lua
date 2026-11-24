@@ -233,11 +233,13 @@ end)
 
 local CARGO = dofile(here .. '../server/resources/[fh]/fh_cargo/shared/cargo_rules.lua')
 local T2 = { unlock = 'contracts_t2', minWagonTier = 2, minDistance = 400, deadlineBase = 900, deadlinePerMeter = 1.0,
-    premium = 1.5, repDelta = 4, maxOffers = 2, cooldownMin = 30, qty = { trade_salt = { min = 90, max = 190 } } }
+    minQty = 10, maxQty = 30, qtyPerLevel = 30, maxLoad = 300000, payMultiple = 3, payCapMultiple = 4,
+    repDelta = 4, maxOffers = 2, cooldownMin = 30 }
 local function t2With(over) local t = {} for k, v in pairs(T2) do t[k] = v end for k, v in pairs(over or {}) do t[k] = v end return t end
 local function cfgT2(over)
     local c = cfgNew({ t2 = T2 })
     c.goods.trade_salt.weight, c.goods.trade_salt.stackable = 1500, true
+    c.goods.trade_cloth.weight, c.goods.trade_cloth.stackable = 2500, true
     for k, v in pairs(over or {}) do c.freight[k] = v end
     return c
 end
@@ -245,32 +247,37 @@ local SH = { dunes = { { item = 'trade_salt', level = 0.5, price = 10 }, { item 
 local function t2of(offers) for _, o in ipairs(offers) do if o.tier == 2 then return o end end end
 local function copy(o) local x = {} for k, v in pairs(o) do x[k] = v end return x end
 
-case('T2 generate: T1 offers first (tier 1, unchanged keys), then T2 locked offers with the T2 template', function()
+case('T2 generate: T1 offers first (tier 1, unchanged keys), then T2 locked offers (pay = 3x the matching T1)', function()
     local offers = F.generate(cfgT2(), 'heartlands', SH)
-    T.eq(3, #offers) -- salt + cloth T1, salt T2 (cloth has no T2 qty template)
+    T.eq(4, #offers) -- salt + cloth T1, salt + cloth T2
     T.eq(1, offers[1].tier); T.eq('heartlands.dunes.trade_salt', offers[1].key); T.eq(nil, offers[1].locked)
-    T.eq(1, offers[2].tier)
+    T.eq(1, offers[2].tier); T.eq('heartlands.dunes.trade_cloth', offers[2].key)
     local o = offers[3]
     T.eq(2, o.tier); T.eq('heartlands.dunes.trade_salt.t2', o.key); assert(#F.questId(o.key) <= 64)
     T.eq(true, o.locked, 'T2 is always listed locked (board is shared; gate is per player at accept)')
     T.eq('contracts_t2', o.unlock); T.eq(2, o.min_wagon_tier)
-    T.eq(140, o.qty)            -- 90 + ceil(0.5 * 100)
-    T.eq(2100, o.reward)        -- floor(140 * 10 * 1.5)
+    T.eq(15, o.qty)             -- clamp(ceil(0.5 * 30), 10, 30)
+    T.eq(375, o.reward)         -- floor(floor(10 * 10 * 1.25) * 3) = floor(125 * 3)
     T.eq(1400, o.deadline_s)    -- 900 + 500 m * 1.0
     T.eq(30, o.cooldown_min)    -- max(cooldownMin 30, ceil(1400 / 60) = 24)
-    T.same({ money = 2100, rep = { region_id = 'dunes', delta = 4 } }, o.rewards)
+    T.same({ money = 375, rep = { region_id = 'dunes', delta = 4 } }, o.rewards)
     assert(o.title:find('[T2]', 1, true), 'board title marks T2')
+    -- pay follows goods value: cloth (base 20) pays more than salt (base 10) even at a lower shortage
+    local o2 = offers[4]
+    T.eq(2, o2.tier); T.eq('trade_cloth', o2.item); T.eq(10, o2.qty) -- ceil(0.3 * 30) = 9 -> clamped to 10
+    T.eq(450, o2.reward)        -- floor(floor(6 * 20 * 1.25) * 3) = floor(150 * 3)
+    assert(o2.reward > o.reward, 'cloth T2 pays more than salt T2 (goods value order)')
 end)
 
-case('T2 generate: deadline scales with distance; cooldown follows a long deadline; qty clamps to the template', function()
+case('T2 generate: deadline scales with distance; cooldown follows a long deadline; qty clamps to the slot range', function()
     local c = cfgT2()
     c.freight.destinations.dunes = { x = 3000, y = 0, z = 0, radius = 40 }
     local o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 1, price = 10 } } }))
     T.eq(3900, o.deadline_s)    -- 900 + 3000
     T.eq(65, o.cooldown_min)    -- ceil(3900 / 60)
-    T.eq(190, o.qty, 'level 1 = template max')
+    T.eq(30, o.qty, 'level 1 = maxQty (t2 slots)')
     o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 0, price = 10 } } }))
-    T.eq(90, o.qty, 'level 0 = template min')
+    T.eq(10, o.qty, 'level 0 = minQty')
 end)
 
 case('T2 generate: none on short routes, without t2 config, without a from-region destination; own cap', function()
@@ -280,11 +287,11 @@ case('T2 generate: none on short routes, without t2 config, without a from-regio
     local c = cfgT2(); c.freight.destinations.heartlands = nil
     T.eq(nil, t2of(F.generate(c, 'heartlands', SH)), 'distance unknown')
     local list = F.generate(cfgT2({ maxOffers = 1 }), 'heartlands', SH)
-    T.eq(2, #list, 'T1 capped at 1, T2 listed on its own cap'); T.eq(1, list[1].tier); T.eq(2, list[2].tier)
+    T.eq(3, #list, 'T1 capped at 1, T2 listed on its own cap'); T.eq(1, list[1].tier); T.eq(2, list[2].tier)
     T.eq(nil, t2of(F.generate(cfgT2({ t2 = t2With({ maxOffers = 0 }) }), 'heartlands', SH)), 'T2 cap 0 lists none')
 end)
 
-case('T2 validateOffer: accepts generated; refuses bad tier, key, qty, deadline, short route, missing t2 config', function()
+case('T2 validateOffer: accepts generated; refuses bad tier, key, level, qty, reward, deadline, short route', function()
     local c = cfgT2()
     local o = t2of(F.generate(c, 'heartlands', SH))
     assert(F.validateOffer(c, o, known))
@@ -293,27 +300,41 @@ case('T2 validateOffer: accepts generated; refuses bad tier, key, qty, deadline,
         local ok, err = F.validateOffer(cc or c, x, known)
         assert(not ok and err == code, field .. '=' .. tostring(v) .. ' -> ' .. tostring(err))
     end
-    bad('tier', 3, 'bad_tier'); bad('tier', '2', 'bad_tier'); bad('tier', 2, 'bad_tier', cfgNew())
+    bad('tier', 3, 'bad_tier'); bad('tier', '2', 'bad_tier'); bad('tier', false, 'bad_tier'); bad('tier', 2, 'bad_tier', cfgNew())
     bad('key', 'heartlands.dunes.trade_salt', 'bad_key') -- T2 offer posing with a T1 key
-    bad('qty', 89, 'bad_qty'); bad('qty', 191, 'bad_qty'); bad('item', 'trade_cloth', 'bad_key')
+    bad('qty', 14, 'bad_qty'); bad('qty', 16, 'bad_qty'); bad('item', 'trade_cloth', 'bad_key')
+    bad('level', 0, 'bad_level'); bad('level', 1.5, 'bad_level'); bad('level', nil, 'bad_level'); bad('level', '0.5', 'bad_level')
+    bad('reward', 0, 'bad_reward'); bad('reward', 1601, 'bad_reward') -- cap = floor(4 * 10 * 10 * 4) = 1600
     bad('deadline_s', 1800, 'bad_deadline') -- must equal the distance formula
-    bad('qty', 140, 'bad_route', cfgT2({ t2 = t2With({ minDistance = 600 }) }))
+    local shortCfg = cfgT2({ t2 = t2With({ minDistance = 600 }) })
+    local ok, err = F.validateOffer(shortCfg, o, known)
+    assert(not ok and err == 'bad_route', 'short route -> ' .. tostring(err))
     -- an untiered (pre-T2) offer still validates as T1; a T1 offer relabelled tier 2 fails on its key
     local x = copy(F.generate(c, 'heartlands', SH)[1])
     x.tier = nil; assert(F.validateOffer(c, x, known), 'untiered offer = T1')
     x.tier = 2; T.eq('bad_key', select(2, F.validateOffer(c, x, known)))
 end)
 
-case('T2 wagonFits: fh_cargo tier rows; t1 cart too small, t2/t3 fit, weight and slots, unreadable tier', function()
+case('tierOf: absent tier = 1; false (and any other non-number) passes through so validateOffer rejects it', function()
+    T.eq(1, F.tierOf({})); T.eq(1, F.tierOf({ tier = nil })); T.eq(1, F.tierOf(nil))
+    T.eq(false, F.tierOf({ tier = false })); T.eq('2', F.tierOf({ tier = '2' })); T.eq(3, F.tierOf({ tier = 3 }))
     local c = cfgT2()
-    local o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 1, price = 10 } } })) -- 190 x 1.5 kg = 285 kg
-    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t1)), 't1 cart')
-    assert(F.wagonFits(c, o, CARGO.TIERS.t2), 't2 wagon (300 kg) fits 285 kg')
+    local t1 = F.generate(c, 'heartlands', SH)[1]
+    local x = copy(t1); x.tier = false
+    T.eq('bad_tier', select(2, F.validateOffer(c, x, known)))
+end)
+
+case('T2 wagonFits: fh_cargo tier rows; t1 cart too small (tier), t2/t3 fit, weight and slots, unreadable tier', function()
+    local c = cfgT2()
+    local o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 1, price = 10 } } })) -- 30 x 1.5 kg = 45 kg
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t1)), 't1 cart refused by tier (1 < 2)')
+    assert(F.wagonFits(c, o, CARGO.TIERS.t2), 't2 wagon fits 45 kg / 1 slot')
     assert(F.wagonFits(c, o, CARGO.TIERS.t3))
-    local heavy = copy(o); heavy.qty = 201 -- 301.5 kg > t2 300 kg
+    local heavy = copy(o); heavy.qty = 201 -- 301.5 kg > t2 300 kg (tampered qty, still caught)
     T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, heavy, CARGO.TIERS.t2)), 'over the t2 weight cap')
-    c.goods.trade_salt.stackable = false -- one slot per unit: 190 > 60 slots even on a t3
-    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t3)), 'slots')
+    c.goods.trade_salt.stackable = false -- one slot per unit: a tampered qty over the slot count fails
+    local many = copy(o); many.qty = 61 -- 61 > t3's 60 slots
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, many, CARGO.TIERS.t3)), 'slots')
     c.goods.trade_salt.stackable = true
     T.eq('fh_freight_wagon_unknown', select(2, F.wagonFits(c, o, nil)), 'T2 fails closed on an unreadable tier')
     T.eq('fh_freight_wagon_unknown', select(2, F.wagonFits(c, o, { tier = 't2' })))
@@ -337,25 +358,64 @@ case('T2 checkUnlock: allowed / tier_too_low / not started / getState throws / c
     T.eq('contracts_t2', F.unlockFor(cfgT2(), 2)); T.eq(nil, F.unlockFor(cfgT2(), 1)); T.eq(1, F.minWagonTier(cfgT2(), 1))
 end)
 
-case('T2 real config: qty ranges need more than a t1 cart and fit an empty t2 wagon; pay stays under the reward cap', function()
+case('T2 real config: every T2 pay <= 4x matching T1 (about 3x at half); qty fits t2 slots/weight; t1 refused, t2 fits', function()
+    local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
     local saved = FhTradeConfig
     dofile(here .. '../server/resources/[fh]/fh_trade/config.lua')
     local c = FhTradeConfig
     FhTradeConfig = saved
     local t = assert(c.freight.t2, 'freight.t2 missing')
     T.eq('contracts_t2', t.unlock); T.eq(2, t.minWagonTier)
-    for item, r in pairs(t.qty) do
-        local g = assert(c.goods[item], item .. ' is not a trade good')
-        assert(r.min * g.weight > CARGO.TIERS.t1.maxWeight, item .. ': T2 minimum fits a t1 cart')
-        assert(r.max * g.weight <= CARGO.TIERS.t2.maxWeight, item .. ': T2 maximum does not fit an empty t2 wagon')
-        -- worst-case unit price: base x regionFactor x (1 + gain x max shortage) x (1 + wobble)
-        local rf = 1
-        for _, f in pairs(c.regionFactor or {}) do if f[item] and f[item] > rf then rf = f[item] end end
-        local maxUnit = g.base * rf * (1 + c.shortage.gain * c.shortage.max) * (1 + c.wobble.amplitude)
-        assert(maxUnit * t.premium <= g.base * c.freight.rewardCapMultiple, item .. ': T2 reward can exceed the cap')
+    T.eq(true, t.maxQty <= CARGO.TIERS.t2.slots, 't2.maxQty must not exceed the t2 wagon slots')
+    T.eq(true, t.maxLoad <= CARGO.TIERS.t2.maxWeight, 't2.maxLoad must not exceed the t2 wagon max weight')
+    for item, g in pairs(c.goods) do
+        local cap = math.floor(t.maxLoad / g.weight)
+        assert(cap >= t.minQty, item .. ': too heavy to even carry t2.minQty')
     end
     local dist = F.routeDistance(c, 'heartlands', 'scarlett_meadows')
     assert(dist and dist >= t.minDistance, 'heartlands <-> scarlett_meadows is not a T2 route')
+
+    -- Real quotes: setShortage across the shortage range, a few wobble phases, every good, both directions.
+    local state, now, regions = P.newState(), 1700000000, { 'heartlands', 'scarlett_meadows' }
+    c.freight.maxOffers, c.freight.t2.maxOffers = 99, 99 -- let every good's offer through
+    local halfT1, halfT2 = {}, {}
+    for _, level in ipairs({ 0.15, 0.25, 0.5, 0.75, 1.0 }) do
+        for _, wob in ipairs({ 0, 900, 1800, 3600 }) do
+            local tt = now + wob
+            for item in pairs(c.goods) do for _, r in ipairs(regions) do P.setShortage(c, state, r, item, level, tt) end end
+            local byRegion = {}
+            for _, r in ipairs(regions) do byRegion[r] = P.shortages(c, state, r, tt) end
+            for _, from in ipairs(regions) do
+                local offers = F.generate(c, from, byRegion)
+                for _, o in ipairs(offers) do
+                    if o.tier == 2 then
+                        local t1
+                        for _, x in ipairs(offers) do
+                            if x.tier == 1 and x.item == o.item and x.to_region == o.to_region then t1 = x end
+                        end
+                        assert(t1, ('%s: no matching T1 offer'):format(o.item))
+                        assert(o.reward <= 4 * t1.reward, ('%s lvl %s: T2 %d > 4x T1 %d'):format(o.item, level, o.reward, t1.reward))
+                        if level == 0.5 and wob == 0 then halfT1[o.item], halfT2[o.item] = t1.reward, o.reward end
+                    end
+                end
+            end
+        end
+    end
+    for item in pairs(c.goods) do
+        local t1, t2 = halfT1[item], halfT2[item]
+        assert(t1 and t2, item .. ': no half-shortage offers')
+        local ratio = t2 / t1
+        assert(ratio >= 2.9 and ratio <= 3.1, ('%s: T2/T1 at half shortage = %.3f, want ~3.0'):format(item, ratio))
+    end
+
+    -- A real T2 offer is refused on a t1 cart (tier gate) and accepted on a t2 wagon (45..300 kg always fits).
+    local one
+    for _, o in ipairs(F.generate(c, 'heartlands', { heartlands = P.shortages(c, state, 'heartlands', now), scarlett_meadows = P.shortages(c, state, 'scarlett_meadows', now) })) do
+        if o.tier == 2 then one = o break end
+    end
+    assert(one, 'no real T2 offer to fit-check')
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, one, CARGO.TIERS.t1)), 't1 cart refused')
+    assert(F.wagonFits(c, one, CARGO.TIERS.t2), 't2 wagon accepted')
 end)
 
 T.finish()

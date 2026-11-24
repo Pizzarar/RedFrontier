@@ -79,17 +79,14 @@ FhTradeConfig = {
             minWagonTier = 2,          -- fh_cargo TIERS[*].tier: t2 Wagon (30 slots / 300 kg) or t3 Freight
             minDistance = 1500,        -- m between the two regions' destinations (heartlands <-> scarlett_meadows ~2405 m)
             deadlineBase = 900, deadlinePerMeter = 1.0, -- deadline_s = base + route m * perMeter (~55 min for 2405 m)
-            premium = 1.5,             -- reward = qty * current quote * premium (T1 1.25; keep premium x max price <= rewardCapMultiple x base)
+            minQty = 10, maxQty = 30,  -- qty = clamp(ceil(level * qtyPerLevel), minQty, min(maxQty, floor(maxLoad / weight)))
+            qtyPerLevel = 30,          -- qty is capped by the t2 wagon's SLOTS (maxQty), not by weight
+            maxLoad = 300000,          -- grams: qty never exceeds the t2 wagon's load capacity (floor(maxLoad / weight))
+            payMultiple = 3,           -- T2 pays ~3x the matching T1 pay for the same level (so pay follows goods value)
+            payCapMultiple = 4,        -- hard cap: T2 pay is never more than 4x the matching T1 pay
             repDelta = 4,              -- T1 2
             maxOffers = 2,             -- per board, listed after the T1 offers (own cap, T1 is never crowded out)
             cooldownMin = 30,          -- raised to the deadline in minutes when that is longer
-            -- qty = min + ceil(level * (max - min)). Ranges weigh more than a t1 cart's 120 kg at the minimum and fit an
-            -- empty t2 wagon's 300 kg at the maximum (salt 1.5 kg, cloth 2.5 kg, whiskey 15 kg per unit).
-            qty = {
-                trade_salt    = { min = 90, max = 190 },
-                trade_cloth   = { min = 50, max = 110 },
-                trade_whiskey = { min = 10, max = 18 },
-            },
         },
         destinations = {
             heartlands = { x = -176.0, y = 630.0, z = 114.0, radius = 40.0 },
