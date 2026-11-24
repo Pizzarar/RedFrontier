@@ -50,15 +50,40 @@ local function pt(offer, point, cid)
     return { citizenid = cid or ME, offer_key = offer.key, region_id = REGION, point = point }
 end
 
-local function entryFor(offer, cid, src, done, ordered)
+-- A watched entry whose row has been seen active (pending cleared), unless `pending` asks for a fresh accept.
+local function entryFor(offer, cid, src, done, ordered, pending)
     local o = offer
     if ordered ~= nil then
         o = {}
         for k, v in pairs(offer) do o[k] = v end
         o.ordered = ordered
     end
-    return assert(WR.entry('survey', { cid = cid or ME, src = src or 1, qid = Jobs.questId('survey', offer.key),
+    local e = assert(WR.entry('survey', { cid = cid or ME, src = src or 1, qid = Jobs.questId('survey', offer.key),
         offer_key = offer.key, region_id = REGION }, o, done))
+    if not pending then e.pending = nil end
+    return e
+end
+
+-- A non-table coordinate value, like FXServer's vector3 userdata (type 'vector3'): Lua 5.4 has no newproxy, so use a
+-- coroutine with a temporary per-type metatable (type() is 'thread', never 'table'). Indexing unknown fields
+-- errors, as a vector3 can. Calls f(make) and restores the thread metatable afterwards.
+local function withVectors(f)
+    local probe = coroutine.create(function() end)
+    local old = debug.getmetatable(probe)
+    local fields = setmetatable({}, { __mode = 'k' })
+    debug.setmetatable(probe, { __index = function(v, k)
+        local c = fields[v]
+        if c and c[k] ~= nil then return c[k] end
+        error('vector3 has no field ' .. tostring(k))
+    end })
+    local function make(x, y, z)
+        local v = coroutine.create(function() end)
+        fields[v] = { x = x, y = y, z = z }
+        return v
+    end
+    local ok, err = pcall(f, make)
+    debug.setmetatable(probe, old)
+    if not ok then error(err, 0) end
 end
 
 describe('quests watch rules: distance', function()
@@ -185,7 +210,7 @@ end)
 describe('quests watch rules: heal from the cached state', function()
     local function st(status, count) return { status = status, progress = { count = count } } end
     it('no cached rows: keep and change nothing; not active: drop', function()
-        local e = entryFor(surveyOffer(), ME, 1, 1)
+        local e = entryFor(surveyOffer(), ME, 1, 1, nil, true)
         eq('keep', WR.heal(e, nil)); eq(1, e.done)
         eq('keep', WR.heal(e, st('done', 0)), 'fresh accept: the old done row is not committed over yet')
         eq('keep', WR.heal(e, st('active', 1)))
@@ -207,6 +232,66 @@ describe('quests watch rules: heal from the cached state', function()
         WR.heal(e, st('active', 1)); eq(nil, e.lag); eq(1, e.done)
         WR.heal(e, st('active', 2)); eq(2, e.done)
         same({ 3 }, WR.nextTargets(e))
+    end)
+end)
+
+describe('quests watch rules: vector3 coords (C2 review HIGH)', function()
+    it('within reads x/y from a non-table vector value, for pos and for the point', function()
+        withVectors(function(vec)
+            local v = vec(100.0, 200.0, 5.0)
+            eq('thread', type(v))
+            eq(true, WR.within(v, { x = 103.0, y = 204.0, z = 0.0 }, 5.0))
+            eq(true, WR.within({ x = 103.0, y = 204.0 }, v, 5.0))
+            eq(false, WR.within(vec(120.0, 200.0, 0.0), { x = 100.0, y = 200.0 }, 5.0))
+            eq(false, WR.within(vec(0 / 0, 0.0, 0.0), { x = 0.0, y = 0.0 }, 5.0))
+            eq(false, WR.within(vec(nil, 0.0, 0.0), { x = 0.0, y = 0.0 }, 5.0)) -- errors on .x: pcall'd
+            eq(false, WR.within(coroutine.create(function() end), { x = 0.0, y = 0.0 }, 5.0))
+        end)
+    end)
+    it('tick reaches a point when posOf (default ped or a kind.posOf) returns a vector value', function()
+        withVectors(function(vec)
+            local o = surveyOffer()
+            local p1 = o.points[1]
+            local watch = { a = entryFor(o, ME, 1) }
+            local hits = WR.tick(watch, function() return vec(p1.x, p1.y, p1.z) end)
+            eq(1, #hits); eq(1, hits[1].point)
+            WR.registerKind('spec_vec', { points = function(offer) return { offer.dest } end, radius = 2.0,
+                posOf = function() return vec(1.0, 1.0, 0.0) end })
+            local e = assert(WR.entry('spec_vec', { cid = ME, src = 1 }, { dest = { x = 0.0, y = 0.0 } }, 0))
+            e.pending = nil
+            hits = WR.tick({ k = e }, function(x) return WR.KINDS[x.job_type].posOf(x) end)
+            eq(1, #hits); eq(true, hits[1].last)
+            WR.KINDS.spec_vec = nil
+        end)
+    end)
+end)
+
+describe('quests watch rules: pending entries (C2 review LOW)', function()
+    local function st(status, count) return { status = status, progress = { count = count } } end
+    local function onePoint()
+        WR.registerKind('spec_one', { points = function(offer) return { offer.dest } end })
+        return assert(WR.entry('spec_one', { cid = ME, src = 1, qid = 'job:spec_one:k' },
+            { dest = { x = 0.0, y = 0.0 } }, 0))
+    end
+    it('a pending entry is never polled, so a 1-point job cannot finish before its row reads active', function()
+        local e = onePoint()
+        local asked = 0
+        eq(0, #WR.tick({ k = e }, function() asked = asked + 1; return { x = 0.0, y = 0.0 } end))
+        eq(0, asked)
+        eq('keep', WR.heal(e, st('done', 0))) -- old done row while accept's commit is in flight
+        eq('keep', WR.heal(e, st('active', 0)))
+        eq(1, #WR.tick({ k = e }, function() return { x = 0.0, y = 0.0 } end))
+        eq('drop', WR.heal(e, st('done', 0))) -- completed: dropped, no leak
+        WR.KINDS.spec_one = nil
+    end)
+    it('a pending entry whose row never turns active is dropped after PENDING_TICKS', function()
+        local e = onePoint()
+        for _ = 1, WR.PENDING_TICKS do eq('keep', WR.heal(e, st('done', 0))) end
+        eq('drop', WR.heal(e, st('done', 0)))
+        local f = onePoint()
+        for _ = 1, WR.PENDING_TICKS do eq('keep', WR.heal(f, nil)) end
+        eq('drop', WR.heal(f, nil))
+        WR.KINDS.spec_one = nil
     end)
 end)
 

@@ -45,13 +45,24 @@ function M.watchedJob(quest_id)
 end
 
 -- ---------------------------------------------------------------- geometry
-local function num(v) return type(v) == 'number' and v == v end
+local function num(v) return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge end
 
----Horizontal (x/y) distance check. Missing or malformed coords never count as reached.
+-- x, y of a table / vector3 / vector4 (FXServer GetEntityCoords returns a vector3 userdata, type 'vector3', not a
+-- table) or any indexable proxy. Field access is pcall'd (as fh_core/shared/spawn_rules.lua readCoords): a value
+-- that errors on indexing or has no finite x/y gives nil.
+local function xy(v)
+    if v == nil then return nil end
+    local ok, x, y = pcall(function() return v.x, v.y end)
+    if not ok or not num(x) or not num(y) then return nil end
+    return x, y
+end
+M.xy = xy
+
+---Horizontal (x/y) distance check. pos/point: table, vector3/vector4 or proxy. Malformed coords never count.
 function M.within(pos, point, radius)
-    if type(pos) ~= 'table' or type(point) ~= 'table' then return false end
-    local px, py, qx, qy = pos.x, pos.y, point.x, point.y
-    if not (num(px) and num(py) and num(qx) and num(qy)) then return false end
+    local px, py = xy(pos)
+    local qx, qy = xy(point)
+    if not px or not qx then return false end
     local r = num(radius) and radius or M.DEFAULT_RADIUS
     local dx, dy = px - qx, py - qy
     return dx * dx + dy * dy <= r * r
@@ -71,7 +82,7 @@ function M.entry(job_type, fields, offer, done)
         offer_key = fields.offer_key, region_id = fields.region_id,
         points = points, ordered = ordered, radius = kind.radius or M.DEFAULT_RADIUS,
         done = math.max(0, math.min(math.tointeger(done) or 0, #points)), visited = {},
-        pending = true, -- until the cached row is seen active (M.heal)
+        pending = 0, -- checks spent waiting for the cached row to read active (M.heal); nil once it has
     }
     return e
 end
@@ -131,7 +142,8 @@ end
 -- ---------------------------------------------------------------- one tick
 ---Check every watched entry once. posOf(entry) is asked ONLY for entries in `watch` (holders of a watched job),
 ---at most once per entry; it may throw or return nil (that entry is skipped this tick). Marks reached points and
----returns a sorted snapshot list of hits { entry, point, last }, so the caller can fire events (which yield) and
+---returns a sorted snapshot list of hits { entry, point, last }. Pending entries (accept not yet committed) are skipped,
+---so nothing is emitted, and nothing can complete, before heal has seen the row active, so the caller can fire events (which yield) and
 ---mutate `watch` afterwards. One point per entry per tick.
 function M.tick(watch, posOf)
     local hits, keys = {}, {}
@@ -139,7 +151,7 @@ function M.tick(watch, posOf)
     table.sort(keys)
     for _, k in ipairs(keys) do
         local e = watch[k]
-        if not M.finished(e) then
+        if not e.pending and not M.finished(e) then -- pending: row not committed yet (see heal), never polled
             local ok, pos = pcall(posOf, e)
             local i = ok and pos and M.reached(e, pos) or nil
             if i then hits[#hits + 1] = { key = k, entry = e, point = i, last = M.mark(e, i) } end
@@ -151,15 +163,28 @@ end
 ---Reconcile an entry with the holder's cached quest state (read-only, no lock). Returns 'keep' or 'drop'.
 ---  nil state (rows not cached): keep, decide nothing. Not active any more (done, failed, abandoned elsewhere): drop.
 ---  A pending entry (armed by accept, which runs before the row is committed) is kept until its row reads active once,
----  so the previous run's 'done' row never drops a fresh accept.
+---  so the previous run's 'done' row never drops a fresh accept. tick never polls a pending entry, so it cannot
+---  emit (or finish a 1-point job) while pending; a pending entry whose row never turns active within
+---  M.PENDING_TICKS checks (commit lost without the abandon hook) is dropped, so it cannot leak.
 ---  Persisted count behind the entry's `done` on M.HEAL_TICKS checks in a row (an emitted point was never
 ---  credited: lock timeout, dropped event): roll back to the persisted count so the point can be reached again.
 ---  One tick of lag is normal (the intake may still hold the lock), so it is tolerated. Credit stays bounded by
 ---  the verdict (count + 1 / count < total), so a roll-back can never over-pay.
 M.HEAL_TICKS = 2
+M.PENDING_TICKS = 10 -- x TICK_MS = 30 s; accept holds the lock for at most its 5 s timeout plus one DB write
 function M.heal(e, state)
-    if type(state) ~= 'table' then return 'keep' end
-    if state.status ~= 'active' then return e.pending and 'keep' or 'drop' end
+    if type(state) ~= 'table' then
+        if e.pending then
+            e.pending = e.pending + 1
+            if e.pending > M.PENDING_TICKS then return 'drop' end
+        end
+        return 'keep'
+    end
+    if state.status ~= 'active' then
+        if not e.pending then return 'drop' end
+        e.pending = e.pending + 1
+        return e.pending > M.PENDING_TICKS and 'drop' or 'keep'
+    end
     e.pending = nil
     local count = math.tointeger(type(state.progress) == 'table' and state.progress.count or 0) or 0
     if count >= e.done then
