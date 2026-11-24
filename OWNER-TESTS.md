@@ -6,7 +6,7 @@ file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need 
 
 ## Playtest order (start here)
 
-One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 390 minutes total.
+One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 400 minutes total.
 
 | # | Section | ~min | Notes |
 |---|---|---|---|
@@ -383,6 +383,21 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
     RESULT:
 24. Run `grep -rn "lib.alertDialog\|giver:talk\|giver:start" server/resources/[fh]/fh_quests`.
     Expected: no matches.
+    RESULT:
+25. Run `/fh_ui_demo tradepost`, then Esc; run `/fh_ui_demo trapper`, then Esc.
+    Expected: `tradepost` shows "Valentine Trade Post" with "Your goods" (Salt Sack "In demand here", Bolt of Cloth "Market is flooded", Whiskey Crate) and "For sale" (Lumber, Nails), each row with a quantity box and Sell/Buy. `trapper` shows "Trapper" with Deer pelt, Fox pelt and Legendary bear pelt (marked Legendary), each with stars, a price and "from your saddlebag/wagon". Enter does nothing; Esc closes and controls return. Fixture Sell/Buy clicks may be "unhandled".
+    RESULT:
+26. Stand at a trade post holding a sellable good and run `/tradepost`. Sell 1, then buy 1 of Lumber. Then type an amount above the limit and click Sell/Buy.
+    Expected: the fh_ui trade post screen opens (no ox_lib menu or amount dialog). Selling shows a `Sold for $N` toast plus an inline `Sold 1x <item> for $N.` and the list refreshes; buying shows `Bought for $N` and `Bought 1x Lumber for $N.`. The amount clamps to the max (it never sells or buys more than the limit). Walking out of range shows the server's refusal text inline and the lists stay.
+    RESULT:
+27. At the trapper (Heartlands), holding at least one pelt in the saddlebag, press E at `[E] Sell pelts`. Click Sell on a row.
+    Expected: the fh_ui `Trapper` screen lists your pelts (name, `*` stars, `Legendary` tag, `$price, from your saddlebag`). Sell gives a `Sold <pelt> (N stars) for $N.` notice, the row disappears and the list refreshes.
+    RESULT:
+28. Empty your saddlebag of pelts and press E at the trapper again.
+    Expected: the screen shows `You have no pelts to sell here.` and a Close button; no ox_lib menu.
+    RESULT:
+29. Raise heat as admin: server console `exports.fh_heat:set(<yourId>, "outlaws", 30)` (or the fh_core admin `fh_heat`). Then set it back with `exports.fh_heat:set(<yourId>, "outlaws", 0)`.
+    Expected: at 30 a `Heat` widget appears with the Outlaws row (tier and 30, plus a bar); the mouse is not captured and you can keep moving. At 0 the widget hides. Then run `grep -rn "lib.registerContext\|lib.showContext\|lib.inputDialog" server/resources/[fh]/fh_trade server/resources/[fh]/fh_hunting`: no matches.
     RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort

@@ -66,7 +66,7 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 
 A sell point at `Config.Trapper.coords` (M1 region `heartlands`). The client shows `[E] Sell pelts` within
 `PromptDistance`; E asks the server (`fh:hunting:sell_open`), which sends back the sellable pelts in the player's
-saddlebag and a nearby wagon with the prices it computed, shown as an ox_lib context menu. Picking one sends
+saddlebag and a nearby wagon with the prices it computed, shown on the fh_ui `trapper` screen. Picking one sends
 `fh:hunting:sell` `{ container = 'saddlebag'|'wagon', slot, item }`.
 
 The server (`shared/sell.lua`, wired in `server/main.lua`) trusts none of it. It re-reads the player position (within

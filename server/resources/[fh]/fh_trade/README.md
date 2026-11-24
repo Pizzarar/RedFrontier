@@ -36,7 +36,7 @@ Sequence (all-or-nothing, one trade per player at a time; the busy lock is share
 5. Grant failed -> `fh_economy:credit(citizenid, total, 'trade_buy_refund:<item>', post.region)` (online pay or queued for next load). OK -> `grant_failed_refunded`; refund refused/threw -> `refund_failed` and console `ALERT refund FAILED for <cid> ... owed $N` (fix by hand).
 
 ## Commands
-- Player: `/tradepost` (ox_lib menu + amount dialog; sell goods and buy supplies), `/tradequote` (also lists supplies), `/tradesell <item> <amount>`, `/tradebuy <item> <amount>` (chat fallback).
+- Player: `/tradepost` (opens the fh_ui `tradepost` screen; sell goods and buy supplies), `/tradequote` (also lists supplies), `/tradesell <item> <amount>`, `/tradebuy <item> <amount>` (chat fallback).
 - Server console: `fh_trade_shortage <region> <item> <level 0..1>`; `tradequote` dumps the price rows as JSON.
 
 ## DB
