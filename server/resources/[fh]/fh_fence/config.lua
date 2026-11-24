@@ -46,4 +46,25 @@ FhFenceConfig = {
 
     -- What the fence buys from players: item -> price per unit.
     buys = { fh_part_gunsmith = 30, fh_part_saddlery = 35 },
+
+    -- Treasure lead dig (progression-02 G2, server/leads.lua + shared/leads_logic.lua).
+    -- digRadius: metres (3D, server-side ped coords) from the lead's target within which a dig counts.
+    -- areaRadius: radius of the map blip; its centre is offset from the target (the blip never marks the spot).
+    -- loot: weighted outcomes, ONE is rolled per dig. money = { min, max } dollars (whole, paid via fh_economy pay);
+    -- item/qty = a part added to the backpack (room checked before the lead is taken). Keep max money under
+    -- fh_economy maxPay. regionId: pay region when the lead's target matches no stock entry.
+    leads = {
+        item = 'fh_treasure_lead',
+        digRadius = 8.0,
+        areaRadius = 60.0,
+        cooldownSeconds = 3,       -- min gap between two dig attempts of one character
+        lockStaleSeconds = 120,    -- a dig lock this old is reclaimable (hung await)
+        regionId = 'heartlands',
+        loot = {
+            { weight = 50, money = { 150, 300 } },
+            { weight = 25, money = { 100, 200 }, item = 'fh_part_gunsmith', qty = 2 },
+            { weight = 15, money = { 100, 200 }, item = 'fh_part_saddlery', qty = 2 },
+            { weight = 10, money = { 400, 700 } },
+        },
+    },
 }
