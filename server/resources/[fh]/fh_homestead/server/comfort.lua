@@ -301,17 +301,18 @@ AddEventHandler('fh:homestead:unclaimed', function(data)
     local holders = {}
     if type(data.citizenid) == 'string' then holders[data.citizenid] = true end
     if byPlot[plotId] then holders[byPlot[plotId]] = true end
+    -- unbind now, before any refresh below can suspend: a plot re-claimed during that await is rebound by its new owner and
+    -- a late clear here would wipe that binding
+    byPlot[plotId] = nil
     for cid in pairs(holders) do
         local e = cache[cid]
         if e and (e.plotId == plotId or e.lotId == plotId) then
             -- forget the released plot, then recompute from whatever home is left (0 and one event if none)
             if e.plotId == plotId then e.plotId, e.trophies = nil, {} end
             if e.lotId == plotId then e.lotId = nil end
-            byPlot[plotId] = nil
             refresh(cid)
         end
     end
-    byPlot[plotId] = nil
     -- FK ON DELETE CASCADE (0011) already removed the rows with fh_plots; this only fires if that did not happen, and
     -- never touches a plot someone has claimed again since.
     local ok, err = pcall(MySQL.update.await,
