@@ -72,7 +72,7 @@ Slot interface (server-local table `FhHomesteadSlots`, for H2, not an export): `
 | `fh:homestead:claimed` | `{ src, citizenid, plot_id, region_id, class }` | after a successful claim or lot purchase |
 | `fh:homestead:lot_bought` | `{ src, citizenid, plot_id, region_id, price }` | after a town lot purchase (right after `claimed`) |
 | `fh:homestead:unclaimed` | `{ src, citizenid, plot_id }` | after a successful unclaim (slots and trophies go with the plot) |
-| `fh:homestead:spilled` | `{ src, citizenid, plot_id, reason, stashes = { { stash_id, items = { { item, count } } } } }` | H13: plot chest items were destroyed on unclaim; `reason` = `force unclaim` (admin force) or `ITEM LOST: added during unclaim` (final sweep). Lists only the stashes whose clear went through; `citizenid` = the owner |
+| `fh:homestead:spilled` | `{ src, citizenid, plot_id, reason, stashes = { { stash_id, items = { { item, count } } } } }` | H13: plot chest items were destroyed on unclaim; `reason` = `force unclaim` (admin force) or `ITEM LOST: added during unclaim` (final sweep). Lists only the stashes whose clear was read back empty; `citizenid` = the owner |
 | `fh:homestead:slot_changed` | `plot_id, slot_id, tier` (positional) | a slot tier was saved and changed |
 | `fh:homestead:station_built` | `citizenid, plot_id, slot_id, station_type` (positional) | a station slot went from tier 0 to 1 or more |
 | `fh:homestead:comfort_changed` | `citizenid, newComfort, oldComfort` (positional) | only when the value actually changes (also to 0 on unclaim) |
@@ -219,8 +219,10 @@ No inherited stashes: the next owner of a plot always opens empty chests.
   `chest_2` / `chest_3` (town lot: `chest_2`) holds anything. Nothing is deleted, no rep moves. Empty the chests, retry.
 - Admin / console: `/fh_unclaim <plot_id> force` (export `unclaim(src, plot_id, true)`) prints one console line per item
   (`force unclaim: plot=.. owner=.. stash=.. slot=.. item=.. count=.. cleared`), empties every non-empty stash through
-  `fh_core.clearContainer`, reads it back, fires `fh:homestead:spilled`, then releases as usual. A stash that will not
-  empty: `fh_chest_clear_failed`, the plot stays claimed. `force` from a non-admin: `fh_not_admin`.
+  `fh_core.clearContainer`, reads it back, fires `fh:homestead:spilled` (verified stashes only), then releases as usual.
+  The clear is the last step before the DELETE (after a town lot's rep-back), so a refused rep-back destroys nothing.
+  A stash that will not empty: `fh_chest_clear_failed`, the plot stays claimed and a taken rep-back is given back.
+  `force` from a non-admin: `fh_not_admin`.
 - Reads fail closed through `fh_core.snapshot`: chest 1 unknown to fh_core is registered again and re-read; an unbuilt
   extra chest is skipped; any other read failure is `fh_chest_check_failed` (`fh_not_ready` before the slot load).
 - Lock / TOCTOU: the check runs after the per-plot lock is taken and before the rep take-back and the DELETE. While the

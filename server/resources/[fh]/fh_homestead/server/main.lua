@@ -392,8 +392,8 @@ local function hasItems(stashes)
 end
 
 ---Log the full contents (one server print per item), then empty every non-empty stash through fh_core.clearContainer
----and read it back. One fh:homestead:spilled event at the end lists the stashes whose clear went through (what was
----actually destroyed), also when a later stash failed, so a retry never reports the same items twice.
+---and read it back. One fh:homestead:spilled event at the end lists the stashes whose clear was verified (read back
+---empty), also when a later stash failed, so a retry never reports the same items twice.
 ---@return boolean ok, string|nil reason  fh_chest_clear_failed when a stash could not be emptied (later ones untouched)
 local function spillStashes(src, owner, plotId, stashes, reason)
     local payload, ok, why = {}, true, nil
@@ -408,11 +408,12 @@ local function spillStashes(src, owner, plotId, stashes, reason)
             local called, cleared, cwhy = pcall(function() return exports.fh_core:clearContainer(s.ref) end)
             local after = nil
             if called and cleared == true then
-                payload[#payload + 1] = { stash_id = s.id, items = items }
                 local now = snapshotOf(s.ref)
                 after = now and stashLines(now) or nil
             end
-            if not after or #after > 0 then
+            if after and #after == 0 then
+                payload[#payload + 1] = { stash_id = s.id, items = items } -- verified empty
+            else
                 print(('^1[fh_homestead] %s: plot=%s stash=%s could not be emptied (%s)^7')
                     :format(reason, plotId, s.id, tostring(called and (cwhy or (after and 'items left') or 'read-back failed') or cleared)))
                 ok, why = false, 'fh_chest_clear_failed'
@@ -420,6 +421,7 @@ local function spillStashes(src, owner, plotId, stashes, reason)
             end
         end
     end
+    -- review low 1: only stashes whose clear was read back empty are reported
     if #payload > 0 then
         pcall(TriggerEvent, 'fh:homestead:spilled', { src = src, citizenid = owner, plot_id = plotId, reason = reason,
             stashes = payload })
@@ -445,7 +447,7 @@ end
 ---is only released by naming its id. The class comes from the plot's row.
 ---H13 stashes: refused 'fh_chests_not_empty' while any of the plot's chests (chest 1, chest_2, chest_3 as its class has
 ---them) holds an item; nothing is deleted. `force` (admins only, else 'fh_not_admin') instead logs every item per stash
----(print + fh:homestead:spilled) and empties them all before the release. The stash check runs AFTER the per-plot lock
+---(print + fh:homestead:spilled) and empties them all as the last step before the DELETE (after the rep-back). The stash check runs AFTER the per-plot lock
 ---is taken (no new chest open, build or trophy change can start) and before the rep-back and the DELETE; a final sweep
 ---after the DELETE catches anything a pane opened before the lock (or fh_hands) slipped in, so the next owner always
 ---opens empty chests.
@@ -478,25 +480,38 @@ local function unclaim(src, plotId, force)
         busy[plotId] = nil
         return false, read and swhy or 'fh_chest_check_failed'
     end
-    if hasItems(stashes) then
-        if not force then
-            busy[plotId] = nil
-            return false, 'fh_chests_not_empty'
-        end
-        local called, spilled, spwhy = pcall(spillStashes, src, owner, plotId, stashes, 'force unclaim')
-        if not called or not spilled then
-            if not called then print(('^1[fh_homestead] force clear of %s errored: %s^7'):format(plotId, tostring(spilled))) end
-            busy[plotId] = nil
-            return false, called and spwhy or 'fh_chest_clear_failed'
-        end
+    local full = hasItems(stashes)
+    if full and not force then
+        busy[plotId] = nil
+        return false, 'fh_chests_not_empty'
     end
     local repBack = class == TOWN_LOT and lotRep() or 0
     local repTaken, repWhy = false, nil
+    ---Give a rep-back taken above back to the owner (the release did not happen).
+    local function undoRep(what)
+        if not repTaken then return end
+        local back, backWhy = takeLotRep(owner, region, repBack, 'town_lot_abandon_undo')
+        if not back then
+            print(('^1[fh_homestead] unclaim of lot %s failed (%s) after its rep-back; restoring rep +%d in %s to %s failed (%s): fix by hand^7')
+                :format(plotId, what, repBack, tostring(region), owner, tostring(backWhy)))
+        end
+    end
     if repBack ~= 0 then
         repTaken, repWhy = takeLotRep(owner, region, -repBack, 'town_lot_abandon')
         if not repTaken and citizenid == owner then
             busy[plotId] = nil
             return false, 'fh_rep_failed'
+        end
+    end
+    -- force: empty the stashes as the LAST step before the DELETE (review low 2), so no refusable step (the owner's own
+    -- rep-back) can come after items were destroyed. A clear that fails gives the rep-back back and keeps the plot.
+    if full then
+        local called, spilled, spwhy = pcall(spillStashes, src, owner, plotId, stashes, 'force unclaim')
+        if not called or not spilled then
+            if not called then print(('^1[fh_homestead] force clear of %s errored: %s^7'):format(plotId, tostring(spilled))) end
+            undoRep('fh_chest_clear_failed')
+            busy[plotId] = nil
+            return false, called and spwhy or 'fh_chest_clear_failed'
         end
     end
     local deleted, affected = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plotId, owner })
@@ -507,12 +522,8 @@ local function unclaim(src, plotId, force)
         -- row may still be there: keep memory and give a rep-back taken above back to the owner.
         if affected == 0 then
             clearClaim(plotId, owner, class)
-        elseif repTaken then
-            local back, backWhy = takeLotRep(owner, region, repBack, 'town_lot_abandon_undo')
-            if not back then
-                print(('^1[fh_homestead] unclaim of lot %s failed after its rep-back; restoring rep +%d in %s to %s failed (%s): fix by hand^7')
-                    :format(plotId, repBack, tostring(region), owner, tostring(backWhy)))
-            end
+        else
+            undoRep('fh_unclaim_failed')
         end
         busy[plotId] = nil
         return false, 'fh_unclaim_failed'

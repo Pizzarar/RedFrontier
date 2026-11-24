@@ -198,7 +198,7 @@ T.describe('fh_homestead unclaim vs plot stashes (H13)', function()
         held(W, 'claim_a', 'A', 'claim')
     end)
 
-    case('clear failures refuse the force: fh_chest_clear_failed, row kept, lock released; event lists only what was cleared', function()
+    case('clear failures refuse the force: fh_chest_clear_failed, row kept, lock released; event lists only verified clears', function()
         for _, mode in ipairs({ 'nope', 'throw', 'noop' }) do
             local W = world()
             put(W, sid('claim_a', 1), 1, 'wood', 2)
@@ -207,7 +207,7 @@ T.describe('fh_homestead unclaim vs plot stashes (H13)', function()
             held(W, 'claim_a', 'A', 'claim')
             T.eq(0, W.named('fh:homestead:unclaimed'))
             assert(W.logged('stash=fh:chest:claim_a:1 could not be emptied'), mode)
-            T.eq(mode == 'noop' and 1 or 0, W.named('fh:homestead:spilled'), mode .. ': spilled only when the clear went through')
+            T.eq(0, W.named('fh:homestead:spilled'), mode .. ': spilled only after a verified clear (review low 1)')
             W.fail.clear = nil
             T.same({ true, 'claim_a' }, { W.ex.unclaim(0, 'claim_a', true) }, mode .. ': retry')
         end
@@ -227,6 +227,61 @@ T.describe('fh_homestead unclaim vs plot stashes (H13)', function()
         T.same({ true, 'claim_a' }, { W.ex.unclaim(0, 'claim_a', true) })
         T.same({ { stash_id = sid('claim_a', 2), items = { { item = 'stone', count = 3 } } } },
             lastEvent(W, 'fh:homestead:spilled').stashes)
+    end)
+
+    case('force clears right before the DELETE: a refused own-lot rep-back destroys nothing; a failed clear gives the rep back', function()
+        -- an admin abandoning their OWN lot with force: the rep-back is refusable, so it must come before the clear
+        local W = world(true)
+        W.admins[1] = true
+        put(W, sid('lot_a', 1), 1, 'wood', 6)
+        W.fail.rep = true
+        T.same({ false, 'fh_rep_failed' }, { W.ex.unclaim(1, 'lot_a', true) })
+        T.eq(6, W.stash[sid('lot_a', 1)][1].amount, 'nothing cleared')
+        T.eq(0, #W.clears); T.eq(0, W.named('fh:homestead:spilled'))
+        held(W, 'lot_a', 'A', 'town_lot')
+        -- rep-back taken, then the clear fails: the rep is given back, the lot stays
+        W.fail.rep, W.fail.clear = nil, 'nope'
+        T.same({ false, 'fh_chest_clear_failed' }, { W.ex.unclaim(0, 'lot_a', true) })
+        T.same({ -25, 25 }, { W.reps[1].delta, W.reps[2].delta })
+        T.eq('town_lot_abandon_undo', W.reps[2].reason)
+        T.eq(0, W.repOf('A', 'heartlands'))
+        held(W, 'lot_a', 'A', 'town_lot')
+        -- the clear runs after the rep-back
+        W.fail.clear = nil
+        local repsBefore = #W.reps
+        T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a', true) })
+        T.eq(repsBefore + 1, #W.reps)
+        assert(empty(W, sid('lot_a', 1)))
+    end)
+
+    case('open_chest: owner opens; refused fh_claim_busy while the plot is mid-unclaim or mid-claim; unbuilt extra chest refused', function()
+        local W = world()
+        W.netEvent('fh:homestead:open_chest', 1, { plot_id = 'claim_a' })
+        T.same({ { src = 1, id = sid('claim_a', 1) } }, W.opens)
+        W.netEvent('fh:homestead:open_chest', 1, { plot_id = 'claim_a', chest = 3 })
+        T.eq(sid('claim_a', 3), W.opens[2].id)
+        W.netEvent('fh:homestead:open_chest', 2, { plot_id = 'claim_a' })
+        T.eq(2, #W.opens, 'not the owner: no open')
+        -- mid-unclaim (held at the DELETE): no chest opens until the lock is gone
+        W.hold.delete_plot = true
+        local h = W.start(function() return W.ex.unclaim(1) end)
+        W.netEvent('fh:homestead:open_chest', 1, { plot_id = 'claim_a' })
+        T.eq('chest: fh_claim_busy', W.client[#W.client].msg)
+        T.eq(2, #W.opens)
+        T.same({ true, 'claim_a' }, { W.finish(h) })
+        -- mid-claim (held at the row insert): the new owner cannot open before the claim has landed
+        W.hold.insert_plot = true
+        W.at(2, 'claim_a')
+        h = W.start(function() return W.ex.claim(2) end)
+        W.netEvent('fh:homestead:open_chest', 2, { plot_id = 'claim_a' })
+        T.eq('chest: fh_claim_busy', W.client[#W.client].msg)
+        T.same({ true, 'claim_a' }, { W.finish(h) })
+        W.netEvent('fh:homestead:open_chest', 2, { plot_id = 'claim_a' })
+        T.same({ src = 2, id = sid('claim_a', 1) }, W.opens[3])
+        W.tiers.claim_a.chest_2 = 0
+        W.netEvent('fh:homestead:open_chest', 2, { plot_id = 'claim_a', chest = 2 })
+        T.eq('chest: fh_chest_not_built', W.client[#W.client].msg)
+        T.eq(3, #W.opens)
     end)
 
     case('force is admin-only: a non-admin owner gets fh_not_admin, command and export alike', function()

@@ -20,7 +20,7 @@ return function(T, cfg)
         local W = { db = { plots = {}, chests = {} }, events = {}, threads = {}, ex = {}, client = {}, commands = {},
             players = { [1] = 'A', [2] = 'B' }, offline = {}, admins = {}, peds = {}, hold = {}, fail = {}, logs = {},
             cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {},
-            stash = {}, registered = {}, snapshots = {}, clears = {} }
+            stash = {}, registered = {}, snapshots = {}, clears = {}, net = {}, opens = {} }
         for _, r in ipairs(rows or {}) do W.db.plots[r.plot_id] = { citizenid = r.citizenid, class = r.class } end
         local function await(tag)
             local h = W.hold[tag]
@@ -153,6 +153,10 @@ return function(T, cfg)
                     for slot, it in pairs(W.stash[ref.id] or {}) do out[slot] = { name = it.name, amount = it.amount } end
                     return out
                 end,
+                open = function(_, src, ref) -- records the open; reach is fh_core's job, not tested here
+                    W.opens[#W.opens + 1] = { src = src, id = ref.id }
+                    return true
+                end,
                 clearContainer = function(_, ref)
                     W.clears[#W.clears + 1] = ref.id
                     if W.fail.clear == 'throw' then error('fh_inventory gone') end
@@ -172,7 +176,7 @@ return function(T, cfg)
             FhHomesteadSlots = opts.slots, -- H13: { isReady, getTiers } stub (extra chests' built tiers)
             MySQL = { query = { await = db }, update = { await = db }, insert = { await = db } },
             CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
-            AddEventHandler = function() end, RegisterNetEvent = function() end,
+            AddEventHandler = function() end, RegisterNetEvent = function(name, fn) W.net[name] = fn end,
             TriggerEvent = function(name, data)
                 if W.fail.eventThrows == name then error('handler of ' .. name .. ' errored') end
                 W.events[#W.events + 1] = { name = name, data = data }
@@ -192,6 +196,13 @@ return function(T, cfg)
         W.at = function(src, plotId) W.peds[src] = cfg.plots[plotId].center end
         W.claimAt = function(src, plotId, class) W.at(src, plotId); return W.ex.claim(src, class) end
         W.buyAt = function(src, plotId) W.at(src, plotId); return W.ex.buyLot(src) end
+        -- client -> server net event as player src (handlers read the `source` global)
+        W.netEvent = function(name, src, payload)
+            W.env.source = src
+            local r = table.pack(W.net[name](payload))
+            W.env.source = nil
+            return table.unpack(r, 1, r.n)
+        end
         W.repOf = function(cid, region) return (W.rep[cid] or {})[region] or 0 end
         W.start = function(fn)
             local h = { co = coroutine.create(fn) }
