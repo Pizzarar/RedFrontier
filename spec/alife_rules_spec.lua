@@ -234,4 +234,16 @@ case('deserialize drops malformed squads, keeps valid', function()
     eq(nil, s.squads.bad1); eq(nil, s.squads.bad2); eq(nil, s.squads.bad3); eq(nil, s.squads.bad4)
 end)
 
+case('deserialize rejects numeric id / NaN eta, re-keys by id', function()
+    local nan = 0 / 0
+    local s = R.deserialize({ version = R.VERSION, squads = {
+        a = { id = 7, faction = 'x', to = 'c', etaTick = 1 },
+        b = { id = 'sqN', faction = 'x', to = 'c', etaTick = nan },
+        c = { id = 'sqI', faction = 'x', to = 'c', etaTick = math.huge },
+        wrongkey = { id = 'sqK', faction = 'x', to = 'c', etaTick = 2 } } })
+    eq(nil, s.squads.a); eq(nil, s.squads[7]); eq(nil, s.squads.sqN); eq(nil, s.squads.sqI)
+    eq(nil, s.squads.wrongkey)
+    eq('sqK', s.squads.sqK.id)
+end)
+
 T.finish()

@@ -76,12 +76,10 @@ function M.deserialize(t)
     s.owners = type(t.owners) == 'table' and t.owners or {}
     s.squads = {}
     if type(t.squads) == 'table' then
-        for k, sq in pairs(t.squads) do
-            local idt = type(sq) == 'table' and type(sq.id)
-            if idt == 'string' or idt == 'number' then
-                if type(sq.faction) == 'string' and type(sq.to) == 'string' and type(sq.etaTick) == 'number' then
-                    s.squads[k] = sq
-                end
+        for _, sq in pairs(t.squads) do
+            if type(sq) == 'table' and type(sq.id) == 'string' and type(sq.faction) == 'string'
+                and type(sq.to) == 'string' and finite(sq.etaTick) then
+                s.squads[sq.id] = sq
             end
         end
     end
