@@ -36,7 +36,8 @@ function Get-MissingFwRules {
     foreach ($r in @($missing)) {
         $covered = $filters | Where-Object {
             $_.Protocol -eq $r.Proto -and
-            (Get-NetFirewallRule -AssociatedNetFirewallPortFilter $_ -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue)
+            (Get-NetFirewallRule -AssociatedNetFirewallPortFilter $_ -ErrorAction SilentlyContinue |
+                Where-Object { $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' -and $_.Enabled -eq 'True' })
         }
         if (-not $covered) { $result += $r }
     }
