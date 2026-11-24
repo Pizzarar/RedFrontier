@@ -137,7 +137,7 @@ case('persist fails: no lock; next join retries the SAME license and grants nobo
     assert(r.allowed, 'live grant still admits the owner this session')
     assert(not st.locked and st.pending == OWNER, 'no lock when persist fails')
     T.eq(0, count(srv.logs, 'granted group.admin'))
-    T.eq(1, count(srv.logs, 'could not write admins.cfg'))
+    T.eq(1, count(srv.logs, 'could not save the admin claim'))
     -- a friend joins while the write is still failing: not granted, pending kept, rejected
     local r2 = srv.join(st, ON, FRIEND)
     T.same({ 'persist', 'check' }, srv.calls, 'retry persists the pending owner line, no execute for the friend')
@@ -227,6 +227,82 @@ case('persistVerified: a nil re-read is a failed persist (no lock, nobody else g
     local r2 = join(FRIEND)
     assert(not r2.allowed and r2.granted == nil and acl[FRIEND] == nil and not st.locked and st.pending == OWNER)
     T.eq(0, count(logs, 'granted group.admin'))
+end)
+
+case('parseStore: valid admin/allow entries, comments, dedupe; malformed entries never reach the lists', function()
+    local st = A.parseStore(table.concat({
+        '# header',
+        'admin ' .. OWNER .. ' # owner',
+        'admin ' .. OWNER,
+        'allow ' .. FRIEND:upper():gsub('^LICENSE', 'license'),
+        'allow discord:123456789012345678',
+        'admin discord:123456789012345678', -- admin must be a license
+        'allow ' .. FRIEND .. ';quit',
+        'admin ' .. OWNER .. ' group.admin', -- extra token: injection attempt
+        'grant ' .. OWNER,
+        '',
+    }, '\r\n'))
+    T.same({ OWNER }, st.admins)
+    T.same({ FRIEND, 'discord:123456789012345678' }, st.allow)
+    T.same({ { line = 6, kind = 'admin' }, { line = 7, kind = 'allow' }, { line = 8, kind = 'admin' }, { line = 9, kind = '?' } },
+        st.bad)
+    T.same({ admins = {}, allow = {}, bad = {} }, A.parseStore(nil), 'missing file -> empty store')
+end)
+
+case('storeAdd / storeText / bootLines round-trip; invalid ids refused', function()
+    local st = A.parseStore(nil)
+    T.eq(true, A.storeAdd(st, 'admin', OWNER))
+    T.eq(false, A.storeAdd(st, 'admin', OWNER:sub(9)), 'idempotent (bare hash normalised)')
+    T.eq(true, A.storeAdd(st, 'allow', FRIEND))
+    T.eq(nil, A.storeAdd(st, 'admin', 'discord:123456789012345678'))
+    T.eq(nil, A.storeAdd(st, 'allow', FRIEND .. ' group.admin'))
+    T.eq(nil, A.storeAdd(st, 'owner', OWNER))
+    local back = A.parseStore(A.storeText(st))
+    T.same({ OWNER }, back.admins)
+    T.same({ FRIEND }, back.allow)
+    T.same({}, back.bad, 'header lines are comments')
+    assert(A.storeHas(back, 'admin', OWNER) and not A.storeHas(back, 'admin', FRIEND) and A.storeHas(back, 'allow', FRIEND))
+    T.same({ A.principalLine(OWNER, A.ADMIN_GROUP), A.principalLine(FRIEND, A.ALLOW_GROUP) }, A.bootLines(back))
+    T.same({}, A.bootLines({ admins = { 'license:zz' }, allow = { FRIEND .. ' x' } }), 'bootLines re-validates')
+end)
+
+case('initialState with store: store owner locks; empty store decides unreadable cfg; bad admin line fails closed', function()
+    local empty = A.parseStore('')
+    local st, msg = A.initialState(nil, empty)
+    assert(not st.locked and st.unreadable and msg and msg:find('access.txt', 1, true) and not msg:find('\n'))
+    local owned = A.parseStore('admin ' .. OWNER .. '\n')
+    local st2, msg2 = A.initialState(nil, owned)
+    assert(st2.locked and msg2 == nil, 'store owner locks even with admins.cfg unreadable')
+    assert(A.initialState('', owned).locked)
+    assert(A.initialState('add_principal identifier.' .. OWNER .. ' group.admin\n', empty).locked, 'cfg admin locks')
+    assert(not A.initialState('# comments\n', empty).locked)
+    local st3, msg3 = A.initialState('', A.parseStore('admin license:nothex\n'))
+    assert(st3.locked and st3.badStore and msg3:find('malformed admin', 1, true), 'malformed admin line -> locked')
+    assert(not A.initialState('', A.parseStore('allow junk\n')).locked, 'a bad allow line does not lock')
+    assert(A.initialState(nil).locked, 'no store passed: unreadable cfg alone still fails closed')
+end)
+
+case('adminExists evidence: locks instead of granting a new first joiner; skipped while a grant is pending', function()
+    local st, calls, logs = { locked = false }, {}, {}
+    local function io(exists)
+        return {
+            execute = function() calls[#calls + 1] = 'execute' end,
+            persist = function() calls[#calls + 1] = 'persist' return false end,
+            isAllowed = function() return true end,
+            adminExists = function() calls[#calls + 1] = 'evidence' return exists end,
+            log = function(m) logs[#logs + 1] = m end,
+        }
+    end
+    local r = A.onConnect(st, ON, { license = FRIEND, name = 'f', whitelistOn = false }, io(true))
+    assert(r.granted == nil and st.locked)
+    T.same({ 'evidence' }, calls)
+    T.eq(1, count(logs, 'existing admin is connected'))
+    -- pending: our own live grant must not count as evidence
+    calls = {}
+    local st2 = { locked = false, pending = OWNER }
+    A.onConnect(st2, ON, { license = FRIEND, name = 'f', whitelistOn = false }, io(true))
+    T.same({ 'persist' }, calls, 'retry persist, no evidence check')
+    assert(not st2.locked and st2.pending == OWNER)
 end)
 
 T.finish()

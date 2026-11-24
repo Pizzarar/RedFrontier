@@ -303,12 +303,32 @@ exports.fh_core:requestOfNetId(netId) -- requestId | nil
 ## Access (B-access, private server)
 
 Private dev server: the owner plus up to 5 friends over NordVPN Meshnet (host Media-Host, `100.102.50.11`) (`sv_maxclients 6`, unlisted via `sv_master1 ""`).
-Files: `shared/access_rules.lua` (`FhAccessRules`, pure, `spec/access_rules_spec.lua`), `server/access.lua` (natives, io).
+Files: `shared/access_rules.lua` (`FhAccessRules`, pure, `spec/access_rules_spec.lua`), `server/access.lua` (natives,
+`spec/access_server_spec.lua` with fake natives).
+
+- **Durable store: `fh_core/access.txt`** (gitignored), written with `SaveResourceFile` and read with
+  `LoadResourceFile`, never Lua io: live on Windows, `io.open` on the server dir returned nil for an existing
+  `admins.cfg` (fixed in core x1). One entry per line: `admin license:<hash>` (owner) / `allow license:<hash>` or
+  `allow discord:<id>` (friend), `#` comments. At resource start every entry is validated with `parseIdentifier` and
+  re-applied with `ExecuteCommand('add_principal ...')` (server.cfg: `add_ace resource.fh_core command.add_principal
+  allow`); malformed entries are logged with their line number and never executed.
+- **admins.cfg / allowlist.cfg** stay owner-editable manual overrides that server.cfg `exec`s at boot. fh_core reads
+  `admins.cfg` for the lock if it can and best-effort appends grants to both; every io failure prints the path and
+  the io error, and success never depends on it.
+- **Lock rule** (auto-admin is claimed, nobody new is granted) when ANY of: `access.txt` has an `admin` entry;
+  `access.txt` has a malformed `admin` line (fail closed until fixed); `admins.cfg` is readable and has an active
+  admin line; at connect, the joiner or any online player already holds the `command` ace (group.admin evidence).
+  An unreadable `admins.cfg` with no store owner does NOT lock on its own, because the store decides (that is the
+  live bug: the first joiner was never granted). Residual risk, accepted for this private, convar-gated server:
+  if `access.txt` is lost AND `admins.cfg` is unreadable AND no admin is online, the next joiner is granted. The
+  admin-evidence check closes the common case (the owner is online, or the joiner is already admin via
+  `exec admins.cfg`). `FhAccessRules.initialState(content)` without a store still fails closed.
 
 - **Auto-admin:** with `fh_dev 1` and `fh_dev_autoadmin 1` (server.cfg, private dev server only) and no admin line in
-  `server/admins.cfg`, the first player to connect gets `add_principal identifier.license:<hash> group.admin`, live
-  and appended to `admins.cfg`; the console prints `granted group.admin to license:<hash>`. The lock engages only
-  once the line is verified on disk. If the write fails, that same license stays admin until restart and the write is
+  `access.txt` / `server/admins.cfg` (lock rule above), the first player to connect gets
+  `add_principal identifier.license:<hash> group.admin` live, saved to `access.txt` (and best-effort `admins.cfg`);
+  the console prints `granted group.admin to license:<hash>`. The lock engages only once the `access.txt` entry is
+  verified by a re-read. If the write fails, that same license stays admin until restart and the write is
   retried on the next connect; nobody else is granted meanwhile. Later joiners are never auto-granted. Server
   events only (playerConnecting); there is no net event.
 - **Allowlist:** rsg-core's own whitelist, switched on in `rsg-core/shared/config.lua` with
@@ -323,11 +343,11 @@ Files: `shared/access_rules.lua` (`FhAccessRules`, pure, `spec/access_rules_spec
   only prints one console line `allowlist: rejected <name> license:<hash> [discord:<id>]`. The player sees rsg-core's
   `error.not_whitelisted` locale text, edited in `rsg-core/locales/en.json` (server/VENDORED.md) to "You're not on
   this private server's allowlist. Ask the owner to add you: they can see your ID in the server console."
-- **admins.cfg unreadable:** fails closed. If `admins.cfg` is missing or unreadable at resource start, auto-admin is
-  treated as locked (nobody is granted) and the console prints one `autoadmin: ERROR cannot read admins.cfg` line
-  with the path. Run `tools/start-server.ps1` / the first-run to create it, or fix its permissions, then restart.
+- **admins.cfg unreadable:** the console prints `autoadmin: cannot read admins.cfg (path: <path>: <io error>)` and
+  `access.txt` decides the lock (rule above).
 - **Adding a friend:** `fh_allow <license:hash | hash | discord:id>` (group.admin, or the server console). Applies
-  live and appends to `allowlist.cfg` (idempotent). The friend reconnects. Revoke: delete the line and restart.
+  live, saves `allow <id>` to `access.txt` (verified) and best-effort appends to `allowlist.cfg` (idempotent). The
+  friend reconnects. Revoke: delete the line from `access.txt` (and `allowlist.cfg` if there) and restart.
 - `tools/lib.ps1` `Initialize-AccessCfgs` creates both cfgs (comments only) when missing, so `exec` never fails.
 
 ## Natives

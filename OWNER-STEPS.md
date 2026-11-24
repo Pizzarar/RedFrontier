@@ -24,14 +24,14 @@ Open RedM, press F8, type `connect 100.102.50.11:30120` (or `192.168.1.135:30120
 
 ## 5. Admin and dev mode
 
-- **Auto-admin:** with `fh_dev_autoadmin 1` and an empty `server/admins.cfg`, the **first player to join** is added to `group.admin` (one `granted group.admin to license:<hash>` line in `server/logs/fxserver.log`, saved in `server/admins.cfg`, so it persists across restarts). Nothing to configure. Check it with `fh_dump backpack <yourId>` (replies, no "no permission"). This is OWNER-TESTS "Core: B-access". To revoke, delete your line in `server/admins.cfg` and restart (the next first joiner becomes admin). Set `fh_dev_autoadmin 0` for a public server.
+- **Auto-admin:** with `fh_dev_autoadmin 1` and no admin yet, the **first player to join** is added to `group.admin` (one `granted group.admin to license:<hash>` line in `server/logs/fxserver.log`). The claim is saved in `server/resources/[fh]/fh_core/access.txt` (and copied into `server/admins.cfg` when the server can write it), so it persists across restarts. Nothing to configure. Check it with `fh_dump backpack <yourId>` (replies, no "no permission"). This is OWNER-TESTS "Core: B-access". To revoke, delete your `admin license:...` line in `fh_core/access.txt` AND your line in `server/admins.cfg` (if there), then restart (the next first joiner becomes admin). Set `fh_dev_autoadmin 0` for a public server.
 - **`fh_dev 1` (dev mode, on in server.cfg):** client script errors are reported to the server and appended to `server/logs/client-errors.log` on the DevPC. Run `fh_clienterr` in game (admin) to check the pipe: expect a line in that file. Exception: `fh_inventory` (an rsg-inventory fork) is not wrapped, so its client errors only show in the RedM client log on the Main PC.
 - **`fh_spike_gated true` (leave it):** conservative path until the spike verdicts are recorded (see OWNER-TESTS "Spike verdicts").
 
 ## 6. Friends (max 6 players)
 
 1. Send your friend a NordVPN Meshnet invite to Media-Host (NordVPN app > Meshnet > Invite, using their NordVPN account email; leave "Allow remote access" on for them); they install NordVPN + RedM, accept the invite, and F8 `connect 100.102.50.11:30120` (`192.168.1.135:30120` on the same LAN). They are rejected the first time.
-2. In the DevPC server window copy the license from the `allowlist: rejected <name> license:<hash>` line and type `fh_allow license:<hash>` there (or in game F8 as admin).
+2. In the DevPC server window copy the license from the `allowlist: rejected <name> license:<hash>` line and type `fh_allow license:<hash>` there (or in game F8 as admin). It is saved in `fh_core/access.txt` (re-applied at every start); `server/allowlist.cfg` still works for adding friends by hand.
 3. They connect again and get in (not as admin).
 
 ## 7. Materials you'll need `fh_give` / `/giveitem` for

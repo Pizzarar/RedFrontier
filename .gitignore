@@ -2,6 +2,8 @@
 server/secrets.cfg
 server/admins.cfg
 server/allowlist.cfg
+# fh_core access store (owner + allowlist claims; SaveResourceFile)
+server/resources/\[fh\]/fh_core/access.txt
 server/artifacts/
 server/db/
 server/cache/

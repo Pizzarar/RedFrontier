@@ -53,7 +53,7 @@ After recording, flip with `set fh_spike_gated false` in the console only for th
    RESULT:
 2. In game, run an fh_ admin command, e.g. `fh_dump backpack <yourId>`: it replies (no "no permission").
    RESULT:
-3. Restart the server (close its window, run `first-run.cmd`), rejoin: still admin (step 2 works), and no new `granted` line in fxserver.log.
+3. Restart the server (close its window, run `first-run.cmd`), rejoin: still admin (step 2 works), the console printed `access: re-applied 1 admin ...` at boot, and no new `granted` line in fxserver.log.
    RESULT:
 4. Friend (optional, needs a second account): a not-yet-allowlisted connect is rejected with "You're not on this private server's allowlist. Ask the owner to add you..." (rsg-core's message; no `[RSGCORE]` prefix, shown once), and the server console prints one `allowlist: rejected <name> license:<hash>` line.
    RESULT:

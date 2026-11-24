@@ -13,9 +13,9 @@ local function appendLine(line)
         local root = base:match('^(.*)/resources/') or base
         logPath = root .. '/logs/client-errors.log'
     end
-    local f = io.open(logPath, 'a')
+    local f, err = io.open(logPath, 'a')
     if not f then
-        print(('[fh_core] cannot open %s (create server/logs/)'):format(logPath))
+        print(('[fh_core] cannot open %s: %s (create server/logs/)'):format(logPath, tostring(err)))
         return
     end
     f:write(line, '\n')
