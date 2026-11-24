@@ -1,0 +1,23 @@
+fx_version 'cerulean'
+game 'rdr3'
+rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'
+
+lua54 'yes'
+
+description 'RedFrontier A-Life: camp ownership sim + outlaw retake squads (plan a-life-01)'
+
+shared_scripts {
+    '@ox_lib/init.lua',
+    '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
+    '@fh_zones/config.lua',        -- FhZonesConfig camp list (fh_zones must be started first)
+    'config.lua',
+    'shared/alife_rules.lua',
+}
+
+server_scripts {
+    'server/main.lua',
+}
+
+dependencies { 'fh_core', 'fh_zones', 'fh_heat', 'fh_trade', 'rsg-core', 'ox_lib' }
+
+server_exports { 'getOwner', 'isLawHeld' }
