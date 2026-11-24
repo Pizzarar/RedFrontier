@@ -13,11 +13,13 @@ shared_scripts {
     '@fh_zones/config.lua',        -- FhZonesConfig camp list (fh_zones must be started first)
     'config.lua',
     'shared/alife_rules.lua',
+    'shared/contracts_rules.lua',
 }
 
 server_scripts {
     'server/main.lua',
-    'server/squads.lua',
+    'server/squads.lua',    -- uses FhAlifeServer from main.lua
+    'server/contracts.lua', -- uses FhAlifeContracts (shared) + FhAlifeServer.getState
 }
 
 dependencies { 'fh_core', 'fh_zones', 'fh_trade', 'ox_lib' }
