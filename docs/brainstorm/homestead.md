@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Homestead
-- Lead: Homestead lead · H3/H4 fixes + H2/H5
+- Lead: ★ Hom2
 - Workers: 0
 
 ## Done when
@@ -23,8 +23,10 @@
 - (none in lane) Resolved: lumber $3 / nails $2 at every trade post (fh_trade/config.lua:25, roads supplies); build money refund via fh_economy.credit (018df02, H2c d19146d). Tracked elsewhere: nails.png icon → idea-724; in-game checks (plots 2-4 coords, prop offsets, fallback chest model) → OWNER-TESTS homestead card; 6 stale homestead worktrees (pre-rebase hashes) need manual sweep, owner OK first.
 
 ## In flight
+- homestead-02 town lots (idea-801): H6 MERGED 281d88a+c90e069 (mig 0018); H7 MERGED b7b73a0; H9 30e713d PASS 0/0/2 (Hom27; lows = plotInfo reports unowned until claims load at startup, same as getPlot, accepted). H9b (Hom26, on homestead-h9): export lawSafeAt for @a-life (Ali1). DECIDED lawSafeAt(coords, citizenid): owner-only, nil without citizenid (stops outlaws hiding in strangers' lots); Ali1 told, passes wanted player id from fh_heat; "any owned lot" would be a separate function. H9b a058f72 PASS 0/0/0 (Hom28), hash sent to Ali1; @a-life caller on main e7a2783 (fh_heat calls lawSafeAt guarded, live once our stack merges). H10 must also check @world /where shows open lots as lots, not claim sites. Stack H8 e5a5b30 → H9 30e713d → H9b a058f72 all PASS, @world B MERGED f342821 → Hom26 rebasing (keep world plot entries, lots stay claimable=false until H10; world D touches fh_homestead/client only, no clash) → keeping both config.lua edits → specs → merge slot → H10. H8 PASS 0/0/0 e5a5b30 on homestead-h8, held until @world B on main; H9 PASS 0/0/2 30e713d (Hom27) + H9b lawSafeAt(coords,citizenid) for @a-life PASS 0/0/0 a058f72 (Hom28) on homestead-h9 (stacked on h8), held with H8 for @world B; lead now Hom2 rn-4b289c2c0700; H10 after B. Follow-ups idea-803 (@a-life enforce lot safety), idea-804 (@core citizenid rep path).
+- homestead-02 decisions: lawman-safe = Workaround (enforcement idea-803 @a-life); lot abandon takes +25 rep back; offline admin abandon releases lot + logs skipped rep (citizenid rep path idea-804 @core). Owner defaults ($300, +25, chest_2+workbench, no refund, old rows = claim) built as config, still unconfirmed by owner.
 - DONE-WHEN MET: H1-H5 on local main (H2 8bbc891 2e696ce 42baa30 + docs 2775580; venv 59/1205/0; no migration). Logged `homestead playtest-ready 2775580` 22:24Z. Nothing pushed.
 - MERGED H2b to local main (ff-only, Red2 slot): 1059d0f on 69dfc15 (review PASS 0/0/0 Hom12 rn-fad11b833003, venv 66/1299/0, no migration). Homestead plan homestead-01 complete; nothing pushed.
 - MERGED H2c+H2d to local main (ff-only, Red2 slot): d19146d (build money refund via fh_economy.credit by citizenid; PASS 0/0/1 rn-39f017886dec) c6eb2ee (items spec; gate-audit lumber/nails claim false positive; PASS 0/0/3 rn-7c53c5dd3102). venv 73/1407/0, no migration. Lumber/nails now bought at trade posts (roads supplies); README + OWNER-TESTS updated.
-- Lead rn-115ea34769e8. Overlord Red2 rn-657b4dc593d4 (merge slot). Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (highest 0011).
+- Lead Hom2 rn-4b289c2c0700 (took over from rn-115ea34769e8 2026-11-24 via vs handoff). Overlord = `vs who lead --lane redfrontier` (Red3 → Red4 handoff). Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (highest 0011).
 - Contacts: Hunting Buddy rn-323e75f78948, Crafting Buddy (H3 consumer, told).

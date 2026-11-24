@@ -26,5 +26,4 @@
 - v2: road ambush nodes; wilderness-claim raids (needs a homestead claim-class API); generated contracts (camp clear, bounty, escort, rescue) via fh_quests; owner-coloured blips (fh_ui places.lua is static); the 8x3 per-faction loot tables (@world data).
 
 ## In flight
-- a-life-01: A1/A2 PASS d7458b1+ee8302b (no-law skip+log), A3/A4 PASS da5a42d; 81/1486/0. aec4cb9 double-heat fix + events.md; 81/1487/0. Gemini PASS A3/A4; Gemini on the sim running, then Red3 slot. Originally handed to a new @a-life lead. @world Buddy pinged about the node and faction data shape.
-- a-life-01 PASS (branch a-life-01 @ docs commit): A1/A2 d7458b1+ee8302b+aec4cb9, A3/A4 da5a42d; Gemini PASS 0/0/3 (minors queued); 81/1487/0. Awaiting Red3 merge slot.
+- a-life-01 MERGED + pushed c1eed21. Follow-ups on main and pushed: idea-803 e7a2783 (no law heat inside your own town lot, via homestead lawSafeAt) and idea-805 53770c3 (review minors, factionLabel broadcasts); 82/1510/0. Lane idle. Waiting on the owner's in-game check, then the owner picks a v2 item from Open.

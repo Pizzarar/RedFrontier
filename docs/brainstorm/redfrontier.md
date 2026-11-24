@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: RiffBot
 - Lead: ★ Red3
-- Workers: 2
+- Workers: 0
 
 ## Done when
 - Every lane in the spec (L0–L10) is merged on local main, with one install/start doc (OWNER-STEPS.md) and one combined test card. Then Aub playtests. The Overlord owns this gate.
@@ -38,6 +38,7 @@
 - @spikes: S1–S5 probes PASS in code, waiting on Aub in-game.
 - @survival (Buddy rn-62b9920d6289): started.
 - @quests, @guide: pinned 2026-11-23, waiting for the Overlord to start their Buddies.
+- @world (Buddy rn-14920746d476) and @a-life (Buddy rn-2589bd3f3837): spun off 2026-11-24, acting on leans, plan-to-lead tonight. Hub sent town-lot/claim split, content ladder, 8 factions, region-2 fold-in.
 - @homestead, @crafting, @roads, @hunting, @progression, @ui: Buddies live 2026-11-23, designing.
 
 ## Unsplit threads
@@ -46,4 +47,7 @@
 - §4 contracts merged in @core (B4a container API, B4b ledger/buffs/regions/events; main 6307f28+). Only B4c spawn contract still flagged on S1.
 - NEXT LANE lined up (2026-11-22): L2 Survival (`fh_survival`). Needs only fh_buffs.apply/get (fh_buffs/README.md). Owns fh_survival only; fh_buffs client effects (currently a stub) go via contract request to @core. Well-Rested-from-comfort waits on L1 comfort score. Spin-off block posted, waiting on owner click.
 - Later: L5 Weapons/Crafting (needs homestead station slots), L10 UI shell, L8 Hunting (needs S2 pelt verdict). L4 death and L3 zones stay inside @core (M1 slice).
-- 2026-11-24 World riff (owner via Red3): owner wants all RDR2 regions (~15, no Guarma), a faction count, and a STALKER-style A-Life sim. Proposed spin-off @world (region and faction data, plots, camps, posts, ground-snap) and @alife (server-side squad sim on a node graph, spawns only near players). Waiting on owner click. Replaces the narrow redfrontier-04-world plan.
+- 2026-11-24 World riff: spun off as @world and @a-life (see Teams). Replaces the narrow redfrontier-04-world plan.
+- 2026-11-24 (owner): two home classes. Town lots are in or near a town, part of the village, and must be bought. Wilderness claims are free. Goes to @world. Tutorial reorder approved and sent to Red3 (greeting, inventory, eat/drink, claim, trade post, hunt/sell, /jobs, family giver). Owner wants v1 content to be "more"; still riffing.
+- 2026-11-24 Red3: tutorial reorder in flight (rn-b0372c950a68, wt rf-tutorder; steps keyed by id). Block E's Scarlett Meadows is on main 26b75b8 for @world to fold in. Main not pushed yet; push is the owner's call.
+- 2026-11-24: owner away for hours ("push whatever you need"). Main d1e9b88 pushed. Red3 at ~145k, handing off to Red4. Content ladder = systemic lean (A-Life carries the "more"; 5 questlines, 15 legendaries). Lane briefs uncommitted until the next merge slot.
