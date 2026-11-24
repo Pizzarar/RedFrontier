@@ -11,6 +11,7 @@ local function stub() return setmetatable({}, { __index = function() return stub
 local invoking, players, handlers, convars, sent = nil, {}, {}, {}, {}
 local gate = {} -- [src] = { ok = bool, why = reason } (default: no horse)
 local gateCalls = 0
+local gateHook -- test hook: runs inside the gate double (stands in for a yield in fh_core's export)
 local shared = {
   bread = { name = 'bread', label = 'Bread', weight = 100, unique = false, type = 'item', useable = true },
   saddle = { name = 'saddle', label = 'Saddle', weight = 5000, unique = true, type = 'item', size_class = 'bulky' },
@@ -25,6 +26,7 @@ Core.Functions.CanUseItem = function(name) return function(src, item) used[#used
 local EXPORTED = {}
 local fhCore = { saddlebagPane = function(_, src, netId)
   gateCalls = gateCalls + 1
+  if gateHook then gateHook(src) end
   local g = gate[src]
   if type(netId) ~= 'number' or not g then return false, 'fh_no_horse' end
   if not g.ok then return false, g.why end
@@ -54,8 +56,9 @@ local env = setmetatable({
   TriggerClientEvent = function(name, src, ...) sent[#sent + 1] = { name = name, src = src, n = select('#', ...), args = { ... } } end,
   TriggerEvent = function() end,
   RegisterNetEvent = function(name, fn) if fn then handlers[name] = fn end end,
-  AddEventHandler = function(name, fn) -- keep the first playerDropped (fh_inventory main.lua; shops.lua loads after)
-    if name == 'playerDropped' and not handlers[name] then handlers[name] = fn end end,
+  AddEventHandler = function(name, fn) -- keep the first of each (fh_inventory main.lua; shops.lua loads after)
+    if (name == 'playerDropped' or name == 'RSGCore:Server:OnPlayerUnload') and not handlers[name] then
+      handlers[name] = fn end end,
   CreateThread = function() end,
   GetResourceState = function() return 'started' end,
 }, { __index = function(_, k) local v = _G[k]; if v ~= nil then return v end return stub() end })
@@ -107,7 +110,19 @@ local function reset()
   gate[1] = { ok = true }
   I.Pane[1] = nil
   I.OpenInv[1] = 'fh:chest:pane'
+  I.PaneRevoked[1] = nil
   used = {}
+  gateHook = nil
+end
+-- MySQL double for one case: records stash ids written by SaveStash.
+local function withSaves(fn)
+  local saved = {}
+  rawset(env, 'MySQL', setmetatable({ prepare = function(_, args) saved[#saved + 1] = args[1] end },
+    { __index = function() return stub() end }))
+  local ok, r, m = pcall(fn, saved)
+  rawset(env, 'MySQL', nil)
+  assert(ok, r)
+  return r, m
 end
 local function toggle(pane, netId) fire('rsg-inventory:server:pane', 1, { pane = pane, netId = netId or 7 }) end
 local function move(from, to, fromSlot, toSlot, amount)
@@ -304,6 +319,62 @@ T.describe('flag on: snap-back', function()
     local gone = I.Pane[1] == nil
     I.OpenInv[1] = nil
     return gone end)
+  case('flag off live, a refresh revokes the pane first: the in-flight saddlebag move is still refused (review low 1)', function()
+    reset(); toggle('saddlebag'); bag.dirty = true
+    return withSaves(function(saved)
+      convars.fh_saddlebag_pane = 'false'
+      I.Refresh(1) -- e.g. the open chest changed: the client is sent the backpack, the pane is revoked silently
+      local e = last('rsg-inventory:client:refresh', 1)
+      local revoked = I.Pane[1] == nil and I.PaneRevoked[1] == true and e.args[1].id == 1
+      local savedBag = bag.type ~= 'stash' or saved[1] == BAG -- (SaveStash only writes type 'stash')
+      local b, p, c = snap(bag.items), snap(P1.PlayerData.items), snap(chest.items)
+      move('player', 'fh:chest:pane', 1, 9) -- the client sent this while it still showed saddlebag slot 1
+      local refused = snap(bag.items) == b and snap(P1.PlayerData.items) == p and snap(chest.items) == c
+        and notified(1, 'fh_pane_disabled') and I.PaneRevoked[1] == nil
+      move('player', 'fh:chest:pane', 6, 9) -- next one comes from the backpack the client now shows
+      convars.fh_saddlebag_pane = 'true'
+      return revoked and savedBag and refused and chest.items[9] and chest.items[9].amount == 5,
+        ('revoked=%s saved=%s refused=%s'):format(tostring(revoked), tostring(savedBag), tostring(refused))
+    end) end)
+  case('flag off live, revoked by a refresh: use is refused too', function()
+    reset(); toggle('saddlebag'); convars.fh_saddlebag_pane = 'false'; I.Refresh(1)
+    fire('rsg-inventory:server:useItem', 1, 6)
+    convars.fh_saddlebag_pane = 'true'
+    return #used == 0 and notified(1, 'fh_pane_disabled') and I.PaneRevoked[1] == nil end)
+  case('character switch on the same src (OnPlayerUnload): pane state gone (review low 2)', function()
+    reset(); toggle('saddlebag'); I.PaneRevoked[1] = true
+    handlers['RSGCore:Server:OnPlayerUnload'](1)
+    return I.Pane[1] == nil and I.PaneRevoked[1] == nil end)
+  case('1 s tick: Pane changing while the gate runs is safe, every pane checked once (review low 3)', function()
+    reset(); toggle('saddlebag')
+    I.Pane[2] = { id = 'fh:saddle:C2x', netId = 7 }
+    local seen = {}
+    gateHook = function(src)
+      seen[#seen + 1] = src
+      if src == 1 then I.Pane[2] = nil; I.Pane[5] = { id = 'fh:saddle:C5x', netId = 7 } end
+      if src == 2 then I.Pane[1] = nil; I.Pane[6] = { id = 'fh:saddle:C6x', netId = 7 } end
+    end
+    local ok, err = pcall(I.PaneTick)
+    gateHook = nil
+    local p5, p6 = I.Pane[5], I.Pane[6]
+    I.Pane[2], I.Pane[5], I.Pane[6] = nil, nil, nil
+    -- no 'invalid key to next'; a pane removed mid-tick is not checked; a pane added mid-tick waits for the next tick
+    for _, s in ipairs(seen) do if s == 5 or s == 6 then return false, 'checked a pane added mid-tick' end end
+    return ok and #seen == 1 and (p5 ~= nil or p6 ~= nil), tostring(err) .. ' seen=' .. #seen end)
+  local function bagGone(label, act)
+    case(label .. ': the bag goes away while the gate runs -> no error, snapped back (review low 4)', function()
+      reset(); toggle('saddlebag'); local p0 = snap(P1.PlayerData.items)
+      local reg = I.API.RegisterStash
+      I.API.RegisterStash = function() return nil end -- the stash cannot come back from the database either
+      gateHook = function() I.Inventories[BAG] = nil end
+      local ok, err = pcall(act)
+      gateHook = nil; I.API.RegisterStash = reg; I.Inventories[BAG] = bag
+      return ok and I.Pane[1] == nil and notified(1, 'fh_pane_changed') and snap(P1.PlayerData.items) == p0
+        and next(P2.PlayerData.items) == nil and I.OpenInv[1] == 'fh:chest:pane', tostring(err) end)
+  end
+  bagGone('give', function() fire('rsg-inventory:server:give', 1, 2, 1, 1, 'bread') end)
+  bagGone('trash', function() fire('rsg-inventory:server:trash', 1, 1, 1, 'bread') end)
+  bagGone('drop', function() fire('rsg-inventory:server:drop', 1, 1, 1) end)
   case('use while the gate fails: nothing used, snapped back with the gate reason', function()
     reset(); toggle('saddlebag'); gate[1] = { ok = false, why = 'fh_out_of_reach' }
     fire('rsg-inventory:server:useItem', 1, 6)

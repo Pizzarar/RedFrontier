@@ -25,8 +25,8 @@ fork notes below.
   backpack/saddlebag toggle; when off, the open event is the unchanged two-argument rsg form. The server alone decides
   which pane is active (`Pane[src]`): `'player'` in move/split/sort/give/trash/drop means that pane, gated by
   `exports.fh_core:saddlebagPane` before every action and once a second (a failure snaps back to the backpack and the
-  action is refused). Use and shop buy/sell are refused on the saddlebag pane. Closing the inventory or leaving resets
-  to the backpack. Specced in `spec/saddlebag_pane_spec.lua`.
+  action is refused). Use and shop buy/sell are refused on the saddlebag pane. Closing the inventory, leaving or a
+  character switch resets to the backpack. Specced in `spec/saddlebag_pane_spec.lua`.
 - **Runtime-registered items** resolve through `RSGCore.Shared.Items` (`FhItems.sharedLookup`), so an item fh_core
   pushed with its `size_class` is classed correctly here.
 

@@ -28,6 +28,9 @@ local FhMeta       = {}
 -- Empty unless convar fh_saddlebag_pane is on; empty = the player pane is the backpack (rsg behaviour).
 local Pane         = {}
 local PaneCooldown = {}
+-- FH (B6f): [src] = true after a saddlebag pane was revoked without a snap-back (flag off live, stash gone; see
+-- ActivePane): the client may still send actions with saddlebag slot numbers, so the next routed action is refused.
+local PaneRevoked  = {}
 
 -- FH: true when the current export call comes from fh_core or from this resource itself
 local function FhCallerAllowed()
@@ -268,7 +271,11 @@ end
 local function ActivePane(src)
     local p = Pane[src]
     if not p then return nil end
-    if not FhPaneEnabled() or not GetContainer(p.id) then Pane[src] = nil return nil end
+    if not FhPaneEnabled() or not GetContainer(p.id) then
+        Pane[src], PaneRevoked[src] = nil, true
+        API.SaveStash(p.id) -- (the SaveStash local is declared further down)
+        return nil
+    end
     return p
 end
 
@@ -1111,13 +1118,12 @@ end
 -- Gate for an action on the player pane -> nil (the pane is the backpack: act as rsg does) | false (the saddlebag pane
 -- failed its gate: snapped back, refuse the action) | the pane (gate passed: act on Pane[src].id).
 local function PaneCheck(src)
-    local held = Pane[src]
-    if not held then return nil end
     local p = ActivePane(src)
     if not p then
-        -- the flag went off live (or the stash is gone) while the client still shows saddlebag slots: refuse this
+        if not PaneRevoked[src] then return nil end
+        -- the flag went off live (or the stash is gone) and the client may still show saddlebag slots: refuse this
         -- action (its slots are saddlebag slots) and push the backpack, same as any other snap-back
-        SaveStash(held.id)
+        PaneRevoked[src] = nil
         Notify(src, 'fh_pane_disabled')
         Refresh(src)
         return false
@@ -1133,7 +1139,7 @@ end
 -- The inventory closed (or the player left): the next open starts on the backpack.
 local function PaneClosed(src)
     local p = Pane[src]
-    Pane[src], PaneCooldown[src] = nil, nil
+    Pane[src], PaneCooldown[src], PaneRevoked[src] = nil, nil, nil
     if p then SaveStash(p.id) end
 end
 
@@ -1228,15 +1234,23 @@ RegisterNetEvent('rsg-inventory:server:pane', function(payload)
     if not ok then Notify(src, idOrWhy) return Refresh(src) end
     if OpenInv[src] == idOrWhy then Notify(src, 'fh_same_container') return Refresh(src) end
     if not GetContainer(idOrWhy) then Notify(src, 'fh_unknown_container') return Refresh(src) end
-    Pane[src] = { id = idOrWhy, netId = netId }
+    Pane[src], PaneRevoked[src] = { id = idOrWhy, netId = netId }, nil
     Refresh(src)
 end)
 
--- FH (B6f): walking or riding away from the horse snaps the pane back even when the player does nothing
+-- FH (B6f): walking or riding away from the horse snaps the pane back even when the player does nothing. The keys are
+-- copied first: the fh_core export can yield, and Pane can gain or lose entries meanwhile (no pairs over a changing table).
+local function PaneTick()
+    local srcs = {}
+    for src in pairs(Pane) do srcs[#srcs + 1] = src end
+    for _, src in ipairs(srcs) do
+        if Pane[src] or PaneRevoked[src] then PaneCheck(src) end
+    end
+end
 CreateThread(function()
     while true do
         Wait(1000)
-        for src in pairs(Pane) do PaneCheck(src) end
+        PaneTick()
     end
 end)
 
@@ -1520,7 +1534,7 @@ RegisterNetEvent('rsg-inventory:server:useItem', function(slot)
     if not Player or IsIncapacitated(Player) then return end
     -- FH (B6f): with the saddlebag pane up the slot is a saddlebag slot, and usable-item callbacks take from the
     -- player's own inventory: refuse (the player moves it to the backpack first)
-    if Pane[src] then -- a snap-back (gate failed, flag off live) has already notified and refreshed
+    if Pane[src] or PaneRevoked[src] then -- a snap-back (gate failed, flag off live) has already notified and refreshed
         if PaneCheck(src) then Notify(src, 'fh_pane_use') end
         return
     end
@@ -1566,7 +1580,11 @@ RegisterNetEvent('rsg-inventory:server:give', function(targetId, slot, amount, i
     if tped == 0 or Dist(src, GetEntityCoords(tped)) > Config.GiveDistance then return Notify(src, 'too_far') end
     local pane = PaneCheck(src) -- FH (B6f): give from the pane on screen
     if pane == false then return end
-    local from = pane and GetContainer(pane.id) or me
+    local from = me
+    if pane then -- (no `pane and X or me`: a missing bag must not fall back to the backpack)
+        from = GetContainer(pane.id)
+        if not from then return SnapBack(src, 'fh_pane_changed') end -- the bag went away while the gate ran
+    end
 
     local item = from.items[slot]
     if not item or (itemName ~= nil and item.name ~= tostring(itemName):lower()) then
@@ -1632,7 +1650,11 @@ RegisterNetEvent('rsg-inventory:server:trash', function(slot, amount, itemName)
     if not me or IsIncapacitated(me.player) then return end
     local pane = PaneCheck(src) -- FH (B6f): trash from the pane on screen
     if pane == false then return end
-    local from = pane and GetContainer(pane.id) or me
+    local from = me
+    if pane then -- (no `pane and X or me`: a missing bag must not fall back to the backpack)
+        from = GetContainer(pane.id)
+        if not from then return SnapBack(src, 'fh_pane_changed') end -- the bag went away while the gate ran
+    end
     local item = from.items[slot]
     if not item or (itemName ~= nil and item.name ~= tostring(itemName):lower()) then return Notify(src, 'invalid_item') end
     amount = math.tointeger(tonumber(amount))
@@ -1661,7 +1683,11 @@ RegisterNetEvent('rsg-inventory:server:drop', function(slot, amount)
     if not me or IsIncapacitated(me.player) then return end
     local pane = PaneCheck(src) -- FH (B6f): drop from the pane on screen
     if pane == false then return end
-    local from = pane and GetContainer(pane.id) or me
+    local from = me
+    if pane then -- (no `pane and X or me`: a missing bag must not fall back to the backpack)
+        from = GetContainer(pane.id)
+        if not from then return SnapBack(src, 'fh_pane_changed') end -- the bag went away while the gate ran
+    end
 
     local item = from.items[slot]
     if not item then return end
@@ -1735,7 +1761,7 @@ InvCore = {
     SavePlayer = SavePlayer, SaveStash = SaveStash, CleanupDropIfEmpty = CleanupDropIfEmpty,
     FhViews = FhViews, FhCheckLayout = FhCheckLayout, MoveBetween = MoveBetween, AddToRaw = AddToRaw,
     Normalize = Normalize, MoveDrop = MoveDrop, IsOpenByAnyone = IsOpenByAnyone,
-    Pane = Pane, PaneCheck = PaneCheck, ActivePane = ActivePane, -- FH (B6f): read by spec/saddlebag_pane_spec.lua
+    Pane = Pane, PaneCheck = PaneCheck, ActivePane = ActivePane, PaneTick = PaneTick, PaneRevoked = PaneRevoked, -- FH (B6f): read by spec/saddlebag_pane_spec.lua
 }
 
 --------------------------------------------------------------------------------
@@ -1767,6 +1793,7 @@ end)
 -- bonuses belong to a character: they are re-applied by the resource that grants them when it loads
 AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src)
     CapacityBonus[src] = nil
+    PaneClosed(src) -- FH (B6f): a character switch on the same src starts on the backpack
 end)
 
 -- Tables are built on start (same schema as install.sql). Set Config.AutoDatabase = false to import install.sql by hand.
