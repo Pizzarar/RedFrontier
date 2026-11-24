@@ -26,14 +26,18 @@ function Get-MissingFwRules {
     }
     if (-not $missing) { return }
 
-    # A named rule is missing: bulk-fetch the port filters ONCE (calling Get-NetFirewallPortFilter
-    # per inbound rule hangs for minutes on PCs with many rules) and drop any proto already
-    # covered by an existing inbound allow rule on this port.
-    $filters = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue |
-        Get-NetFirewallPortFilter
+    # A named rule is missing: fetch every port filter in ONE CIM query (piping every inbound
+    # rule into Get-NetFirewallPortFilter is the slow per-rule association query that hangs on
+    # PCs with many rules). Keep only the filters that already open this port, then resolve just
+    # those few to their rule to confirm it is an enabled inbound allow rule.
+    $filters = Get-NetFirewallPortFilter -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalPort -contains "$Port" }
     $result = @()
     foreach ($r in @($missing)) {
-        $covered = $filters | Where-Object { $_.Protocol -eq $r.Proto -and ($_.LocalPort -contains "$Port") }
+        $covered = $filters | Where-Object {
+            $_.Protocol -eq $r.Proto -and
+            (Get-NetFirewallRule -AssociatedNetFirewallPortFilter $_ -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue)
+        }
         if (-not $covered) { $result += $r }
     }
     $result
