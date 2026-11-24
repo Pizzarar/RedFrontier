@@ -46,6 +46,16 @@ function M.wantsSnap(snap)
     return snap ~= false
 end
 
+---Probe-start offset for a place: town lots and verified places use the tight downward probe (SPAWN_PROBE_ABOVE),
+---so a chest/prop never lands on an awning or roof; unverified wilderness claims keep the wide probe (PROBE_ABOVE).
+---place = { class, verified } (a plot); a missing class/verified reads as an unverified claim.
+function M.probeAboveFor(place)
+    if type(place) == 'table' and (place.class == 'town_lot' or place.verified == true) then
+        return M.SPAWN_PROBE_ABOVE
+    end
+    return M.PROBE_ABOVE
+end
+
 ---Keep probing after a failed attempt? attempt is the attempt just made (1-based). Gives up at maxRetries
 ---(default M.MAX_RETRIES) or at the deadline (ms, optional).
 ---@return boolean

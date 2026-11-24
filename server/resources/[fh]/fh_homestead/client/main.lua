@@ -28,7 +28,14 @@ local function spawn(p)
     local t = GetGameTimer()
     while not HasModelLoaded(model) and GetGameTimer() - t < 5000 do Wait(50) end
     if not HasModelLoaded(model) then return end
-    local z = FhSnap.groundZAt(p.id, p.coords.x, p.coords.y, p.coords.z)
+    local plot = FhHomesteadConfig and FhHomesteadConfig.plots and FhHomesteadConfig.plots[p.id]
+    local z = FhGroundSnap.snapZ(p.coords.z,
+        FhSnap.groundZAt(p.id, p.coords.x, p.coords.y, p.coords.z, FhGroundSnap.probeAboveFor(plot)),
+        FhGroundSnap.SNAP_TOLERANCE)
+    if props[p.id] then -- re-check after the probe yielded: another spawn may have completed meanwhile
+        SetModelAsNoLongerNeeded(model)
+        return
+    end
     local obj = CreateObject(model, p.coords.x, p.coords.y, z, false, false, false) -- isNetwork = false
     if not obj or obj == 0 then
         SetModelAsNoLongerNeeded(model)
@@ -92,7 +99,15 @@ local function spawnSlot(set, p)
         SetModelAsNoLongerNeeded(model)
         return
     end
-    local z = FhSnap.groundZAt(p.plot_id .. ':' .. p.slot_id, p.coords.x, p.coords.y, p.coords.z)
+    local plot = FhHomesteadConfig and FhHomesteadConfig.plots and FhHomesteadConfig.plots[p.plot_id]
+    local z = FhGroundSnap.snapZ(p.coords.z,
+        FhSnap.groundZAt(p.plot_id .. ':' .. p.slot_id, p.coords.x, p.coords.y, p.coords.z, FhGroundSnap.probeAboveFor(plot)),
+        FhGroundSnap.SNAP_TOLERANCE)
+    -- re-check after the probe yielded: the set may have been cleared/replaced meanwhile
+    if slotSets[p.plot_id] ~= set or set.ents[p.slot_id] then
+        SetModelAsNoLongerNeeded(model)
+        return
+    end
     local obj = CreateObject(model, p.coords.x, p.coords.y, z, false, false, false) -- isNetwork = false
     SetModelAsNoLongerNeeded(model)
     if not obj or obj == 0 then return end
@@ -116,7 +131,7 @@ local function clearPlot(plotId)
     if not set then return end
     slotSets[plotId] = nil
     for _, pt in ipairs(set.points) do pt:remove() end
-    for slotId, pt in pairs(set.promptPoints or {}) do pt:remove() end
+    for _, pt in pairs(set.promptPoints or {}) do pt:remove() end
     for slotId in pairs(set.ents) do despawnSlot(set, slotId) end
     if set.prompt then lib.hideTextUI() end
 end

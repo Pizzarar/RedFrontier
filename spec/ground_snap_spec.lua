@@ -52,6 +52,16 @@ case('SPAWN_PROBE_ABOVE: spawns probe down from 1.5 m above (never a roof/upper 
     T.eq(1.5, G.SPAWN_PROBE_ABOVE)
 end)
 
+case('probeAboveFor: town lot / verified place uses the tight downward probe, else the wide probe', function()
+    T.eq(G.SPAWN_PROBE_ABOVE, G.probeAboveFor({ class = 'town_lot' }))
+    T.eq(G.SPAWN_PROBE_ABOVE, G.probeAboveFor({ verified = true }))
+    T.eq(G.SPAWN_PROBE_ABOVE, G.probeAboveFor({ class = 'town_lot', verified = false }))
+    T.eq(G.PROBE_ABOVE, G.probeAboveFor({ verified = false }))
+    T.eq(G.PROBE_ABOVE, G.probeAboveFor({ class = 'claim' }))
+    T.eq(G.PROBE_ABOVE, G.probeAboveFor({}))
+    T.eq(G.PROBE_ABOVE, G.probeAboveFor(nil))
+end)
+
 case('resolve: groundZ on success, hint on failure', function()
     T.eq(105.0, G.resolve(true, 105.0, 118.0))
     T.eq(118.0, G.resolve(false, nil, 118.0))
