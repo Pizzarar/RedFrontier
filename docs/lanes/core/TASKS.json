@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T17:13:05.821Z",
+  "updatedAt": "2026-11-24T22:11:01.277Z",
   "units": [
     {
       "id": "B5",
@@ -83,10 +83,12 @@
     },
     {
       "id": "B6f",
-      "goal": "follow-up: backpack/saddlebag player-pane toggle in fh_inventory fork (~6 handlers assume player pane); replaces /saddlebag in|out UX; tierA-invariant",
+      "goal": "pane toggle dark behind fh_saddlebag_pane=false (core-07, tierA)",
       "files": [],
       "doneCheck": "",
-      "status": "blocked"
+      "status": "running",
+      "branch": "core-b6f",
+      "commit": "c2d652b"
     },
     {
       "id": "B6g",
@@ -245,9 +247,58 @@
       "goal": "idea-804 fh_economy repByCitizenid (offline rep for homestead H8 lot abandon)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-r1",
-      "commit": "f9a7316"
+      "commit": "7bb75f6"
+    },
+    {
+      "id": "L1",
+      "goal": "contract lint tools/check-contracts.py (core-07)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-l1",
+      "commit": "5145348"
+    },
+    {
+      "id": "A1",
+      "goal": "tierA fh_economy money audit (core-07)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-a1",
+      "commit": "dadc1bc"
+    },
+    {
+      "id": "S1",
+      "goal": "fh_core edge specs (core-07)",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-s1",
+      "commit": "4393738"
+    },
+    {
+      "id": "M2",
+      "goal": "money items always fit: rsg-core moneyitems.lua:77-88 AddMoney returns true when cash item can't be placed; next sync drops it (A1 high-plausible). tierA",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "M3",
+      "goal": "fh_inventory/server/shops.lua:136-170 bypasses fh_economy ledger, fractional prices, unchecked sell AddMoney (A1 med)",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "X1",
+      "goal": "live: fh_core access io.open fails in FXServer; move claim to resource-local storage + log io errors (tierA-security)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-x1"
     }
   ]
 }

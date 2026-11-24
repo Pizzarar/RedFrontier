@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor2
-- Workers: 0
+- Workers: 4
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -27,6 +27,7 @@
 - 2026-11-23 core-04 inbox sweep (docs/brainstorm/plans/core-04-inbox-sweep.md): 612/613 caps, 610 buffs remaining, 609 death bags mine/remaining, 611/699 run-specs, 700 offline credit = pending-credit queue claimed on load (raw money UPDATE races rsg save), B7-nit.
 - 2026-11-23 core-05 (plans/core-05-gun-parts-loot.md): gun_parts outlaw loot 0.8 x2-3 + unpend crafting sources spec. idea-721 declined: fh_core timeout cannot stop the late write; root fix = fence-side token.
 - 2026-11-24 Host network moved Tailscale -> NordVPN Meshnet (Media-Host), idea-744. core-06 infra sweep (743 ace grants, 744 docs, 750 idempotent rocks_zones INSERT) dispatched by lead as I1 rn-c1105e8f1c5c tierA; 762 bounced to @roads.
+- 2026-11-24 core-07 (plans/core-07-keyless-hardening.md), quota push: L1 static contract lint (exports/events/items), A1 tierA money audit, S1 fh_core edge specs, B6f pane toggle DARK behind convar fh_saddlebag_pane=false (flip after owner saddlebag RESULT; then remove /saddlebag in|out). Lane SPEC.md written (docs/lanes/core/SPEC.md, uncommitted, lead commits in merge slot).
 
 ## Open
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
@@ -58,3 +59,5 @@
 - 11-23 core-05 COMPLETE: K1 gun_parts outlaw loot (0.8, 2-3) + rollLoot ranges + crafting_sources_spec unpend merged main (ae7a8ff, a488aba; Gemini PASS 0/0/2 folded; venv 71/1385/0). idea-721 declined (fix is fence-side). Core merges on hold until playtest gate docs land.
 - 11-24 core-06 COMPLETE: I1 (743 ACE grants before ensures, 744 Meshnet Media-Host IP/docs) merged main 47b4fd5 by Red3; 750 already on main 90a8278 (hub rf-inboxfix). I1-nit Get-MeshnetIp null guard 0b72271. tools/test-firstrun.ps1 needs a Windows run (no pwsh on forge). Core inbox empty.
 - 11-24 R1 COMPLETE: idea-804 fh_economy.repByCitizenid (offline rep for homestead H8 abandon; shared applyRep, src re-resolve after awaits) 59c688b+f9a7316, Gemini PASS 0/0/2 folded; venv 87/1595/0.
+- 11-24 R1 idea-804 merged 7bb75f6; core-06 I1 (743/744/750) by lead. core-07 handed to Cor2 rn-d9e827279687 (4 parallel blocks). Remaining owner-gated: B1-live, B6f flip.
+- 11-24 core-07 S1 PASS: fh_core edge specs (49 tests: carried refs offline src, bulky veto, setItemInfo races, netId after despawn, spawn timeouts, snap) d29dc30+4393738, Gemini PASS 0/0/3 folded; venv 93/1699/0.
