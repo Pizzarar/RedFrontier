@@ -1,5 +1,5 @@
 -- fh_quests server reach-watcher (quests-02 C2). I/O only: every decision is in shared/watch_rules.lua (specced).
--- Polls ONLY players holding a watched job (survey now; escort C3 and rescue C4 register a kind in their own
+-- Polls ONLY players holding a watched job (survey, escort; rescue C4 registers a kind in its own
 -- shared/jobtypes/<type>.lua via FhQuestsWatchRules.registerKind), on a coarse tick, with server-side coords
 -- (GetEntityCoords(GetPlayerPed(src)), OneSync), and emits the kind's quest-owned local event
 -- (default fh:quests:point_reached { citizenid, offer_key, region_id, point }). Same shape as the bounty watcher in
@@ -161,5 +161,104 @@ function W.rearmAll()
     for _, id in ipairs(GetPlayers()) do
         local src = tonumber(id)
         CreateThread(function() Wait(3000); pcall(rearm, src) end)
+    end
+end
+
+-- ================================================================ escort (quests-02 C3)
+-- The escort kind (shared/jobtypes/escort.lua) gets its server-only parts here: onArm spawns the escortee via
+-- fh_core requestSpawn (like the bounty ped), posOf is the escortee (so the core tick emits fh:quests:escort_arrived
+-- when it reaches the destination), onDisarm despawns it. A separate check on the same coarse tick emits
+-- fh:quests:escort_lost (escortee dead / despawned -> job failed). Both are LOCAL server events (TriggerEvent only).
+-- The holder's client gets the escortee's netId (fh:quests:escort_follow) and runs the follow task (client/escort.lua).
+-- Natives (unverified in-game, as for the bounty watcher): NetworkGetEntityFromNetworkId, DoesEntityExist,
+-- GetEntityHealth, GetEntityCoords.
+do
+    local kind = WR.KINDS.escort
+    local DONE_DESPAWN_MS = 15000 -- an arrived escortee lingers a moment instead of vanishing on the spot
+
+    local function entityOf(netId)
+        if not netId then return nil end
+        local ent = NetworkGetEntityFromNetworkId(netId)
+        if not ent or ent == 0 or not DoesEntityExist(ent) then return nil end
+        return ent
+    end
+
+    local function despawnReq(reqId)
+        if reqId then pcall(function() exports.fh_core:despawn(reqId) end) end
+    end
+
+    kind.onArm = function(e, offer)
+        local s = offer.start
+        if type(s) ~= 'table' or type(offer.model) ~= 'string' then return false, 'fh_bad_offer' end
+        local key = WR.key(e.cid, e.qid)
+        local reqId, err = exports.fh_core:requestSpawn({
+            kind = 'ped', model = offer.model, coords = vector4(s.x, s.y, s.z, offer.heading or 0.0),
+            owner = { kind = 'quest', id = e.cid }, tag = JT.escortTag(e.region_id, e.offer_key, e.cid),
+        }, {
+            near = vector3(s.x, s.y, s.z),
+            onReady = function(netId, requestId) -- again with a new netId after a re-request (spawner drop)
+                if watch[key] ~= e then despawnReq(requestId) return end
+                e.netId = netId
+                if ownerOnline(e) then TriggerClientEvent('fh:quests:escort_follow', e.src, { netId = netId }) end
+            end,
+            onFailed = function(reason)
+                if watch[key] ~= e then return end
+                e.spawnFailed = true -- the lost check fails the job
+                Q.log('escort %s spawn failed: %s', key, tostring(reason))
+            end,
+        })
+        if not reqId then return false, type(err) == 'string' and err or 'fh_escort_spawn_failed' end
+        e.reqId = reqId
+        return true
+    end
+
+    kind.onDisarm = function(e, why)
+        if e.netId and ownerOnline(e) then TriggerClientEvent('fh:quests:escort_stop', e.src, { netId = e.netId }) end
+        if why == 'done' then
+            local reqId = e.reqId
+            SetTimeout(DONE_DESPAWN_MS, function() despawnReq(reqId) end)
+        else
+            despawnReq(e.reqId)
+        end
+    end
+
+    kind.posOf = function(e)
+        local ent = entityOf(e.netId)
+        if not ent or GetEntityHealth(ent) <= 0 then return nil end
+        return JT.escortPos(e, GetEntityCoords(ent))
+    end
+
+    -- One observation for the pure lost rule (JT.escortObserve). Offline holders are never observed (ownerGone
+    -- disarms them anyway).
+    local function observe(e)
+        if not ownerOnline(e) then error('holder offline') end
+        local spawn = exports.fh_core:getSpawn(e.reqId)
+        if type(spawn) == 'table' and spawn.netId then e.netId = spawn.netId end
+        local ent = spawn and spawn.state == 'adopted' and entityOf(spawn.netId) or nil
+        return { spawn = spawn, exists = ent ~= nil, dead = ent ~= nil and GetEntityHealth(ent) <= 0,
+            failed = e.spawnFailed }
+    end
+
+    CreateThread(function()
+        while true do
+            Wait(WR.TICK_MS)
+            if next(watch) ~= nil then
+                -- Snapshot first (escortCollectLost): TriggerEvent yields (the intake takes the quest lock).
+                for _, l in ipairs(JT.escortCollectLost(watch, observe)) do
+                    if watch[l.key] == l.entry then
+                        local ok, err = pcall(TriggerEvent, JT.ESCORT_LOST, JT.escortLostPayload(l.entry))
+                        if not ok then Q.log('^1escort lost event for %s failed: %s^7', l.key, tostring(err)) end
+                        -- the entry stays (lost: no arrival) until heal sees the row failed and drops it
+                    end
+                end
+            end
+        end
+    end)
+
+    ---registerJobType hooks for escort: the watched-job hooks plus the lost event.
+    function W.escortHooks()
+        local h = W.jobHooks('escort')
+        h.events[#h.events + 1] = JT.ESCORT_LOST
+        return h
     end
 end

@@ -19,7 +19,7 @@ local FH = here .. '../server/resources/[fh]/'
 -- Checked-in allowlist of names fh client/shared code may call as a bare global (exposed natives + CFX builtins).
 local ALLOW = {
     -- RDR3 natives exposed by name
-    'AddRelationshipGroup', 'CreateObject', 'CreatePed', 'CreateVehicle', 'DeleteEntity', 'DeleteObject',
+    'AddRelationshipGroup', 'ClearPedTasks', 'CreateObject', 'CreatePed', 'CreateVehicle', 'DeleteEntity', 'DeleteObject',
     'DisableAllControlActions', 'DisableControlAction', 'DoesAnimDictExist', 'DoesEntityExist',
     'EnableControlAction', 'FreezeEntityPosition', 'GetCloudTimeAsInt', 'GetCurrentPedWeapon',
     'GetEntityBoneIndexByName', 'GetEntityCoords', 'GetEntityHealth', 'GetEntityModel', 'GetGameTimer',
@@ -28,6 +28,7 @@ local ALLOW = {
     'IsEntityDead', 'IsEntityInWater', 'IsModelInCdimage', 'IsModelValid', 'IsPauseMenuActive', 'IsPedAPlayer',
     'IsPedDeadOrDying', 'IsPedOnMount', 'IsThisModelAHorse', 'NetworkDoesNetworkIdExist',
     'NetworkGetEntityFromNetworkId', 'NetworkGetEntityIsNetworked', 'NetworkGetNetworkIdFromEntity',
+    'NetworkHasControlOfEntity', 'NetworkRequestControlOfEntity',
     'PlaceObjectOnGroundProperly', 'PlayerId', 'PlayerPedId', 'RemoveAnimDict', 'RemoveBlip', 'RemoveWeaponFromPed',
     'RequestAnimDict', 'RequestClipSet', 'RequestCollisionAtCoord', 'RequestModel', 'SetBlipScale', 'SetBlipSprite',
     'SetBlockingOfNonTemporaryEvents', 'SetCurrentPedWeapon', 'SetEntityAsMissionEntity', 'SetEntityCollision',
@@ -35,7 +36,7 @@ local ALLOW = {
     'SetEntityHeading',
     'SetEntityInvincible', 'SetModelAsNoLongerNeeded', 'SetPedCanRagdoll', 'SetPedCombatAttributes',
     'SetPedFleeAttributes', 'SetPedRelationshipGroupHash', 'SetRelationshipBetweenGroups',
-    'TaskCombatHatedTargetsAroundPed', 'TaskPlayAnim', 'Wait',
+    'TaskCombatHatedTargetsAroundPed', 'TaskFollowToOffsetOfEntity', 'TaskPlayAnim', 'Wait',
     -- CfxLua / CFX runtime builtins
     'AddEventHandler', 'CreateThread', 'Entity', 'GetConvarInt', 'GetCurrentResourceName', 'GetGamePool',
     'GetResourceState', 'IsNuiFocused', 'RegisterCommand', 'RegisterNUICallback', 'RegisterNetEvent',

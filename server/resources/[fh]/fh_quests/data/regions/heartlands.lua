@@ -24,4 +24,10 @@ JT.registerRegion('heartlands', {
             { x = -410.0, y = 650.0, z = 121.0 }, -- TODO-verify-in-game
         } },
     },
+    escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
+        { key = 'doc_hollis', name = 'Doc Hollis', model = 'a_m_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
+            start = { x = -175.0, y = 627.0, z = 114.0 },       -- TODO-verify-in-game
+            destination = { x = -360.0, y = 795.0, z = 116.0 }, -- TODO-verify-in-game
+        },
+    },
 })

@@ -1,4 +1,4 @@
--- fh_quests built-in job types (Q3): hunt_request, camp_clear, bounty; survey (quests-02 C2). Pure Lua, no natives.
+-- fh_quests built-in job types (Q3): hunt_request, camp_clear, bounty; survey (quests-02 C2); escort (C3). Pure Lua, no natives.
 -- This is the data + the decisions. server/jobtypes.lua registers them through the same registerJobType export
 -- every other lane uses, and does the bounty I/O (spawn, death watch). Region templates live in M.DATA.
 --
@@ -9,7 +9,7 @@ local M = {}
 
 local function match() return FhQuestsMatch or require('match') end
 
-M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run', 'survey' }
+M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run', 'survey', 'escort' }
 M.BOUNTY_EVENT = 'fh:quests:bounty_down' -- local server event fired by the bounty death watcher: { citizenid, offer_key, region_id }
 M.BOUNTY_TAG_PREFIX = 'fh_quests:bounty:'
 
@@ -105,7 +105,7 @@ if GetCurrentResourceName then
     FhQuestsJobTypes = M
 else
     -- Specs: load what the manifest loads in-game. The global is set first: some files read FhQuestsJobTypes
-    -- directly (supply_run, survey); the rest take the chunk argument passed below, guarded by
+    -- directly (supply_run, survey, escort); the rest take the chunk argument passed below, guarded by
     -- `type((...)) == 'table'` because under FXServer `...` is a number and they fall back to the global.
     FhQuestsJobTypes = M
     local dir = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
