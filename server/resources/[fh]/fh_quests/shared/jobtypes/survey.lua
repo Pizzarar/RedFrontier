@@ -3,7 +3,7 @@
 --   surveys = { { key, name, points = { {x,y,z}, ... }, ordered = true|false (default true), money, rep }, ... }
 -- Points are TODO-verify-in-game guesses. The server reach-watcher (server/watch.lua) emits one
 -- fh:quests:point_reached per reached point; each valid one counts one toward count = #points.
-local JT = ... or FhQuestsJobTypes -- chunk argument outside FXServer (specs), the global in-game
+local JT = FhQuestsJobTypes -- the global (in-game: set by shared/jobtypes.lua; specs: set by its spec loader)
 local WR = FhQuestsWatchRules or require('watch_rules')
 
 local function copyPoints(points)
