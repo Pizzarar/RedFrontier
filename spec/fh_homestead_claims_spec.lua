@@ -2,7 +2,8 @@
 -- in-memory fh_plots table that enforces PRIMARY KEY(plot_id) + UNIQUE(citizenid, class) like migration 0018.
 -- byOwner is byOwner[class][citizenid]; getPlot(cid) / plotOf(cid) default to the 'claim' class, so every existing
 -- caller (fh_hands, slots/build/comfort) keeps getting the homestead claim and never a town lot.
--- An await can be HELD (W.hold[tag] = true): the call yields there so a spec can run another call meanwhile.
+-- An await can be HELD (W.hold[tag] = true, or a count n = the next n calls): the call yields there so a spec can run
+-- another call meanwhile.
 local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
 local case = T.it
@@ -27,7 +28,11 @@ local function newWorld(rows, opts)
         players = { [1] = 'A', [2] = 'B' }, peds = {}, hold = {}, fail = {}, logs = {} }
     for _, r in ipairs(rows or {}) do W.db.plots[r.plot_id] = { citizenid = r.citizenid, class = r.class } end
     local function await(tag)
-        if W.hold[tag] and coroutine.isyieldable() then W.hold[tag] = nil; coroutine.yield(tag) end
+        local h = W.hold[tag]
+        if h and coroutine.isyieldable() then
+            W.hold[tag] = (type(h) == 'number' and h > 1) and h - 1 or nil
+            coroutine.yield(tag)
+        end
     end
     local function db(sql, p)
         p = p or {}
@@ -56,6 +61,8 @@ local function newWorld(rows, opts)
             return 1
         elseif sql:find('^DELETE FROM fh_plots') then
             await('delete_plot')
+            if W.fail.delete_plot == 'throw' then error('db down') end
+            if W.fail.delete_plot == 'nil' then return nil end -- error logged by the driver, no row count
             local r = W.db.plots[p[1]]
             if not r or r.citizenid ~= p[2] then return 0 end
             W.db.plots[p[1]], W.db.chests[p[1]] = nil, nil
@@ -100,6 +107,7 @@ local function newWorld(rows, opts)
         local r = table.pack(coroutine.resume(h.co))
         if not r[1] then error(r[2], 0) end
         h.res = r
+        h.done = coroutine.status(h.co) == 'dead'
         return h
     end
     W.finish = function(h)
@@ -301,6 +309,81 @@ T.describe('fh_homestead claims per class (H7)', function()
         -- unclaim of a loaded lot clears its class bucket, the claim stays
         T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') })
         T.eq(nil, W.ex.getPlot('B', 'town_lot')); T.eq('claim_b', W.ex.getPlot('B'))
+        W.consistent()
+    end)
+
+    case('unclaim + unclaim + re-claim interleaved: one per-plot lock, the stale unclaim never wipes the new claim', function()
+        local W = newWorld()
+        W.claimAt(1, 'lot_a', 'town_lot')
+        W.hold.delete_plot = 2 -- both unclaims would park at their DELETE
+        local h1 = W.start(function() return W.ex.unclaim(0, 'lot_a') end)
+        T.eq(false, h1.done)
+        local h2 = W.start(function() return W.ex.unclaim(1, 'lot_a') end)
+        -- the second unclaim never reaches the DB: refused at once, retryable
+        T.eq(true, h2.done, 'second unclaim must not be in flight')
+        T.same({ false, 'fh_claim_busy' }, { W.finish(h2) })
+        T.same({ false, 'fh_plot_taken' }, { W.claimAt(2, 'lot_a', 'town_lot') }) -- still A's until the DELETE lands
+        T.same({ true, 'lot_a' }, { W.finish(h1) })
+        W.hold.delete_plot = nil
+        W.consistent()
+        -- A re-claims; while that claim is mid-write any unclaim of the plot is refused
+        W.hold.insert_chest = true
+        W.at(1, 'lot_a')
+        local h3 = W.start(function() return W.ex.claim(1, 'town_lot') end)
+        T.same({ false, 'fh_claim_busy' }, { W.ex.unclaim(0, 'lot_a') })
+        T.same({ false, 'fh_claim_busy' }, { W.ex.unclaim(1, 'lot_a') })
+        T.same({ true, 'lot_a' }, { W.finish(h3) })
+        T.eq('lot_a', W.ex.getPlot('A', 'town_lot'))
+        T.eq(1, W.named('fh:homestead:unclaimed'))
+        W.consistent()
+        -- the reservation is intact: no second lot for A
+        T.same({ false, 'fh_already_has_lot' }, { W.claimAt(1, 'lot_b', 'town_lot') })
+    end)
+
+    case('rollback DELETE fails after a chest failure: row stays, claim stays in memory, lock released, unclaim retries', function()
+        for _, mode in ipairs({ 'throw', 'nil' }) do
+            local W = newWorld()
+            W.fail.insert_chest, W.fail.delete_plot = true, mode
+            T.same({ false, 'fh_claim_failed' }, { W.claimAt(1, 'lot_a', 'town_lot') })
+            T.same({ citizenid = 'A', class = 'town_lot' }, W.db.plots.lot_a, mode .. ': row left behind')
+            T.eq('lot_a', W.ex.getPlot('A', 'town_lot'), mode .. ': memory keeps the claim')
+            T.eq(0, W.named('fh:homestead:claimed'))
+            local logged = false
+            for _, m in ipairs(W.logs) do if m:find('^%^1') and m:find('rolled back') then logged = true end end
+            assert(logged, mode .. ': ^1 rollback error logged')
+            W.consistent()
+            W.fail.insert_chest, W.fail.delete_plot = nil, nil
+            T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') }) -- not stuck busy
+            W.consistent()
+            T.same({ true, 'lot_a' }, { W.claimAt(1, 'lot_a', 'town_lot') })
+            W.consistent()
+        end
+        -- rollback DELETE works: the reservation is cleared (covered above too, asserted against the DB here)
+        local W = newWorld()
+        W.fail.insert_chest = true
+        T.same({ false, 'fh_claim_failed' }, { W.claimAt(1, 'lot_a', 'town_lot') })
+        T.eq(nil, W.db.plots.lot_a); T.eq(nil, W.C.ownerOf('lot_a'))
+        W.consistent()
+    end)
+
+    case('unclaim DELETE fails: memory kept, lock released; 0 rows (row gone outside) drops the stale memory', function()
+        for _, mode in ipairs({ 'throw', 'nil' }) do
+            local W = newWorld()
+            W.claimAt(1, 'lot_a', 'town_lot')
+            W.fail.delete_plot = mode
+            T.same({ false, 'fh_unclaim_failed' }, { W.ex.unclaim(0, 'lot_a') })
+            T.eq('lot_a', W.ex.getPlot('A', 'town_lot'), mode)
+            W.consistent()
+            W.fail.delete_plot = nil
+            T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') }, mode .. ': retry works')
+            W.consistent()
+        end
+        local W = newWorld()
+        W.claimAt(1, 'lot_a', 'town_lot')
+        W.db.plots.lot_a = nil -- deleted by hand in the DB
+        T.same({ false, 'fh_unclaim_failed' }, { W.ex.unclaim(0, 'lot_a') })
+        T.eq(nil, W.ex.getPlot('A', 'town_lot')); T.eq(nil, W.C.ownerOf('lot_a'))
+        T.eq(0, W.named('fh:homestead:unclaimed'))
         W.consistent()
     end)
 end)

@@ -8,7 +8,10 @@ local rules = FhPlotRules
 -- UNIQUE(citizenid, class)); classByPlot[plot_id] = the class the row was written / loaded with.
 local claims = { byPlot = {}, byOwner = { claim = {}, town_lot = {} }, classByPlot = {} }
 local ready = false
-local claiming = {} -- plot_id -> true while a claim's DB writes are in flight (unclaim waits for it)
+-- Per-plot in-flight lock shared by claim AND unclaim: plot_id -> true from before the first MySQL await until every
+-- exit. A second claim/unclaim of that plot meanwhile gets the retryable 'fh_claim_busy', so no two DB writes for one
+-- plot ever interleave (and a stale unclaim can never clear a newer claim's memory).
+local busy = {}
 
 local DEFAULT_CLASS = 'claim'
 ---Normalise a class arg / DB value: missing or empty = 'claim'.
@@ -128,32 +131,40 @@ local function claim(src, class)
     if rules.classOf(plot) ~= class then return false, 'fh_wrong_plot_class' end
     local ok, why = rules.canClaim(plot, coords, citizenid, claims)
     if not ok then return false, why end
+    if busy[plot.id] then return false, 'fh_claim_busy' end
     -- reserve in memory first so a second claim in the same tick is refused; DB unique keys are the backstop
     setClaim(plot.id, citizenid, class)
-    claiming[plot.id] = true
+    busy[plot.id] = true
     local plotRow = pcall(MySQL.insert.await, 'INSERT INTO fh_plots (plot_id, citizenid, class) VALUES (?, ?, ?)',
         { plot.id, citizenid, class })
     if not plotRow then
         -- our insert did not happen (e.g. a unique-key conflict with someone else's row): delete nothing
-        claiming[plot.id] = nil
+        busy[plot.id] = nil
         clearClaim(plot.id, citizenid, class)
         return false, 'fh_claim_failed'
     end
     local done = pcall(MySQL.insert.await, 'INSERT INTO fh_plot_chests (plot_id, chest_id, stash_id) VALUES (?, 1, ?)',
         { plot.id, rules.chestStashId(plot.id, 1) })
     if done then
-        -- pcall: an fh_core error must roll back, not leave this plot reserved and `claiming` stuck
+        -- pcall: an fh_core error must roll back, not leave this plot reserved and `busy` stuck
         local called, registered = pcall(registerChest, plot)
         done = called and registered
     end
     if not done then
-        -- roll back only the row this call inserted
-        pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plot.id, citizenid })
-        claiming[plot.id] = nil
-        clearClaim(plot.id, citizenid, class)
+        -- roll back only the row this call inserted. Memory follows the DB: a deleted (or already absent) row clears
+        -- the reservation; a failed DELETE leaves the row, so the claim stays in memory and an unclaim can retry.
+        local rolledBack, affected = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?',
+            { plot.id, citizenid })
+        busy[plot.id] = nil
+        if rolledBack and tonumber(affected) then
+            clearClaim(plot.id, citizenid, class)
+        else
+            print(('^1[fh_homestead] claim of %s by %s failed and its fh_plots row could not be rolled back (%s); kept as claimed, unclaim it to retry^7')
+                :format(plot.id, citizenid, tostring(affected)))
+        end
         return false, 'fh_claim_failed'
     end
-    claiming[plot.id] = nil
+    busy[plot.id] = nil
     TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region })
     return true, plot.id
 end
@@ -170,14 +181,18 @@ local function unclaim(src, plotId)
     if not plotId then return false, 'fh_no_plot' end
     local ok, why = rules.canUnclaim(plotId, citizenid, isAdmin, claims)
     if not ok then return false, why end
-    -- the claim's own writes (row, chest row, chest register) are still in flight: it either lands or rolls back
-    if claiming[plotId] then return false, 'fh_claim_busy' end
+    -- a claim or another unclaim of this plot is mid-write: retry once it has landed or rolled back
+    if busy[plotId] then return false, 'fh_claim_busy' end
     local owner = claims.byPlot[plotId]
     local class = claims.classByPlot[plotId] or rules.classOf(cfg.plots[plotId])
+    busy[plotId] = true
     local deleted, affected = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plotId, owner })
-    -- a concurrent unclaim that already deleted the row affects 0 rows: only one caller emits the event
-    if not deleted or (tonumber(affected) or 0) == 0 then
-        if deleted then clearClaim(plotId, owner, class) end
+    busy[plotId] = nil
+    affected = deleted and tonumber(affected) or nil
+    if not affected or affected == 0 then
+        -- 0 rows under the lock = the DB has no (plot, owner) row (removed outside this server): drop the stale memory
+        -- so memory matches the DB again. An error / unknown count = the row may still be there: keep memory.
+        if affected == 0 then clearClaim(plotId, owner, class) end
         return false, 'fh_unclaim_failed'
     end
     clearClaim(plotId, owner, class)
