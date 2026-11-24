@@ -385,29 +385,6 @@ local function claimedPlots()
     return out
 end
 
----Safe zone query (spec L139: homestead is a safe zone). True when coords are within the safe radius of a CLAIMED
----plot: FhHomesteadConfig.baseSafeRadius (else the plot radius) plus the built fence's safeRadiusBonus. An owned town
----lot (H9) counts too, radius = its plot.radius, no fence bonus. Unclaimed plots (either class) and everything before
----the claim load are not safe. Before the slot cache is loaded the fence bonus is not counted.
----TODO(fh_zones): AI/damage handling and the real zone registry live in fh_zones; nothing enforces this yet.
-local plotIds = {}
-for id in pairs(cfg.plots) do plotIds[#plotIds + 1] = id end
-table.sort(plotIds)
-
-local function isInSafeZone(coords)
-    if not ready then return false end
-    local slots = FhHomesteadSlots -- server/slots.lua (loaded after this file)
-    for _, id in ipairs(plotIds) do
-        if claims.byPlot[id] then
-            local plot = cfg.plots[id]
-            local tiers = slots and slots.getTiers and slots.getTiers(id) or {}
-            local d = rules.dist(plot.center, coords)
-            if d and d <= FhBuildRules.safeRadiusFor(plot, tiers, cfg.baseSafeRadius) then return true end
-        end
-    end
-    return false
-end
-
 ---H9 plot facts for other resources (@alife raids, law AI): { class, raidable, lawSafe, owner } or nil for an unknown
 ---plot id. raidable = class 'claim', lawSafe = class 'town_lot'; owner = citizenid or nil (unclaimed). Class is the
 ---held row's class, else config.lua's.
@@ -417,6 +394,46 @@ local function plotInfo(plotId)
     if not plot then return nil end
     local class = claims.classByPlot[plotId] or rules.classOf(plot)
     return { class = class, raidable = class == DEFAULT_CLASS, lawSafe = class == TOWN_LOT, owner = claims.byPlot[plotId] }
+end
+
+---Safe zone query (spec L139: homestead is a safe zone). True when coords are within the safe radius of a CLAIMED
+---plot: FhHomesteadConfig.baseSafeRadius (else the plot radius) plus the built fence's safeRadiusBonus. An owned town
+---lot (H9) counts too, radius = its plot.radius, no fence bonus. Unclaimed plots (either class) and everything before
+---the claim load are not safe. Before the slot cache is loaded the fence bonus is not counted.
+---TODO(fh_zones): AI/damage handling and the real zone registry live in fh_zones; nothing enforces this yet.
+local plotIds = {}
+for id in pairs(cfg.plots) do plotIds[#plotIds + 1] = id end
+table.sort(plotIds)
+
+---Shared rule of isInSafeZone and lawSafeAt: first owned plot (sorted id order) whose safe radius contains coords, or
+---nil. lawSafeOnly = only plots whose plotInfo says lawSafe (town lots); owner (optional) = only plots that citizenid
+---holds. Bad/nil coords: dist is nil, so nil.
+local function safePlotAt(coords, lawSafeOnly, owner)
+    if not ready then return nil end
+    local slots = FhHomesteadSlots -- server/slots.lua (loaded after this file)
+    for _, id in ipairs(plotIds) do
+        local holder = claims.byPlot[id]
+        if holder and (owner == nil or holder == owner) and (not lawSafeOnly or plotInfo(id).lawSafe) then
+            local plot = cfg.plots[id]
+            local tiers = slots and slots.getTiers and slots.getTiers(id) or {}
+            local d = rules.dist(plot.center, coords)
+            if d and d <= FhBuildRules.safeRadiusFor(plot, tiers, cfg.baseSafeRadius) then return id end
+        end
+    end
+    return nil
+end
+
+local function isInSafeZone(coords)
+    return safePlotAt(coords) ~= nil
+end
+
+---idea-803 (@a-life): plot id of the law-safe plot (town lot) that `citizenid` owns and coords fall in (within
+---plot.radius, same rule as isInSafeZone), else nil. nil/empty citizenid, a non-owner in someone else's lot, wilderness
+---claims, unowned lots and bad/nil coords = nil. Never throws.
+local function lawSafeAt(coords, citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    local ok, id = pcall(safePlotAt, coords, true, citizenid)
+    return ok and id or nil
 end
 
 ---Is chest n of the plot usable? 1 = the claim chest; 2+ = the matching chest_<n> slot must be built.
@@ -479,3 +496,4 @@ exports('getPlot', getPlot)
 exports('claimedPlots', claimedPlots)
 exports('isInSafeZone', isInSafeZone)
 exports('plotInfo', plotInfo)
+exports('lawSafeAt', lawSafeAt)
