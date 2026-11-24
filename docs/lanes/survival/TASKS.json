@@ -1,6 +1,6 @@
 {
   "laneId": "survival",
-  "updatedAt": "2026-11-24T13:31:15.066Z",
+  "updatedAt": "2026-11-24T13:31:26.127Z",
   "units": [
     {
       "id": "S3-low",
@@ -60,9 +60,9 @@
         "server/resources/[fh]/fh_survival/server/rest.lua"
       ],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "survival-s4b",
-      "commit": "6e74574"
+      "commit": "caebf25"
     }
   ]
 }
