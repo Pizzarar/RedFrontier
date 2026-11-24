@@ -119,4 +119,19 @@ case('canClaim: old flat byOwner { [cid] = plot_id } still read, as class claim'
     assert(why(claimPlot, { byPlot = { p2 = 'XYZ' }, byOwner = { XYZ = 'p2' } }))   -- other cid's flat entry
     assert(why(lotPlot, flat))                                                         -- flat entries are claims only
 end)
+case('canClaim region gate (world-02 G1): disabled refused, enabled ok, nil region ok, no gate = allowed', function()
+    local gate = function(id) return id ~= 'off_region' end
+    local function rg(p, g) local ok, e = R.canClaim(p, here0, 'ABC', empty, g) return ok, e end
+    local rp = { id = 'rp', center = here0, radius = 10.0, region = 'off_region' }
+    local ok, e = rg(rp, gate)
+    assert(not ok and e == 'fh_region_disabled', tostring(e))
+    rp.region = 'on_region'
+    assert(rg(rp, gate), 'enabled region allowed')
+    rp.region = nil
+    assert(rg(rp, gate), 'nil region (legacy) is always allowed')
+    rp.region = ''
+    assert(rg(rp, gate), 'empty region (legacy) is always allowed')
+    -- no isEnabled arg and no FhRegions global: today's behaviour, the region is not checked
+    assert(R.canClaim({ id = 'p2', center = here0, radius = 10.0, region = 'off_region' }, here0, 'ABC', empty))
+end)
 T.finish()

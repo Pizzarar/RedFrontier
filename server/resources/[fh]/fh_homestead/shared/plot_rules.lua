@@ -64,12 +64,22 @@ end
 ---claims = { byPlot = { [plot_id] = citizenid }, byOwner = { [class] = { [citizenid] = plot_id } } }
 ---(byOwner may also be the old flat { [citizenid] = plot_id }, read as class 'claim').
 ---One plot per character per class: a character may hold one claim and one town lot.
+---isEnabled (optional, world-02 G1): fn(region_id) -> boolean. When a plot carries a region and this (or the FhRegions
+---global) reports it disabled, the claim is refused 'fh_region_disabled'. A nil/empty region (legacy plot) or no gate
+---available (no arg and no FhRegions) keeps today's behaviour: allowed.
 ---@return boolean ok, string|nil reason
-function M.canClaim(plot, coords, citizenid, claims)
+function M.canClaim(plot, coords, citizenid, claims, isEnabled)
     if type(citizenid) ~= 'string' or citizenid == '' then return false, 'fh_no_character' end
     if type(plot) ~= 'table' then return false, 'fh_no_plot' end
     if plot.claimable == false then return false, 'fh_not_claimable' end
     if not M.inRadius(plot, coords) then return false, 'fh_not_in_plot' end
+    if type(plot.region) == 'string' and plot.region ~= '' then
+        local gate = isEnabled
+        if type(gate) ~= 'function' then
+            gate = (type(FhRegions) == 'table' and type(FhRegions.isEnabled) == 'function') and FhRegions.isEnabled or nil
+        end
+        if gate and gate(plot.region) == false then return false, 'fh_region_disabled' end
+    end
     claims = claims or {}
     if claims.byPlot and claims.byPlot[plot.id] then return false, 'fh_plot_taken' end
     local class = M.classOf(plot)

@@ -152,7 +152,7 @@ local function precheck(src, class)
     local plot = rules.plotAt(cfg.plots, coords)
     if not plot then return nil, 'fh_not_in_plot' end
     if rules.classOf(plot) ~= class then return nil, 'fh_wrong_plot_class' end
-    local ok, why = rules.canClaim(plot, coords, citizenid, claims)
+    local ok, why = rules.canClaim(plot, coords, citizenid, claims, FhRegions and FhRegions.isEnabled)
     if not ok then return nil, why end
     if busy[plot.id] then return nil, 'fh_claim_busy' end
     return plot, citizenid

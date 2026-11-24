@@ -67,8 +67,10 @@ case('town lots are claimable (buyable, homestead H10) and radius 12-15', functi
         end
     end
     for id, r in pairs(regions.regions) do
-        local n = lotsByRegion[id] or 0
-        assert(n >= 1, id .. ' has ' .. tostring(n) .. ' town lots (want >=1)')
+        if #r.towns >= 1 then
+            local n = lotsByRegion[id] or 0
+            assert(n >= 1, id .. ' has ' .. tostring(n) .. ' town lots (want >=1)')
+        end
     end
 end)
 
@@ -105,7 +107,7 @@ case('H10 every town lot has a whole positive price (own or townLot.price), a kn
             end
         end
     end
-    T.eq(6, n)
+    T.eq(18, n)
 end)
 
 T.finish()

@@ -68,6 +68,16 @@ T.describe('fh_homestead town lots (H8)', function()
         W.consistent()
     end)
 
+    case('a disabled-region lot is refused before any charge; an enabled-region lot still buys (world-02 G1)', function()
+        local W = newWorld(nil, { isEnabled = function(id) return id ~= 'scarlett_meadows' end })
+        T.same({ false, 'fh_region_disabled' }, { W.buyAt(1, 'lot_b') }) -- lot_b region = scarlett_meadows
+        T.eq(0, #W.charges); T.eq(0, #W.reps); T.eq(0, #W.credits)
+        T.eq(nil, W.db.plots.lot_b); T.eq(nil, W.C.ownerOf('lot_b'))
+        T.eq(0, W.named('fh:homestead:claimed'))
+        T.same({ true, 'lot_a' }, { W.buyAt(1, 'lot_a') }, 'enabled region still buys')
+        W.consistent()
+    end)
+
     case('fh_insufficient_funds: no row, no rep, no credit, reservation released', function()
         local W = newWorld()
         W.cash.A = 100

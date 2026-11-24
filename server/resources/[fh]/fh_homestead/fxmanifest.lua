@@ -8,6 +8,7 @@ description 'RedFrontier homestead: fixed plots, build slots, stations, comfort 
 
 shared_scripts {
     '@ox_lib/init.lua',
+    '@fh_core/shared/regions.lua', -- FhRegions global (claim/buyLot region gate; fh_core must be started first)
     'config.lua',
     'shared/plot_rules.lua',
     'shared/build_rules.lua',

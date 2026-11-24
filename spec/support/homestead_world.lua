@@ -139,6 +139,7 @@ return function(T, cfg)
         }
         W.env = setmetatable({
             FhHomesteadConfig = cfg, FhPlotRules = PR, FhBuildRules = { safeRadius = function(p) return p.radius end, safeRadiusFor = function(p) return p.radius end },
+            FhRegions = opts.isEnabled and { isEnabled = opts.isEnabled } or nil,
             MySQL = { query = { await = db }, update = { await = db }, insert = { await = db } },
             CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
             AddEventHandler = function() end, RegisterNetEvent = function() end,
