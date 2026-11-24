@@ -7,6 +7,10 @@
 --      effects): pay / charge must report what really happened, not void a row for money that did move.
 --   3. amounts the cash backend cannot hold: rsg-core money items work in whole cents (math.floor(a * 100 + 0.5)), so
 --      a sub-cent amount moves nothing; pay / charge round to whole cents and refuse what rounds to 0.
+--   4. (A1 review) the throw-after check compares in integer cents: with money items on, rsg-core's sync re-reads cash
+--      as tonumber(('%.2f'):format(...)), so 0.14 + 1 ~= 1.14 as doubles.
+--   5. (A1 review) the unload tracker does not grow forever: entries are cleared after the playerDropped native once
+--      rsg-core no longer has that character on the src, never while it still does.
 -- Not a substitute for a live boot.
 local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
@@ -96,7 +100,9 @@ local MySQL = {
 }
 
 local players = {}
-local moneyMode = 'ok' -- 'ok' | 'throw_after' | 'throw_before'
+local moneyMode = 'ok' -- 'ok' | 'throw_after' | 'throw_before' | 'norm_throw_after'
+-- rsg-core money-item sync (moneyitems.lua SynchronizeMoneyItems / calculateTotal): cash re-read from the items
+local function norm(x) return tonumber(string.format('%.2f', x)) end
 local function mkPlayer(src, cid, cash)
     known[cid] = true
     local P = { PlayerData = { source = src, citizenid = cid, money = { cash = cash } }, Functions = {} }
@@ -104,6 +110,10 @@ local function mkPlayer(src, cid, cash)
     P.Functions.AddMoney = function(mtype, amount)
         if moneyMode == 'throw_before' then error('boom before') end
         P.PlayerData.money[mtype] = P.PlayerData.money[mtype] + amount
+        if moneyMode == 'norm_throw_after' then
+            P.PlayerData.money[mtype] = norm(P.PlayerData.money[mtype])
+            error('boom after the money-item sync')
+        end
         if moneyMode == 'throw_after' then error('boom after (UpdatePlayerData)') end
         return true
     end
@@ -112,6 +122,10 @@ local function mkPlayer(src, cid, cash)
         local nb = P.PlayerData.money[mtype] - amount
         if nb < 0 then return false end
         P.PlayerData.money[mtype] = nb
+        if moneyMode == 'norm_throw_after' then
+            P.PlayerData.money[mtype] = norm(nb)
+            error('boom after the money-item sync')
+        end
         if moneyMode == 'throw_after' then error('boom after (UpdatePlayerData)') end
         return true
     end
@@ -132,7 +146,9 @@ local exportsT = setmetatable({}, {
     end,
     __call = function(_, name, fn) exported[name] = fn end,
 })
+local timers = {} -- SetTimeout callbacks, run by the spec
 local env = setmetatable({
+    SetTimeout = function(_, fn) timers[#timers + 1] = fn end,
     exports = exportsT, MySQL = MySQL, GetCurrentResourceName = function() return 'fh_economy' end,
     TriggerEvent = function(name, payload) events[#events + 1] = { name = name, payload = payload } end,
     AddEventHandler = function(name, fn) handlers[name] = fn end,
@@ -140,11 +156,17 @@ local env = setmetatable({
     print = function(...) warnings[#warnings + 1] = table.concat({ ... }, ' ') end,
 }, { __index = _G })
 env._G = env
+local tracker -- the unload tracker main.lua creates (captured to check it does not grow)
 for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_economy/config.lua',
     R .. 'fh_economy/shared/ledger_logic.lua', R .. 'fh_economy/server/main.lua' }) do
+    if p:find('server/main.lua', 1, true) and env.FhLedgerLogic.unloadTracker then
+        local mk = env.FhLedgerLogic.unloadTracker
+        env.FhLedgerLogic.unloadTracker = function(...) tracker = mk(...); return tracker end
+    end
     local fh = assert(io.open(p, 'rb')); local src = fh:read('a'); fh:close()
     assert(load(src, '@' .. p, 't', env))()
 end
+local logic = env.FhLedgerLogic
 local pay, charge, credit = exported.pay, exported.charge, exported.credit
 
 local function count(t, pred)
@@ -163,6 +185,9 @@ local function unloadStart(src) local h = handlers['RSGCore:Server:OnPlayerUnloa
 local function unloadEnd(src) players[src] = nil end
 -- playerDropped: RSGCore:Server:PlayerDropped(Player), Save() (may yield in SaveInventory), then Players[src] = nil
 local function dropStart(P) local h = handlers['RSGCore:Server:PlayerDropped']; if h then h(P) end end
+-- the playerDropped native (global `source`), and the SetTimeouts it scheduled
+local function dropNative(src) local h = handlers['playerDropped']; if h then env.source = src; h(); env.source = nil end end
+local function runTimers() local due = timers; timers = {}; for _, fn in ipairs(due) do fn() end end
 
 local function suspendAt(label, fn, ...)
     pauseAt = label
@@ -283,6 +308,83 @@ T.describe('fh_economy: rsg-core money call throws', function()
         moneyMode = 'ok'
         T.eq(false, ok); T.eq('removemoney_refused', err); T.eq(before, P.PlayerData.money.cash)
         T.eq(1, kindRows('CIDT2', 'charge'))
+    end)
+end)
+
+T.describe('fh_economy: throw-after check in integer cents (money-item sync, %.2f balances)', function()
+    T.it('movedBy compares in cents: true for real moves, false otherwise or on junk', function()
+        assert(0.14 + 1 ~= 1.14 and 1.14 - 1 ~= 0.14, 'precondition: the float compare is inexact here')
+        T.eq(true, logic.movedBy(0.14, 1.14, 1)); T.eq(true, logic.movedBy(1.14, 0.14, -1))
+        T.eq(true, logic.movedBy(0.1 + 0.2, 1.3, 1)); T.eq(true, logic.movedBy(127.2, 132.2, 5))
+        T.eq(false, logic.movedBy(0.14, 0.14, 1)); T.eq(false, logic.movedBy(0.14, 1.13, 1))
+        T.eq(false, logic.movedBy(1.14, 1.14, -1))
+        T.eq(false, logic.movedBy(nil, 1, 1)); T.eq(false, logic.movedBy(0, 0 / 0, 1)); T.eq(false, logic.movedBy(0, 1, math.huge))
+    end)
+    T.it('pay: balance 0.14, AddMoney(1) re-synced to 1.14 then throws -> ok, row kept (not voided / re-paid)', function()
+        local P = mkPlayer(40, 'CIDN1', 0.14); loaded(P)
+        moneyMode = 'norm_throw_after'
+        local ok, err, id = pay(40, 1, 'bounty', 'heartlands')
+        moneyMode = 'ok'
+        T.eq(true, ok); T.eq(nil, err); T.eq(1.14, P.PlayerData.money.cash); T.eq('pay', ledger[id] and ledger[id].kind)
+    end)
+    T.it('charge: balance 1.14, RemoveMoney(1) re-synced to 0.14 then throws -> ok, row kept', function()
+        local P = mkPlayer(41, 'CIDN2', 1.14); loaded(P)
+        moneyMode = 'norm_throw_after'
+        local ok, err, id = charge(41, 1, 'lot', 'heartlands')
+        moneyMode = 'ok'
+        T.eq(true, ok); T.eq(nil, err); T.eq(0.14, P.PlayerData.money.cash); T.eq('charge', ledger[id] and ledger[id].kind)
+    end)
+    T.it('credit online on 0.14: paid once, not queued for a second payment', function()
+        local P = mkPlayer(42, 'CIDN3', 0.14); loaded(P)
+        moneyMode = 'norm_throw_after'
+        local ok, _, mode = credit('CIDN3', 1, 'refund', 'heartlands')
+        moneyMode = 'ok'
+        T.eq(true, ok); T.eq('paid', mode); T.eq(0, pendingOf('CIDN3'))
+        loaded(P); T.eq(1.14, P.PlayerData.money.cash); T.eq(1, kindRows('CIDN3', 'credit'))
+    end)
+    T.it('load claim on 0.14: the queued credit is paid once and cleared, not released for a second payment', function()
+        known.CIDN4 = true
+        assert(credit('CIDN4', 1, 'refund', 'heartlands') == true)
+        local P = mkPlayer(43, 'CIDN4', 0.14)
+        moneyMode = 'norm_throw_after'; loaded(P); moneyMode = 'ok'
+        T.eq(1.14, P.PlayerData.money.cash); T.eq(0, pendingOf('CIDN4'))
+        loaded(P); T.eq(1.14, P.PlayerData.money.cash); T.eq(1, kindRows('CIDN4', 'credit'))
+    end)
+end)
+
+T.describe('fh_economy: the unload tracker is cleared after playerDropped', function()
+    T.it('logout then quit at character select: entry cleared once the timer runs', function()
+        assert(tracker, 'main.lua builds its unload tracker with FhLedgerLogic.unloadTracker')
+        local n0 = tracker.size()
+        local P = mkPlayer(50, 'CIDU1', 10); loaded(P)
+        unloadStart(50); T.eq(n0 + 1, tracker.size())
+        unloadEnd(50)
+        dropNative(50); T.eq(n0 + 1, tracker.size()) -- deferred, not cleared inside the handler
+        runTimers(); T.eq(n0, tracker.size())
+    end)
+    T.it('drop while the save is still running (character still loaded): kept, still refused, cleared later', function()
+        local n0 = tracker.size()
+        local P = mkPlayer(51, 'CIDU2', 10); loaded(P)
+        dropStart(P); dropNative(51)
+        runTimers() -- rsg-core has not removed the Player yet
+        T.eq(n0 + 1, tracker.size()); T.eq(1, #timers, 'rescheduled')
+        T.eq('no_player', select(2, pay(51, 5, 'x', 'heartlands'))); T.eq(10, P.PlayerData.money.cash)
+        players[51] = nil
+        runTimers(); T.eq(n0, tracker.size()); T.eq(0, #timers)
+    end)
+    T.it('many players come and go on ever-higher server ids: no entries left behind', function()
+        local n0 = tracker.size()
+        for src = 100, 149 do
+            local P = mkPlayer(src, 'CIDM' .. src, 1); loaded(P)
+            if src % 2 == 0 then unloadStart(src); unloadEnd(src) else dropStart(P); players[src] = nil end
+            dropNative(src)
+        end
+        T.eq(n0 + 50, tracker.size())
+        runTimers(); T.eq(n0, tracker.size())
+    end)
+    T.it('a drop with nothing marked (never loaded a character) changes nothing', function()
+        local n0 = tracker.size()
+        dropNative(160); runTimers(); T.eq(n0, tracker.size()); T.eq(0, #timers)
     end)
 end)
 

@@ -25,6 +25,48 @@ function logic.toCents(amount)
     return c / 100
 end
 
+---A money value as integer cents (same rounding as logic.toCents / rsg-core's getParts); nil when not a finite number.
+function logic.cents(x)
+    if not isFinite(x) then return nil end
+    return math.floor(x * 100 + 0.5)
+end
+
+---True when a cash balance moved from `before` to `after` by exactly `delta` (signed), compared in integer cents.
+---Never as floats: rsg-core's money-item sync re-reads cash as tonumber(('%.2f'):format(...)), so after a real
+---AddMoney(1) on 0.14 the balance is 1.14, and 0.14 + 1 ~= 1.14 as doubles.
+function logic.movedBy(before, after, delta)
+    local b, a, d = logic.cents(before), logic.cents(after), logic.cents(delta)
+    return b ~= nil and a ~= nil and d ~= nil and a - b == d
+end
+
+---Logout / drop window tracker (src -> citizenid of a character being unloaded). See fh_economy server/main.lua.
+---  mark(src, cid)       on RSGCore:Server:OnPlayerUnload / PlayerDropped (before rsg-core's final save)
+---  loaded(src)          a character loaded on src again: the window is over
+---  blocks(src, cid)     true while that character on that src must not move money
+---  settle(src, curCid)  after the playerDropped native: curCid = citizenid still loaded on src (nil when rsg-core
+---                       has removed it). Clears the entry unless the SAME character is still loaded (its save may
+---                       still be running); returns true when it is still pending (caller re-checks later).
+---  size()               entries held (spec / leak check)
+function logic.unloadTracker()
+    local map, n = {}, 0
+    local t = {}
+    local function set(src, cid)
+        if map[src] == nil and cid ~= nil then n = n + 1 elseif map[src] ~= nil and cid == nil then n = n - 1 end
+        map[src] = cid
+    end
+    function t.mark(src, cid) set(src, cid) end
+    function t.loaded(src) set(src, nil) end
+    function t.blocks(src, cid) return map[src] ~= nil and map[src] == cid end
+    function t.settle(src, curCid)
+        if map[src] == nil then return false end
+        if curCid ~= nil and curCid == map[src] then return true end
+        set(src, nil)
+        return false
+    end
+    function t.size() return n end
+    return t
+end
+
 ---@param args { amount:any, reason:any, region_id:any }
 ---@param ctx { isKnownRegion:fun(id:any):boolean, maxPay:number? }
 ---@return boolean ok, string? err, number? amount  the amount rounded to whole cents (logic.toCents) when ok

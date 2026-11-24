@@ -18,8 +18,11 @@ local VOID_LEDGER = 'DELETE FROM fh_ledger WHERE id = ?'
 -- SAVES the character, then Wait(200)s before RSGCore.Players[src] = nil (rsg-core/server/player.lua Logout); its
 -- playerDropped fires RSGCore:Server:PlayerDropped, then saves. Money moved on that Player after the save is never
 -- written back: lost on pay / credit / claim, and a charge that "took" it would hand out goods for free. So from the
--- unload event on, that character counts as gone here. Cleared when a character loads on the src again.
-local unloading = {}
+-- unload event on, that character counts as gone here. Cleared when a character loads on the src again, or after the
+-- playerDropped native once rsg-core no longer has that character on the src (FhLedgerLogic.unloadTracker).
+local unloading = logic.unloadTracker()
+-- Re-check delay after playerDropped: well past rsg-core's Logout Wait(200) and its drop-time save.
+local UNLOAD_SETTLE_MS = 5000
 
 ---Fresh lookup of the character a call started for. Every MySQL await yields, and during the yield the player can
 ---drop or switch character: after a yield, call this again and never touch the Player object from before it.
@@ -28,7 +31,7 @@ local function playerFor(src, citizenid)
     local Player = getPlayer(src)
     if not Player then return nil, 'no_player' end
     if type(Player.PlayerData) ~= 'table' or Player.PlayerData.citizenid ~= citizenid then return nil, 'player_changed' end
-    if unloading[src] == citizenid then return nil, 'no_player' end
+    if unloading.blocks(src, citizenid) then return nil, 'no_player' end
     return Player
 end
 
@@ -55,26 +58,25 @@ end
 ---AddMoney that tells "added" from "not added" even when it throws: rsg-core's AddMoney adds to PlayerData.money
 ---first and only then runs its client / log side effects, so a throw can come after the money moved. Nothing in here
 ---yields, so the balance change is ours alone. true = the money is on the character.
----The check redoes rsg-core's own float addition (`money[mt] + amount`, player.lua:357, amount unchanged by
----prepMoney's tonumber) and compares exactly: same IEEE operation, same operands -> bit-identical result. Never
----`after - before == amount`: with a fractional balance (127.2 + 5) - 127.2 ~= 5, which would class money that
----moved as unpaid and pay it again.
+---The check compares in integer cents (FhLedgerLogic.movedBy), never as floats: with money items on, rsg-core's sync
+---re-reads cash as tonumber(('%.2f'):format(...)), so a real AddMoney(1) on 0.14 leaves 1.14 and 0.14 + 1 ~= 1.14.
+---A float compare would class money that moved as unpaid (paid again) or the reverse.
 local function addMoneyChecked(Player, amount, reason)
     local before = cashOf(Player)
     local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
     if called then return added == true end
     local after = cashOf(Player)
-    return before ~= nil and after ~= nil and after == before + amount
+    return logic.movedBy(before, after, amount)
 end
 
 ---RemoveMoney twin of addMoneyChecked: RemoveMoney also moves the balance first and runs its side effects after, so a
----throw does not mean "nothing taken". Same exact-operation check (`money[mt] - amount`, player.lua RemoveMoney).
+---throw does not mean "nothing taken". Same integer-cents check (FhLedgerLogic.movedBy), with a negative delta.
 local function removeMoneyChecked(Player, amount, reason)
     local before = cashOf(Player)
     local called, removed = pcall(Player.Functions.RemoveMoney, cfg.moneyType, amount, reason)
     if called then return removed == true end
     local after = cashOf(Player)
-    return before ~= nil and after ~= nil and after == before - amount
+    return logic.movedBy(before, after, -amount)
 end
 
 ---Pay: ledger row FIRST, then AddMoney on a Player looked up again after the insert yield. If the player left or
@@ -224,7 +226,7 @@ function onlineByCitizenid(citizenid)
     local called, Player = pcall(function() return exports['rsg-core']:GetPlayerByCitizenId(citizenid) end)
     if not called or type(Player) ~= 'table' or type(Player.PlayerData) ~= 'table' then return nil end
     if Player.PlayerData.citizenid ~= citizenid or not logic.validSrc(Player.PlayerData.source) then return nil end
-    if unloading[Player.PlayerData.source] == citizenid then return nil end -- logging out: treat as offline (queue)
+    if unloading.blocks(Player.PlayerData.source, citizenid) then return nil end -- logging out: treat as offline (queue)
     return Player
 end
 
@@ -376,7 +378,7 @@ end
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     local pd = type(Player) == 'table' and Player.PlayerData
     if type(pd) ~= 'table' then return end
-    if logic.validSrc(pd.source) then unloading[pd.source] = nil end -- a character is (re)loaded on this src
+    if logic.validSrc(pd.source) then unloading.loaded(pd.source) end -- a character is (re)loaded on this src
     if logic.validCitizenid(pd.citizenid) then claimPending(pd.citizenid) end
 end)
 
@@ -385,13 +387,24 @@ end)
 AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src)
     src = tonumber(src)
     local citizenid = logic.validSrc(src) and loadedCitizenid(src)
-    if citizenid then unloading[src] = citizenid end
+    if citizenid then unloading.mark(src, citizenid) end
 end)
 AddEventHandler('RSGCore:Server:PlayerDropped', function(Player)
     local pd = type(Player) == 'table' and Player.PlayerData
     if type(pd) == 'table' and logic.validSrc(pd.source) and type(pd.citizenid) == 'string' then
-        unloading[pd.source] = pd.citizenid
+        unloading.mark(pd.source, pd.citizenid)
     end
+end)
+-- Server ids are not reused soon, so a src that leaves would keep its entry forever. After the playerDropped native,
+-- clear it once rsg-core no longer has that character on the src (removed after its save); while the same character
+-- is still loaded (a save still yielding), keep it and look again later, so the window never reopens.
+AddEventHandler('playerDropped', function()
+    local src = tonumber(source)
+    if not logic.validSrc(src) then return end
+    local function settle()
+        if unloading.settle(src, loadedCitizenid(src)) then SetTimeout(UNLOAD_SETTLE_MS, settle) end
+    end
+    SetTimeout(UNLOAD_SETTLE_MS, settle)
 end)
 
 -- No claim is in flight at start: any claimed row now is from an earlier run (crash mid-claim, or a failed clear).
