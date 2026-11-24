@@ -18,6 +18,6 @@ server_scripts {
     'server/main.lua',
 }
 
-dependencies { 'fh_core', 'fh_zones', 'fh_heat', 'fh_trade', 'rsg-core', 'ox_lib' }
+dependencies { 'fh_core', 'fh_zones', 'fh_trade', 'ox_lib' }
 
 server_exports { 'getOwner', 'isLawHeld' }

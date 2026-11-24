@@ -74,7 +74,17 @@ function M.deserialize(t)
     s.tick = math.tointeger(t.tick) or 0
     s.nextSquadId = math.tointeger(t.nextSquadId) or 1
     s.owners = type(t.owners) == 'table' and t.owners or {}
-    s.squads = type(t.squads) == 'table' and t.squads or {}
+    s.squads = {}
+    if type(t.squads) == 'table' then
+        for k, sq in pairs(t.squads) do
+            local idt = type(sq) == 'table' and type(sq.id)
+            if idt == 'string' or idt == 'number' then
+                if type(sq.faction) == 'string' and type(sq.to) == 'string' and type(sq.etaTick) == 'number' then
+                    s.squads[k] = sq
+                end
+            end
+        end
+    end
     return s
 end
 

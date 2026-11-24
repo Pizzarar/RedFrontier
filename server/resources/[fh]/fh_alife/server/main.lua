@@ -1,6 +1,6 @@
 -- fh_alife server (plan a-life-01): owns camp ownership. fh_zones asks getOwner/isLawHeld before spawning a camp's
 -- peds; a cleared camp flips to law and schedules an outlaw retake squad that marches back ~retake.minTicks..maxTicks
--- later. State persists as a KVP JSON blob. Natives: GetPlayers, GetGameTimer, SetResourceKvp, GetResourceKvpString,
+-- later. State persists as a KVP JSON blob. Natives: SetResourceKvp, GetResourceKvpString,
 -- TriggerEvent / TriggerClientEvent (fh_core/docs/natives.md, unverified in-game). NOT runtime-tested (no Cfx key).
 local cfg = FhAlifeConfig
 local rules = FhAlifeRules
@@ -14,7 +14,8 @@ local function log(fmt, ...) print(('[fh_alife] ' .. fmt):format(...)) end
 -- The rules module takes a single pre-formatted string; this adapter forwards it through our formatted logger.
 local function notify(msg) log('%s', msg) end
 local function reply(src, msg)
-    if src and src > 0 then TriggerClientEvent('chat:addMessage', src, { args = { 'fh', msg } }) end
+    if src == 0 then print('[fh_alife] ' .. msg)
+    elseif src and src > 0 then TriggerClientEvent('chat:addMessage', src, { args = { 'fh', msg } }) end
 end
 
 -- ---------------------------------------------------------------- persistence
@@ -120,7 +121,7 @@ local function statusLine()
     end
     local sqs = {}
     for _, sq in pairs(state.squads) do
-        sqs[#sqs + 1] = ('%s:%s->%s eta%d'):format(sq.id, tostring(sq.faction), tostring(sq.to), tostring(sq.etaTick))
+        sqs[#sqs + 1] = ('%s:%s->%s eta%s'):format(tostring(sq.id), tostring(sq.faction), tostring(sq.to), tostring(sq.etaTick))
     end
     table.sort(sqs)
     for _, s in ipairs(sqs) do parts[#parts + 1] = s end

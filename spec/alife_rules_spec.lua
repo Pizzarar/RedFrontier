@@ -206,4 +206,13 @@ case('deserialize rejects junk', function()
     eq(nil, s); eq('fh_alife_version', err)
 end)
 
+case('deserialize drops malformed squads, keeps valid', function()
+    local good = { id = 'sq1', faction = 'outlaws', to = 'c1', etaTick = 5 }
+    local s = R.deserialize({ version = R.VERSION, tick = 0, nextSquadId = 3, owners = {}, squads = {
+        sq1 = good, bad1 = 'x', bad2 = { faction = 'a', to = 'b', etaTick = 1 },
+        bad3 = { id = 'sq3', faction = 'a', to = 'b' }, bad4 = { id = 'sq4', faction = 5, to = 'b', etaTick = 1 } } })
+    eq(good, s.squads.sq1)
+    eq(nil, s.squads.bad1); eq(nil, s.squads.bad2); eq(nil, s.squads.bad3); eq(nil, s.squads.bad4)
+end)
+
 T.finish()

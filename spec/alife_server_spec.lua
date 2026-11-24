@@ -101,7 +101,7 @@ end
 local function boot(preKvp)
     local B = {
         exported = {}, handlers = {}, commands = {}, broadcasts = {}, flipped = {}, heatCalls = {},
-        shortageCalls = {}, kvp = preKvp or {},
+        shortageCalls = {}, printed = {}, kvp = preKvp or {},
     }
     local exportsT = setmetatable({
         -- fh_heat is stubbed as a spy: fh_alife must NOT call addSource (camp_clear heat is fh_heat's own job).
@@ -130,7 +130,7 @@ local function boot(preKvp)
         json = Json,
         vector3 = function(x, y, z) return { x = x, y = y, z = z } end,
         vector4 = function(x, y, z, w) return { x = x, y = y, z = z, w = w } end,
-        print = function() end,
+        print = function(...) B.printed[#B.printed + 1] = table.concat({ ... }, ' ') end,
     }, { __index = _G })
     env._G = env
     for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_zones/config.lua', R .. 'fh_alife/config.lua',
@@ -200,6 +200,14 @@ T.describe('fh_alife server wiring (stubbed server)', function()
             if b[1] == 1 and b[2].args[2]:find('tick 0', 1, true) then replied = true end
         end
         assert(replied, 'status reply sent to the admin')
+    end)
+
+    T.it('/alife from the server console (src 0) prints instead of dropping', function()
+        local B = boot()
+        B.commands.alife(0, {}, 'alife')
+        local seen = false
+        for _, l in ipairs(B.printed) do if l:find('tick 0', 1, true) then seen = true end end
+        assert(seen, 'console status printed')
     end)
 end)
 
