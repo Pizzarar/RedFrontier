@@ -109,6 +109,31 @@ case('onCampCleared: unknown camp produces no effects', function()
     eq(0, #st.squads)
 end)
 
+case('onCampCleared: region with no law faction -> logs, skips the flip, keeps heat, no error', function()
+    -- A region whose factions are all non-law (kind present, none 'law'): regionLawFaction -> nil.
+    local lawless = {
+        factions = {
+            outlaws = { id = 'outlaws', label = 'Heartland Outlaws', kind = 'outlaw' },
+            neutral = { id = 'neutral', label = 'Neutral', kind = 'neutral' },
+        },
+        regions = { badlands = { id = 'badlands', label = 'Badlands', factions = { 'outlaws', 'neutral' }, territories = {} } },
+        territories = {
+            badlands_t1_camp = { id = 'badlands_t1_camp', label = 'Badlands Outlaw Camp', region = 'badlands', faction = 'outlaws' },
+        },
+    }
+    local lawlessCamps = { badlands_t1_01 = { id = 'badlands_t1_01', region = 'badlands', territory = 'badlands_t1_camp' } }
+    local c = R.context(cfg, lawless, lawlessCamps)
+    local st = R.newState()
+    local logged
+    local effects = R.onCampCleared(c, st, 'badlands_t1_01', { 'CID1' }, seq(5, 25), function(msg) logged = msg end)
+    assert(logged and logged:find('no law faction', 1, true), 'logged a reason: ' .. tostring(logged))
+    -- no flip effects (flipped / broadcast / shortage); heat against the old owner still applies
+    same({ { type = 'heat', citizenid = 'CID1', faction = 'outlaws' } }, effects)
+    eq('outlaws', R.getOwner(c, st, 'badlands_t1_01'), 'owner unchanged')
+    eq(false, R.isLawHeld(c, st, 'badlands_t1_01'))
+    eq(0, (function() local n = 0 for _ in pairs(st.squads) do n = n + 1 end return n end)(), 'no retake squad')
+end)
+
 case('retake within configured ticks with seeded rng', function()
     for seed = 1, 50 do
         local st = R.newState()

@@ -11,6 +11,8 @@ local ctx = rules.context(cfg, regions, FhZonesConfig.camps)
 local state = rules.newState()
 
 local function log(fmt, ...) print(('[fh_alife] ' .. fmt):format(...)) end
+-- The rules module takes a single pre-formatted string; this adapter forwards it through our formatted logger.
+local function notify(msg) log('%s', msg) end
 local function reply(src, msg)
     if src and src > 0 then TriggerClientEvent('chat:addMessage', src, { args = { 'fh', msg } }) end
 end
@@ -98,7 +100,7 @@ exports('isLawHeld', isLawHeld)
 
 AddEventHandler('fh:zones:camp_cleared', function(data)
     if type(data) ~= 'table' or type(data.camp_id) ~= 'string' then return end
-    local effects = rules.onCampCleared(ctx, state, data.camp_id, data.participants)
+    local effects = rules.onCampCleared(ctx, state, data.camp_id, data.participants, nil, notify)
     applyEffects(effects)
     save()
 end)

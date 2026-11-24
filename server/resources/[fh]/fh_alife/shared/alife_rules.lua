@@ -197,9 +197,12 @@ end
 
 ---The owner cleared a camp: law holds it now. Effects: flip to region law, heat per participant against the old owner,
 ---shortage relief (on the transition), broadcast. Also schedules the retake squad when one is not already en route.
+---A region with no law faction (regionLawFaction -> nil) is logged and the flip is skipped: no flip effects
+---(flipped / broadcast / shortage / retake), but the camp was still cleared so heat still applies, and this never errors.
 ---@param participants string[] citizenids inside the camp at clear
+---@param log fun(msg:string)? called once with a reason string when there is no law faction to flip to
 ---@return table effects
-function M.onCampCleared(ctx, state, campId, participants, rng)
+function M.onCampCleared(ctx, state, campId, participants, rng, log)
     rng = rng or math.random
     local camp = ctx.camps[campId]
     if not camp then return {} end
@@ -207,6 +210,11 @@ function M.onCampCleared(ctx, state, campId, participants, rng)
     local oldOwner = M.getOwner(ctx, state, campId)
     local effects = {}
     local justFlipped = law ~= nil and law ~= oldOwner
+
+    if not law then
+        if log then log(('no law faction for region %s; camp %s stays %s (no flip)'):format(
+            camp.region, campId, tostring(oldOwner))) end
+    end
 
     if justFlipped then
         M.flip(ctx, state, campId, law)
