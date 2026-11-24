@@ -27,7 +27,4 @@
 - MERGED S4 on main @ c0dafc1 (01b935e fa481a0 c0dafc1; Gemini PASS 0/0/0 a60f748, range-diff all '='; venv 65/1290/0). Bedroll registers via S3b I.ITEMS path.
 - MERGED S5 on main @ e9a2efc (Gemini PASS 0/0/1 a72557b, low fixed in doc commit; range-diff '=' vs b37946c; venv 66/1299/0). ## Survival card in OWNER-TESTS.md. survival-01 S1-S5 COMPLETE, playtest-ready e9a2efc.
 - MERGED S4b on main @ caebf25 (homestead pcall adapter dropped, direct exports + GetResourceState gate; Gemini PASS 0/0/1 6e74574; range-diff '='; venv 78/1456/0/0, syntax 180/0). survival-01 fully done incl. S3b/S4b.
-- FORGE FREEZE (Overlord, from the owner via Hub15): nothing new starts and there are no merges or pushes. The Overlord pushes all branches. Parked:
-  - S1 is built on `survival-s1` @ 533fba9 (22 specs/355 tests green), NOT merged. Its review Sur2 rn-ba97d44e5597 was in progress.
-  - Resume after the cutover: re-run the S1 review → merge → S2 review (rebase, fix server.cfg) → merge → S3||S4||S5.
-- DRAINED (lead): `survival-s1` @ 533fba9 (S1, review incomplete: Sur2 stopped with no verdict, so re-run the review after the cutover). `survival-s2` @ d3c3e37 (empty WIP marker on top of a7c9268, S2 server core complete: 357 tests green, unreviewed; rebase on main expected to conflict in server.cfg). Both worktrees are clean and unmerged. Open: @core hydrated/clean caps; pick the ColdRegions ids.
+- 2026-11-24 PASS survival-01 (Red3): stale FREEZE/DRAINED notes about S1/S2 removed; all of S1-S5, S3b and S4b are merged (see above). No open units, empty inbox. Lane idle by design.
