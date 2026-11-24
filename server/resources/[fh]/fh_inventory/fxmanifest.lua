@@ -23,6 +23,7 @@ shared_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    '@fh_core/shared/regions.lua', -- FH: FhRegions, the ledger region of a shop (server/shops.lua, core M3)
     'server/main.lua',
     'server/shops.lua',
     'server/compat.lua',

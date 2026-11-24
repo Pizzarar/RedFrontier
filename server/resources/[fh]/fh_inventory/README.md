@@ -27,6 +27,16 @@ fork notes below.
   `exports.fh_core:saddlebagPane` before every action and once a second (a failure snaps back to the backpack and the
   action is refused). Use and shop buy/sell are refused on the saddlebag pane. Closing the inventory, leaving or a
   character switch resets to the backpack. Specced in `spec/saddlebag_pane_spec.lua`.
+- **Shop money goes through the fh_economy ledger** (`server/shops.lua`, core M3). Buy = `exports.fh_economy:charge`
+  (reason `shop_buy:<shop>`), then the item add; if the add fails the charge is refunded (`pay`, else `credit` to the
+  citizenid; reason `shop_buy_refund:<shop>`). Sell = remove the item, then `pay` (reason `shop_sell:<shop>`); if pay is
+  refused the item goes back, or (`no_player` / `player_changed`) the payout is `credit`ed. A throw from the export
+  (unknown whether money moved) never compensates twice: it logs `ALERT` for an admin. One shop trade per player at a
+  time (a second event while one is in flight is ignored); stock is reserved before the charge yields.
+  `price` / `buyPrice` are rounded to whole cents at `CreateShop` (warned); missing, non-numeric, <= 0 or over $100,000
+  a unit = not for sale / not bought. Totals are worked in integer cents. The ledger region is `CreateShop`'s
+  `region` (an fh_core region id) or, without one, the region of the nearest town to `coords` (`FhRegions`, loaded in
+  the manifest). A shop with no region, or a `currency` other than `cash`, refuses every trade (warned at create).
 - **Runtime-registered items** resolve through `RSGCore.Shared.Items` (`FhItems.sharedLookup`), so an item fh_core
   pushed with its `size_class` is classed correctly here.
 
