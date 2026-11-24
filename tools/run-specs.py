@@ -3,6 +3,7 @@
 
   python tools/run-specs.py                 run every spec/*_spec.lua (fresh Lua state each)
   python tools/run-specs.py spec/x_spec.lua run the named specs
+  python tools/run-specs.py --contracts   run tools/check-contracts.py (cross-resource exports/events/items lint)
   python tools/run-specs.py --syntax DIR..  load() (compile only, no execution) every .lua under DIR
 
 Specs stay runner-agnostic: they load spec/support/fh_prelude.lua, which uses busted's describe/it when
@@ -100,4 +101,7 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     if args and args[0] == '--syntax':
         sys.exit(syntax(args[1:] or [os.path.join(ROOT, 'server', 'resources', '[fh]')]))
+    if args and args[0] == '--contracts':  # static cross-resource lint (tools/check-contracts.py); not part of the default run
+        import subprocess
+        sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, 'tools', 'check-contracts.py')] + args[1:]))
     sys.exit(run_specs(args))

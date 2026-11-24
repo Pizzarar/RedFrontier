@@ -1,0 +1,6 @@
+# check-contracts.py allowlist: `<rule>|<key>  # reason / idea id`. Stale entries are reported as warnings.
+events|fh:cargo:offroad_hint  # TODO(R2 off-road) in fh_cargo/README.md: no verified road native yet, client never sends it (@roads, no lane dir; reported to core lead)
+events|fh:alife:camp_flipped  # published event, no consumer or README mention; fh_alife has no lane dir, reported to core lead
+events|fh:hands:hired  # idea-858 (progression inbox)
+events|fh:hands:fired  # idea-858 (progression inbox)
+events|fh:survival:restBed  # idea-857 (survival inbox)
