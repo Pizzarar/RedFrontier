@@ -716,4 +716,21 @@ case('server H15: claim swapped repeatedly mid-load retries once, never loops', 
     S.claim('heartlands_02', 'A'); S.tiers.heartlands_02 = { trophy_wall = 1 }
     T.eq(5, finish(), 'one retry lands on the new claim')
 end)
+case('server H15: unclaim does not wipe the byPlot binding of a plot re-bought during its refresh await', function()
+    local S = server()
+    S.tiers[PLOT] = {}; S.unclaim(PLOT)
+    withLot(S, 'A', { chest_2 = 1 })
+    T.eq(2, S.X.getComfort('A')) -- A cached lot-only
+    S.claim('heartlands_02', 'A'); S.tiers.heartlands_02 = {} -- A also holds a claim not loaded yet
+    S.lots.A, S.plots[LOT] = nil, nil -- A abandons the lot
+    S.hold.query = true
+    local finish = S.start(function() S.handlers['fh:homestead:unclaimed']({ citizenid = 'A', plot_id = LOT }) end)
+    withLot(S, 'B', { chest_2 = 1 }) -- B buys it while A's refresh awaits the claim's trophy rows
+    S.handlers['fh:homestead:slot_changed'](LOT, 'chest_2', 1) -- B bound to LOT
+    finish()
+    S.lots.B, S.plots[LOT] = nil, nil
+    S.handlers['fh:homestead:unclaimed']({ plot_id = LOT }) -- holder found only through byPlot
+    local cc = S.last('fh:homestead:comfort_changed')
+    T.eq('B', cc[1]); T.eq(0, cc[2]); T.eq(2, cc[3])
+end)
 T.finish()
