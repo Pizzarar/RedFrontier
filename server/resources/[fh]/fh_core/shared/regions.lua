@@ -81,7 +81,7 @@ regions.regions = {
         enabled = false,
         towns = {},
         factions = { 'lawmen', 'raiders' },
-        territories = {},
+        territories = { 'bluewater_marsh_t1_camp', 'bluewater_marsh_t1_camp_2', 'bluewater_marsh_t2_camp' },
     },
     roanoke_ridge = {
         id = 'roanoke_ridge',
@@ -94,7 +94,7 @@ regions.regions = {
             { id = 'van_horn',  label = 'Van Horn',  x = 2973.0, y = 606.0,  z = 38.0 },
         },
         factions = { 'lawmen', 'outlaws', 'rail_mining' },
-        territories = {},
+        territories = { 'roanoke_ridge_t1_camp', 'roanoke_ridge_t1_camp_2', 'roanoke_ridge_t2_camp' },
     },
     grizzlies_east = {
         id = 'grizzlies_east',
@@ -106,7 +106,7 @@ regions.regions = {
             { id = 'wapiti', label = 'Wapiti', x = 1673.0, y = 1900.0, z = 200.0 },
         },
         factions = { 'lawmen', 'outlaws', 'settlers' },
-        territories = {},
+        territories = { 'grizzlies_east_t1_camp', 'grizzlies_east_t1_camp_2', 'grizzlies_east_t2_camp' },
     },
     grizzlies_west = {
         id = 'grizzlies_west',
@@ -118,7 +118,7 @@ regions.regions = {
             { id = 'colter', label = 'Colter', x = -1300.0, y = 1600.0, z = 240.0 },
         },
         factions = { 'lawmen', 'outlaws', 'rail_mining', 'settlers' },
-        territories = {},
+        territories = { 'grizzlies_west_t1_camp', 'grizzlies_west_t1_camp_2', 'grizzlies_west_t2_camp' },
     },
     cumberland_forest = {
         id = 'cumberland_forest',
@@ -130,7 +130,7 @@ regions.regions = {
             { id = 'bacchus_station', label = 'Bacchus Station', x = -810.0, y = 1340.0, z = 130.0 },
         },
         factions = { 'lawmen', 'outlaws', 'settlers', 'rail_mining' },
-        territories = {},
+        territories = { 'cumberland_forest_t1_camp', 'cumberland_forest_t1_camp_2', 'cumberland_forest_t2_camp' },
     },
     big_valley = {
         id = 'big_valley',
@@ -143,7 +143,7 @@ regions.regions = {
             { id = 'wallace_station', label = 'Wallace Station', x = -1340.0, y = -440.0, z = 130.0 },
         },
         factions = { 'lawmen', 'outlaws', 'settlers', 'traders', 'rail_mining' },
-        territories = {},
+        territories = { 'big_valley_t1_camp', 'big_valley_t1_camp_2', 'big_valley_t2_camp' },
     },
     great_plains = {
         id = 'great_plains',
@@ -167,7 +167,7 @@ regions.regions = {
             { id = 'manzanita_post', label = 'Manzanita Post', x = -1795.0, y = -1600.0, z = 150.0 },
         },
         factions = { 'lawmen', 'outlaws', 'bounty_hunters' },
-        territories = {},
+        territories = { 'tall_trees_t1_camp', 'tall_trees_t1_camp_2', 'tall_trees_t2_camp' },
     },
     hennigans_stead = {
         id = 'hennigans_stead',
@@ -180,7 +180,7 @@ regions.regions = {
             { id = 'thieves_landing',   label = 'Thieves Landing',    x = -1445.0, y = -2224.0, z = 40.0 },
         },
         factions = { 'lawmen', 'desert_gang', 'settlers' },
-        territories = {},
+        territories = { 'hennigans_stead_t1_camp', 'hennigans_stead_t1_camp_2', 'hennigans_stead_t2_camp' },
     },
     cholla_springs = {
         id = 'cholla_springs',
@@ -192,7 +192,7 @@ regions.regions = {
             { id = 'armadillo', label = 'Armadillo', x = -3711.0, y = -2581.0, z = 70.0 },
         },
         factions = { 'lawmen', 'desert_gang', 'bounty_hunters' },
-        territories = {},
+        territories = { 'cholla_springs_t1_camp', 'cholla_springs_t1_camp_2', 'cholla_springs_t2_camp' },
     },
     gaptooth_ridge = {
         id = 'gaptooth_ridge',
@@ -204,7 +204,7 @@ regions.regions = {
             { id = 'tumbleweed', label = 'Tumbleweed', x = -5522.0, y = -2938.0, z = 90.0 },
         },
         factions = { 'lawmen', 'desert_gang' },
-        territories = {},
+        territories = { 'gaptooth_ridge_t1_camp', 'gaptooth_ridge_t1_camp_2', 'gaptooth_ridge_t2_camp' },
     },
     rio_bravo = {
         id = 'rio_bravo',
@@ -214,7 +214,7 @@ regions.regions = {
         enabled = false,
         towns = {},
         factions = { 'lawmen', 'desert_gang' },
-        territories = {},
+        territories = { 'rio_bravo_t1_camp', 'rio_bravo_t1_camp_2', 'rio_bravo_t2_camp' },
     },
 }
 
@@ -351,6 +351,314 @@ regions.territories = {
         center = { x = -700.0, y = -1600.0, z = 40.0 }, -- approximate (unverified)
         radius = 60.0,
     },
+    -- Bluewater Marsh (raiders = Swamp Gang)
+    bluewater_marsh_t1_camp = {
+        id = 'bluewater_marsh_t1_camp',
+        label = 'Marsh Ford Camp',
+        region = 'bluewater_marsh',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 2400.0, y = -400.0, z = 25.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    bluewater_marsh_t1_camp_2 = {
+        id = 'bluewater_marsh_t1_camp_2',
+        label = 'Bullrush Camp',
+        region = 'bluewater_marsh',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 2000.0, y = -450.0, z = 20.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    bluewater_marsh_t2_camp = {
+        id = 'bluewater_marsh_t2_camp',
+        label = 'Cypress Bend Camp',
+        region = 'bluewater_marsh',
+        faction = 'raiders',
+        tier = 'T2',
+        center = { x = 2850.0, y = -900.0, z = 20.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Roanoke Ridge (outlaws = Mountain Gang)
+    roanoke_ridge_t1_camp = {
+        id = 'roanoke_ridge_t1_camp',
+        label = 'Riverbend Camp',
+        region = 'roanoke_ridge',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = 2250.0, y = 800.0, z = 90.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    roanoke_ridge_t1_camp_2 = {
+        id = 'roanoke_ridge_t1_camp_2',
+        label = 'Timber Ridge Camp',
+        region = 'roanoke_ridge',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = 2600.0, y = 1450.0, z = 120.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    roanoke_ridge_t2_camp = {
+        id = 'roanoke_ridge_t2_camp',
+        label = 'Iron Hollow Camp',
+        region = 'roanoke_ridge',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = 2450.0, y = 650.0, z = 70.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Grizzlies East (outlaws = Mountain Gang)
+    grizzlies_east_t1_camp = {
+        id = 'grizzlies_east_t1_camp',
+        label = 'Frost Creek Camp',
+        region = 'grizzlies_east',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = 1380.0, y = 1380.0, z = 190.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    grizzlies_east_t1_camp_2 = {
+        id = 'grizzlies_east_t1_camp_2',
+        label = 'Aspen Camp',
+        region = 'grizzlies_east',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = 1850.0, y = 1500.0, z = 200.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    grizzlies_east_t2_camp = {
+        id = 'grizzlies_east_t2_camp',
+        label = 'Granite Camp',
+        region = 'grizzlies_east',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = 1500.0, y = 1150.0, z = 170.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Grizzlies West (outlaws = Mountain Gang)
+    grizzlies_west_t1_camp = {
+        id = 'grizzlies_west_t1_camp',
+        label = 'Tundra Camp',
+        region = 'grizzlies_west',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1460.0, y = 980.0, z = 210.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    grizzlies_west_t1_camp_2 = {
+        id = 'grizzlies_west_t1_camp_2',
+        label = 'High Pass Camp',
+        region = 'grizzlies_west',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1850.0, y = 1650.0, z = 230.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    grizzlies_west_t2_camp = {
+        id = 'grizzlies_west_t2_camp',
+        label = 'Ravine Camp',
+        region = 'grizzlies_west',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = -1150.0, y = 1250.0, z = 200.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Cumberland Forest (outlaws = Mountain Gang)
+    cumberland_forest_t1_camp = {
+        id = 'cumberland_forest_t1_camp',
+        label = 'Rapids Camp',
+        region = 'cumberland_forest',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -930.0, y = 1120.0, z = 110.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    cumberland_forest_t1_camp_2 = {
+        id = 'cumberland_forest_t1_camp_2',
+        label = 'Elm Grove Camp',
+        region = 'cumberland_forest',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -430.0, y = 1020.0, z = 100.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    cumberland_forest_t2_camp = {
+        id = 'cumberland_forest_t2_camp',
+        label = 'North Ridge Camp',
+        region = 'cumberland_forest',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = -600.0, y = 1500.0, z = 140.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Big Valley (outlaws = Mountain Gang)
+    big_valley_t1_camp = {
+        id = 'big_valley_t1_camp',
+        label = 'Creekside Camp',
+        region = 'big_valley',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1650.0, y = -900.0, z = 90.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    big_valley_t1_camp_2 = {
+        id = 'big_valley_t1_camp_2',
+        label = 'Hillside Camp',
+        region = 'big_valley',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1250.0, y = -950.0, z = 85.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    big_valley_t2_camp = {
+        id = 'big_valley_t2_camp',
+        label = 'West Ridge Camp',
+        region = 'big_valley',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = -2100.0, y = -780.0, z = 95.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Tall Trees (outlaws = Mountain Gang)
+    tall_trees_t1_camp = {
+        id = 'tall_trees_t1_camp',
+        label = 'Pine Flats Camp',
+        region = 'tall_trees',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1600.0, y = -1300.0, z = 110.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    tall_trees_t1_camp_2 = {
+        id = 'tall_trees_t1_camp_2',
+        label = 'West Hollow Camp',
+        region = 'tall_trees',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -2000.0, y = -1850.0, z = 130.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    tall_trees_t2_camp = {
+        id = 'tall_trees_t2_camp',
+        label = 'East Timber Camp',
+        region = 'tall_trees',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = -1500.0, y = -1400.0, z = 115.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Hennigan's Stead (desert_gang = Desert Gang)
+    hennigans_stead_t1_camp = {
+        id = 'hennigans_stead_t1_camp',
+        label = 'Tableland Camp',
+        region = 'hennigans_stead',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -1900.0, y = -1950.0, z = 60.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    hennigans_stead_t1_camp_2 = {
+        id = 'hennigans_stead_t1_camp_2',
+        label = 'West Mesa Camp',
+        region = 'hennigans_stead',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -2400.0, y = -2250.0, z = 70.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    hennigans_stead_t2_camp = {
+        id = 'hennigans_stead_t2_camp',
+        label = 'South Crossing Camp',
+        region = 'hennigans_stead',
+        faction = 'desert_gang',
+        tier = 'T2',
+        center = { x = -1650.0, y = -2600.0, z = 55.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Cholla Springs (desert_gang = Desert Gang)
+    cholla_springs_t1_camp = {
+        id = 'cholla_springs_t1_camp',
+        label = 'Alkali Flat Camp',
+        region = 'cholla_springs',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -3350.0, y = -2480.0, z = 75.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    cholla_springs_t1_camp_2 = {
+        id = 'cholla_springs_t1_camp_2',
+        label = 'Prickly Pear Camp',
+        region = 'cholla_springs',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -3900.0, y = -2400.0, z = 80.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    cholla_springs_t2_camp = {
+        id = 'cholla_springs_t2_camp',
+        label = 'Sagebrush Camp',
+        region = 'cholla_springs',
+        faction = 'desert_gang',
+        tier = 'T2',
+        center = { x = -4200.0, y = -2600.0, z = 80.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Gaptooth Ridge (desert_gang = Desert Gang)
+    gaptooth_ridge_t1_camp = {
+        id = 'gaptooth_ridge_t1_camp',
+        label = 'Gaptooth Camp',
+        region = 'gaptooth_ridge',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -5100.0, y = -2600.0, z = 90.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    gaptooth_ridge_t1_camp_2 = {
+        id = 'gaptooth_ridge_t1_camp_2',
+        label = 'West Draw Camp',
+        region = 'gaptooth_ridge',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -5800.0, y = -2800.0, z = 85.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    gaptooth_ridge_t2_camp = {
+        id = 'gaptooth_ridge_t2_camp',
+        label = 'South Canyon Camp',
+        region = 'gaptooth_ridge',
+        faction = 'desert_gang',
+        tier = 'T2',
+        center = { x = -5400.0, y = -3200.0, z = 90.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Rio Bravo (desert_gang = Desert Gang)
+    rio_bravo_t1_camp = {
+        id = 'rio_bravo_t1_camp',
+        label = 'Rio Camp',
+        region = 'rio_bravo',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -1800.0, y = -3200.0, z = 55.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    rio_bravo_t1_camp_2 = {
+        id = 'rio_bravo_t1_camp_2',
+        label = 'Mesa Camp',
+        region = 'rio_bravo',
+        faction = 'desert_gang',
+        tier = 'T1',
+        center = { x = -1450.0, y = -2700.0, z = 60.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    rio_bravo_t2_camp = {
+        id = 'rio_bravo_t2_camp',
+        label = 'Bend Camp',
+        region = 'rio_bravo',
+        faction = 'desert_gang',
+        tier = 'T2',
+        center = { x = -2050.0, y = -3150.0, z = 55.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
 }
 
 -- world-02 (block F): one trade post per enabled region, town-adjacent. `region` + position here are the single
@@ -361,6 +669,20 @@ regions.posts = {
     rhodes_post = { id = 'rhodes_post', region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0 },
     saint_denis_post = { id = 'saint_denis_post', region = 'bayou_nwa', x = 2700.0, y = -1430.0, z = 45.0 },
     blackwater_post = { id = 'blackwater_post', region = 'great_plains', x = -865.0, y = -1350.0, z = 44.0 },
+    bluewater_marsh_post = { id = 'bluewater_marsh_post', region = 'bluewater_marsh', x = 2300.0, y = -600.0, z = 20.0 },
+    annesburg_post = { id = 'annesburg_post', region = 'roanoke_ridge', x = 2925.0, y = 1295.0, z = 96.0 },
+    van_horn_post = { id = 'van_horn_post', region = 'roanoke_ridge', x = 2975.0, y = 600.0, z = 38.0 },
+    wapiti_post = { id = 'wapiti_post', region = 'grizzlies_east', x = 1675.0, y = 1895.0, z = 200.0 },
+    colter_post = { id = 'colter_post', region = 'grizzlies_west', x = -1305.0, y = 1595.0, z = 240.0 },
+    bacchus_station_post = { id = 'bacchus_station_post', region = 'cumberland_forest', x = -815.0, y = 1335.0, z = 130.0 },
+    strawberry_post = { id = 'strawberry_post', region = 'big_valley', x = -1810.0, y = -435.0, z = 120.0 },
+    wallace_station_post = { id = 'wallace_station_post', region = 'big_valley', x = -1345.0, y = -435.0, z = 130.0 },
+    manzanita_post_post = { id = 'manzanita_post_post', region = 'tall_trees', x = -1790.0, y = -1595.0, z = 150.0 },
+    macfarlanes_ranch_post = { id = 'macfarlanes_ranch_post', region = 'hennigans_stead', x = -2275.0, y = -2485.0, z = 60.0 },
+    thieves_landing_post = { id = 'thieves_landing_post', region = 'hennigans_stead', x = -1438.0, y = -2218.0, z = 40.0 },
+    armadillo_post = { id = 'armadillo_post', region = 'cholla_springs', x = -3703.0, y = -2573.0, z = 70.0 },
+    tumbleweed_post = { id = 'tumbleweed_post', region = 'gaptooth_ridge', x = -5514.0, y = -2928.0, z = 90.0 },
+    rio_bravo_post = { id = 'rio_bravo_post', region = 'rio_bravo', x = -2000.0, y = -3000.0, z = 55.0 },
 }
 
 function regions.getRegion(id) return regions.regions[id] end

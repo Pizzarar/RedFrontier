@@ -38,11 +38,10 @@ case('every camp keeps the A-Life field shape and is known', function()
     end
 end)
 
-case('every camp is owned (via territory) by an outlaw faction in an enabled region', function()
+case('every camp is owned (via territory) by an outlaw faction in a known region', function()
     for id, c in pairs(zones.camps) do
         local r = regions.getRegion(c.region)
         assert(r ~= nil, id .. ' unknown region ' .. tostring(c.region))
-        assert(r.enabled == true, id .. ' region ' .. c.region .. ' not enabled')
         local t = regions.getTerritory(c.territory)
         assert(t ~= nil, id .. ' missing territory ' .. tostring(c.territory))
         assert(t.region == c.region, id .. ' territory region mismatch')
@@ -60,14 +59,24 @@ case('every camp.enabled mirrors FhRegions.isEnabled(region) (world-01 block D g
     end
 end)
 
-case('each enabled region has 3-4 camps', function()
+case('every region (enabled or disabled) has 3-4 camps', function()
     local counts = {}
     for _, c in pairs(zones.camps) do counts[c.region] = (counts[c.region] or 0) + 1 end
     for id, r in pairs(regions.regions) do
-        if r.enabled then
-            local n = counts[id] or 0
-            assert(n >= 3 and n <= 4, id .. ' has ' .. tostring(n) .. ' camps (want 3-4)')
-        end
+        local n = counts[id] or 0
+        assert(n >= 3 and n <= 4, id .. ' has ' .. tostring(n) .. ' camps (want 3-4)')
+    end
+end)
+
+case('every territory has exactly one camp (no orphan territories or duplicate camps)', function()
+    local seen = {}
+    for id, c in pairs(zones.camps) do
+        assert(regions.getTerritory(c.territory) ~= nil, id .. ' territory missing')
+        assert(not seen[c.territory], c.territory .. ' claimed by more than one camp')
+        seen[c.territory] = true
+    end
+    for tid in pairs(regions.territories) do
+        assert(seen[tid], tid .. ' has no camp')
     end
 end)
 
