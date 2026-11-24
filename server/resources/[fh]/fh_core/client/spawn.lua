@@ -98,6 +98,7 @@ FH.onNet('fh:spawn:delete', function(d)
     if d.netId ~= nil and slot.netId ~= d.netId then return end
     if not slot.entity then slot.cancelled = true; return end -- still creating: create() drops it
     made[d.token] = nil
+    slot.cancelled = true -- create() may still be waiting for the netId: stop it acking/failing for a deleted entity
     destroy(slot.entity)
 end)
 
