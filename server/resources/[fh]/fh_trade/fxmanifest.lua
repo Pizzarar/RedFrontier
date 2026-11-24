@@ -10,6 +10,7 @@ shared_scripts {
     '@ox_lib/init.lua',
     '@fh_core/shared/regions.lua',        -- FhRegions global (fh_core must be started first)
     '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (resolves posts from FhRegions at config load)
+    '@fh_cargo/shared/cargo_rules.lua',   -- FhCargoRules.TIERS, read-only (wagon tier slots/weight for T2 freight fit)
     'config.lua',
     'shared/trade_prices.lua',
     'shared/freight.lua',

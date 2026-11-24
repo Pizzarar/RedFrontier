@@ -1,5 +1,6 @@
 -- fh_trade freight contracts (roads R4): a fh_quests job type. Thin wiring over shared/freight.lua (specced).
--- Uses fh_core §4 exports + fh_cargo exports only. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
+-- Uses fh_core §4 exports + fh_cargo exports (+ its shared TIERS, read-only) only. T2 contracts (roads-02 R9) are
+-- gated at accept by fh_progression canUnlock (soft dependency, fail closed) and by the wagon's tier. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
 -- and the fh_quests engine pays (engine.apply, exactly once). NOT runtime-tested (no Cfx key).
 -- Natives: GetCurrentResourceName, GetResourceState, GetPlayerPed, GetEntityCoords, CreateThread, Wait.
 local cfg = FhTradeConfig
@@ -90,6 +91,27 @@ local function takeCargo(c)
     return true
 end
 
+-- ---------------------------------------------------------------- T2 gates (roads-02 R9)
+
+---Per-player contract-tier gate: T1 always passes; T2 needs fh_progression canUnlock(contracts_t2) == true.
+---Soft dependency, fail closed: not started / throws / anything but true -> 'fh_locked'. canUnlock may yield.
+local function tierUnlocked(src, tier)
+    local id = F.unlockFor(cfg, tier)
+    if not id then return true end
+    local ok, why = F.checkUnlock(GetResourceState, function() return exports.fh_progression:canUnlock(src, id) end)
+    if not ok then log('T2 contract refused for src %s: %s (%s)', tostring(src), id, tostring(why)) return false, 'fh_locked' end
+    return true
+end
+
+---fh_cargo tier row ({ tier, slots, maxWeight }) of a live wagon, or nil when unreadable. Read-only: getWagon export +
+---FhCargoRules.TIERS (fh_cargo shared/cargo_rules.lua, loaded as a shared script).
+local function wagonTierRow(wagonId)
+    local ok, w = pcall(function() return exports.fh_cargo:getWagon(wagonId) end)
+    if not ok or type(w) ~= 'table' or type(w.tier) ~= 'string' then return nil end
+    local tiers = type(FhCargoRules) == 'table' and FhCargoRules.TIERS
+    return type(tiers) == 'table' and tiers[w.tier] or nil
+end
+
 -- ---------------------------------------------------------------- job type hooks
 
 local function offers(regionId)
@@ -108,9 +130,15 @@ local function accept(src, offer)
     local rok, res, extra = pcall(function()
         if (contracts[citizenid] or {})[offer.key] then return false, 'fh_freight_active' end
         if countActive(citizenid) >= (fcfg.maxActivePerPlayer or 2) then return false, 'fh_freight_too_many' end
+        local tier = F.tierOf(offer)
+        local unlocked, lerr = tierUnlocked(src, tier)
+        if not unlocked then return false, lerr end
+        if tier ~= 1 and citizenidOf(src) ~= citizenid then return false, 'fh_no_player' end -- canUnlock can yield
         local ref = exports.fh_cargo:nearestWagon(src, nil, fcfg.acceptReach or 8.0)
         local wagonId = wagonIdOfRef(ref)
         if not wagonId then return false, 'fh_freight_no_wagon' end
+        local sized, serr = F.wagonFits(cfg, offer, wagonTierRow(wagonId))
+        if not sized then return false, serr end
         local fit, why = exports.fh_core:canFit(ref, offer.item, offer.qty)
         if not fit then return false, why or 'fh_too_heavy' end
         local added, awhy = exports.fh_core:addItem(ref, offer.item, offer.qty, { freight = offer.key })

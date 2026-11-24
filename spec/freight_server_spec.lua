@@ -7,6 +7,7 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local case = T.it
 local F = dofile(here .. '../server/resources/[fh]/fh_trade/shared/freight.lua')
 local SERVER = here .. '../server/resources/[fh]/fh_trade/server/freight.lua'
+local CARGO = dofile(here .. '../server/resources/[fh]/fh_cargo/shared/cargo_rules.lua')
 
 local clock = 1000000
 os.time = function() return clock end
@@ -26,13 +27,28 @@ local function newEnv(opts)
         },
     }
     FhRegions = { regions = { heartlands = {}, dunes = {} }, isKnownRegion = function(id) return id == 'heartlands' or id == 'dunes' end }
+    FhCargoRules = CARGO
+    if opts.t2 then -- roads-02 R9: T2 contracts on a 500 m route; salt gets a weight so wagon fit is real
+        FhTradeConfig.freight.t2 = { unlock = 'contracts_t2', minWagonTier = 2, minDistance = 400, deadlineBase = 900,
+            deadlinePerMeter = 1.0, premium = 1.5, repDelta = 4, maxOffers = 2, qty = { trade_salt = { min = 90, max = 190 } } }
+        FhTradeConfig.freight.destinations.heartlands = { x = 0, y = 0, z = 0, radius = 40 }
+        FhTradeConfig.goods.trade_salt.weight, FhTradeConfig.goods.trade_salt.stackable = 1500, true
+    end
+    E.states, E.unlockCalls, E.shortages = {}, {}, {}
     local registered = {}
     local exp = setmetatable({}, { __call = function(_, name, fn) registered[name] = fn end })
     exp['rsg-core'] = { GetCoreObject = function() return { Functions = {
         GetPlayer = function(src) local c = E.online[src] return c and { PlayerData = { citizenid = c, source = src } } or nil end,
         GetPlayerByCitizenId = function(cid) for s, c in pairs(E.online) do if c == cid then return { PlayerData = { citizenid = c, source = s } } end end end,
     } } end }
-    exp.fh_trade = { getShortages = function() return {} end }
+    exp.fh_trade = { getShortages = function(_, id) return E.shortages[id] or {} end }
+    if not opts.noProgression then
+        exp.fh_progression = { canUnlock = function(_, src, id)
+            E.unlockCalls[#E.unlockCalls + 1] = { src = src, id = id }
+            if E.unlockFn then return E.unlockFn(src, id) end
+            return true
+        end }
+    end
     exp.fh_cargo = {
         nearestWagon = function() return E.nearest end,
         getWagon = function(_, id) if E.getWagonThrows then error('getWagon boom') end return E.wagons[id] end,
@@ -73,7 +89,7 @@ local function newEnv(opts)
     Wait = function() coroutine.yield('wait') end
     TriggerEvent = function(name, payload) E.events[#E.events + 1] = { name = name, payload = payload } end
     AddEventHandler = function(n, fn) if n == 'onResourceStart' then E.onStart = fn end end
-    GetResourceState = function() return 'started' end
+    GetResourceState = function(name) return E.states[name] or 'started' end
     GetCurrentResourceName = function() return 'fh_trade' end
     dofile(SERVER)
     E.onStart('fh_quests') -- as the engine would: register the job type
@@ -287,6 +303,104 @@ case('onEvent hook maps through state.quest_id', function()
     local E = newEnv()
     T.eq('complete', E.hooks.onEvent(F.EVENT_DELIVERED, { key = 'k' }, { quest_id = 'job:freight:k' }))
     T.eq(nil, E.hooks.onEvent(F.EVENT_DELIVERED, { key = 'k' }, { quest_id = 'job:freight:j' }))
+end)
+
+-- ---------------------------------------------------------------- T2 contracts (roads-02 R9)
+
+local function t2Offer(E, level)
+    E.shortages.dunes = { { item = 'trade_salt', level = level or 0.5, price = 10 } }
+    for _, o in ipairs(E.hooks.offers('heartlands')) do if o.tier == 2 then return o end end
+end
+-- Put the player's `tierKey` wagon next to them (getWagon reports its fh_cargo tier key) and accept `o`.
+local function acceptWith(E, o, tierKey)
+    local id = 'CID1:' .. tierKey
+    E.nearest = { type = 'wagon', id = 'fh:wagon:' .. id }
+    E.wagons[id] = { id = id, owner = 'CID1', tier = tierKey, coords = { x = 0, y = 0, z = 0 } }
+    return E.hooks.accept(7, o)
+end
+local function t1Offer(E)
+    E.shortages.dunes = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    for _, o in ipairs(E.hooks.offers('heartlands')) do if o.tier == 1 then return o end end
+end
+
+case('T2 offers: the board hook lists T2 with locked = true (no player is known there) next to T1', function()
+    local E = newEnv({ t2 = true })
+    E.shortages.dunes = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    local list = E.hooks.offers('heartlands')
+    T.eq(2, #list)
+    T.eq(1, list[1].tier); T.eq(nil, list[1].locked)
+    T.eq(2, list[2].tier); T.eq(true, list[2].locked); T.eq('contracts_t2', list[2].unlock)
+    T.eq(0, #E.unlockCalls, 'offers must not call canUnlock')
+end)
+
+case('T2 accept allowed: canUnlock(src, contracts_t2) true + t2 wagon -> cargo added, contract listed', function()
+    local E = newEnv({ t2 = true })
+    local o = t2Offer(E)
+    local ok, err = acceptWith(E, o, 't2')
+    assert(ok == true, tostring(err))
+    T.same({ { src = 7, id = 'contracts_t2' } }, E.unlockCalls)
+    T.eq(1, #E.addCalls); T.eq(140, E.addCalls[1].n); T.same({ freight = 'heartlands.dunes.trade_salt.t2' }, E.addCalls[1].info)
+    T.eq(1, #E.registered.getContracts(7))
+end)
+
+case('T2 accept refused fh_locked: tier_too_low / not started / throws / export missing / non-true; nothing added, lock released', function()
+    local setups = {
+        tier_too_low = function(E) E.unlockFn = function() return false, 'tier_too_low' end end,
+        not_started = function(E) E.states.fh_progression = 'stopped' end,
+        throws = function(E) E.unlockFn = function() error('progression cache boom') end end,
+        truthy = function(E) E.unlockFn = function() return 1 end end,
+    }
+    for name, setup in pairs(setups) do
+        local E = newEnv({ t2 = true })
+        local o = t2Offer(E)
+        setup(E)
+        local ok, err = acceptWith(E, o, 't2')
+        assert(ok == false and err == 'fh_locked', name .. ' -> ' .. tostring(err))
+        T.eq(0, #E.addCalls, name .. ': cargo added'); T.eq(0, #E.registered.getContracts(7), name .. ': contract kept')
+        if name == 'not_started' then T.eq(0, #E.unlockCalls, 'canUnlock called while fh_progression is stopped') end
+        E.unlockFn, E.states.fh_progression = nil, nil -- gate opens: the accept lock must have been released
+        assert(acceptWith(E, o, 't2') == true, name .. ': accept lock not released')
+    end
+    local E = newEnv({ t2 = true, noProgression = true }) -- fh_progression exports absent entirely
+    local ok, err = acceptWith(E, t2Offer(E), 't2')
+    assert(ok == false and err == 'fh_locked', 'missing export -> ' .. tostring(err))
+end)
+
+case('T1 is never gated: accepted with fh_progression stopped / throwing / absent, canUnlock not called', function()
+    for _, mode in ipairs({ 'stopped', 'throws', 'absent' }) do
+        local E = newEnv({ t2 = true, noProgression = mode == 'absent' })
+        if mode == 'stopped' then E.states.fh_progression = 'stopped' end
+        if mode == 'throws' then E.unlockFn = function() error('x') end end
+        local ok, err = acceptWith(E, t1Offer(E), 't1')
+        assert(ok == true, mode .. ' -> ' .. tostring(err))
+        T.eq(0, #E.unlockCalls, mode .. ': canUnlock called for T1')
+    end
+end)
+
+case('T2 wagon fit: t1 cart too small, unknown tier fails closed, t3 fits; refusal adds nothing', function()
+    local E = newEnv({ t2 = true })
+    local o = t2Offer(E, 1) -- 190 salt = 285 kg
+    local ok, err = acceptWith(E, o, 't1')
+    assert(ok == false and err == 'fh_freight_wagon_too_small', tostring(err))
+    E.nearest = { type = 'wagon', id = 'fh:wagon:CID1:tx' }
+    E.wagons['CID1:tx'] = { id = 'CID1:tx', owner = 'CID1', tier = 'tx', coords = { x = 0, y = 0, z = 0 } }
+    ok, err = E.hooks.accept(7, o)
+    assert(ok == false and err == 'fh_freight_wagon_unknown', tostring(err))
+    E.getWagonThrows = true
+    ok, err = acceptWith(E, o, 't2')
+    assert(ok == false and err == 'fh_freight_wagon_unknown', 'getWagon throws -> ' .. tostring(err))
+    E.getWagonThrows = false
+    T.eq(0, #E.addCalls, 'cargo added on a refused fit')
+    assert(acceptWith(E, o, 't3') == true, 't3 freight wagon fits')
+end)
+
+case('T2 accept: the character changed while canUnlock ran -> fh_no_player, nothing added', function()
+    local E = newEnv({ t2 = true })
+    local o = t2Offer(E)
+    E.unlockFn = function() E.online[7] = 'CID2' return true end -- canUnlock yields in game (rep read)
+    local ok, err = acceptWith(E, o, 't2')
+    assert(ok == false and err == 'fh_no_player', tostring(err))
+    T.eq(0, #E.addCalls)
 end)
 
 T.finish()

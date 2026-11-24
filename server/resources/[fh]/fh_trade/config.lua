@@ -72,6 +72,25 @@ FhTradeConfig = {
         allowSameRegion = false,       -- two regions exist now: offers are generated between them (set true to test one-region)
         checkMs = 5000, graceChecks = 3, -- delivery/loss scan period; consecutive misses before wagon/cargo loss counts
         acceptReach = 8.0,             -- m: your wagon must be this close to you to take a contract
+        -- T2 contracts (roads-02 R9): bulk loads on long routes, gated per player at accept by fh_progression
+        -- canUnlock(unlock) (fail closed) and by the wagon's fh_cargo tier. Listed on the board as `[T2]`, `locked = true`.
+        t2 = {
+            unlock = 'contracts_t2',
+            minWagonTier = 2,          -- fh_cargo TIERS[*].tier: t2 Wagon (30 slots / 300 kg) or t3 Freight
+            minDistance = 1500,        -- m between the two regions' destinations (heartlands <-> scarlett_meadows ~2405 m)
+            deadlineBase = 900, deadlinePerMeter = 1.0, -- deadline_s = base + route m * perMeter (~55 min for 2405 m)
+            premium = 1.5,             -- reward = qty * current quote * premium (T1 1.25; keep premium x max price <= rewardCapMultiple x base)
+            repDelta = 4,              -- T1 2
+            maxOffers = 2,             -- per board, listed after the T1 offers (own cap, T1 is never crowded out)
+            cooldownMin = 30,          -- raised to the deadline in minutes when that is longer
+            -- qty = min + ceil(level * (max - min)). Ranges weigh more than a t1 cart's 120 kg at the minimum and fit an
+            -- empty t2 wagon's 300 kg at the maximum (salt 1.5 kg, cloth 2.5 kg, whiskey 15 kg per unit).
+            qty = {
+                trade_salt    = { min = 90, max = 190 },
+                trade_cloth   = { min = 50, max = 110 },
+                trade_whiskey = { min = 10, max = 18 },
+            },
+        },
         destinations = {
             heartlands = { x = -176.0, y = 630.0, z = 114.0, radius = 40.0 },
             scarlett_meadows = { x = 1288.0, y = -1278.0, z = 77.0, radius = 40.0 }, -- Rhodes trade post (unverified)

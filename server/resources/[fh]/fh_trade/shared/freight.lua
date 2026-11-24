@@ -21,8 +21,38 @@ function M.keyOf(questId)
     return k ~= '' and k or nil
 end
 
----Stable per template: same (from, to, item) = same key. fh_quests ids are <= 64 chars of [A-Za-z0-9_.:-].
-function M.offerKey(from, to, item) return (('%s>%s>%s'):format(from, to, item):gsub('>', '.')) end
+---Stable per template: same (from, to, item, tier) = same key. fh_quests ids are <= 64 chars of [A-Za-z0-9_.:-].
+---T1 keys are unchanged (`from.to.item`); T2 keys get a `.t2` suffix so both tiers can sit on one board.
+function M.offerKey(from, to, item, tier)
+    local k = ('%s>%s>%s'):format(from, to, item):gsub('>', '.')
+    if tier == 2 then k = k .. '.t2' end
+    return k
+end
+
+M.T2_UNLOCK = 'contracts_t2'
+
+---T2 settings (roads-02 R9) or nil when T2 freight is not configured.
+local function t2cfg(cfg)
+    local t = (cfg.freight or {}).t2
+    return type(t) == 'table' and t or nil
+end
+
+---Offer tier, 1 when absent (offers generated before T2 existed). 1 and 2 are the only tiers.
+function M.tierOf(offer) return type(offer) == 'table' and offer.tier or 1 end
+
+---fh_progression unlock id gating a tier, or nil (T1 is never gated).
+function M.unlockFor(cfg, tier)
+    if tier ~= 2 then return nil end
+    local t = t2cfg(cfg)
+    return t and t.unlock or M.T2_UNLOCK
+end
+
+---Smallest wagon tier number (fh_cargo TIERS[*].tier) a contract tier needs. T1: 1 (any wagon).
+function M.minWagonTier(cfg, tier)
+    if tier ~= 2 then return 1 end
+    local t = t2cfg(cfg)
+    return t and t.minWagonTier or 2
+end
 
 local function defaults(cfg)
     local f = cfg.freight or {}
@@ -36,11 +66,67 @@ end
 
 local function clamp(v, lo, hi) if v < lo then return lo elseif v > hi then return hi end return v end
 
+---Horizontal route length (m) between two regions' freight destinations, or nil when either has none.
+function M.routeDistance(cfg, from, to)
+    local dest = (cfg.freight or {}).destinations or {}
+    local a, b = dest[from], dest[to]
+    if type(a) ~= 'table' or type(b) ~= 'table' or not finite(a.x) or not finite(a.y) or not finite(b.x) or not finite(b.y) then return nil end
+    local dx, dy = a.x - b.x, a.y - b.y
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+---T2 deadline (s): deadlineBase + distance * deadlinePerMeter, whole seconds, clamped to 60..86400.
+function M.t2Deadline(cfg, distance)
+    local t = t2cfg(cfg) or {}
+    local s = math.floor((t.deadlineBase or 900) + distance * (t.deadlinePerMeter or 1.0))
+    return clamp(s, 60, 86400)
+end
+
+---T2 qty for a shortage level from the item's { min, max } template: min + ceil(level * (max - min)). nil = no template.
+local function t2Qty(t, item, level)
+    local r = t.qty and t.qty[item]
+    if type(r) ~= 'table' or not int(r.min) or not int(r.max) or r.min < 1 or r.max < r.min then return nil end
+    return clamp(r.min + math.ceil(clamp(level, 0, 1) * (r.max - r.min)), r.min, r.max)
+end
+
+---T2 offers for one route: one per shortage with a qty template, only on routes of at least minDistance.
+local function t2Offers(cfg, d, fromRegion, to, list, out)
+    local t = t2cfg(cfg)
+    if not t then return end
+    local dist = M.routeDistance(cfg, fromRegion, to)
+    if not dist or dist < (t.minDistance or 0) then return end
+    local deadline = M.t2Deadline(cfg, dist)
+    local cooldown = math.max(t.cooldownMin or d.cooldownMin, math.ceil(deadline / 60)) -- not re-takeable while one could be live
+    for _, s in ipairs(list) do
+        local good = cfg.goods[s.item]
+        local qty = good and finite(s.level) and finite(s.price) and t2Qty(t, s.item, s.level)
+        if qty then
+            local reward = math.floor(qty * s.price * (t.premium or 1.5))
+            if reward >= 1 then
+                local label = good.label or s.item
+                out[#out + 1] = {
+                    key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true, unlock = M.unlockFor(cfg, 2),
+                    min_wagon_tier = M.minWagonTier(cfg, 2),
+                    title = ('[T2] Freight: %dx %s to %s'):format(qty, label, to),
+                    text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier 2 for T2 contracts and a wagon (t2) or bigger.')
+                        :format(qty, label, fromRegion, to, math.floor(dist)),
+                    region_id = fromRegion, from_region = fromRegion, to_region = to,
+                    item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = deadline, cooldown_min = cooldown,
+                    rewards = { money = reward, rep = { region_id = to, delta = t.repDelta or d.repDelta } },
+                }
+            end
+        end
+    end
+end
+
 ---Offers for a board at `fromRegion`, one per shortage in the OTHER regions that have a destination.
 ---`shortagesByRegion[region] = fh_trade shortages list { item, level, multiplier, price }`. Pure; worst shortage first.
----@return table[] offers { key, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id }
+---T1 offers (tier = 1) are listed first, capped at maxOffers; then T2 offers (tier = 2, freight.t2 configured, routes of
+---at least t2.minDistance), capped at t2.maxOffers. fh_quests calls offers(region_id) with no player, so a T2 offer is
+---always `locked = true` (gated by `unlock`): the board is shared and the per-player check happens at accept.
+---@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, locked?, unlock?, min_wagon_tier? }
 function M.generate(cfg, fromRegion, shortagesByRegion)
-    local d, out = defaults(cfg), {}
+    local d, out, t2out = defaults(cfg), {}, {}
     if type(fromRegion) ~= 'string' or fromRegion == '' then return out end
     local regions = {}
     for r in pairs(shortagesByRegion or {}) do regions[#regions + 1] = r end
@@ -55,7 +141,7 @@ function M.generate(cfg, fromRegion, shortagesByRegion)
                     if reward >= 1 then
                         local label = good.label or s.item
                         out[#out + 1] = {
-                            key = M.offerKey(fromRegion, to, s.item),
+                            key = M.offerKey(fromRegion, to, s.item), tier = 1,
                             title = ('Freight: %dx %s to %s'):format(qty, label, to),
                             text = ('Haul %dx %s from %s to %s before time runs out.'):format(qty, label, fromRegion, to),
                             region_id = fromRegion, from_region = fromRegion, to_region = to,
@@ -65,10 +151,15 @@ function M.generate(cfg, fromRegion, shortagesByRegion)
                     end
                 end
             end
+            t2Offers(cfg, d, fromRegion, to, shortagesByRegion[to], t2out)
         end
     end
-    table.sort(out, function(a, b) if a.level ~= b.level then return a.level > b.level end return a.key < b.key end)
+    local function worstFirst(a, b) if a.level ~= b.level then return a.level > b.level end return a.key < b.key end
+    table.sort(out, worstFirst)
     while #out > d.maxOffers do out[#out] = nil end
+    table.sort(t2out, worstFirst)
+    local t2max = (t2cfg(cfg) or {}).maxOffers or 2
+    for i = 1, math.min(#t2out, t2max) do out[#out + 1] = t2out[i] end
     return out
 end
 
@@ -82,10 +173,55 @@ function M.validateOffer(cfg, offer, isKnownRegion)
     if isKnownRegion and not (isKnownRegion(offer.from_region) and isKnownRegion(offer.to_region)) then return false, 'bad_region' end
     if offer.from_region == offer.to_region and not d.allowSameRegion then return false, 'same_region' end
     if not d.destinations[offer.to_region] then return false, 'no_destination' end
-    if offer.key ~= M.offerKey(offer.from_region, offer.to_region, offer.item) or #M.questId(offer.key) > 64 then return false, 'bad_key' end
-    if not int(offer.qty) or offer.qty < d.minQty or offer.qty > d.maxQty then return false, 'bad_qty' end
+    local tier = M.tierOf(offer)
+    if tier ~= 1 and tier ~= 2 then return false, 'bad_tier' end
+    local t = t2cfg(cfg)
+    if tier == 2 and not t then return false, 'bad_tier' end
+    if offer.key ~= M.offerKey(offer.from_region, offer.to_region, offer.item, tier) or #M.questId(offer.key) > 64 then return false, 'bad_key' end
+    if tier == 1 then
+        if not int(offer.qty) or offer.qty < d.minQty or offer.qty > d.maxQty then return false, 'bad_qty' end
+    else
+        local r = t.qty and t.qty[offer.item]
+        if type(r) ~= 'table' or not int(offer.qty) or offer.qty < r.min or offer.qty > r.max then return false, 'bad_qty' end
+        local dist = M.routeDistance(cfg, offer.from_region, offer.to_region)
+        if not dist or dist < (t.minDistance or 0) then return false, 'bad_route' end
+        if offer.deadline_s ~= M.t2Deadline(cfg, dist) then return false, 'bad_deadline' end
+    end
     if not int(offer.reward) or offer.reward < 1 or offer.reward > offer.qty * good.base * d.rewardCap then return false, 'bad_reward' end
     if not int(offer.deadline_s) or offer.deadline_s < 60 or offer.deadline_s > 86400 then return false, 'bad_deadline' end
+    return true
+end
+
+---Can a wagon of fh_cargo tier row `tierRow` ({ tier, slots, maxWeight }, nil = unreadable) carry this contract?
+---Checks the tier number against the contract tier's minimum, then capacity of an EMPTY wagon of that tier: slots
+---(a stackable good takes one slot per stack) and qty * good.weight against maxWeight. fh_core canFit then checks the
+---real current load. Unreadable tier: T1 passes (canFit still applies), T2 fails closed.
+---@return boolean ok, string? err 'fh_freight_wagon_unknown'|'fh_freight_wagon_too_small'
+function M.wagonFits(cfg, offer, tierRow)
+    local tier = M.tierOf(offer)
+    if type(tierRow) ~= 'table' or not int(tierRow.tier) then
+        if tier == 1 then return true end
+        return false, 'fh_freight_wagon_unknown'
+    end
+    if tierRow.tier < M.minWagonTier(cfg, tier) then return false, 'fh_freight_wagon_too_small' end
+    local good = cfg.goods[offer.item] or {}
+    local slots = good.stackable == false and offer.qty or 1
+    if finite(tierRow.slots) and slots > tierRow.slots then return false, 'fh_freight_wagon_too_small' end
+    if finite(tierRow.maxWeight) and finite(good.weight) and offer.qty * good.weight > tierRow.maxWeight then
+        return false, 'fh_freight_wagon_too_small'
+    end
+    return true
+end
+
+---Fail-closed unlock gate (soft dep on fh_progression, fh_fence/fh_hands pcall pattern). `getState` =
+---GetResourceState, `canUnlock` = function() returning exports.fh_progression:canUnlock(src, id).
+---@return boolean ok, string? why  why = 'not_started'|'threw'|<canUnlock reason>|'denied' (callers refuse 'fh_locked')
+function M.checkUnlock(getState, canUnlock)
+    local okS, st = pcall(getState, 'fh_progression')
+    if not okS or st ~= 'started' then return false, 'not_started' end
+    local ok, res, why = pcall(canUnlock)
+    if not ok then return false, 'threw' end
+    if res ~= true then return false, type(why) == 'string' and why or 'denied' end
     return true
 end
 

@@ -229,4 +229,133 @@ case('generate: offers carry an explicit cooldown_min (config, default 30); only
     T.eq(0, o.cooldown_min, '0 is allowed by fh_quests and kept')
 end)
 
+-- ---------------------------------------------------------------- T2 contracts (roads-02 R9)
+
+local CARGO = dofile(here .. '../server/resources/[fh]/fh_cargo/shared/cargo_rules.lua')
+local T2 = { unlock = 'contracts_t2', minWagonTier = 2, minDistance = 400, deadlineBase = 900, deadlinePerMeter = 1.0,
+    premium = 1.5, repDelta = 4, maxOffers = 2, cooldownMin = 30, qty = { trade_salt = { min = 90, max = 190 } } }
+local function t2With(over) local t = {} for k, v in pairs(T2) do t[k] = v end for k, v in pairs(over or {}) do t[k] = v end return t end
+local function cfgT2(over)
+    local c = cfgNew({ t2 = T2 })
+    c.goods.trade_salt.weight, c.goods.trade_salt.stackable = 1500, true
+    for k, v in pairs(over or {}) do c.freight[k] = v end
+    return c
+end
+local SH = { dunes = { { item = 'trade_salt', level = 0.5, price = 10 }, { item = 'trade_cloth', level = 0.3, price = 20 } } }
+local function t2of(offers) for _, o in ipairs(offers) do if o.tier == 2 then return o end end end
+local function copy(o) local x = {} for k, v in pairs(o) do x[k] = v end return x end
+
+case('T2 generate: T1 offers first (tier 1, unchanged keys), then T2 locked offers with the T2 template', function()
+    local offers = F.generate(cfgT2(), 'heartlands', SH)
+    T.eq(3, #offers) -- salt + cloth T1, salt T2 (cloth has no T2 qty template)
+    T.eq(1, offers[1].tier); T.eq('heartlands.dunes.trade_salt', offers[1].key); T.eq(nil, offers[1].locked)
+    T.eq(1, offers[2].tier)
+    local o = offers[3]
+    T.eq(2, o.tier); T.eq('heartlands.dunes.trade_salt.t2', o.key); assert(#F.questId(o.key) <= 64)
+    T.eq(true, o.locked, 'T2 is always listed locked (board is shared; gate is per player at accept)')
+    T.eq('contracts_t2', o.unlock); T.eq(2, o.min_wagon_tier)
+    T.eq(140, o.qty)            -- 90 + ceil(0.5 * 100)
+    T.eq(2100, o.reward)        -- floor(140 * 10 * 1.5)
+    T.eq(1400, o.deadline_s)    -- 900 + 500 m * 1.0
+    T.eq(30, o.cooldown_min)    -- max(cooldownMin 30, ceil(1400 / 60) = 24)
+    T.same({ money = 2100, rep = { region_id = 'dunes', delta = 4 } }, o.rewards)
+    assert(o.title:find('[T2]', 1, true), 'board title marks T2')
+end)
+
+case('T2 generate: deadline scales with distance; cooldown follows a long deadline; qty clamps to the template', function()
+    local c = cfgT2()
+    c.freight.destinations.dunes = { x = 3000, y = 0, z = 0, radius = 40 }
+    local o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 1, price = 10 } } }))
+    T.eq(3900, o.deadline_s)    -- 900 + 3000
+    T.eq(65, o.cooldown_min)    -- ceil(3900 / 60)
+    T.eq(190, o.qty, 'level 1 = template max')
+    o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 0, price = 10 } } }))
+    T.eq(90, o.qty, 'level 0 = template min')
+end)
+
+case('T2 generate: none on short routes, without t2 config, without a from-region destination; own cap', function()
+    T.eq(nil, t2of(F.generate(cfgT2({ t2 = t2With({ minDistance = 600 }) }), 'heartlands', SH)), 'route 500 m < 600')
+    local plain = F.generate(cfgNew(), 'heartlands', SH)
+    T.eq(nil, t2of(plain), 'no t2 config'); T.eq(1, plain[1].tier)
+    local c = cfgT2(); c.freight.destinations.heartlands = nil
+    T.eq(nil, t2of(F.generate(c, 'heartlands', SH)), 'distance unknown')
+    local list = F.generate(cfgT2({ maxOffers = 1 }), 'heartlands', SH)
+    T.eq(2, #list, 'T1 capped at 1, T2 listed on its own cap'); T.eq(1, list[1].tier); T.eq(2, list[2].tier)
+    T.eq(nil, t2of(F.generate(cfgT2({ t2 = t2With({ maxOffers = 0 }) }), 'heartlands', SH)), 'T2 cap 0 lists none')
+end)
+
+case('T2 validateOffer: accepts generated; refuses bad tier, key, qty, deadline, short route, missing t2 config', function()
+    local c = cfgT2()
+    local o = t2of(F.generate(c, 'heartlands', SH))
+    assert(F.validateOffer(c, o, known))
+    local function bad(field, v, code, cc)
+        local x = copy(o); x[field] = v
+        local ok, err = F.validateOffer(cc or c, x, known)
+        assert(not ok and err == code, field .. '=' .. tostring(v) .. ' -> ' .. tostring(err))
+    end
+    bad('tier', 3, 'bad_tier'); bad('tier', '2', 'bad_tier'); bad('tier', 2, 'bad_tier', cfgNew())
+    bad('key', 'heartlands.dunes.trade_salt', 'bad_key') -- T2 offer posing with a T1 key
+    bad('qty', 89, 'bad_qty'); bad('qty', 191, 'bad_qty'); bad('item', 'trade_cloth', 'bad_key')
+    bad('deadline_s', 1800, 'bad_deadline') -- must equal the distance formula
+    bad('qty', 140, 'bad_route', cfgT2({ t2 = t2With({ minDistance = 600 }) }))
+    -- an untiered (pre-T2) offer still validates as T1; a T1 offer relabelled tier 2 fails on its key
+    local x = copy(F.generate(c, 'heartlands', SH)[1])
+    x.tier = nil; assert(F.validateOffer(c, x, known), 'untiered offer = T1')
+    x.tier = 2; T.eq('bad_key', select(2, F.validateOffer(c, x, known)))
+end)
+
+case('T2 wagonFits: fh_cargo tier rows; t1 cart too small, t2/t3 fit, weight and slots, unreadable tier', function()
+    local c = cfgT2()
+    local o = t2of(F.generate(c, 'heartlands', { dunes = { { item = 'trade_salt', level = 1, price = 10 } } })) -- 190 x 1.5 kg = 285 kg
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t1)), 't1 cart')
+    assert(F.wagonFits(c, o, CARGO.TIERS.t2), 't2 wagon (300 kg) fits 285 kg')
+    assert(F.wagonFits(c, o, CARGO.TIERS.t3))
+    local heavy = copy(o); heavy.qty = 201 -- 301.5 kg > t2 300 kg
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, heavy, CARGO.TIERS.t2)), 'over the t2 weight cap')
+    c.goods.trade_salt.stackable = false -- one slot per unit: 190 > 60 slots even on a t3
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t3)), 'slots')
+    c.goods.trade_salt.stackable = true
+    T.eq('fh_freight_wagon_unknown', select(2, F.wagonFits(c, o, nil)), 'T2 fails closed on an unreadable tier')
+    T.eq('fh_freight_wagon_unknown', select(2, F.wagonFits(c, o, { tier = 't2' })))
+    local t1 = F.generate(c, 'heartlands', SH)[1]
+    assert(F.wagonFits(c, t1, nil), 'T1 with unreadable tier passes (canFit still applies)')
+    assert(F.wagonFits(c, t1, CARGO.TIERS.t1), 'T1 on a cart')
+end)
+
+case('T2 checkUnlock: allowed / tier_too_low / not started / getState throws / canUnlock throws / truthy non-true', function()
+    local started = function() return 'started' end
+    assert(F.checkUnlock(started, function() return true end))
+    T.eq('tier_too_low', select(2, F.checkUnlock(started, function() return false, 'tier_too_low' end)))
+    local called = false
+    T.eq('not_started', select(2, F.checkUnlock(function() return 'stopped' end, function() called = true return true end)))
+    T.eq(false, called, 'canUnlock must not be called while fh_progression is not started')
+    T.eq('not_started', select(2, F.checkUnlock(function() error('native gone') end, function() return true end)))
+    T.eq('not_started', select(2, F.checkUnlock(nil, function() return true end)))
+    T.eq('threw', select(2, F.checkUnlock(started, function() error('No such export canUnlock') end)))
+    T.eq('denied', select(2, F.checkUnlock(started, function() return 'yes' end)), 'only true unlocks')
+    T.eq('denied', select(2, F.checkUnlock(started, function() return nil end)))
+    T.eq('contracts_t2', F.unlockFor(cfgT2(), 2)); T.eq(nil, F.unlockFor(cfgT2(), 1)); T.eq(1, F.minWagonTier(cfgT2(), 1))
+end)
+
+case('T2 real config: qty ranges need more than a t1 cart and fit an empty t2 wagon; pay stays under the reward cap', function()
+    local saved = FhTradeConfig
+    dofile(here .. '../server/resources/[fh]/fh_trade/config.lua')
+    local c = FhTradeConfig
+    FhTradeConfig = saved
+    local t = assert(c.freight.t2, 'freight.t2 missing')
+    T.eq('contracts_t2', t.unlock); T.eq(2, t.minWagonTier)
+    for item, r in pairs(t.qty) do
+        local g = assert(c.goods[item], item .. ' is not a trade good')
+        assert(r.min * g.weight > CARGO.TIERS.t1.maxWeight, item .. ': T2 minimum fits a t1 cart')
+        assert(r.max * g.weight <= CARGO.TIERS.t2.maxWeight, item .. ': T2 maximum does not fit an empty t2 wagon')
+        -- worst-case unit price: base x regionFactor x (1 + gain x max shortage) x (1 + wobble)
+        local rf = 1
+        for _, f in pairs(c.regionFactor or {}) do if f[item] and f[item] > rf then rf = f[item] end end
+        local maxUnit = g.base * rf * (1 + c.shortage.gain * c.shortage.max) * (1 + c.wobble.amplitude)
+        assert(maxUnit * t.premium <= g.base * c.freight.rewardCapMultiple, item .. ': T2 reward can exceed the cap')
+    end
+    local dist = F.routeDistance(c, 'heartlands', 'scarlett_meadows')
+    assert(dist and dist >= t.minDistance, 'heartlands <-> scarlett_meadows is not a T2 route')
+end)
+
 T.finish()
