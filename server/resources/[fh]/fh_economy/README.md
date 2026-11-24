@@ -7,6 +7,12 @@ Money & rep ledger (spec 4.6). All payouts and rep changes go through here; ever
   Credits `config.moneyType` (`cash`) via RSGCore `Player.Functions.AddMoney`.
 - `exports.fh_economy:rep(src, region_id, delta, reason)` -> `ok, err`
   Atomic: clamped `value = value + delta` upsert and the ledger insert share one transaction.
+- `exports.fh_economy:repByCitizenid(citizenid, region_id, delta, reason)` -> `ok, err` (idea-804)
+  Same write as `rep` (shared inner function: clamp, upsert, `kind='rep'` ledger row, `fh:economy:rep_changed`) keyed
+  by citizenid, so it works for an offline character (rep lives in `fh_rep`, which rsg-core holds no copy of).
+  The event's `src` is the online server id if that citizenid is loaded, else `nil`. Refused: `invalid_citizenid`
+  (same rules as `getRep` strings), `unknown_citizenid` (no `players` row), and `rep`'s delta / reason / region errors.
+  Server export only.
 - `exports.fh_economy:charge(src, amount, reason, region_id)` -> `ok, err, ledgerId` (B7)
   Debit, the mirror of `pay`: balance check, ledger row `kind='charge'` (amount = the positive sum taken) FIRST, then
   RSGCore `Player.Functions.RemoveMoney` on a Player looked up again after the insert. Never takes the balance
@@ -83,10 +89,11 @@ Region ids: fh_economy loads `@fh_core/shared/regions.lua` itself in its manifes
 does not depend on fh_core's manifest listing it (B4a's `shared/*.lua` glob covers fh_core's own use).
 
 ## Tests
-From the repo root: `~/.venvs/rf/bin/python tools/run-specs.py spec/ledger_logic_spec.lua spec/fh_economy_server_spec.lua spec/fh_economy_credit_spec.lua`
+From the repo root: `~/.venvs/rf/bin/python tools/run-specs.py spec/ledger_logic_spec.lua spec/fh_economy_server_spec.lua spec/fh_economy_credit_spec.lua spec/fh_economy_rep_spec.lua`
 - `spec/ledger_logic_spec.lua`: pure validation and the pay / charge sequences.
 - `spec/fh_economy_server_spec.lua`: the real `server/main.lua` on a stubbed server: `charge`, `pay`, `getRep`,
   including drop / character switch across the insert yield.
+- `spec/fh_economy_rep_spec.lua`: `repByCitizenid` offline (row + ledger, clamp), online (event carries `src`), refusals.
 - `spec/fh_economy_credit_spec.lua`: `credit` online / offline, claim on load (double and concurrent claims pay once),
   `AddMoney` refused / throwing after the claim, a failed clear, the start-up audit warning.
 

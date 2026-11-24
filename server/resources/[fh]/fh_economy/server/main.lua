@@ -131,15 +131,10 @@ local function getRep(who, region_id)
     return logic.repValue(value)
 end
 
----Rep: atomic clamped `value = value + delta` upsert plus ledger insert in one transaction.
+---Shared rep write (rep + repByCitizenid): atomic clamped `value = value + delta` upsert plus ledger insert in one
+---transaction, then the read-back and fh:economy:rep_changed. `src` = the online server id, or nil (offline write).
 ---@return boolean ok, string? err
-local function rep(src, region_id, delta, reason)
-    local ok, err = logic.validateRep({ delta = delta, reason = reason, region_id = region_id }, ctx)
-    if not ok then return false, err end
-    local Player = getPlayer(src)
-    if not Player then return false, 'no_player' end
-    local citizenid = Player.PlayerData.citizenid
-
+local function applyRep(citizenid, src, region_id, delta, reason)
     local done, committed = pcall(MySQL.transaction.await, {
         { query = 'INSERT INTO fh_rep (citizenid, region_id, `value`) VALUES (?, ?, LEAST(?, GREATEST(?, ?))) '
             .. 'ON DUPLICATE KEY UPDATE `value` = LEAST(?, GREATEST(?, `value` + ?))',
@@ -155,6 +150,16 @@ local function rep(src, region_id, delta, reason)
     TriggerEvent('fh:economy:rep_changed', { src = src, citizenid = citizenid, region_id = region_id,
         delta = delta, value = value, reason = reason })
     return true
+end
+
+---Rep for an online player (server id).
+---@return boolean ok, string? err
+local function rep(src, region_id, delta, reason)
+    local ok, err = logic.validateRep({ delta = delta, reason = reason, region_id = region_id }, ctx)
+    if not ok then return false, err end
+    local Player = getPlayer(src)
+    if not Player then return false, 'no_player' end
+    return applyRep(Player.PlayerData.citizenid, src, region_id, delta, reason)
 end
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -178,6 +183,24 @@ local function onlineByCitizenid(citizenid)
     if not called or type(Player) ~= 'table' or type(Player.PlayerData) ~= 'table' then return nil end
     if Player.PlayerData.citizenid ~= citizenid or not logic.validSrc(Player.PlayerData.source) then return nil end
     return Player
+end
+
+---Rep by citizenid (idea-804): same clamp / ledger row / event as `rep`, for an offline owner too. Rep lives in our
+---own fh_rep table (rsg-core holds no copy), so a direct write is safe offline. The event's `src` is the online
+---server id when that character is loaded, else nil. Refused: invalid_citizenid, unknown_citizenid (no `players` row),
+---plus rep's own delta / reason / region errors.
+---@return boolean ok, string? err
+local function repByCitizenid(citizenid, region_id, delta, reason)
+    if not logic.validCitizenid(citizenid) then return false, 'invalid_citizenid' end
+    local ok, err = logic.validateRep({ delta = delta, reason = reason, region_id = region_id }, ctx)
+    if not ok then return false, err end
+    local Player = onlineByCitizenid(citizenid)
+    if not Player then
+        local okQ, known = pcall(MySQL.scalar.await, 'SELECT 1 FROM players WHERE citizenid = ? LIMIT 1', { citizenid })
+        if not okQ then return false, 'ledger_failed' end
+        if known == nil then return false, 'unknown_citizenid' end
+    end
+    return applyRep(citizenid, Player and Player.PlayerData.source or nil, region_id, delta, reason)
 end
 
 local function cashOf(Player)
@@ -347,6 +370,7 @@ end
 
 exports('pay', pay)
 exports('rep', rep)
+exports('repByCitizenid', repByCitizenid)
 exports('charge', charge)
 exports('getRep', getRep)
 exports('credit', credit)

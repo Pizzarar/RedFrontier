@@ -27,7 +27,7 @@ The emitting lane owns the name and documents it in its README.
 | `fh:death:bags` | fh_death (server -> all clients) | `{ { id, x, y, z }, ... }`: live bags for the open prompt; no owner in it |
 | `fh:zones:camp_cleared` | zones lane | `{ src, territory_id, tier }` |
 | `fh:economy:paid` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
-| `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason }` |
+| `fh:economy:rep_changed` | fh_economy | `{ src, citizenid, region_id, delta, value, reason }`: `src` is `nil` when written by `repByCitizenid` for an offline character; key on `citizenid` |
 | `fh:economy:charged` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }`: a `charge` debit (B7); `amount` is the positive sum taken |
 | `fh:economy:credited` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id, queued }`: money added by `credit` (core-04 E2). `queued = false`: paid online at once (`ledger_id` = its `credit` row); `queued = true`: a pending credit paid on character load (no `ledger_id`) |
 | `fh:buffs:applied` | fh_buffs | `{ src, buff_id, magnitude, expires_at, refreshed }` |
