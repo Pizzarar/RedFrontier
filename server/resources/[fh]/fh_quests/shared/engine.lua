@@ -4,8 +4,11 @@
 --
 -- State (one row of fh_quest_state per citizenid + quest_id):
 --   { citizenid, quest_id, status = 'active'|'done'|'failed'|'abandoned', step = 1..#steps,
---     progress = { count = n, completions = n, reward_pending = bool },
+--     progress = { count = n, completions = n, reward_pending = bool, step_id = string|nil },
 --     cooldown_until = unix seconds|nil, updated_at = unix seconds }
+-- `step` is the index into the CURRENT def; `progress.step_id` is the step's optional stable id. A def may give
+-- steps ids ({ id = 'claim_plot', ... }); progress is then resolved by id first, so reordering/inserting steps does
+-- not move a player mid-quest. Rows written before a def had ids have no step_id and fall back to the index.
 -- Effects: { type = 'started'|'step'|'completed'|'failed'|'abandoned'|'reward', citizenid, quest_id, kind, step,
 --   reason? } ('reward' also carries money, rep, items, reason = 'quest:<id>').
 -- `now` is injected everywhere: a number (unix seconds) or a function returning one.
@@ -90,6 +93,32 @@ function M.stepOf(def, i)
     return { on = on, where = where, count = raw.count or 1, text = raw.text, talk = raw.talk }
 end
 
+---The stable id of step `i`, or nil when the def gives the step no id.
+function M.stepIdOf(def, i)
+    local raw = def.steps and def.steps[i]
+    return raw and type(raw.id) == 'string' and raw.id or nil
+end
+
+local function indexOfId(def, id)
+    if type(id) ~= 'string' then return nil end
+    for i, raw in ipairs(def.steps or {}) do
+        if raw.id == id then return i end
+    end
+    return nil
+end
+
+---The index in `def` that `state` is on: the saved step id resolved against the current def (a reorder keeps
+---progress), else the saved index (defs without ids / legacy rows). nil when the saved id no longer exists.
+function M.stepIndexOf(def, state)
+    if type(state) ~= 'table' then return nil end
+    local saved = type(state.progress) == 'table' and state.progress.step_id or nil
+    if saved ~= nil then
+        if type(saved) ~= 'string' then return state.step end
+        return indexOfId(def, saved) -- nil = the step was removed: apply treats it as past the end
+    end
+    return state.step
+end
+
 local function validRegion(regions, id)
     if type(id) ~= 'string' or id == '' then return false end
     if regions == nil then return true end
@@ -155,9 +184,15 @@ function M.validate(def, opts)
     if not isList(def.steps) then return false, 'fh_bad_steps' end -- holes or non-integer keys
     if #def.steps > M.LIMITS.steps then return false, 'fh_too_many_steps' end
     local events = opts.events or INTAKE_SET
+    local stepIds = {}
     for i, raw in ipairs(def.steps) do
         local at = '@step' .. i
         if type(raw) ~= 'table' then return false, 'fh_bad_step' .. at end
+        if raw.id ~= nil and (type(raw.id) ~= 'string' or raw.id == '') then return false, 'fh_bad_step_id' .. at end
+        if raw.id ~= nil then
+            if stepIds[raw.id] then return false, 'fh_duplicate_step_id' .. at end
+            stepIds[raw.id] = true
+        end
         if type(raw.text) ~= 'string' or raw.text == '' then return false, 'fh_bad_step_text' .. at end
         if raw.count ~= nil and not posInt(raw.count, M.LIMITS.count) then return false, 'fh_bad_step_count' .. at end
         if raw.talk ~= nil then
@@ -230,7 +265,8 @@ function M.start(def, stateByQuest, citizenid, now)
     local prev = (stateByQuest or {})[def.id]
     local state = {
         citizenid = citizenid, quest_id = def.id, status = 'active', step = 1,
-        progress = { count = 0, completions = prev and (prev.progress or {}).completions or 0 },
+        progress = { count = 0, completions = prev and (prev.progress or {}).completions or 0,
+            step_id = M.stepIdOf(def, 1) },
         cooldown_until = prev and prev.cooldown_until or nil, updated_at = nowOf(now),
     }
     return state, { effect('started', def, state) }
@@ -267,20 +303,23 @@ function M.apply(def, state, verdict, now)
         complete(def, s, t, effects)
         return s, effects
     end
-    local step = M.stepOf(def, s.step)
-    if not step then -- step past the end (def shrank since this row was saved): finish rather than stall
+    local idx = M.stepIndexOf(def, s)
+    local step = idx and M.stepOf(def, idx) or nil
+    if not step then -- step past the end (def shrank / the saved step id is gone): finish rather than stall
         complete(def, s, t, effects)
         return s, effects
     end
+    s.step = idx -- heal the index when the saved step id moved in a reordered def
     s.progress.count = (s.progress.count or 0) + 1
     if s.progress.count < step.count then
         effects[1] = effect('step', def, s, { count = s.progress.count, need = step.count })
         return s, effects
     end
-    if s.step >= #def.steps then
+    if idx >= #def.steps then
         complete(def, s, t, effects)
     else
-        s.step = s.step + 1
+        s.step = idx + 1
+        s.progress.step_id = M.stepIdOf(def, s.step)
         s.progress.count = 0
         effects[1] = effect('step', def, s, { count = 0, need = M.stepOf(def, s.step).count })
     end
@@ -304,7 +343,8 @@ end
 
 function M.onEvent(def, state, eventName, payload, now)
     if not M.eligible(state, eventName, payload) then return state, {} end
-    local step = M.stepOf(def, state.step)
+    local idx = M.stepIndexOf(def, state)
+    local step = idx and M.stepOf(def, idx) or nil
     if not step or step.on ~= eventName then return state, {} end
     if not match().where(step.where, payload) then return state, {} end
     return M.apply(def, state, 'progress', now)

@@ -33,34 +33,37 @@ AddEventHandler('onResourceStart', function(res)
 end)
 
 -- ------------------------------------------------------------------ prompts
--- One client event carries both the text and the GPS waypoint (nil = clear the route).
-local function sendPrompt(src, text, waypoint)
+-- One client event carries the text, the GPS waypoint (nil = clear the route) and an optional ack: for an
+-- informational step with no player action, the client reports the step's check after `after_ms` on screen.
+local function sendPrompt(src, text, waypoint, ack)
     TriggerClientEvent('fh:tutorial:prompt', src, {
         text = text,
         waypoint = waypoint and { x = waypoint.x, y = waypoint.y, z = waypoint.z, label = waypoint.label } or nil,
+        ack = ack,
     })
 end
 
 local function stepPrompt(i)
     local step = T.stepOf(T.def, i)
     if not step then return nil end
-    return step.text, T.waypointOf(step)
+    local ack = step.ack_ms and step.check and { check = step.check, after_ms = step.ack_ms } or nil
+    return step.text, T.waypointOf(step), ack
 end
 
 AddEventHandler('fh:quests:started', function(p)
     if type(p) ~= 'table' or p.quest_id ~= T.QUEST_ID then return end
     local src = srcOf[p.citizenid]
     if src then
-        local text, wp = stepPrompt(p.step)
-        sendPrompt(src, text, wp)
+        local text, wp, ack = stepPrompt(p.step)
+        sendPrompt(src, text, wp, ack)
     end
 end)
 AddEventHandler('fh:quests:step', function(p)
     if type(p) ~= 'table' or p.quest_id ~= T.QUEST_ID then return end
     local src = srcOf[p.citizenid]
     if src then
-        local text, wp = stepPrompt(p.step)
-        sendPrompt(src, text, wp)
+        local text, wp, ack = stepPrompt(p.step)
+        sendPrompt(src, text, wp, ack)
     end
 end)
 AddEventHandler('fh:quests:completed', function(p)
@@ -143,8 +146,8 @@ RegisterCommand('tutorial', function(src, args)
     -- No subcommand: show the current step and re-set its waypoint.
     local step = activeStep(src)
     if step then
-        local text, wp = stepPrompt(step)
-        sendPrompt(src, text, wp)
+        local text, wp, ack = stepPrompt(step)
+        sendPrompt(src, text, wp, ack)
     else
         sendPrompt(src, 'No active tutorial. Use /tutorial restart to replay it.')
     end
@@ -164,6 +167,23 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
         -- Persist only after a successful start; otherwise retry on the next load (a failed start must not
         -- permanently burn the one auto-start).
         if ok == true then saveRecord(cid, false) end
+    else
+        -- Returning character: started/step events are not replayed on load, so show the in-flight step again.
+        -- (The greeting has no player action; without this a relog during it would wait for /tutorial.) Retry
+        -- briefly in case fh_quests has not finished its own load yet.
+        CreateThread(function()
+            for _ = 1, 10 do
+                if questsReady() then
+                    local step = activeStep(src)
+                    if step then
+                        local text, wp, ack = stepPrompt(step)
+                        sendPrompt(src, text, wp, ack)
+                    end
+                    return
+                end
+                Wait(500)
+            end
+        end)
     end
 end)
 

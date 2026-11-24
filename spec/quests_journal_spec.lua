@@ -55,6 +55,18 @@ describe('quests journal: entry', function()
             cooldown_until = nil, updated_at = T0 + 5,
         }, e)
     end)
+    it('resolves the step by id after a reorder', function()
+        local d = line()
+        d.steps = {
+            { id = 'claim', on = 'fh:homestead:claimed', text = 'Claim a plot.' },
+            { id = 'sell', on = 'fh:hunting:pelt_sold', count = 3, text = 'Sell three pelts.' },
+        }
+        d.steps = { d.steps[2], d.steps[1] } -- reordered: sell is now step 1
+        local st = state('family_test_1', 'active', 2, 1) -- index from the old order still says 2
+        st.progress.step_id = 'sell'
+        local e = J.entry(d, st)
+        eq(1, e.step); eq('Sell three pelts.', e.step_text); eq(3, e.need)
+    end)
     it('item info never reaches the client', function()
         local e = J.entry(line(), state('family_test_1', 'active'))
         eq(nil, e.rewards.items[1].info)

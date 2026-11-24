@@ -1,5 +1,6 @@
 -- fh_quests persistence mapping (Q2). Pure Lua: state <-> fh_quest_state row (migration 0007_quest_state.sql).
--- progress keys kept: count, completions, reward_pending, reward_paid, reward_inflight, job (anything else is dropped).
+-- progress keys kept: count, completions, reward_pending, reward_paid, reward_inflight, step_id, job (anything else
+-- is dropped).
 -- JSON encode/decode are injected (the server passes the CfxLua `json` global), so specs run without natives.
 -- fromRow normalises what comes back (JSON numbers may decode as floats; bad JSON or an unknown status drops the
 -- row's progress / the row) so the engine and the reward protocol only ever see well-formed state.
@@ -24,6 +25,7 @@ end
 local function cleanProgress(p)
     p = type(p) == 'table' and p or {}
     local out = { count = int(p.count) or 0, completions = int(p.completions) or 0 }
+    if type(p.step_id) == 'string' and p.step_id ~= '' then out.step_id = p.step_id end
     if p.reward_pending == true then out.reward_pending = true end
     if type(p.reward_paid) == 'table' then
         local paid, any = {}, false

@@ -36,9 +36,9 @@ migration (`server/migrations/0007_quest_state.sql`) applied by
   prereq    = { 'tutorial_intro' },     -- optional: quest ids that must have been completed at least once
   ['repeat'] = { cooldown_min = 60 },   -- optional: repeatable, cooldown after each completion; nil = one-time
   steps = {                             -- 1..32 steps, done in order
-    { on = 'fh:homestead:claimed', text = 'Claim a homestead plot.' },
-    { on = 'fh:hunting:pelt_sold', where = { quality = { min = 2 } }, count = 3, text = 'Sell three good pelts.' },
-    { talk = { npc = 'npc_hale', lines = { 'You did it.', 'Here, take this.' } }, text = 'Report back to Hale.' },
+    { id = 'claim', on = 'fh:homestead:claimed', text = 'Claim a homestead plot.' }, -- id is optional
+    { id = 'sell', on = 'fh:hunting:pelt_sold', where = { quality = { min = 2 } }, count = 3, text = 'Sell three good pelts.' },
+    { id = 'report', talk = { npc = 'npc_hale', lines = { 'You did it.', 'Here, take this.' } }, text = 'Report back to Hale.' },
   },
   rewards = {                           -- all optional
     money = 25,                                   -- whole dollars, fh_economy.pay
@@ -50,6 +50,9 @@ migration (`server/migrations/0007_quest_state.sql`) applied by
 
 - `repeat` is a Lua keyword: write it as `['repeat']` in Lua source.
 - `step.count` defaults to 1: the step needs that many matching events.
+- `step.id` is an optional stable id (non-empty string, unique in the def). Progress is saved by id as well as
+  index, so a registered def can be reordered or gain steps without moving an in-flight character. A row saved
+  before the def had ids falls back to its index.
 - `step.talk = { npc, lines? }`: the step listens on `fh:quests:talked` (default `on`) with `npc_id = talk.npc`
   added to its `where`. `lines` is the text dialogue shown when the step advances (no cutscenes or voice).
 - `engine.validate(def, { regions = FhRegions.regions })` rejects malformed defs with a code (`fh_bad_id`,
@@ -144,7 +147,7 @@ All player exports take `src` (player server id) and resolve the citizenid thems
 | `fh_internal` | every player export | a Lua error inside the locked section (logged); state is as last saved |
 | `fh_bad_def`, `fh_bad_id`, `fh_bad_kind`, `fh_bad_title`, `fh_bad_giver`, `fh_bad_region`, `fh_bad_prereq`, `fh_prereq_self`, `fh_bad_repeat`, `fh_no_steps`, `fh_too_many_steps` | `registerQuest`, `acceptOffer` | `engine.validate`: the def's own fields |
 | `fh_bad_steps` | `registerQuest`, `acceptOffer` | `steps` is not a dense 1..n list (holes or non-integer keys) |
-| `fh_bad_step@stepN`, `fh_bad_step_text@stepN`, `fh_bad_step_count@stepN`, `fh_bad_talk@stepN`, `fh_bad_talk_lines@stepN`, `fh_bad_step_event@stepN`, `fh_bad_<pred>@<field>@stepN` | `registerQuest`, `acceptOffer` | a step, its talk block, its event (not on the intake / job events) or a `where` predicate |
+| `fh_bad_step@stepN`, `fh_bad_step_id@stepN`, `fh_duplicate_step_id@stepN`, `fh_bad_step_text@stepN`, `fh_bad_step_count@stepN`, `fh_bad_talk@stepN`, `fh_bad_talk_lines@stepN`, `fh_bad_step_event@stepN`, `fh_bad_<pred>@<field>@stepN` | `registerQuest`, `acceptOffer` | a step, its id, its talk block, its event (not on the intake / job events) or a `where` predicate |
 | `fh_bad_rewards`, `fh_unknown_reward:<k>`, `fh_bad_money`, `fh_bad_rep_region`, `fh_bad_rep_delta`, `fh_bad_items`, `fh_bad_item`, `fh_bad_item_amount`, `fh_bad_item_info` | `registerQuest`, `acceptOffer` | the rewards block |
 | `fh_reserved_id` | `registerQuest` | ids starting with `job:` are reserved for accepted jobs |
 | `fh_bad_job_name`, `fh_bad_hooks`, `fh_bad_hook:<hook>`, `fh_bad_job_events`, `fh_bad_job_event:<name>` | `registerJobType` | name not `[a-z0-9_]+` (max 32), hooks not a table, `offers` missing or a hook not callable, `events` not a list of `fh:*` names (never `fh:quests:talked`) |
@@ -376,6 +379,7 @@ one row; `cooldown_until` is set on each completion and `progress.completions` c
 | Key | Meaning |
 |---|---|
 | `count`, `completions` | events counted toward the current step; completions so far |
+| `step_id` | the current step's stable `id` when the def gives steps ids; resolved before `step` on load |
 | `reward_pending` | `true` while any reward part is still owed |
 | `reward_paid` | `{ [part key] = true }` parts already delivered (`money`, `rep`, `item:<i>`) |
 | `reward_inflight` | `{ key, at }` the part being paid right now (crash recovery) |

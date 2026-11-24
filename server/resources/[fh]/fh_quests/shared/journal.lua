@@ -16,10 +16,11 @@ local function rewardsView(r)
     return out
 end
 
----One journal entry. A step index past the end of the def (def shrank) shows the last step.
+---One journal entry. The current step is resolved by its saved id when the def has ids (a reorder keeps the
+---player's place). A step index past the end of the def (def shrank) shows the last step.
 function M.entry(def, state)
     local n = #def.steps
-    local i = math.min(math.max(state.step or 1, 1), n)
+    local i = math.min(math.max(engine().stepIndexOf(def, state) or state.step or 1, 1), n)
     local step = engine().stepOf(def, i)
     local p = state.progress or {}
     return {

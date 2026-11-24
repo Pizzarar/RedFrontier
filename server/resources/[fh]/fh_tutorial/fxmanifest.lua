@@ -8,6 +8,7 @@ description 'RedFrontier intro tutorial (guide-02): a skippable, never-blocking 
 
 shared_scripts {
     '@ox_lib/init.lua',    -- `lib` (client notify)
+    'config.lua',          -- FhTutorialConfig.order: the step order is config, not code
     'shared/tutorial.lua', -- FhTutorial: pure quest def + step/persistence decisions (specced in spec/tutorial_spec.lua)
 }
 

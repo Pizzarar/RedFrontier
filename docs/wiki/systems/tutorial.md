@@ -1,6 +1,6 @@
 # Tutorial
 
-The first time a new character loads, a short guide starts. It walks you through your first day in seven text steps — no voice, no cutscenes. It never blocks anything, and you can skip it any time. Built but **not checked in game yet** (unverified).
+The first time a new character loads, a short guide starts. It walks you through your first day in eight text steps — no voice, no cutscenes. It never blocks anything, and you can skip it any time. Built but **not checked in game yet** (unverified).
 
 ## Commands
 
@@ -10,29 +10,37 @@ The first time a new character loads, a short guide starts. It walks you through
 | `/tutorial skip` | stop the tutorial for this character (survives relog) |
 | `/tutorial restart` | start it again from the first step |
 
-## The seven steps
+## The eight steps
 
-1. Open your inventory with `I`.
-2. Ride to the Valentine Trade Post and quote or sell.
-3. Find a homestead plot and claim it with `/fh_claim`.
-4. Open the jobs board with `/jobs`.
-5. Hunt an animal, skin it, and sell the pelt to the trapper.
-6. Meet a family quest giver — Ruth Hale.
-7. Eat and drink to keep your needs up.
+1. **Greeting** — a short welcome; the inventory prompt follows.
+2. Open your inventory with `I`.
+3. Eat and drink to keep your needs up.
+4. Find a homestead plot and claim it with `/fh_claim`.
+5. Ride to the Valentine Trade Post and quote or sell.
+6. Hunt an animal, skin it, and sell the pelt to the trapper.
+7. Open the jobs board with `/jobs`.
+8. Meet a family quest giver — Ruth Hale.
 
-Steps with a destination set a yellow GPS route to it. The tutorial finishes on its own after step 7 and never
+The order is deliberate: needs first, then a home and stash, then shopping, then jobs once the first sale has proved
+the money loop, and the family giver as the graduation. It lives in `FhTutorialConfig.order` (`fh_tutorial/config.lua`),
+not in code, so reordering it is a config edit; unknown step ids are dropped with a warning.
+
+Steps with a destination set a yellow GPS route to it. The tutorial finishes on its own after the last step and never
 re-starts unless you ask it to.
 
 ## Good to know
 
 - It is completely optional and never blocks anything — the [family questlines](quests.md) don't wait for it.
-- Progress and the "done" mark are kept per character; skipping is too.
+- Progress and the "done" mark are kept per character; skipping is too. Progress is stored by step id, so a future
+  reorder keeps an in-flight character on the same logical step.
 - Where a step matches a real game event (claiming a plot, selling a pelt), it advances on that. The rest advance on a
-  simple check (opening the inventory, the board, the trade menu, or eating/drinking).
+  simple check (opening the inventory, the board, the trade menu, or eating/drinking); the greeting acknowledges
+  itself after a couple of seconds on screen.
 
 See also: [Getting started](../getting-started.md) · [Quests](quests.md) · [Wiki index](../README.md)
 
 Sources:
+- `server/resources/[fh]/fh_tutorial/config.lua`
 - `server/resources/[fh]/fh_tutorial/README.md`
 - `server/resources/[fh]/fh_tutorial/shared/tutorial.lua`
 - `server/resources/[fh]/fh_tutorial/server/main.lua`

@@ -102,6 +102,9 @@ describe('quests engine: validate', function()
         bad(function(d) d.steps[2].where = { quality = { min = 'x' } } end, 'fh_bad_min@quality@step2')
         bad(function(d) d.steps[3].talk = { lines = {} } end, 'fh_bad_talk@step3')
         bad(function(d) d.steps[3].talk.lines = { 1 } end, 'fh_bad_talk_lines@step3')
+        bad(function(d) d.steps[1].id = '' end, 'fh_bad_step_id@step1')
+        bad(function(d) d.steps[1].id = 5 end, 'fh_bad_step_id@step1')
+        bad(function(d) d.steps[1].id = 'same'; d.steps[2].id = 'same' end, 'fh_duplicate_step_id@step2')
         bad(function(d) d.rewards.money = -1 end, 'fh_bad_money')
         bad(function(d) d.rewards.money = 2.5 end, 'fh_bad_money')
         bad(function(d) d.rewards.rep = { region_id = 'mars', delta = 1 } end, 'fh_bad_rep_region')
@@ -135,6 +138,51 @@ describe('quests engine: validate', function()
     it('a talk step defaults to fh:quests:talked with npc_id = talk.npc', function()
         local s = E.stepOf(line(), 3)
         eq('fh:quests:talked', s.on); eq('npc_hale', s.where.npc_id); eq(1, s.count)
+    end)
+end)
+
+describe('quests engine: step ids survive a reorder', function()
+    local function idLine()
+        return {
+            id = 'tutorial_like', kind = 'tutorial', title = 'T', region_id = 'heartlands',
+            steps = {
+                { id = 'a', on = 'fh:homestead:claimed', text = 'A' },
+                { id = 'b', on = 'fh:hunting:pelt_sold', text = 'B' },
+                { id = 'c', talk = { npc = 'npc_hale' }, text = 'C' },
+                { id = 'd', on = 'fh:zones:camp_cleared', text = 'D' },
+            },
+        }
+    end
+    local pelt = { citizenid = CID, quality = 2, region_id = 'heartlands' }
+    it('start records the first step id; advancing records the next one', function()
+        local d = idLine()
+        local st = E.start(d, {}, CID, T0)
+        eq('a', st.progress.step_id)
+        st = E.onEvent(d, st, 'fh:homestead:claimed', { citizenid = CID, plot_id = 'p1', region_id = 'heartlands' }, T0)
+        eq(2, st.step); eq('b', st.progress.step_id)
+    end)
+    it('resolves the current step by id in a reordered def, then advances by that step', function()
+        local d = idLine()
+        local st = E.onEvent(d, E.start(d, {}, CID, T0), 'fh:homestead:claimed',
+            { citizenid = CID, plot_id = 'p1', region_id = 'heartlands' }, T0)
+        local reordered = idLine()
+        reordered.steps = { reordered.steps[3], reordered.steps[1], reordered.steps[2], reordered.steps[4] }
+        eq(3, E.stepIndexOf(reordered, st))
+        st = E.onEvent(reordered, st, 'fh:hunting:pelt_sold', pelt, T0)
+        eq('d', st.progress.step_id)
+        eq(4, st.step)
+        st = E.onEvent(reordered, st, 'fh:zones:camp_cleared', { citizenid = CID, camp_id = 'c1' }, T0)
+        eq('done', st.status)
+    end)
+    it('a legacy row without a step id uses the saved index; a vanished id completes', function()
+        local d = idLine()
+        local st = E.start(d, {}, CID, T0)
+        st.step, st.progress.step_id = 2, nil
+        eq(2, E.stepIndexOf(d, st))
+        st.progress.step_id = 'gone'
+        eq(nil, E.stepIndexOf(d, st))
+        st = E.apply(d, st, 'progress', T0)
+        eq('done', st.status)
     end)
 end)
 

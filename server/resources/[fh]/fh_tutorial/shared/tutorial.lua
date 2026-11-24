@@ -14,6 +14,7 @@ M.QUEST_ID = 'tutorial_intro'
 -- synthetic talk npc and calls talk(src, npc). The npc id is free-form (fh_quests `talk` accepts any non-empty
 -- string; only the giver proximity net handlers know real giver positions).
 M.CHECKS = {
+    greeting  = 'tutorial_greeting',
     inventory = 'tutorial_inventory',
     trade     = 'tutorial_trade',
     jobs      = 'tutorial_jobs',
@@ -32,32 +33,100 @@ M.WAYPOINTS = {
     giver_hale = { x = -296.0, y = 788.0, z = 118.2, label = 'Ruth Hale' },               -- fh_quests/shared/givers.lua:8
 }
 
+-- Step bodies, keyed by stable id. The order comes from FhTutorialConfig.order (config.lua), never from this file:
+-- reordering the intro is a config edit. `id` is what fh_quests persists in the player's progress, so moving a step
+-- keeps an in-flight character on the same logical step (see "progress" in fh_quests/shared/engine.lua).
+-- `ack_ms` is for an informational step: the client reports its check after the prompt has been on screen that long
+-- (the greeting has no player action of its own).
+M.STEPS = {
+    greeting = {
+        talk = { npc = 'tutorial_greeting' }, check = 'greeting', ack_ms = 2500,
+        text = 'Welcome to RedFrontier. This short guide covers your first day and never blocks you (skip any time with /tutorial skip).' },
+    inventory = {
+        talk = { npc = 'tutorial_inventory' }, check = 'inventory',
+        text = 'Press I to open your inventory and see what you are carrying.' },
+    eat_drink = {
+        talk = { npc = 'tutorial_survival' }, check = 'survival',
+        text = 'Eat and drink to keep your needs up — a hungry rider is a slow one.' },
+    claim_plot = {
+        on = 'fh:homestead:claimed', waypoint = 'homestead',
+        text = 'Find a homestead plot and claim it with /fh_claim.' },
+    trade_post = {
+        talk = { npc = 'tutorial_trade' }, check = 'trade', waypoint = 'trader',
+        text = 'Ride to the Valentine Trade Post and open its menu to quote or sell goods.' },
+    hunt = {
+        on = 'fh:hunting:pelt_sold', waypoint = 'trapper',
+        text = 'Hunt an animal, skin it, then sell the pelt to the trapper — your first sale.' },
+    jobs = {
+        talk = { npc = 'tutorial_jobs' }, check = 'jobs',
+        text = 'Open the jobs board with /jobs to take on paid work.' },
+    family = {
+        talk = { npc = 'npc_hale' }, waypoint = 'giver_hale',
+        text = 'Meet a family quest giver — find Ruth Hale and introduce yourself.' },
+}
+
+-- Used when config.lua is absent or its order is unusable. Keep in sync with config.lua's documented default.
+M.DEFAULT_ORDER = { 'greeting', 'inventory', 'eat_drink', 'claim_plot', 'trade_post', 'hunt', 'jobs', 'family' }
+
+-- Only these must be in the order; the rest may be omitted by a config that wants a shorter intro.
+M.MANDATORY = { greeting = true, inventory = true }
+
+local function defaultWarn(fmt, ...)
+    if print then print('[fh_tutorial] ' .. string.format(fmt, ...)) end
+end
+
+---Build the def's step list from an order of step ids. Unknown and duplicate ids are dropped with a warning; an
+---order missing a mandatory step falls back to M.DEFAULT_ORDER. Every built step carries its id.
+---@param order table|nil list of step ids
+---@param warn fun(fmt: string, ...): nil|nil warning collector (default: print)
+---@param fallback boolean|nil internal: do not fall back again
+---@return table steps
+function M.buildSteps(order, warn, fallback)
+    warn = warn or defaultWarn
+    if type(order) ~= 'table' then
+        warn('order is not a list; using the default order')
+        return fallback and {} or M.buildSteps(M.DEFAULT_ORDER, warn, true)
+    end
+    local steps, seen = {}, {}
+    for _, id in ipairs(order) do
+        local template = type(id) == 'string' and M.STEPS[id] or nil
+        if not template then
+            warn('unknown step id %q dropped', tostring(id))
+        elseif seen[id] then
+            warn('duplicate step id %q dropped', id)
+        else
+            seen[id] = true
+            local step = {}
+            for k, v in pairs(template) do step[k] = v end
+            step.id = id
+            steps[#steps + 1] = step
+        end
+    end
+    for id in pairs(M.MANDATORY) do
+        if not seen[id] then
+            warn('mandatory step %q missing; using the default order', id)
+            if not fallback then return M.buildSteps(M.DEFAULT_ORDER, warn, true) end
+        end
+    end
+    return steps
+end
+
 -- Repeatable with a zero cooldown so `/tutorial restart` can replay a completed tutorial through the public
 -- start/abandon exports (a one-time quest cannot be restarted once done). No rewards: nothing to pay twice, and the
 -- zero-cooldown "can underpay" caveat only applies to rewarded quests. Never a prereq for anything: never blocking.
+local config = rawget(_G, 'FhTutorialConfig')
 M.def = {
     id = M.QUEST_ID,
     kind = 'tutorial',
     title = 'Welcome to RedFrontier',
     region_id = 'heartlands',
     ['repeat'] = { cooldown_min = 0 },
-    steps = {
-        { talk = { npc = 'tutorial_inventory' }, check = 'inventory',
-          text = 'Welcome to RedFrontier. This short guide covers your first day and never blocks you (skip anytime with /tutorial skip). Press I to open your inventory.' },
-        { talk = { npc = 'tutorial_trade' }, check = 'trade', waypoint = 'trader',
-          text = 'Ride to the Valentine Trade Post and open its menu to quote or sell goods.' },
-        { on = 'fh:homestead:claimed', waypoint = 'homestead',
-          text = 'Find a homestead plot and claim it with /fh_claim.' },
-        { talk = { npc = 'tutorial_jobs' }, check = 'jobs',
-          text = 'Open the jobs board with /jobs.' },
-        { on = 'fh:hunting:pelt_sold', waypoint = 'trapper',
-          text = 'Hunt an animal, skin it, then sell the pelt to the trapper.' },
-        { talk = { npc = 'npc_hale' }, waypoint = 'giver_hale',
-          text = 'Meet a family quest giver — find Ruth Hale and introduce yourself.' },
-        { talk = { npc = 'tutorial_survival' }, check = 'survival',
-          text = 'Eat and drink to keep your needs up.' },
-    },
+    steps = nil, -- built below from FhTutorialConfig.order
 }
+local configured = type(config) == 'table' and config.order or nil
+M.def.steps = M.buildSteps(configured)
+M.order = {}
+for i, step in ipairs(M.def.steps) do M.order[i] = step.id end
 
 ---The step at 1-based index `i`, or nil.
 function M.stepOf(def, i) return def.steps[i] end

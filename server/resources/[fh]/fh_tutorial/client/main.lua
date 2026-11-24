@@ -31,6 +31,17 @@ FH.onNet('fh:tutorial:prompt', function(data)
         clearRoute()
     end
     notify(data.text)
+
+    -- Informational step ack: a step with no player action (the greeting) carries ack = { check, after_ms }. Report
+    -- its check once the prompt has had time to be read; the server ignores it unless that step is still current.
+    local ack = data.ack
+    if type(ack) == 'table' and type(ack.check) == 'string' then
+        local check, after = ack.check, math.max(0, tonumber(ack.after_ms) or 0)
+        CreateThread(function()
+            Wait(after)
+            TriggerServerEvent('fh:tutorial:check', check)
+        end)
+    end
 end)
 
 -- Client-check signals. The server only advances when the current step matches (talk is a no-op otherwise), so these

@@ -128,6 +128,15 @@ describe('quests store: save/load round trip', function()
         eq(2, st.step); eq(T0, st.updated_at); eq(T0 + 60, st.cooldown_until)
         isInt(st.step); isInt(st.cooldown_until)
     end)
+    it('progress.step_id survives a reload (a reorder keeps the player on the same logical step)', function()
+        local s = active()
+        s.progress.step_id = 'trade_post'
+        local st = reload(s)
+        eq('trade_post', st.progress.step_id)
+
+        s.progress.step_id = ''
+        eq(nil, reload(s).progress.step_id)
+    end)
     it('reward bookkeeping keys survive (reward_pending, reward_paid, reward_inflight)', function()
         local s = active()
         s.status = 'done'

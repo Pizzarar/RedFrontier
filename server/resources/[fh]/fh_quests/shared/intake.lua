@@ -130,12 +130,13 @@ end
 ---Dialogue for a change caused by a talk: the talk step's lines once that step advanced (or finished the quest).
 ---@return table|nil { quest_id, step, lines }
 function M.dialogue(def, before, after)
-    local step = engine().stepOf(def, before.step)
+    local beforeIdx = engine().stepIndexOf(def, before) or before.step
+    local step = engine().stepOf(def, beforeIdx)
     if not step or not step.talk then return nil end
-    if after.status == 'active' and after.step == before.step then return nil end -- counted, not advanced
+    if after.status == 'active' and after.step == beforeIdx then return nil end -- counted, not advanced
     local lines = {}
     for i, l in ipairs(step.talk.lines or {}) do lines[i] = l end
-    return { quest_id = def.id, step = before.step, lines = lines }
+    return { quest_id = def.id, step = beforeIdx, lines = lines }
 end
 
 ---Quest ids `npc_id` gives (def.giver) that this character can start now. Sorted.
