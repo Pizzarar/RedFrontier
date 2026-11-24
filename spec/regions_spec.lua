@@ -117,4 +117,23 @@ case('rhodes_law is an alias that resolves to lawmen', function()
     assert(regions.getFaction('lawmen') == regions.factions.lawmen)
 end)
 
+case('factionLabel skins lawmen per state, falls back to the label', function()
+    assert(regions.factionLabel('lawmen', 'heartlands') == 'New Hanover Law')
+    assert(regions.factionLabel('lawmen', 'scarlett_meadows') == 'Lemoyne Law')
+    assert(regions.factionLabel('lawmen', 'grizzlies_east') == 'Ambarino Law')
+    assert(regions.factionLabel('lawmen', 'great_plains') == 'West Elizabeth Law')
+    assert(regions.factionLabel('lawmen', 'cholla_springs') == 'New Austin Law')
+    -- a faction with no skins returns its label, even when a region is given
+    assert(regions.factionLabel('outlaws', 'heartlands') == 'Mountain Gang')
+    -- unknown or missing region -> label; unknown faction -> nil
+    assert(regions.factionLabel('lawmen', 'bogus') == 'Lawmen')
+    assert(regions.factionLabel('lawmen', nil) == 'Lawmen')
+    assert(regions.factionLabel('bogus', 'heartlands') == nil)
+end)
+
+case('factionLabel resolves the rhodes_law alias before skinning', function()
+    assert(regions.factionLabel('rhodes_law', 'scarlett_meadows') == 'Lemoyne Law')
+    assert(regions.factionLabel('rhodes_law', 'heartlands') == 'New Hanover Law')
+end)
+
 T.finish()

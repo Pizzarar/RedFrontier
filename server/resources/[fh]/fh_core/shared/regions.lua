@@ -15,7 +15,14 @@ regions.TIERS = { 'T1', 'T2', 'T3' }
 -- `alias_of` marks an id kept only for legacy rows (fh_heat may be keyed on it);
 -- every lookup helper resolves it to the canonical faction.
 regions.factions = {
-    lawmen         = { id = 'lawmen',         label = 'Lawmen',               kind = 'law',     home = 'heartlands' },
+    lawmen = {
+        id = 'lawmen', label = 'Lawmen', kind = 'law', home = 'heartlands',
+        -- per-state label skin (plan world-01 block A): region.state -> law label
+        skins = {
+            new_hanover = 'New Hanover Law', lemoyne = 'Lemoyne Law', ambarino = 'Ambarino Law',
+            west_elizabeth = 'West Elizabeth Law', new_austin = 'New Austin Law',
+        },
+    },
     rhodes_law     = { id = 'rhodes_law',     label = 'Rhodes Law',           kind = 'law',     home = 'scarlett_meadows', alias_of = 'lawmen' },
     rail_mining    = { id = 'rail_mining',    label = 'Rail & Mining Company', kind = 'neutral', home = 'roanoke_ridge' },
     settlers       = { id = 'settlers',       label = 'Settlers League',      kind = 'neutral', home = 'heartlands' },
@@ -357,6 +364,18 @@ function regions.getFaction(id)
     local f = regions.factions[id]
     if f and f.alias_of then return regions.factions[f.alias_of] end
     return f
+end
+
+---Per-state label for a faction (e.g. lawmen). Resolves aliases, then returns skins[region.state]
+---when the faction has a skin for that region's state, otherwise the faction label.
+function regions.factionLabel(factionId, regionId)
+    local f = regions.getFaction(factionId)
+    if not f then return nil end
+    local r = regionId and regions.getRegion(regionId) or nil
+    if r and type(f.skins) == 'table' and f.skins[r.state] then
+        return f.skins[r.state]
+    end
+    return f.label
 end
 
 function regions.getTerritory(id) return regions.territories[id] end
