@@ -266,6 +266,9 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
 7. Transfer path: open the plot chest (E) with bread inside, stand with your horse within 3.5 m of you and the chest, run `/saddlebag in <slot>` for the bread, then `/saddlebag out <slot>` for it again. Try `/saddlebag in <slot>` with no container open, and with the horse 6+ m away.
    Expected: moved both ways with no duplicate or lost bread (count it before/after; if the open pane looks stale, reopen the chest with E and note it); with nothing open `saddlebag: fh_nothing_open`; far horse `saddlebag: fh_out_of_reach`. Spamming the command faster than twice a second is silently ignored.
    RESULT:
+8. Optional, B6f pane toggle (off by default: `set fh_saddlebag_pane false` in `server/server.cfg`). First confirm the inventory shows no Saddlebag/Backpack button. Then change it to `set fh_saddlebag_pane true`, restart, open the plot chest (E) with your horse beside you, click "Saddlebag" on your pane, drag bread chest -> pane (and a bulky item such as the Worn Rifle, if the chest has one), then walk 10+ m away.
+   Expected: flag off: no button. Flag on: the pane shows the saddlebag's contents, the bread (and bulky item) land in the saddlebag (check with `/saddlebag` later), and walking away flips the pane back to the backpack within about a second with "You are too far away from that". Set the convar back to `false` after.
+   RESULT:
 
 ## UI (fh_ui shell, buff/bag HUD, screens)
 

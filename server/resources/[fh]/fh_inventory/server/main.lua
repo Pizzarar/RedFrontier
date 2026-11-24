@@ -24,6 +24,10 @@ local API          = {}
 -- FH: [stash id] = { fhType, coords } for fh_core containers. Kept outside Inventories so it survives
 -- a stash being unloaded and re-registered from the database.
 local FhMeta       = {}
+-- FH (B6f): [src] = { id = saddlebag stash id, netId = horse net id } while src's player pane shows their saddlebag.
+-- Empty unless convar fh_saddlebag_pane is on; empty = the player pane is the backpack (rsg behaviour).
+local Pane         = {}
+local PaneCooldown = {}
 
 -- FH: true when the current export call comes from fh_core or from this resource itself
 local function FhCallerAllowed()
@@ -250,17 +254,49 @@ local function EmptyGround()
     return { id = 'newdrop', label = locale('ground'), type = 'drop', slots = Config.Drop.Slots, maxWeight = Config.Drop.MaxWeight, items = {} }
 end
 
+-- FH (B6f): is the saddlebag player pane switched on? Server convar only (`set fh_saddlebag_pane true`, default false);
+-- clients learn it from the open event, never from a convar of their own. Read per call: turning it off live drops
+-- every pane back to the backpack (ActivePane).
+local function FhPaneEnabled()
+    local v = tostring(GetConvar('fh_saddlebag_pane', 'false')):lower()
+    return v == 'true' or v == '1' or v == 'yes' or v == 'on'
+end
+
+-- FH (B6f): the saddlebag pane src has active, or nil (the player pane is the backpack). A pane left over from before
+-- the flag was turned off, or whose stash is gone, is dropped here. This only reads server state; the horse gate is
+-- PaneCheck (below), which every routed handler runs before it acts.
+local function ActivePane(src)
+    local p = Pane[src]
+    if not p then return nil end
+    if not FhPaneEnabled() or not GetContainer(p.id) then Pane[src] = nil return nil end
+    return p
+end
+
+-- FH (B6f): what src's player pane shows: their saddlebag (marked pane = 'saddlebag') or their own inventory.
+local function PlayerPaneInv(src, me)
+    local p = ActivePane(src)
+    if not p then return ClientInv(me) end
+    local inv = ClientInv(GetContainer(p.id))
+    inv.pane = 'saddlebag'
+    return inv
+end
+
 -- push fresh data to the owner (if a player) and everyone looking at a container
 local function Refresh(id)
     local c = GetContainer(id)
     if type(id) == 'number' and c then
         local otherId = OpenInv[id]
         local other = otherId and otherId ~= 'newdrop' and GetContainer(otherId)
-        TriggerClientEvent('rsg-inventory:client:refresh', id, ClientInv(c), other and ClientInv(other) or nil)
+        TriggerClientEvent('rsg-inventory:client:refresh', id, PlayerPaneInv(id, c), other and ClientInv(other) or nil)
     end
     for watcher, openId in pairs(OpenInv) do
         if openId == id and watcher ~= id then
             TriggerClientEvent('rsg-inventory:client:refresh', watcher, nil, c and ClientInv(c) or false)
+        end
+    end
+    if type(id) == 'string' then -- FH (B6f): a saddlebag someone has as their player pane
+        for owner, p in pairs(Pane) do
+            if p.id == id then Refresh(owner) end
         end
     end
 end
@@ -752,6 +788,9 @@ local function IsOpenByAnyone(id)
     for _, openId in pairs(OpenInv) do
         if openId == id then return true end
     end
+    for _, p in pairs(Pane) do -- FH (B6f): a saddlebag shown as a player pane is open too (no unload, no delete)
+        if p.id == id then return true end
+    end
     return false
 end
 
@@ -1043,10 +1082,67 @@ local function OnClosed(src)
     if id then SaveStash(id) CleanupDropIfEmpty(id) end
 end
 
+--------------------------------------------------------------------------------
+-- FH (B6f): saddlebag player pane (dark: convar fh_saddlebag_pane, default false)
+-- With the flag on, the player pane can show the character's saddlebag (fh_core B6e) instead of the backpack.
+-- The server alone decides which pane is active (Pane[src]); the client's 'player' always means that pane and is
+-- never a container id of its own. The gate is fh_core's B6e horse check (mounted / horse in reach, server natives
+-- only), re-run before every routed action and once a second; a failure snaps the pane back to the backpack.
+--------------------------------------------------------------------------------
+-- fh_core's horse gate -> true, saddlebag stash id | false, reason. Fails closed (flag off, fh_core not answering).
+local function FhPaneGate(src, netId)
+    if not FhPaneEnabled() then return false, 'fh_pane_disabled' end
+    local ok, a, b = pcall(function() return exports.fh_core:saddlebagPane(src, netId) end)
+    if not ok then return false, 'fh_core_unavailable' end
+    if a ~= true or type(b) ~= 'string' then return false, (a == false and type(b) == 'string') and b or 'fh_no_horse' end
+    return true, b
+end
+
+-- The player pane goes back to the backpack. why = notification key (nil: silent, e.g. the player asked for it).
+local function SnapBack(src, why)
+    local p = Pane[src]
+    if not p then return end
+    Pane[src] = nil
+    SaveStash(p.id)
+    if why then Notify(src, why) end
+    Refresh(src)
+end
+
+-- Gate for an action on the player pane -> nil (the pane is the backpack: act as rsg does) | false (the saddlebag pane
+-- failed its gate: snapped back, refuse the action) | the pane (gate passed: act on Pane[src].id).
+local function PaneCheck(src)
+    local held = Pane[src]
+    if not held then return nil end
+    local p = ActivePane(src)
+    if not p then
+        -- the flag went off live (or the stash is gone) while the client still shows saddlebag slots: refuse this
+        -- action (its slots are saddlebag slots) and push the backpack, same as any other snap-back
+        SaveStash(held.id)
+        Notify(src, 'fh_pane_disabled')
+        Refresh(src)
+        return false
+    end
+    local ok, idOrWhy = FhPaneGate(src, p.netId)
+    if not ok or idOrWhy ~= p.id then
+        SnapBack(src, ok and 'fh_pane_changed' or idOrWhy)
+        return false
+    end
+    return p
+end
+
+-- The inventory closed (or the player left): the next open starts on the backpack.
+local function PaneClosed(src)
+    local p = Pane[src]
+    Pane[src], PaneCooldown[src] = nil, nil
+    if p then SaveStash(p.id) end
+end
+
 local function OpenFor(src, otherId)
     local me = GetContainer(src)
     if not me or IsIncapacitated(me.player) then return false end
     if OpenInv[src] ~= nil and OpenInv[src] ~= otherId then OnClosed(src) end -- switching container: flush the old one
+    -- FH (B6f): the saddlebag cannot be the player pane and the other pane at once
+    if Pane[src] and Pane[src].id == otherId then PaneClosed(src) end
     local other
     if otherId == 'newdrop' then
         other = EmptyGround()
@@ -1063,7 +1159,11 @@ local function OpenFor(src, otherId)
         other = ClientInv(oc)
     end
     OpenInv[src] = otherId
-    TriggerClientEvent('rsg-inventory:client:open', src, ClientInv(me), other)
+    if FhPaneEnabled() then -- FH (B6f): the client learns the pane toggle exists from here, not from its own convar
+        TriggerClientEvent('rsg-inventory:client:open', src, PlayerPaneInv(src, me), other, { saddlebagPane = true })
+    else
+        TriggerClientEvent('rsg-inventory:client:open', src, ClientInv(me), other)
+    end
     return true
 end
 
@@ -1089,6 +1189,7 @@ end
 
 function API.CloseInventory(src)
     OnClosed(src)
+    PaneClosed(src) -- FH (B6f)
     TriggerClientEvent('rsg-inventory:client:close', src)
 end
 
@@ -1106,6 +1207,37 @@ end)
 
 RegisterNetEvent('rsg-inventory:server:close', function()
     OnClosed(source)
+    PaneClosed(source) -- FH (B6f)
+end)
+
+-- FH (B6f): the player pane toggle. payload = { pane = 'saddlebag', netId = horse net id } | { pane = 'backpack' }.
+-- The netId only locates the horse; fh_core re-checks it with server natives (FhPaneGate). Flag off: ignored.
+RegisterNetEvent('rsg-inventory:server:pane', function(payload)
+    local src = source
+    if not FhPaneEnabled() or type(payload) ~= 'table' then return end
+    local now = GetGameTimer()
+    if PaneCooldown[src] and now - PaneCooldown[src] < 500 then return end
+    PaneCooldown[src] = now
+    if payload.pane == 'backpack' then return SnapBack(src) end
+    if payload.pane ~= 'saddlebag' then return end
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player or IsIncapacitated(Player) then return end
+    local netId = math.tointeger(tonumber(payload.netId))
+    if not netId or netId < 1 then Notify(src, 'fh_no_horse') return Refresh(src) end
+    local ok, idOrWhy = FhPaneGate(src, netId)
+    if not ok then Notify(src, idOrWhy) return Refresh(src) end
+    if OpenInv[src] == idOrWhy then Notify(src, 'fh_same_container') return Refresh(src) end
+    if not GetContainer(idOrWhy) then Notify(src, 'fh_unknown_container') return Refresh(src) end
+    Pane[src] = { id = idOrWhy, netId = netId }
+    Refresh(src)
+end)
+
+-- FH (B6f): walking or riding away from the horse snaps the pane back even when the player does nothing
+CreateThread(function()
+    while true do
+        Wait(1000)
+        for src in pairs(Pane) do PaneCheck(src) end
+    end
 end)
 
 -- A stash header button was clicked. Only fires for an action registered on the stash the
@@ -1234,11 +1366,18 @@ RegisterNetEvent('rsg-inventory:server:move', function(data)
     if MoveCooldown[src] and now - MoveCooldown[src] < 50 then return Refresh(src) end -- every move can write to the database
     MoveCooldown[src] = now
     if IsIncapacitated(RSGCore.Functions.GetPlayer(src)) then return Refresh(src) end
-    local fromId = data.from == 'player' and src or data.from
-    local toId   = data.to   == 'player' and src or data.to
+    -- FH (B6f): 'player' is the active player pane (backpack = src, or the saddlebag after its gate passed)
+    local pane = PaneCheck(src)
+    if pane == false then return end
+    local mine = pane and pane.id or src
+    local fromId = data.from == 'player' and mine or data.from
+    local toId   = data.to   == 'player' and mine or data.to
     local fromSlot, toSlot = math.tointeger(tonumber(data.fromSlot)), math.tointeger(tonumber(data.toSlot))
     if not fromSlot or not toSlot or fromId == 'newdrop' then return end
-    if not CanAccess(src, fromId) or not CanAccess(src, toId) then
+    -- FH (B6f): with the saddlebag pane up, the backpack is not on screen: a raw src id is refused
+    if pane and (fromId == src or toId == src) then return Refresh(src) end
+    local function access(id) return (pane and id == pane.id) or CanAccess(src, id) end
+    if not access(fromId) or not access(toId) then
         if Config.Debug then
             print(('[rsg-inventory] %s: move denied %s -> %s (open=%s)'):format(src, tostring(fromId), tostring(toId), tostring(OpenInv[src])))
         end
@@ -1250,6 +1389,10 @@ RegisterNetEvent('rsg-inventory:server:move', function(data)
 
     -- shops: shop -> own inventory buys, own inventory -> shop sells
     local toShop = type(toId) == 'string' and Inventories[toId] and Inventories[toId].type == 'shop'
+    if pane and (from.type == 'shop' or toShop) then -- FH (B6f): buying and selling go through the backpack only
+        Notify(src, 'fh_pane_shop')
+        return Refresh(src)
+    end
     if from.type == 'shop' or toShop then
         if from.type == 'shop' and toId == src then
             Shops.Buy(src, from, fromSlot, data.amount, toSlot)
@@ -1318,7 +1461,9 @@ RegisterNetEvent('rsg-inventory:server:sort', function(which)
 
     local id
     if which == 'player' then
-        id = src
+        local pane = PaneCheck(src) -- FH (B6f): sort the pane on screen
+        if pane == false then return end
+        id = pane and pane.id or src
     elseif which == 'other' then
         id = OpenInv[src]
         local inv = type(id) == 'string' and Inventories[id]
@@ -1373,6 +1518,12 @@ RegisterNetEvent('rsg-inventory:server:useItem', function(slot)
 
     local Player = RSGCore.Functions.GetPlayer(src)
     if not Player or IsIncapacitated(Player) then return end
+    -- FH (B6f): with the saddlebag pane up the slot is a saddlebag slot, and usable-item callbacks take from the
+    -- player's own inventory: refuse (the player moves it to the backpack first)
+    if Pane[src] then -- a snap-back (gate failed, flag off live) has already notified and refreshed
+        if PaneCheck(src) then Notify(src, 'fh_pane_use') end
+        return
+    end
 
     slot = math.tointeger(tonumber(slot))
     local item = slot and Normalize(Player.PlayerData.items)[slot]
@@ -1413,8 +1564,11 @@ RegisterNetEvent('rsg-inventory:server:give', function(targetId, slot, amount, i
     if not them then return Notify(src, 'no_player') end -- chosen player left the server: cancel
     local tped = GetPlayerPed(targetId)
     if tped == 0 or Dist(src, GetEntityCoords(tped)) > Config.GiveDistance then return Notify(src, 'too_far') end
+    local pane = PaneCheck(src) -- FH (B6f): give from the pane on screen
+    if pane == false then return end
+    local from = pane and GetContainer(pane.id) or me
 
-    local item = me.items[slot]
+    local item = from.items[slot]
     if not item or (itemName ~= nil and item.name ~= tostring(itemName):lower()) then
         return Notify(src, 'invalid_item') -- the slot changed while the player was choosing
     end
@@ -1423,10 +1577,10 @@ RegisterNetEvent('rsg-inventory:server:give', function(targetId, slot, amount, i
 
     local name, info = item.name, DeepClone(item.info)
     if not AddTo(them, name, amount, info) then return Notify(src, 'target_full') end
-    RemoveFrom(me, name, amount, slot)
-    Commit(me) Commit(them)
-    SavePlayer(src) SavePlayer(targetId) -- both sides persisted together
-    if not me.items[slot] then CheckWeapon(src, item) end
+    RemoveFrom(from, name, amount, slot)
+    Commit(from) Commit(them)
+    if pane then SaveStash(pane.id) else SavePlayer(src) end SavePlayer(targetId) -- both sides persisted together
+    if not pane and not me.items[slot] then CheckWeapon(src, item) end
     Refresh(src) Refresh(targetId)
     TriggerClientEvent('rsg-inventory:client:ItemBox', src, SharedItem(name), 'remove', amount)
     TriggerClientEvent('rsg-inventory:client:ItemBox', targetId, SharedItem(name), 'add', amount)
@@ -1476,16 +1630,19 @@ RegisterNetEvent('rsg-inventory:server:trash', function(slot, amount, itemName)
 
     local me = GetContainer(src)
     if not me or IsIncapacitated(me.player) then return end
-    local item = me.items[slot]
+    local pane = PaneCheck(src) -- FH (B6f): trash from the pane on screen
+    if pane == false then return end
+    local from = pane and GetContainer(pane.id) or me
+    local item = from.items[slot]
     if not item or (itemName ~= nil and item.name ~= tostring(itemName):lower()) then return Notify(src, 'invalid_item') end
     amount = math.tointeger(tonumber(amount))
     if not amount or amount < 1 or amount > item.amount then return Notify(src, 'invalid_amount') end
 
     local name = item.name
-    RemoveFrom(me, name, amount, slot)
-    Commit(me)
-    SavePlayer(src)
-    if not me.items[slot] then CheckWeapon(src, item) end
+    RemoveFrom(from, name, amount, slot)
+    Commit(from)
+    if pane then SaveStash(pane.id) else SavePlayer(src) end
+    if not pane and not me.items[slot] then CheckWeapon(src, item) end
     Refresh(src)
     TriggerClientEvent('rsg-inventory:client:ItemBox', src, SharedItem(name), 'remove', amount)
     Notify(src, 'item_trashed')
@@ -1502,8 +1659,11 @@ RegisterNetEvent('rsg-inventory:server:drop', function(slot, amount)
 
     local me = GetContainer(src)
     if not me or IsIncapacitated(me.player) then return end
+    local pane = PaneCheck(src) -- FH (B6f): drop from the pane on screen
+    if pane == false then return end
+    local from = pane and GetContainer(pane.id) or me
 
-    local item = me.items[slot]
+    local item = from.items[slot]
     if not item then return end
     if amount == nil then amount = item.amount else amount = math.tointeger(tonumber(amount)) end
     if not amount or amount < 1 or amount > item.amount then return Notify(src, 'invalid_amount') end
@@ -1523,9 +1683,10 @@ RegisterNetEvent('rsg-inventory:server:drop', function(slot, amount)
         CleanupDropIfEmpty(dropId)
         return Notify(src, 'too_heavy')
     end
-    RemoveFrom(me, name, amount, slot)
-    Commit(me) Commit(drop)
-    if not me.items[slot] then CheckWeapon(src, item) end
+    RemoveFrom(from, name, amount, slot)
+    Commit(from) Commit(drop)
+    if pane then SaveStash(pane.id) end
+    if not pane and not me.items[slot] then CheckWeapon(src, item) end
     Refresh(src) Refresh(dropId)
     Log('Drop', ('%s dropped %sx %s'):format(GetPlayerName(src), amount, name))
 end)
@@ -1574,6 +1735,7 @@ InvCore = {
     SavePlayer = SavePlayer, SaveStash = SaveStash, CleanupDropIfEmpty = CleanupDropIfEmpty,
     FhViews = FhViews, FhCheckLayout = FhCheckLayout, MoveBetween = MoveBetween, AddToRaw = AddToRaw,
     Normalize = Normalize, MoveDrop = MoveDrop, IsOpenByAnyone = IsOpenByAnyone,
+    Pane = Pane, PaneCheck = PaneCheck, ActivePane = ActivePane, -- FH (B6f): read by spec/saddlebag_pane_spec.lua
 }
 
 --------------------------------------------------------------------------------
@@ -1582,6 +1744,7 @@ InvCore = {
 AddEventHandler('playerDropped', function()
     local src = source
     OnClosed(src)
+    PaneClosed(src) -- FH (B6f)
     UseCooldown[src], GiveCooldown[src], DropCooldown[src], ActionCooldown[src], TrashCooldown[src] = nil, nil, nil, nil, nil
     MoveCooldown[src], OpenCooldown[src], SortCooldown[src], NearbyCooldown[src] = nil, nil, nil, nil
     AdminView[src], CapacityBonus[src], DropSeen[src] = nil, nil, nil

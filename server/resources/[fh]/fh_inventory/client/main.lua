@@ -33,6 +33,7 @@ local labelKeys = {
     'ui_drop', 'ui_trash', 'ui_trash_title', 'ui_trash_warning', 'ui_trash_confirm', 'ui_split', 'ui_take', 'ui_move_to', 'ui_buy', 'ui_sell', 'ui_copy_serial',
     'ui_one', 'ui_half', 'ui_all_amount', 'ui_enter_amount', 'ui_max', 'ui_cancel', 'ui_confirm',
     'ui_kg', 'ui_close', 'ui_amount_tip', 'info_serie', 'info_quality',
+    'ui_saddlebag', 'ui_backpack', -- FH (B6f)
 }
 local labels
 local function UiLabels()
@@ -107,14 +108,16 @@ end
 --------------------------------------------------------------------------------
 -- Server -> client
 --------------------------------------------------------------------------------
-RegisterNetEvent('rsg-inventory:client:open', function(player, other)
+-- opts (FH B6f) = { saddlebagPane = true } only when the server has fh_saddlebag_pane on; nil otherwise
+RegisterNetEvent('rsg-inventory:client:open', function(player, other, opts)
     isOpen = true
     SetNuiFocus(true, true)
     -- Keep game input alive only so we can whitelist push-to-talk (everything else is disabled in the loop below)
     if Config.AllowPushToTalkWhileOpen then
         SetNuiFocusKeepInput(true)
     end
-    Send('open', { player = player, other = other, imagePath = Config.ImagePath, hotbarSlots = Config.HotbarSlots, trash = Config.Trash.Enabled, labels = UiLabels(), categoryLabels = Config.CategoryLabels })
+    Send('open', { player = player, other = other, imagePath = Config.ImagePath, hotbarSlots = Config.HotbarSlots, trash = Config.Trash.Enabled, labels = UiLabels(), categoryLabels = Config.CategoryLabels,
+        saddlebagPane = type(opts) == 'table' and opts.saddlebagPane == true or nil })
 end)
 
 RegisterNetEvent('rsg-inventory:client:refresh', function(player, other)
@@ -248,6 +251,20 @@ end)
 
 RegisterNUICallback('drop', function(data, cb)
     TriggerServerEvent('rsg-inventory:server:drop', data.slot, data.amount)
+    cb('ok')
+end)
+
+-- FH (B6f): player pane toggle backpack <-> saddlebag (button only shown when the server has the flag on). The horse
+-- net id comes from fh_core's client; the server re-checks the horse, the flag and everything else.
+RegisterNUICallback('pane', function(data, cb)
+    if type(data) == 'table' and (data.pane == 'saddlebag' or data.pane == 'backpack') then
+        local netId
+        if data.pane == 'saddlebag' and GetResourceState('fh_core') == 'started' then
+            local ok, n = pcall(function() return exports.fh_core:horseNetId() end)
+            netId = ok and n or nil
+        end
+        TriggerServerEvent('rsg-inventory:server:pane', { pane = data.pane, netId = netId })
+    end
     cb('ok')
 end)
 

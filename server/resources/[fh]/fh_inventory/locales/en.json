@@ -103,5 +103,17 @@
     "fh_no_coords": "That can't be opened right now",
     "fh_no_player_coords": "Can't tell where you are",
     "fh_out_of_reach": "You are too far away from that",
-    "fh_refused": "That can't go there"
+    "fh_refused": "That can't go there",
+    "ui_saddlebag": "Saddlebag",
+    "ui_backpack": "Backpack",
+    "fh_pane_use": "Move it to your satchel to use it",
+    "fh_pane_shop": "Switch back to your satchel to trade",
+    "fh_pane_changed": "Back to your satchel",
+    "fh_pane_disabled": "Back to your satchel",
+    "fh_core_unavailable": "The saddlebag is unavailable",
+    "fh_no_horse": "No horse in reach",
+    "fh_not_a_horse": "That is not a horse",
+    "fh_no_character": "No character loaded",
+    "fh_no_container": "That container doesn't exist",
+    "fh_same_container": "That is already open"
 }

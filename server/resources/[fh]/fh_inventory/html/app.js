@@ -23,7 +23,11 @@ const state = {
     player: null,
     other: null,
     drag: null,
+    saddlebagPane: false, // FH (B6f): the server has the backpack <-> saddlebag pane toggle on
 };
+
+// FH (B6f): the player pane shows the saddlebag (no hotbar, no Use; the server enforces both)
+const onSaddlebag = () => !!(state.player && state.player.pane === 'saddlebag');
 
 function post(name, data = {}) {
     return fetch(`https://${RES}/${name}`, {
@@ -126,7 +130,7 @@ function renderGrid(invKey) {
         const item = inv.map[s];
         // filtered view (category chip or search text): only matching items, empty slots hidden
         if (filtered && (!item || !matches(item))) continue;
-        grid.appendChild(slotEl(invKey, s, item, invKey === 'player' && s <= state.hotbarSlots));
+        grid.appendChild(slotEl(invKey, s, item, invKey === 'player' && !onSaddlebag() && s <= state.hotbarSlots));
         shown++;
     }
     if (filtered && shown === 0) {
@@ -146,6 +150,15 @@ document.addEventListener('click', (e) => {
     if (btn) post('sort', { which: btn.dataset.sort });
 });
 
+// FH (B6f): ask the server to switch the player pane; it answers with a refresh (or a notification + no change)
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#pane-toggle');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    setTimeout(() => { btn.disabled = false; }, 600);
+    post('pane', { pane: onSaddlebag() ? 'backpack' : 'saddlebag' });
+});
+
 document.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip[data-filter]');
     if (!chip) return;
@@ -159,6 +172,9 @@ function render() {
         setWeight('player', state.player);
         renderGrid('player');
     }
+    const paneBtn = $('pane-toggle'); // FH (B6f)
+    paneBtn.classList.toggle('hidden', !state.saddlebagPane);
+    paneBtn.textContent = onSaddlebag() ? L('ui_backpack', 'Backpack') : L('ui_saddlebag', 'Saddlebag');
     const other = state.other;
     $('panel-other').classList.toggle('hidden', !other);
     if (other) {
@@ -324,7 +340,7 @@ document.addEventListener('mouseup', (e) => {
     const zone = over.closest('.drop-zone');
     if (zone) {
         if (d.key !== 'player') return;
-        if (zone.dataset.zone === 'use') post('use', { slot: d.slot });
+        if (zone.dataset.zone === 'use' && !onSaddlebag()) post('use', { slot: d.slot });
         if (zone.dataset.zone === 'give') {
             const typed = parseInt($('amount').value, 10); // the amount box pre-fills the quantity (empty / 0 = 1)
             openGive(d.item, d.slot, typed > 0 ? typed : 1);
@@ -343,7 +359,7 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 document.addEventListener('dblclick', (e) => {
     const el = e.target.closest('#grid-player .slot.filled');
-    if (el) post('use', { slot: +el.dataset.slot });
+    if (el && !onSaddlebag()) post('use', { slot: +el.dataset.slot });
 });
 
 document.addEventListener('mouseover', (e) => {
@@ -416,7 +432,7 @@ function buildMenu(key, slot, item) {
     }
 
     if (key === 'player') {
-        if (item.useable || item.type === 'weapon' || item.type === 'weapon_thrown' || item.type === 'equipment') {
+        if (!onSaddlebag() && (item.useable || item.type === 'weapon' || item.type === 'weapon_thrown' || item.type === 'equipment')) {
             entries.push({ label: L('ui_use', 'Use'), run: () => post('use', { slot }) });
         }
         entries.push({ label: L('ui_give', 'Give'), run: () => openGive(item, slot) });
@@ -704,6 +720,7 @@ window.addEventListener('message', ({ data: msg }) => {
             state.open = true;
             state.imagePath = d.imagePath || state.imagePath;
             state.hotbarSlots = d.hotbarSlots || 5;
+            state.saddlebagPane = d.saddlebagPane === true;
             trashEnabled = d.trash !== false;
             state.other = null;
             closeGive();

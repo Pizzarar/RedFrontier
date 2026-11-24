@@ -19,6 +19,14 @@ fork notes below.
 - **fh_core owns fh containers.** Only fh_core (or this resource) can register, reshape, clear or delete a
   container that fh_core registered, or call the `Fh*` exports (`server/fh_api.lua`). Game code calls fh_core's
   exports (`move`, `transferAll`, `registerContainer`, `open`, `createDropBag`, ...), never these.
+- **Saddlebag player pane (B6f, dark).** Convar `fh_saddlebag_pane` (server only, default `false`, set in
+  `server/server.cfg`; `true`/`1`/`yes`/`on` turn it on, read on every call so turning it off live snaps every pane
+  back). When on, the open event carries a third argument `{ saddlebagPane = true }` and the screen shows a
+  backpack/saddlebag toggle; when off, the open event is the unchanged two-argument rsg form. The server alone decides
+  which pane is active (`Pane[src]`): `'player'` in move/split/sort/give/trash/drop means that pane, gated by
+  `exports.fh_core:saddlebagPane` before every action and once a second (a failure snaps back to the backpack and the
+  action is refused). Use and shop buy/sell are refused on the saddlebag pane. Closing the inventory or leaving resets
+  to the backpack. Specced in `spec/saddlebag_pane_spec.lua`.
 - **Runtime-registered items** resolve through `RSGCore.Shared.Items` (`FhItems.sharedLookup`), so an item fh_core
   pushed with its `size_class` is classed correctly here.
 

@@ -134,4 +134,22 @@ RegisterNetEvent('fh:saddlebag:transfer', function(payload)
     reply(src, mok and ('saddlebag: moved (' .. plan.dir .. ')') or ('saddlebag: ' .. tostring(mwhy)))
 end)
 
+-- B6f: the gate for fh_inventory's saddlebag player pane (convar fh_saddlebag_pane, read by fh_inventory). Same horse
+-- check as fh:saddlebag:open (server natives; the netId only locates the entity), then the bag is registered / moved
+-- to the horse. fh_inventory calls this on the toggle, before every action on the pane, and once a second.
+---@return boolean ok, string stash id | reason
+local function saddlebagPane(src, netId)
+    if not validNetId(netId) then return false, 'fh_no_horse' end
+    local cid, ped = citizenidOf(src), GetPlayerPed(src)
+    if not cid or ped == 0 then return false, 'fh_no_character' end
+    local horse = readHorse(netId)
+    local ok, why = FhSaddlebagRules.canAccess(cid, horse, GetEntityCoords(ped),
+        FhContainers.interactDistance('saddlebag'), horses())
+    if not ok then return false, why end
+    local ref, rwhy = ensure(cid, horse.coords)
+    if not ref then return false, tostring(rwhy or 'fh_no_container') end
+    return true, ref.id
+end
+
 exports('saddlebagOf', saddlebagOf)
+exports('saddlebagPane', saddlebagPane)

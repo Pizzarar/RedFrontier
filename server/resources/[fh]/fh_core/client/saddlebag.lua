@@ -24,6 +24,14 @@ local function findHorse()
     return best
 end
 
+-- B6f: net id of the horse the player rides, else the nearest one in reach, else nil. fh_inventory's saddlebag pane
+-- toggle sends it to the server, which re-checks the horse itself (fh_core saddlebagPane).
+exports('horseNetId', function()
+    local horse = findHorse()
+    if not horse or not NetworkGetEntityIsNetworked(horse) then return nil end
+    return NetworkGetNetworkIdFromEntity(horse)
+end)
+
 local function say(msg) TriggerEvent('chat:addMessage', { args = { 'fh', msg } }) end
 
 RegisterCommand('saddlebag', FH.wrap(function(_, args)
