@@ -18,6 +18,26 @@ Regional rep tiers and unlocks (M7). Read-only: it never writes rep; fh_economy 
 - `tiers[region_id] = { t2 = n, t3 = n }`: minimum rep per tier; region ids come from `fh_core/shared/regions.lua`.
 - `unlocks[unlock_id] = { region_id, min_tier }`.
 
+### Tiers (every quest-enabled region)
+| Region | T2 rep | T3 rep |
+|---|---|---|
+| heartlands | 100 | 400 |
+| scarlett_meadows | 100 | 400 |
+| bayou_nwa | 100 | 400 |
+| great_plains | 100 | 400 |
+
+### Unlocks
+| Unlock | Region | Min tier |
+|---|---|---|
+| contracts_t2 | heartlands | 2 |
+| wagon_t2 | heartlands | 2 |
+| fence_rare_stock | heartlands | 2 |
+| fence_treasure_leads | heartlands | 3 |
+| hire_hand | heartlands | 2 |
+| wagon_t3 | heartlands | 3 |
+| contracts_t3 | heartlands | 3 |
+| hire_hand_2 | heartlands | 3 |
+
 ## Cache
 `server/progression_cache.lua` (pure, injected deps, covered by `spec/progression_cache_spec.lua`). Per player (keyed by
 `src`, validated against `citizenid`), all configured regions loaded together. Rep reads yield, so: a load commits only if

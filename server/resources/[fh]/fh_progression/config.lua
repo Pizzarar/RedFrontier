@@ -2,7 +2,10 @@
 FhProgressionConfig = {
     -- Minimum rep for each tier, per region. Tier 1 is the floor (always held). Must ascend.
     tiers = {
-        heartlands = { t2 = 100, t3 = 400 },
+        heartlands       = { t2 = 100, t3 = 400 },
+        scarlett_meadows = { t2 = 100, t3 = 400 },
+        bayou_nwa        = { t2 = 100, t3 = 400 },
+        great_plains     = { t2 = 100, t3 = 400 },
     },
     -- unlock_id -> { region_id, min_tier } (min_tier is a number: 1, 2 or 3)
     unlocks = {
@@ -11,5 +14,8 @@ FhProgressionConfig = {
         fence_rare_stock     = { region_id = 'heartlands', min_tier = 2 },
         fence_treasure_leads = { region_id = 'heartlands', min_tier = 3 },
         hire_hand            = { region_id = 'heartlands', min_tier = 2 },
+        wagon_t3             = { region_id = 'heartlands', min_tier = 3 },
+        contracts_t3         = { region_id = 'heartlands', min_tier = 3 },
+        hire_hand_2          = { region_id = 'heartlands', min_tier = 3 },
     },
 }

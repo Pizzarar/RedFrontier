@@ -12,10 +12,38 @@ local cfg = FhProgressionConfig
 
 case('config regions and unlock ids are known / seeded', function()
     for r in pairs(cfg.tiers) do assert(regions.isKnownRegion(r), r) end
-    for _, id in ipairs({ 'contracts_t2', 'wagon_t2', 'fence_rare_stock', 'fence_treasure_leads', 'hire_hand' }) do
+    for _, id in ipairs({ 'contracts_t2', 'wagon_t2', 'fence_rare_stock', 'fence_treasure_leads', 'hire_hand',
+        'wagon_t3', 'contracts_t3', 'hire_hand_2' }) do
         local u = cfg.unlocks[id]
         assert(u and cfg.tiers[u.region_id], id)
     end
+end)
+case('every FhRegions.isEnabled region has an ascending tier row', function()
+    for id, _ in pairs(regions.regions) do
+        if regions.isEnabled(id) then
+            local t = cfg.tiers[id]
+            assert(t, id .. ' missing tier row')
+            T.eq('number', type(t.t2), id .. ' t2')
+            T.eq('number', type(t.t3), id .. ' t3')
+            assert(t.t3 > t.t2, id .. ' tier thresholds must ascend')
+        end
+    end
+end)
+case('every unlock names a known region with min_tier in 1..3', function()
+    for id, u in pairs(cfg.unlocks) do
+        assert(regions.isKnownRegion(u.region_id), id .. ' -> ' .. tostring(u.region_id))
+        assert(type(u.min_tier) == 'number' and u.min_tier >= 1 and u.min_tier <= 3, id .. ' min_tier')
+        assert(cfg.tiers[u.region_id], id .. ' region not configured')
+    end
+end)
+case('wagon_t3 matches exactly', function()
+    T.same({ region_id = 'heartlands', min_tier = 3 }, cfg.unlocks.wagon_t3)
+end)
+case('getTier climbs t1->t2->t3 in scarlett_meadows', function()
+    local t = cfg.tiers.scarlett_meadows
+    T.eq(1, (logic.tierForRep(cfg, 'scarlett_meadows', t.t2 - 1)))
+    T.eq(2, (logic.tierForRep(cfg, 'scarlett_meadows', t.t2)))
+    T.eq(3, (logic.tierForRep(cfg, 'scarlett_meadows', t.t3)))
 end)
 case('tierForRep thresholds', function()
     local t = cfg.tiers.heartlands
