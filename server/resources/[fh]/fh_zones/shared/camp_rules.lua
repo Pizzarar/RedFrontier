@@ -111,12 +111,18 @@ function M.respawnDue(now, respawnAt)
     return type(now) == 'number' and type(respawnAt) == 'number' and now >= respawnAt
 end
 
----Pick the loot table for a camp's current owner: lootByFaction[owner] when the owner has an entry, else the camp's
----own table (camp.loot.table). owner is a faction id (e.g. 'outlaws') or nil (fh_alife absent / export failed) -> fall back.
-function M.pickLootTable(lootByFaction, owner, campTable)
+---Pick the loot table for a camp's current owner and tier: lootByFaction[owner][tier] when both resolve, else the
+---flat lootByFaction[owner] (the v1 shape, kept backward compatible), else the camp's own table (camp.loot.table).
+---owner is a faction id (e.g. 'outlaws') or nil (fh_alife absent / export failed). tier is 'T1'|'T2'|'T3' or nil.
+function M.pickLootTable(lootByFaction, owner, campTable, tier)
     if type(lootByFaction) == 'table' and type(owner) == 'string' then
         local t = lootByFaction[owner]
-        if type(t) == 'table' then return t end
+        if type(t) == 'table' then
+            local tt = type(tier) == 'string' and t[tier] or nil
+            if type(tt) == 'table' then return tt end
+            -- backward compat: a flat [faction] -> entries array (v1 shape, no tier dimension) still resolves
+            if type(t[1]) == 'table' then return t end
+        end
     end
     return campTable
 end

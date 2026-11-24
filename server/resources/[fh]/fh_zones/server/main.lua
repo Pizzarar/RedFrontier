@@ -138,7 +138,7 @@ end
 local function rollIntoStash(camp)
     local ref = stashRef(camp)
     exports.fh_core:clearContainer(ref)
-    local table_ = rules.pickLootTable(cfg.lootByFaction, getOwner(camp.cfg.id), camp.cfg.loot.table)
+    local table_ = rules.pickLootTable(cfg.lootByFaction, getOwner(camp.cfg.id), camp.cfg.loot.table, camp.cfg.tier)
     local items = rules.rollLoot(table_)
     local placed = {}
     for _, it in ipairs(items) do

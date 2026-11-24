@@ -216,20 +216,27 @@ case('shouldWake: a camp in a disabled region (enabled=false) never wakes', func
     assert(R.shouldWake('idle', mk(nil), { near }, nil)) -- nil enabled = today's behaviour
 end)
 
-case('pickLootTable: owner map entry, else fall back to the camp table', function()
-    local heart = cfg.lootByFaction.outlaws
-    local raider = cfg.lootByFaction.raiders
-    eq(heart, R.pickLootTable(cfg.lootByFaction, 'outlaws', camp.loot.table))
-    eq(raider, R.pickLootTable(cfg.lootByFaction, 'raiders', camp.loot.table))
+case('pickLootTable: tiered owner map entry, flat (v1) map entry, else fall back to the camp table', function()
+    local outlawT1 = cfg.lootByFaction.outlaws.T1
+    local raiderT2 = cfg.lootByFaction.raiders.T2
+    eq(outlawT1, R.pickLootTable(cfg.lootByFaction, 'outlaws', camp.loot.table, 'T1'))
+    eq(raiderT2, R.pickLootTable(cfg.lootByFaction, 'raiders', camp.loot.table, 'T2'))
+    -- a tier with no entry on a tiered map -> the camp's own table
+    eq(camp.loot.table, R.pickLootTable(cfg.lootByFaction, 'outlaws', camp.loot.table, 'T9'))
+    -- backward compat: a flat [faction] -> entries array (v1 shape) still resolves, with or without a tier
+    local flat = { { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } } }
+    eq(flat, R.pickLootTable({ outlaws = flat }, 'outlaws', camp.loot.table))
+    eq(flat, R.pickLootTable({ outlaws = flat }, 'outlaws', camp.loot.table, 'T1'))
     -- unknown owner / nil owner / nil map -> the camp's own table
-    eq(camp.loot.table, R.pickLootTable(cfg.lootByFaction, 'lawmen', camp.loot.table))
+    eq(camp.loot.table, R.pickLootTable(cfg.lootByFaction, 'bogus_faction', camp.loot.table, 'T1'))
     eq(camp.loot.table, R.pickLootTable(cfg.lootByFaction, nil, camp.loot.table))
     eq(camp.loot.table, R.pickLootTable(nil, 'outlaws', camp.loot.table))
 end)
 
-case('config: lootByFaction ships copies of the per-camp tables, keys not reshaped into camps', function()
-    same(cfg.camps.heartlands_t1_01.loot.table, cfg.lootByFaction.outlaws)
-    same(cfg.camps.scarlett_meadows_t1_01.loot.table, cfg.lootByFaction.raiders)
+case('config: lootByFaction is keyed faction -> tier; camps keep only their own loot table', function()
+    eq('table', type(cfg.lootByFaction.outlaws.T1))
+    eq('table', type(cfg.lootByFaction.lawmen.T3))
+    eq(nil, cfg.lootByFaction.rhodes_law) -- alias excluded: rhodes_law resolves to lawmen via getFaction
     eq(nil, cfg.camps.heartlands_t1_01.lootByFaction) -- top-level only; @world's per-camp tables untouched
     eq(nil, cfg.camps.scarlett_meadows_t1_01.lootByFaction)
 end)

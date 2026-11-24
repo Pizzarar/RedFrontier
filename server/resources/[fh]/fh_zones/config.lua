@@ -358,20 +358,241 @@ FhZonesConfig = {
         worn_rifle = { label = 'Worn Rifle', weight = 4000, size_class = 'bulky', stackable = false, value_base = 25 },
         small_safe = { label = 'Small Safe', weight = 25000, size_class = 'bulky', stackable = false, value_base = 60, illicit = true },
     },
-    -- Optional loot override by OWNING faction (A-life camp ownership, plan a-life-01). FhZonesConfig.camps is @world's
-    -- data (do not add keys there); this top-level map is keyed by fh_core faction id (regions.factions). Entries are
-    -- copies of today's per-camp tables; rules.pickLootTable falls back to camp.loot.table when the owner has no entry
-    -- or fh_alife is absent.
+    -- Optional loot override by OWNING faction x tier (A-life camp ownership, plan a-life-01; world-02 block E fills
+    -- the 8x3 data). FhZonesConfig.camps is @world's data (do not add keys there); this top-level map is keyed by
+    -- fh_core faction id (regions.factions, alias excluded: rhodes_law resolves to lawmen via getFaction), then tier
+    -- T1/T2/T3 (regions.TIERS). rules.pickLootTable falls back to camp.loot.table when the owner/tier has no entry or
+    -- fh_alife is absent; a flat [faction] -> table (the v1 shape) still resolves for backward compatibility.
     lootByFaction = {
-        outlaws = {
-            { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
-            { name = 'small_safe', chance = 1.0, amount = 1 },
-            { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
+        -- lawmen (kind law): ammunition + money + field medical
+        lawmen = {
+            T1 = {
+                { name = 'ammo_box_revolver', chance = 0.8, amount = 1 },
+                { name = 'ammo_box_rifle',    chance = 0.5, amount = 1 },
+                { name = 'bandage',           chance = 0.7, amount = { 1, 2 } },
+                { name = 'dollar',            chance = 0.9, amount = { 1, 3 } },
+                { name = 'fieldbandage',      chance = 0.4, amount = 1 },
+            },
+            T2 = {
+                { name = 'ammo_box_revolver', chance = 0.9, amount = { 1, 2 } },
+                { name = 'ammo_box_rifle',    chance = 0.6, amount = 1 },
+                { name = 'ammo_box_repeater', chance = 0.5, amount = 1 },
+                { name = 'dollar',            chance = 1.0, amount = { 3, 8 } },
+                { name = 'tonic_healing',     chance = 0.4, amount = 1 },
+                { name = 'fieldbandage',      chance = 0.5, amount = { 1, 2 } },
+            },
+            T3 = {
+                { name = 'money_clip',                chance = 0.5, amount = 1 },
+                { name = 'dollar',                    chance = 1.0, amount = { 6, 12 } },
+                { name = 'ammo_box_revolver_express', chance = 0.5, amount = 1 },
+                { name = 'ammo_box_rifle_express',    chance = 0.4, amount = 1 },
+                { name = 'ammo_box_shotgun',          chance = 0.4, amount = 1 },
+                { name = 'tonic_healing',             chance = 0.5, amount = { 1, 2 } },
+                { name = 'firstaid',                  chance = 0.3, amount = 1 },
+            },
         },
+        -- bounty_hunters (neutral): ammunition + money + tracking gear
+        bounty_hunters = {
+            T1 = {
+                { name = 'ammo_box_revolver', chance = 0.7, amount = 1 },
+                { name = 'ammo_box_rifle',    chance = 0.5, amount = 1 },
+                { name = 'dollar',            chance = 0.9, amount = { 2, 4 } },
+                { name = 'weapon_gun_oil',    chance = 0.5, amount = 1 },
+                { name = 'bandage',           chance = 0.5, amount = 1 },
+            },
+            T2 = {
+                { name = 'ammo_box_repeater', chance = 0.6, amount = { 1, 2 } },
+                { name = 'ammo_box_rifle',    chance = 0.6, amount = 1 },
+                { name = 'ammo_box_revolver', chance = 0.8, amount = { 1, 2 } },
+                { name = 'dollar',            chance = 1.0, amount = { 4, 8 } },
+                { name = 'tonic_stamina',     chance = 0.4, amount = 1 },
+                { name = 'weapon_repair_kit', chance = 0.4, amount = 1 },
+            },
+            T3 = {
+                { name = 'money_clip',                chance = 0.6, amount = 1 },
+                { name = 'dollar',                    chance = 1.0, amount = { 8, 15 } },
+                { name = 'ammo_box_revolver_express', chance = 0.5, amount = 1 },
+                { name = 'ammo_box_rifle_express',    chance = 0.4, amount = 1 },
+                { name = 'weapon_kit_binoculars',     chance = 0.4, amount = 1 },
+                { name = 'tonic_energy',              chance = 0.5, amount = 1 },
+            },
+        },
+        -- traders (neutral): goods + money + tools
+        traders = {
+            T1 = {
+                { name = 'dollar',        chance = 0.9, amount = { 2, 5 } },
+                { name = 'canned_beans',  chance = 0.6, amount = { 1, 2 } },
+                { name = 'coffee',        chance = 0.5, amount = 1 },
+                { name = 'flour_wheat',   chance = 0.4, amount = { 1, 2 } },
+                { name = 'sugar',         chance = 0.4, amount = 1 },
+                { name = 'resource_rope', chance = 0.4, amount = 1 },
+            },
+            T2 = {
+                { name = 'dollar',          chance = 1.0, amount = { 5, 10 } },
+                { name = 'canned_salmon',   chance = 0.5, amount = { 1, 2 } },
+                { name = 'canned_peaches',  chance = 0.5, amount = { 1, 2 } },
+                { name = 'coffee_beans',    chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_cloth',  chance = 0.5, amount = { 1, 2 } },
+                { name = 'resource_wood',   chance = 0.4, amount = { 1, 2 } },
+                { name = 'shovel',          chance = 0.4, amount = 1 },
+            },
+            T3 = {
+                { name = 'money_clip',          chance = 0.5, amount = 1 },
+                { name = 'dollar',              chance = 1.0, amount = { 8, 18 } },
+                { name = 'canned_apricots',     chance = 0.5, amount = { 1, 2 } },
+                { name = 'resource_copper_bar', chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_iron_bar',   chance = 0.4, amount = { 1, 2 } },
+                { name = 'axe',                 chance = 0.4, amount = 1 },
+                { name = 'oilcan',              chance = 0.3, amount = 1 },
+            },
+        },
+        -- settlers (neutral): goods + tools + money + trail food
+        settlers = {
+            T1 = {
+                { name = 'dollar',       chance = 0.8, amount = { 1, 3 } },
+                { name = 'fh_biscuit',   chance = 0.6, amount = { 1, 2 } },
+                { name = 'fh_jerky',     chance = 0.5, amount = { 1, 2 } },
+                { name = 'fh_canteen',   chance = 0.4, amount = 1 },
+                { name = 'bread',        chance = 0.5, amount = { 1, 2 } },
+                { name = 'canned_beans', chance = 0.4, amount = 1 },
+            },
+            T2 = {
+                { name = 'dollar',         chance = 0.9, amount = { 3, 7 } },
+                { name = 'fh_stew',        chance = 0.5, amount = { 1, 2 } },
+                { name = 'coffee',         chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_wood',  chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_cloth', chance = 0.4, amount = { 1, 2 } },
+                { name = 'bucket',         chance = 0.4, amount = 1 },
+                { name = 'shovel',         chance = 0.4, amount = 1 },
+            },
+            T3 = {
+                { name = 'dollar',          chance = 1.0, amount = { 6, 12 } },
+                { name = 'money_clip',      chance = 0.3, amount = 1 },
+                { name = 'bedroll',         chance = 0.4, amount = 1 },
+                { name = 'resource_iron_bar', chance = 0.3, amount = { 1, 2 } },
+                { name = 'mortarpestle',    chance = 0.3, amount = 1 },
+                { name = 'pickaxe',         chance = 0.3, amount = 1 },
+                { name = 'canned_salmon',   chance = 0.4, amount = { 1, 2 } },
+            },
+        },
+        -- rail_mining (neutral): goods + mining/tool supplies + money
+        rail_mining = {
+            T1 = {
+                { name = 'dollar',          chance = 0.8, amount = { 2, 4 } },
+                { name = 'canned_beans',    chance = 0.5, amount = { 1, 2 } },
+                { name = 'coffee',          chance = 0.4, amount = 1 },
+                { name = 'resource_coal',   chance = 0.5, amount = { 1, 2 } },
+                { name = 'resource_iron_bar', chance = 0.3, amount = 1 },
+                { name = 'pickaxe',         chance = 0.4, amount = 1 },
+            },
+            T2 = {
+                { name = 'dollar',          chance = 0.9, amount = { 4, 9 } },
+                { name = 'resource_wood',   chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_coal',   chance = 0.5, amount = { 1, 2 } },
+                { name = 'resource_iron_bar', chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_rope',   chance = 0.4, amount = { 1, 2 } },
+                { name = 'shovel',          chance = 0.4, amount = 1 },
+                { name = 'oilcan',          chance = 0.3, amount = 1 },
+            },
+            T3 = {
+                { name = 'money_clip',        chance = 0.4, amount = 1 },
+                { name = 'dollar',            chance = 1.0, amount = { 6, 14 } },
+                { name = 'resource_copper_bar', chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_gunpowder', chance = 0.4, amount = { 1, 2 } },
+                { name = 'resource_cloth',    chance = 0.3, amount = { 1, 2 } },
+                { name = 'axe',               chance = 0.3, amount = 1 },
+                { name = 'tool_goldpan',      chance = 0.3, amount = 1 },
+            },
+        },
+        -- outlaws (Mountain Gang, outlaw): contraband / stolen goods
+        outlaws = {
+            T1 = {
+                { name = 'worn_rifle',     chance = 0.6, amount = 1, condition = { 20, 45 } },
+                { name = 'small_safe',     chance = 0.5, amount = 1 },
+                { name = 'gun_parts',      chance = 0.7, amount = { 2, 3 } },
+                { name = 'cigarettes',     chance = 0.6, amount = { 1, 2 } },
+                { name = 'chewingtobacco', chance = 0.5, amount = 1 },
+                { name = 'bandana',        chance = 0.4, amount = 1 },
+            },
+            T2 = {
+                { name = 'worn_rifle',                chance = 0.7, amount = 1, condition = { 20, 45 } },
+                { name = 'small_safe',                chance = 0.6, amount = 1 },
+                { name = 'gun_parts',                 chance = 0.8, amount = { 2, 4 } },
+                { name = 'money_clip',                chance = 0.5, amount = 1 },
+                { name = 'moonshine',                 chance = 0.5, amount = 1 },
+                { name = 'weapon_revolver_cattleman', chance = 0.4, amount = 1, condition = { 25, 50 } },
+                { name = 'tool_lockpick',             chance = 0.4, amount = 1 },
+            },
+            T3 = {
+                { name = 'small_safe',               chance = 0.7, amount = 1 },
+                { name = 'money_clip',               chance = 0.6, amount = 1 },
+                { name = 'weapon_repeater_carbine',  chance = 0.4, amount = 1, condition = { 30, 60 } },
+                { name = 'moonshine',                chance = 0.6, amount = { 1, 2 } },
+                { name = 'resource_gold_nugget',     chance = 0.5, amount = { 1, 2 } },
+                { name = 'blood_money_clip',         chance = 0.5, amount = 1 },
+                { name = 'cigar',                    chance = 0.4, amount = 1 },
+                { name = 'weapon_gun_oil',           chance = 0.4, amount = 1 },
+            },
+        },
+        -- raiders (Swamp Gang, outlaw): contraband / stolen goods
         raiders = {
-            { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
-            { name = 'small_safe', chance = 1.0, amount = 1 },
-            { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
+            T1 = {
+                { name = 'worn_rifle',     chance = 0.6, amount = 1, condition = { 20, 45 } },
+                { name = 'small_safe',     chance = 0.5, amount = 1 },
+                { name = 'gun_parts',      chance = 0.7, amount = { 2, 3 } },
+                { name = 'pipetobacco',    chance = 0.5, amount = 1 },
+                { name = 'cigarettes',     chance = 0.5, amount = 1 },
+                { name = 'bandana',        chance = 0.4, amount = 1 },
+            },
+            T2 = {
+                { name = 'worn_rifle',                chance = 0.7, amount = 1, condition = { 20, 45 } },
+                { name = 'small_safe',                chance = 0.6, amount = 1 },
+                { name = 'gun_parts',                 chance = 0.8, amount = { 2, 4 } },
+                { name = 'money_clip',                chance = 0.5, amount = 1 },
+                { name = 'moonshine',                 chance = 0.5, amount = 1 },
+                { name = 'weapon_revolver_cattleman', chance = 0.4, amount = 1, condition = { 25, 50 } },
+                { name = 'tool_lockpick',             chance = 0.4, amount = 1 },
+            },
+            T3 = {
+                { name = 'small_safe',                 chance = 0.7, amount = 1 },
+                { name = 'money_clip',                 chance = 0.6, amount = 1 },
+                { name = 'weapon_shotgun_doublebarrel', chance = 0.4, amount = 1, condition = { 30, 60 } },
+                { name = 'moonshine',                  chance = 0.6, amount = { 1, 2 } },
+                { name = 'resource_gold_nugget',       chance = 0.5, amount = { 1, 2 } },
+                { name = 'blood_money_clip',           chance = 0.5, amount = 1 },
+                { name = 'pipe',                       chance = 0.4, amount = 1 },
+                { name = 'weapon_repair_kit',          chance = 0.4, amount = 1 },
+            },
+        },
+        -- desert_gang (Desert Gang, outlaw): contraband / stolen goods (own tables)
+        desert_gang = {
+            T1 = {
+                { name = 'worn_rifle',     chance = 0.6, amount = 1, condition = { 20, 45 } },
+                { name = 'small_safe',     chance = 0.5, amount = 1 },
+                { name = 'gun_parts',      chance = 0.7, amount = { 2, 3 } },
+                { name = 'cigarettes',     chance = 0.5, amount = 1 },
+                { name = 'chewingtobacco', chance = 0.4, amount = 1 },
+                { name = 'bandana',        chance = 0.5, amount = 1 },
+            },
+            T2 = {
+                { name = 'worn_rifle',                chance = 0.7, amount = 1, condition = { 20, 45 } },
+                { name = 'small_safe',                chance = 0.6, amount = 1 },
+                { name = 'gun_parts',                 chance = 0.8, amount = { 2, 4 } },
+                { name = 'money_clip',                chance = 0.5, amount = 1 },
+                { name = 'moonshine',                 chance = 0.4, amount = 1 },
+                { name = 'weapon_revolver_cattleman', chance = 0.5, amount = 1, condition = { 25, 50 } },
+                { name = 'tool_lockpick',             chance = 0.3, amount = 1 },
+            },
+            T3 = {
+                { name = 'small_safe',              chance = 0.7, amount = 1 },
+                { name = 'money_clip',              chance = 0.6, amount = 1 },
+                { name = 'weapon_rifle_boltaction', chance = 0.4, amount = 1, condition = { 30, 60 } },
+                { name = 'resource_gold_nugget',    chance = 0.5, amount = { 1, 2 } },
+                { name = 'resource_silver_bar',     chance = 0.5, amount = { 1, 2 } },
+                { name = 'blood_dollar',            chance = 0.5, amount = { 2, 4 } },
+                { name = 'cigar',                   chance = 0.4, amount = 1 },
+                { name = 'weapon_gun_oil',          chance = 0.4, amount = 1 },
+            },
         },
     },
 }
@@ -379,3 +600,12 @@ FhZonesConfig = {
 -- Single source for camp coordinates (world-02 block F, idea-809): fill center/region from FhRegions at load.
 -- FhRegions + FhPlaceResolver are loaded before this file in every fxmanifest and spec that reads it.
 if FhPlaceResolver and FhRegions then FhPlaceResolver.resolveCamps(FhZonesConfig.camps, FhRegions) end
+
+-- world-02 block E: each camp's loot tier resolves from its territory (FhRegions.territories[].tier), the same single
+-- source as center/region — no duplicated tier field. The server reads camp.tier to index lootByFaction[owner][tier].
+if FhRegions then
+    for _, camp in pairs(FhZonesConfig.camps) do
+        local terr = FhRegions.territories[camp.territory]
+        if terr and terr.tier then camp.tier = terr.tier end
+    end
+end
