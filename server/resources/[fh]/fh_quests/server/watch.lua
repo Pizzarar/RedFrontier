@@ -82,7 +82,7 @@ CreateThread(function()
                 local e = watch[key]
                 local rows = Q.cache[e.cid]
                 local row = rows and rows[e.qid]
-                if WR.heal(e, row) == 'drop' then disarm(key, row.status == 'done' and 'done' or 'gone') end
+                if WR.heal(e, row) == 'drop' then disarm(key, row and row.status == 'done' and 'done' or 'gone') end
             end
             -- WR.tick snapshots hits before anything yields; TriggerEvent below takes the quest lock.
             for _, hit in ipairs(WR.tick(watch, posOf)) do
