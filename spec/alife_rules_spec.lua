@@ -244,4 +244,295 @@ case('deserialize rejects numeric id / NaN eta, re-keys by id', function()
     eq('sqK', s.squads.sqK.id)
 end)
 
+-- ---------------------------------------------------------------- a-life-02 B1: roads and raids
+
+local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+local function noRng() error('rng must not be called') end
+
+---Real FhRegions with per-region `ambush` lists overlaid (@world H format). isEnabled/factions/territories are the
+---real ones (via __index), so enabled gates match regions.lua.
+local function fixtureRegions(ambush)
+    local rr = {}
+    for id, r in pairs(Regions.regions) do
+        local copy = {}
+        for k, v in pairs(r) do copy[k] = v end
+        copy.ambush = ambush[id]
+        rr[id] = copy
+    end
+    return setmetatable({ regions = rr }, { __index = Regions })
+end
+
+local function cfgWith(over)
+    local c = {}
+    for k, v in pairs(cfg) do c[k] = v end
+    for k, v in pairs(over or {}) do c[k] = v end
+    return c
+end
+
+local HEART_AMBUSH = {
+    { id = 'heartlands_amb_bend', x = 100.0, y = 500.0, z = 110.0, label = 'Dakota bend', verified = true },
+    { x = 120.0, y = 520.0, z = 111.0 }, -- no id -> heartlands:ambush:2, no label
+}
+local heartCtx = R.context(cfg, fixtureRegions({ heartlands = HEART_AMBUSH }), camps)
+local heartCamps = { 'heartlands_t1_01', 'heartlands_t1_02', 'heartlands_t1_03', 'heartlands_t2_01' }
+
+---State with every heartlands camp owned by law except `outlawCamps`, so planRaids only sees those.
+local function stateWithOutlawCamps(outlawCamps)
+    local st = R.newState()
+    local keep = {}
+    for _, c in ipairs(outlawCamps or {}) do keep[c] = true end
+    for id in pairs(camps) do if not keep[id] then st.owners[id] = 'lawmen' end end
+    return st
+end
+
+case('B1 no ambush data: all 15 regions, absent or empty ambush -> no nodes, no raids, no rng, no error', function()
+    local ids = {}
+    for id in pairs(Regions.regions) do ids[#ids + 1] = id end
+    eq(15, #ids, 'regions.lua has 15 regions')
+    local emptyAll = {}
+    for _, id in ipairs(ids) do emptyAll[id] = {} end
+    for _, regs in ipairs({ Regions, fixtureRegions({}), fixtureRegions(emptyAll) }) do
+        local c = R.context(cfg, regs, camps)
+        same({}, c.graph.ambushByRegion)
+        for _, node in pairs(c.graph.nodes) do assert(node.type ~= 'ambush', 'unexpected ambush node ' .. node.id) end
+        local st = R.newState() -- every camp outlaw-held by default: raids would roll if any node existed
+        for _, id in ipairs(ids) do
+            same({}, R.ambushNodes(c, id))
+            eq(id .. ': no ambush nodes', R.describeAmbush(c, st, id))
+        end
+        local effects = R.tick(c, st, 200, noRng)
+        eq(0, #effects)
+        eq(0, count(st.squads), 'no squads at all')
+        same({}, st.regionPressure)
+    end
+end)
+
+case('B1 buildGraph: ambush nodes keyed by id, else <region>:ambush:<index>; x/y/z, label, verified kept', function()
+    local a = heartCtx.graph.nodes['heartlands_amb_bend']
+    same({ id = 'heartlands_amb_bend', type = 'ambush', region = 'heartlands', index = 1, x = 100.0, y = 500.0,
+        z = 110.0, label = 'Dakota bend', verified = true }, a)
+    local b = heartCtx.graph.nodes['heartlands:ambush:2']
+    eq('ambush', b.type); eq(120.0, b.x); eq(520.0, b.y); eq(111.0, b.z); eq(nil, b.label); eq(false, b.verified)
+    same({ 'heartlands_amb_bend', 'heartlands:ambush:2' }, heartCtx.graph.ambushByRegion.heartlands)
+    eq('Dakota bend', R.nodeLabel(heartCtx, 'heartlands_amb_bend'))
+    eq('heartlands:ambush:2', R.nodeLabel(heartCtx, 'heartlands:ambush:2'))
+    -- camp/town nodes unchanged
+    eq('camp', heartCtx.graph.nodes[heartlandsCamp].type); eq('town', heartCtx.graph.nodes.heartlands.type)
+end)
+
+case('B1 buildGraph: skips disabled regions, malformed entries and taken ids; no isEnabled -> all regions', function()
+    eq(false, Regions.isEnabled('bluewater_marsh'), 'fixture assumes bluewater_marsh is disabled')
+    local regs = fixtureRegions({
+        heartlands = {
+            'junk', { id = 'nan', x = 0 / 0, y = 1, z = 1 }, { id = 'noz', x = 1, y = 1 },
+            { id = heartlandsCamp, x = 1, y = 1, z = 1 }, -- collides with a camp node
+            { id = 'dup', x = 1, y = 1, z = 1 }, { id = 'dup', x = 2, y = 2, z = 2 },
+            { id = '', x = 3, y = 3, z = 3 }, -- empty id -> index key
+        },
+        bluewater_marsh = { { id = 'bw1', x = 1, y = 1, z = 1 } },
+    })
+    local g = R.buildGraph(cfg, regs, camps)
+    same({ 'dup', 'heartlands:ambush:7' }, g.ambushByRegion.heartlands)
+    eq(1, g.nodes.dup.x, 'first dup wins')
+    eq('camp', g.nodes[heartlandsCamp].type)
+    eq(nil, g.nodes.bw1); eq(nil, g.ambushByRegion.bluewater_marsh)
+    -- no isEnabled function (older FhRegions): no gate
+    local plain = { regions = { r1 = { id = 'r1', ambush = { { x = 1, y = 2, z = 3 } } } }, factions = {} }
+    same({ 'r1:ambush:1' }, R.buildGraph(cfg, plain, {}).ambushByRegion.r1)
+    -- isEnabled that errors: region treated as disabled, no error
+    local boom = { regions = plain.regions, factions = {}, isEnabled = function() error('x') end }
+    eq(nil, R.buildGraph(cfg, boom, {}).ambushByRegion.r1)
+end)
+
+case('B1 planRaids: chance roll hit sends a squad to the picked node; miss sends none', function()
+    local st = stateWithOutlawCamps({ heartlandsCamp })
+    same({}, R.planRaids(heartCtx, st, seq(cfg.raids.chancePct + 1)), 'miss')
+    eq(0, count(st.squads))
+    -- rolls: chance, node index (2 of 2 free), travel, strength
+    local effects = R.planRaids(heartCtx, st, seq(cfg.raids.chancePct, 2, 3, 4))
+    same({ { type = 'ambush_sent', squad_id = 'sq1', camp_id = heartlandsCamp, node = 'heartlands:ambush:2',
+        region_id = 'heartlands', faction = 'outlaws', strength = 4, label = 'heartlands:ambush:2' } }, effects)
+    same({ id = 'sq1', goal = 'ambush', faction = 'outlaws', strength = 4, from = heartlandsCamp,
+        to = 'heartlands:ambush:2', node = 'heartlands:ambush:2', region = 'heartlands', phase = 'travel',
+        travel = 3, etaTick = 3 }, st.squads.sq1)
+end)
+
+case('B1 caps: one live squad per node, region cap, law-held camps never raid', function()
+    -- 4 outlaw camps, 2 nodes, cap 2: only 2 squads, one per node, however many ticks pass.
+    local st = R.newState()
+    local always = function(lo) return lo end -- chance 1 <= pct, first free node, min travel/strength
+    for _ = 1, 3 do R.planRaids(heartCtx, st, always) end
+    local nodes = {}
+    for _, sq in pairs(st.squads) do
+        assert(not nodes[sq.node], 'two squads on ' .. sq.node)
+        nodes[sq.node] = true
+    end
+    eq(2, count(st.squads))
+    -- region cap 1 with 2 free nodes -> 1 squad
+    local c1 = R.context(cfgWith({ raids = setmetatable({ regionCap = 1 }, { __index = cfg.raids }) }),
+        fixtureRegions({ heartlands = HEART_AMBUSH }), camps)
+    local st1 = R.newState()
+    for _ = 1, 3 do R.planRaids(c1, st1, always) end
+    eq(1, count(st1.squads))
+    -- a returning squad frees its node and its cap slot
+    st1.squads.sq1.phase = 'return'
+    R.planRaids(c1, st1, always)
+    eq(2, count(st1.squads))
+    eq('heartlands_amb_bend', st1.squads.sq2.node, 'the returning squad no longer holds node 1')
+    -- every heartlands camp law-held: no raids, no rng
+    local stLaw = stateWithOutlawCamps({})
+    same({}, R.planRaids(heartCtx, stLaw, noRng))
+end)
+
+case('B1 ambush lifecycle: travel -> hold (ambush_holding) -> return -> back at camp (squad_returned)', function()
+    local st = stateWithOutlawCamps({ heartlandsCamp })
+    R.planRaids(heartCtx, st, seq(1, 1, 2, 3)) -- node 1, travel 2, strength 3
+    local sq = st.squads.sq1
+    eq('travel', sq.phase); eq(2, sq.etaTick)
+    local no = function() return 100 end -- chance misses from here on (100 > chancePct)
+    eq(0, #R.tick(heartCtx, st, 1, no))
+    same({ { type = 'ambush_holding', squad_id = 'sq1', node = 'heartlands_amb_bend', region_id = 'heartlands',
+        faction = 'outlaws', strength = 3, label = 'Dakota bend' } }, R.tick(heartCtx, st, 1, no))
+    eq('hold', sq.phase); eq(2 + cfg.raids.holdTicks, sq.etaTick)
+    eq('heartlands: 2 ambush node(s): Dakota bend=sq1 outlaws x3 hold, heartlands:ambush:2=free',
+        R.describeAmbush(heartCtx, st, 'heartlands'))
+    eq(0, #R.tick(heartCtx, st, cfg.raids.holdTicks, no))
+    eq('return', sq.phase); eq(2 + cfg.raids.holdTicks + 2, sq.etaTick)
+    eq(0, #R.tick(heartCtx, st, 1, no))
+    same({ { type = 'squad_returned', reason = 'returned', squad_id = 'sq1', goal = 'ambush', faction = 'outlaws',
+        camp_id = heartlandsCamp, node = 'heartlands_amb_bend', region_id = 'heartlands', strength = 3 } },
+        R.tick(heartCtx, st, 1, no))
+    eq(nil, st.squads.sq1)
+    same({}, st.regionPressure, 'returning survivors add no pressure')
+end)
+
+case('B1 onSquadKill: -1 strength per kill, outlaw losses add regionPressure, wipe removes the squad', function()
+    local st = stateWithOutlawCamps({ heartlandsCamp })
+    R.planRaids(heartCtx, st, seq(1, 1, 2, 3))
+    same({}, (R.onSquadKill(heartCtx, st, 'sq1')))
+    eq(2, st.squads.sq1.strength); eq(1, R.getPressure(st, 'heartlands', 'outlaws'))
+    same({ { type = 'squad_wiped', squad_id = 'sq1', goal = 'ambush', faction = 'outlaws', node = 'heartlands_amb_bend',
+        camp_id = heartlandsCamp, region_id = 'heartlands', label = 'Dakota bend' } },
+        (R.onSquadKill(heartCtx, st, 'sq1', 5)))
+    eq(nil, st.squads.sq1)
+    eq(3, R.getPressure(st, 'heartlands', 'outlaws'), 'only the 2 actually lost count')
+    local e, err = R.onSquadKill(heartCtx, st, 'sq1')
+    same({}, e); eq('fh_alife_no_squad', err)
+    -- pressureMax caps it
+    st.regionPressure.heartlands.outlaws = cfg.raids.pressureMax
+    R.planRaids(heartCtx, st, seq(1, 1, 2, 3))
+    R.onSquadKill(heartCtx, st, 'sq2')
+    eq(cfg.raids.pressureMax, R.getPressure(st, 'heartlands', 'outlaws'))
+    -- law squad losses add no pressure
+    local stL = R.newState()
+    stL.squads.sqL = { id = 'sqL', goal = 'reinforce', faction = 'lawmen', strength = 2, from = 'heartlands',
+        to = heartlandsCamp, region = 'heartlands', phase = 'hold', travel = 3, etaTick = 9 }
+    R.onSquadKill(ctx, stL, 'sqL')
+    same({}, stL.regionPressure)
+end)
+
+case('B1 reinforce: a law-held camp gets one data-only squad (no rng), holds while law keeps the camp', function()
+    local st = R.newState()
+    R.onCampCleared(ctx, st, heartlandsCamp, {}, seq(4, 22))
+    eq(0, #R.tick(ctx, st, 1, noRng))
+    local rf = R.listSquads(st, 'reinforce')
+    eq(1, #rf)
+    same({ id = 'sq2', goal = 'reinforce', faction = 'lawmen', strength = cfg.reinforce.strength, from = 'heartlands',
+        to = heartlandsCamp, region = 'heartlands', phase = 'travel', travel = cfg.reinforce.travelTicks,
+        etaTick = 1 + cfg.reinforce.travelTicks }, rf[1])
+    eq(0, R.holderStrength(st, heartlandsCamp))
+    R.tick(ctx, st, cfg.reinforce.travelTicks + cfg.reinforce.holdTicks, noRng)
+    eq(1, #R.listSquads(st, 'reinforce'), 'still one, renewed')
+    eq('hold', rf[1].phase); eq(cfg.reinforce.strength, R.holderStrength(st, heartlandsCamp))
+end)
+
+case('B1 pressure math: retake roll = strength - pressure vs holders; fail regroups, pressure is consumed', function()
+    local st = R.newState()
+    R.onCampCleared(ctx, st, heartlandsCamp, {}, seq(4, 22)) -- retake strength 4 at tick 22
+    R.tick(ctx, st, 21, noRng)
+    eq(2, R.holderStrength(st, heartlandsCamp))
+    st.regionPressure.heartlands = { outlaws = 3 } -- 3 outlaws killed on the road: effective 4 - 3 = 1 <= 2
+    local effects = R.tick(ctx, st, 1, seq(5, 25)) -- the regroup squad rolls strength 5, eta +25
+    same({
+        { type = 'retake_failed', camp_id = heartlandsCamp, region_id = 'heartlands', faction = 'outlaws', strength = 4,
+            pressure = 3, holder = 2 },
+        { type = 'broadcast', message = 'Mountain Gang failed to retake the Heartland Bluffs Camp' },
+    }, effects)
+    eq('lawmen', R.getOwner(ctx, st, heartlandsCamp))
+    eq(0, R.getPressure(st, 'heartlands', 'outlaws'), 'pressure consumed by the roll')
+    eq(1, R.holderStrength(st, heartlandsCamp), 'holders took the effective 1')
+    local retakes = R.listSquads(st, 'retake')
+    eq(1, #retakes); eq(5, retakes[1].strength); eq(22 + 25, retakes[1].etaTick)
+    -- next retake, pressure 1: effective 4 > holder 1 -> lands; reinforce squads are removed
+    st.regionPressure.heartlands = { outlaws = 1 }
+    local e2 = R.tick(ctx, st, 25, noRng)
+    eq('flipped', e2[1].type); eq('outlaws', R.getOwner(ctx, st, heartlandsCamp))
+    eq(0, count(st.squads)); eq(0, R.getPressure(st, 'heartlands', 'outlaws'))
+end)
+
+case('B1 pressure: strength - pressure 0 with no holders still fails (no flip), clamps at 0', function()
+    local st = R.newState()
+    R.flip(ctx, st, heartlandsCamp, 'lawmen')
+    st.regionPressure.heartlands = { outlaws = 6 }
+    local e = R.resolveSquad(ctx, st, { id = 'sqX', goal = 'retake', faction = 'outlaws', strength = 4,
+        from = 'heartlands', to = heartlandsCamp, etaTick = 0 }, seq(3, 20))
+    eq('retake_failed', e[1].type); eq(6, e[1].pressure); eq(0, e[1].holder)
+    eq('lawmen', R.getOwner(ctx, st, heartlandsCamp))
+end)
+
+case('B1 save v2 roundtrip: ambush/reinforce squads and regionPressure survive', function()
+    local st = stateWithOutlawCamps({ heartlandsCamp })
+    R.planRaids(heartCtx, st, seq(1, 1, 2, 3))
+    R.tick(heartCtx, st, 2, function() return 100 end)
+    st.regionPressure.heartlands = { outlaws = 2 }
+    local saved = R.serialize(st)
+    eq(2, saved.version)
+    local st2, err, eff = R.deserialize(saved, heartCtx)
+    eq(nil, err); same({}, eff)
+    same(st.squads, st2.squads); same(st.regionPressure, st2.regionPressure); same(st.owners, st2.owners)
+end)
+
+case('B1 old save (a-life-01 v1) loads: owners and retake squads kept, regionPressure empty, saved as v2', function()
+    local v1 = { version = 1, tick = 7, nextSquadId = 2, owners = { [heartlandsCamp] = 'lawmen' },
+        squads = { sq1 = { id = 'sq1', faction = 'outlaws', strength = 4, from = 'heartlands', to = heartlandsCamp,
+            etaTick = 22, goal = 'retake' } } }
+    local st, err, eff = R.deserialize(v1, ctx)
+    eq(nil, err); same({}, eff)
+    eq(7, st.tick); eq('lawmen', st.owners[heartlandsCamp]); eq(4, st.squads.sq1.strength)
+    same({}, st.regionPressure)
+    eq(2, R.serialize(st).version)
+    local effects = R.tick(ctx, st, 15, noRng) -- reinforce arrives, retake lands at 22 (4 > 2)
+    eq('flipped', effects[1].type)
+end)
+
+case('B1 load with a missing node: squad dropped, strength returned to camp, never errors', function()
+    local st = stateWithOutlawCamps({ heartlandsCamp })
+    R.planRaids(heartCtx, st, seq(1, 2, 2, 3)) -- node heartlands:ambush:2
+    local saved = R.serialize(st)
+    -- @world data changed: node 2 removed
+    local c = R.context(cfg, fixtureRegions({ heartlands = { HEART_AMBUSH[1] } }), camps)
+    local st2, err, eff = R.deserialize(saved, c)
+    eq(nil, err)
+    same({ { type = 'squad_returned', reason = 'node_missing', squad_id = 'sq1', goal = 'ambush', faction = 'outlaws',
+        camp_id = heartlandsCamp, node = 'heartlands:ambush:2', region_id = 'heartlands', strength = 3 } }, eff)
+    eq(0, count(st2.squads)); same({}, st2.regionPressure)
+    -- deserialize without ctx (a-life-01 server call): the first tick prunes it instead
+    local st3 = R.deserialize(saved)
+    eq(1, count(st3.squads))
+    local e3 = R.tick(ctx, st3, 1, noRng) -- ctx has no ambush data at all
+    eq('node_missing', e3[1].reason); eq(0, #R.listSquads(st3, 'ambush'))
+end)
+
+case('B1 deserialize: malformed v2 squads and pressure are dropped', function()
+    local s = R.deserialize({ version = 2, squads = {
+        a = { id = 'a', goal = 'ambush', faction = 'outlaws', to = 'n', node = 'n', from = 'c', etaTick = 1, phase = 'zzz' },
+        b = { id = 'b', goal = 'ambush', faction = 'outlaws', to = 'n', from = 'c', etaTick = 1, phase = 'hold' },
+        c = { id = 'c', goal = 'ambush', faction = 'outlaws', to = 'n', node = 'n', from = 'c', etaTick = 1,
+            phase = 'hold', strength = 0 / 0, travel = -4 },
+    }, regionPressure = { heartlands = { outlaws = 2, raiders = -1, bad = 0 / 0 }, [5] = { x = 1 }, other = 'x' } })
+    eq(nil, s.squads.a); eq(nil, s.squads.b)
+    eq(0, s.squads.c.strength); eq(1, s.squads.c.travel)
+    same({ heartlands = { outlaws = 2 } }, s.regionPressure)
+end)
+
 T.finish()
