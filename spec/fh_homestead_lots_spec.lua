@@ -1,8 +1,8 @@
 -- H8 (plan homestead-02): town-lot purchase (/fh_buylot, export buyLot) and lot abandon in fh_homestead server/main.lua,
 -- in the stubbed world of spec/support/homestead_world.lua (fake DB with 0018's keys + fake fh_economy charge/credit/rep).
 -- Money: reserve + lock BEFORE charge; any failure after a charge = exactly one credit of the same amount. Rep: +townLot.rep
--- on purchase, -townLot.rep on abandon (owner online), so buy/abandon/rebuy nets one bump. Offline owner + admin abandon:
--- released anyway, the skipped rep-back is logged (fh_economy has no citizenid rep path).
+-- on purchase, -townLot.rep on abandon by citizenid (repByCitizenid, idea-804: owner online or offline), so
+-- buy/abandon/rebuy nets one bump. Admin abandon with the rep call failing/throwing: released anyway, skip logged.
 local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
 local case = T.it
@@ -187,7 +187,7 @@ T.describe('fh_homestead town lots (H8)', function()
         T.same({ true, 'lot_a' }, { W.ex.unclaim(1, 'lot_a') }) -- owner abandons their lot
         T.eq(0, W.repOf('A', 'heartlands'))
         T.eq(700, W.cash.A, 'abandon: no money back'); T.eq(0, #W.credits)
-        T.same({ citizenid = 'A', region = 'heartlands', delta = -25, reason = 'town_lot_abandon' }, W.reps[2])
+        T.same({ citizenid = 'A', region = 'heartlands', delta = -25, reason = 'town_lot_abandon', byCid = true }, W.reps[2])
         T.eq(nil, W.db.plots.lot_a); T.eq(nil, W.ex.getPlot('A', 'town_lot'))
         T.same({ true, 'lot_a' }, { W.buyAt(1, 'lot_a') })
         T.eq(25, W.repOf('A', 'heartlands'), 'net one bump')
@@ -208,7 +208,7 @@ T.describe('fh_homestead town lots (H8)', function()
         W.consistent()
     end)
 
-    case('admin abandon, owner online: rep taken back from the owner (by their src)', function()
+    case('admin abandon, owner online: rep taken back from the owner (by citizenid)', function()
         local W = newWorld()
         W.buyAt(1, 'lot_a')
         T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') })
@@ -221,26 +221,48 @@ T.describe('fh_homestead town lots (H8)', function()
         W.consistent()
     end)
 
-    case('admin abandon, owner offline: released anyway, skipped rep-back logged (cid, region, amount, lot)', function()
+    case('admin abandon, owner offline: rep taken back by citizenid (idea-804), lot released', function()
         local W = newWorld()
         W.buyAt(1, 'lot_a')
         W.offline[1] = true
         T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') })
         T.eq(nil, W.db.plots.lot_a); T.eq(nil, W.C.ownerOf('lot_a'))
         T.eq(1, W.named('fh:homestead:unclaimed'))
-        T.eq(25, W.repOf('A', 'heartlands'), 'no citizenid rep path: rep not taken back')
+        T.eq(0, W.repOf('A', 'heartlands'), 'offline owner: rep taken back')
+        T.same({ citizenid = 'A', region = 'heartlands', delta = -25, reason = 'town_lot_abandon', byCid = true }, W.reps[#W.reps])
+        assert(not W.logged('without rep%-back'), 'nothing skipped')
+        W.consistent()
+    end)
+
+    case('admin abandon, rep-back refused (unknown_citizenid / ledger_failed) or throwing: released anyway, logged', function()
+        local W = newWorld()
+        W.buyAt(1, 'lot_a')
+        W.offline[1] = true
+        W.unknown.A = true
+        T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') })
+        T.eq(nil, W.db.plots.lot_a); T.eq(nil, W.C.ownerOf('lot_a'))
+        T.eq(25, W.repOf('A', 'heartlands'))
         local found = false
         for _, m in ipairs(W.logs) do
             if m:find('without rep%-back') and m:find('lot_a') and m:find('citizenid=A') and m:find('region=heartlands')
-                and m:find('amount=%-25') and m:find('owner_offline') then found = true end
+                and m:find('amount=%-25') and m:find('unknown_citizenid') then found = true end
         end
         assert(found, 'skipped rep-back logged: ' .. table.concat(W.logs, ' | '))
-        -- admin with the owner online but the rep call failing: still released, also logged
-        W.offline[1] = nil
+        W.unknown.A, W.offline[1] = nil, nil
+        -- owner online but the rep call failing: still released, also logged
         W.buyAt(2, 'lot_b')
         W.fail.rep = true
         T.same({ true, 'lot_b' }, { W.ex.unclaim(0, 'lot_b') })
-        assert(W.logged('lot_b released by admin without rep%-back'))
+        assert(W.logged('lot_b released by admin without rep%-back.*ledger_failed'))
+        W.fail.rep = nil
+        -- repByCitizenid throws: released, logged, lock released
+        W.buyAt(2, 'lot_c')
+        W.fail.repByCidThrows = true
+        T.same({ true, 'lot_c' }, { W.ex.unclaim(0, 'lot_c') })
+        W.fail.repByCidThrows = nil
+        assert(W.logged('lot_c released by admin without rep%-back.*fh_economy stopped'))
+        W.cash.B = 1000
+        T.same({ true, 'lot_c' }, { W.buyAt(2, 'lot_c') }, 'lock released')
         W.consistent()
     end)
 
@@ -314,14 +336,14 @@ T.describe('fh_homestead town lots (H8)', function()
         W.consistent()
     end)
 
-    case('rsg-core throws during the abandon rep-back: owner treated offline, admin release goes through, lock released', function()
+    case('rsg-core throws during an admin abandon: the citizenid rep-back does not need it, release goes through', function()
         local W = newWorld()
         W.buyAt(1, 'lot_a')
         W.fail.getPlayerThrows = true
         T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') })
         W.fail.getPlayerThrows = nil
-        assert(W.logged('lot_a released by admin without rep%-back.*owner_offline'))
-        T.eq(25, W.repOf('A', 'heartlands'))
+        assert(not W.logged('without rep%-back'))
+        T.eq(0, W.repOf('A', 'heartlands'))
         T.eq(nil, W.db.plots.lot_a)
         T.same({ true, 'lot_a' }, { W.buyAt(2, 'lot_a') }, 'lock released')
         -- a throw while buying (rep guard): rep skipped and logged, buy stands, lock released

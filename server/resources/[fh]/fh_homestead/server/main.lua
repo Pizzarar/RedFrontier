@@ -139,15 +139,6 @@ local function lotPrice(plot)
     return price
 end
 
----Server id of the online player whose loaded character is citizenid, or nil (offline / any doubt).
-local function onlineSrcOf(citizenid)
-    local called, p = pcall(function() return core().Functions.GetPlayerByCitizenId(citizenid) end)
-    if not called or type(p) ~= 'table' or type(p.PlayerData) ~= 'table' then return nil end
-    if p.PlayerData.citizenid ~= citizenid then return nil end
-    local s = p.PlayerData.source
-    return type(s) == 'number' and s or nil
-end
-
 ---Checks shared by claim and buyLot, all before any await: the plot the player stands in, of `class`, claimable by
 ---them (plot_rules.canClaim), and not mid-write.
 ---@return table|nil plot, string citizenid_or_reason
@@ -305,11 +296,11 @@ local function buyLot(src)
     return true, plot.id
 end
 
----Abandoning a town lot takes the purchase rep back from the owner (fh_economy.rep needs an online src; there is no
----citizenid rep path). Runs under the per-plot lock, so nothing here may throw. Returns ok, reason when not ok.
-local function takeLotRep(ownerSrc, owner, region, delta, reason)
-    if not ownerSrc or safeCitizenidOf(ownerSrc) ~= owner then return false, 'owner_offline' end
-    local rc, rok, rerr = pcall(function() return exports.fh_economy:rep(ownerSrc, region, delta, reason) end)
+---Abandoning a town lot takes the purchase rep back from the owner by citizenid (fh_economy.repByCitizenid, idea-804:
+---same clamp + ledger as rep(), works with the owner online or offline). Runs under the per-plot lock, so nothing here
+---may throw (pcall). Returns ok, reason when not ok.
+local function takeLotRep(owner, region, delta, reason)
+    local rc, rok, rerr = pcall(function() return exports.fh_economy:repByCitizenid(owner, region, delta, reason) end)
     if rc and rok == true then return true end
     return false, tostring(rc and rerr or rok)
 end
@@ -318,8 +309,8 @@ end
 ---caller's CLAIM is released; a town lot is only released by naming its id. The class comes from the plot's row.
 ---Town lot (abandon, no money back): rep -townLot.rep in the lot's region for the owner, before the DELETE. The owner
 ---abandoning their own lot is refused if that rep change fails (so buy/abandon/rebuy never farms rep). An admin can
----always clear a lot: with the owner offline (or the rep call failing) the lot is released and the skipped rep-back is
----logged.
+---always clear a lot: the rep-back is taken by citizenid (owner online or offline); if that call fails or throws the lot
+---is released anyway and the skipped rep-back is logged.
 ---TODO: spill leftover chest items to a drop bag on unclaim; until then a later owner of the plot inherits them.
 ---@return boolean ok, string|nil reason
 local function unclaim(src, plotId)
@@ -337,10 +328,9 @@ local function unclaim(src, plotId)
     local region = cfg.plots[plotId] and cfg.plots[plotId].region
     busy[plotId] = true
     local repBack = class == TOWN_LOT and lotRep() or 0
-    local ownerSrc, repTaken, repWhy = nil, false, nil
+    local repTaken, repWhy = false, nil
     if repBack ~= 0 then
-        ownerSrc = (citizenid == owner and src ~= 0) and src or onlineSrcOf(owner)
-        repTaken, repWhy = takeLotRep(ownerSrc, owner, region, -repBack, 'town_lot_abandon')
+        repTaken, repWhy = takeLotRep(owner, region, -repBack, 'town_lot_abandon')
         if not repTaken and citizenid == owner then
             busy[plotId] = nil
             return false, 'fh_rep_failed'
@@ -355,7 +345,7 @@ local function unclaim(src, plotId)
         if affected == 0 then
             clearClaim(plotId, owner, class)
         elseif repTaken then
-            local back, backWhy = takeLotRep(ownerSrc, owner, region, repBack, 'town_lot_abandon_undo')
+            local back, backWhy = takeLotRep(owner, region, repBack, 'town_lot_abandon_undo')
             if not back then
                 print(('^1[fh_homestead] unclaim of lot %s failed after its rep-back; restoring rep +%d in %s to %s failed (%s): fix by hand^7')
                     :format(plotId, repBack, tostring(region), owner, tostring(backWhy)))
@@ -367,7 +357,7 @@ local function unclaim(src, plotId)
     busy[plotId] = nil
     clearClaim(plotId, owner, class)
     if repBack ~= 0 and not repTaken then
-        print(('^3[fh_homestead] town lot %s released by admin without rep-back: citizenid=%s region=%s amount=-%d (%s); fh_economy has no citizenid rep path^7')
+        print(('^3[fh_homestead] town lot %s released by admin without rep-back: citizenid=%s region=%s amount=-%d (%s): fix by hand^7')
             :format(plotId, owner, tostring(region), repBack, tostring(repWhy)))
     end
     TriggerEvent('fh:homestead:unclaimed', { src = src, citizenid = owner, plot_id = plotId })

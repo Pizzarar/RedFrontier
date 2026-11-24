@@ -1,6 +1,7 @@
 -- Shared harness for the fh_homestead server specs (claims H7, town lots H8): loads fh_homestead server/main.lua in a
 -- stubbed FXServer world with an in-memory fh_plots table that enforces PRIMARY KEY(plot_id) + UNIQUE(citizenid, class)
--- like migration 0018, plus a fake fh_economy (charge / credit / rep with per-character charge lock, cash and rep).
+-- like migration 0018, plus a fake fh_economy (charge / credit / rep / repByCitizenid with per-character charge lock,
+-- cash and rep).
 -- An await can be HELD (W.hold[tag] = true, or a count n = the next n calls): the call yields there so a spec can run
 -- another call meanwhile. Tags: insert_plot, insert_chest, delete_plot, charge, rep. W.fail.getPlayerThrows makes
 -- rsg-core GetPlayer throw; W.fail.eventThrows = <event name> makes TriggerEvent of that name throw.
@@ -17,7 +18,7 @@ return function(T, cfg)
         opts = opts or {}
         local W = { db = { plots = {}, chests = {} }, events = {}, threads = {}, ex = {}, client = {}, commands = {},
             players = { [1] = 'A', [2] = 'B' }, offline = {}, admins = {}, peds = {}, hold = {}, fail = {}, logs = {},
-            cash = { A = 1000, B = 1000 }, rep = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {} }
+            cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {} }
         for _, r in ipairs(rows or {}) do W.db.plots[r.plot_id] = { citizenid = r.citizenid, class = r.class } end
         local function await(tag)
             local h = W.hold[tag]
@@ -112,6 +113,18 @@ return function(T, cfg)
                 W.rep[cid] = W.rep[cid] or {}
                 W.rep[cid][region] = (W.rep[cid][region] or 0) + delta
                 W.reps[#W.reps + 1] = { citizenid = cid, region = region, delta = delta, reason = reason }
+                return true
+            end,
+            -- idea-804: by citizenid, online or offline. W.unknown[cid] = no players row; W.fail.repByCidThrows = throws.
+            repByCitizenid = function(_, cid, region, delta, reason)
+                if W.fail.repByCidThrows then error('fh_economy stopped') end
+                if type(cid) ~= 'string' or cid == '' then return false, 'invalid_citizenid' end
+                if W.unknown[cid] then return false, 'unknown_citizenid' end
+                await('rep')
+                if W.fail.rep then return false, 'ledger_failed' end
+                W.rep[cid] = W.rep[cid] or {}
+                W.rep[cid][region] = (W.rep[cid][region] or 0) + delta
+                W.reps[#W.reps + 1] = { citizenid = cid, region = region, delta = delta, reason = reason, byCid = true }
                 return true
             end,
         }

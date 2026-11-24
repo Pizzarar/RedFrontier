@@ -426,6 +426,8 @@ Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one
 6. Abandon (no refund, rep taken back). In or out of the lot, run `/fh_unclaim heartlands_lot_01`.
    Expected: `fh_unclaim: released plot heartlands_lot_01`. Cash unchanged (no refund). heartlands rep -25 (back to what it was before step 1). The lot props disappear; your claim is untouched (`/fh_build` at the claim still works). A bare `/fh_unclaim` would release the claim, not the lot.
    Buy it again (`/fh_buylot` in the lot): cash -300, rep +25 again, so buy-abandon-buy nets one +25 bump.
+   Admin abandon with the owner OFFLINE: quit the game, then on the server console run `fh_unclaim heartlands_lot_01`.
+   Expected: `released plot heartlands_lot_01`, no `without rep-back` line, and `SELECT value FROM fh_rep WHERE region_id = 'heartlands' AND citizenid = '<cid>';` is 25 lower than before (the rep is taken back while you are offline; ledger row `rep` -25 `town_lot_abandon`). Rejoin and buy the lot back (`/fh_buylot`) for step 7.
    RESULT:
 7. Law encounters skipped in your own lot, not in a stranger's. Roadblocks fire when heat CROSSES the roadblock level (as in M5 step 17), so each check is: heat to 0, then to 55. Own heartlands_lot_01 (step 6) and stand in the middle of it. Run `exports.fh_heat:set(<yourId>, "outlaws", 0)`, then `exports.fh_heat:set(<yourId>, "outlaws", 55)`.
    Expected: no roadblock spawns; the console shows once `[fh_heat] <id>/<cid> law-safe in own lot heartlands_lot_01: skipping spawn`. Walk out of the lot (more than 14 m from its center), set heat 0 then 55 again: the roadblock spawns as in M5 step 17 (the skipped one started no cooldown). Set heat back to 0.

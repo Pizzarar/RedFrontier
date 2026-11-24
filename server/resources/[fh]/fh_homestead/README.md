@@ -186,9 +186,12 @@ Finding a lot: use `/where` (lots are listed as `<name> (town lot)`; `(coming so
 - A failed rep bump after a good purchase is logged, the lot stays bought.
 
 Abandon: `/fh_unclaim <lot_id>` (a bare `/fh_unclaim` releases the **claim**). **No refund.** The purchase rep is taken back
-(`rep(-townLot.rep, 'town_lot_abandon')`) BEFORE the row is deleted; if that fails for the owner the abandon is refused
-with `fh_rep_failed` and nothing changes. An admin release while the owner is offline goes through and logs the skipped
-rep-back (fh_economy has no rep path by citizenid). Buy, abandon, buy again nets one rep bump.
+by citizenid (`fh_economy.repByCitizenid(owner, region, -townLot.rep, 'town_lot_abandon')`, idea-804: owner online or
+offline) BEFORE the row is deleted; if that fails for the owner's own abandon it is refused with `fh_rep_failed` and
+nothing changes. An admin release always goes through and takes the rep back from an offline owner too; if the rep call
+fails or throws (for example `unknown_citizenid`) the lot is still released and the console logs
+`released by admin without rep-back` with citizenid, region, amount and the error. Buy, abandon, buy again nets one rep
+bump.
 
 On a lot: chest 1 (`fh:chest:<lot>:1`) works as on a claim; `/fh_build chest_2` and `/fh_build station_1` (workbench, used
 by crafting via `isNearStation`). No comfort. Safety: `isInSafeZone` covers the owned lot out to its `radius`, `plotInfo`
