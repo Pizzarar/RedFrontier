@@ -134,6 +134,33 @@ case('chargeRegion: territory region first, else faction home region, else nil',
     assert(regions.isKnownRegion(R.chargeRegion(regions, 'lawmen', nil, nil)), 'never an unknown region')
 end)
 
+case('chargeRegion: explicit faction.home wins over alphabetical order', function()
+    -- lawmen/outlaws are listed in many regions (e.g. bayou_nwa sorts before heartlands);
+    -- their explicit home keeps the ledger region stable regardless of listing order.
+    T.eq('heartlands', R.chargeRegion(regions, 'lawmen', 99999, 99999))
+    T.eq('heartlands', R.chargeRegion(regions, 'outlaws', nil, nil))
+    T.eq('bayou_nwa', R.chargeRegion(regions, 'raiders', 99999, 99999))
+    T.eq('gaptooth_ridge', R.chargeRegion(regions, 'desert_gang', 99999, 99999))
+end)
+
+case('chargeRegion: alphabetical-first fallback when a faction has no home', function()
+    local r = {
+        factions = {
+            rogues = { id = 'rogues' },                  -- no home: falls back to alphabetical-first
+            drifters = { id = 'drifters', home = 'zed' }, -- home beats alphabetical
+        },
+        regions = {
+            alpha = { id = 'alpha', factions = { 'rogues' } },
+            zed = { id = 'zed', factions = { 'rogues', 'drifters' } },
+        },
+    }
+    r.isKnownRegion = function(id) return r.regions[id] ~= nil end
+    r.territoryAt = function() return nil end
+    T.eq('alpha', R.chargeRegion(r, 'rogues', 0, 0))  -- first region (by id) listing rogues
+    T.eq('zed', R.chargeRegion(r, 'drifters', 0, 0))  -- explicit home wins
+    assert(R.chargeRegion(r, 'nobody', 0, 0) == nil)
+end)
+
 case('parsePoints: only an omitted arg means all; junk / <= 0 / out of range refused', function()
     local ok, p = R.parsePoints(nil, 40); assert(ok == true and p == nil)
     ok, p = R.parsePoints('10', 40); assert(ok == true and p == 10)

@@ -77,18 +77,20 @@ function M.factionAt(regions, x, y)
 end
 
 ---Region id for the bounty ledger row (fh_ledger.region_id is NOT NULL; fh_economy refuses unknown regions):
----the region of the territory the player stands in, else the faction's home region = the first region (by id)
----that lists the faction in its `factions`. nil when neither is known (the caller must not charge).
+---the region of the territory the player stands in, else the faction's explicit `home` region (regions.lua),
+---else the first region (by id) that lists the faction in its `factions`. nil when neither is known.
 function M.chargeRegion(regions, faction, x, y)
     if type(regions) ~= 'table' then return nil end
     local t = regions.territoryAt and regions.territoryAt(x, y)
     if t and regions.isKnownRegion(t.region) then return t.region end
+    local f = type(faction) == 'string' and regions.factions and regions.factions[faction] or nil
+    if f and f.home and regions.isKnownRegion(f.home) then return f.home end
     local ids = {}
     for id in pairs(regions.regions or {}) do ids[#ids + 1] = id end
     table.sort(ids)
     for _, id in ipairs(ids) do
-        for _, f in ipairs(regions.regions[id].factions or {}) do
-            if f == faction then return id end
+        for _, listed in ipairs(regions.regions[id].factions or {}) do
+            if listed == faction then return id end
         end
     end
     return nil

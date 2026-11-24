@@ -10,18 +10,20 @@ regions.TIERS = { 'T1', 'T2', 'T3' }
 
 -- 8 factions + 1 alias. Original names only: no RDR2 gang/company names.
 -- `kind` is read by A-Life for hostility: 'law' | 'outlaw' | 'neutral'.
+-- `home` is the faction's canonical region, used by fh_heat chargeRegion for the
+-- bounty ledger when the player is off every territory (before the alphabetical fallback).
 -- `alias_of` marks an id kept only for legacy rows (fh_heat may be keyed on it);
 -- every lookup helper resolves it to the canonical faction.
 regions.factions = {
-    lawmen         = { id = 'lawmen',         label = 'Lawmen',               kind = 'law' },
-    rhodes_law     = { id = 'rhodes_law',     label = 'Rhodes Law',           kind = 'law',    alias_of = 'lawmen' },
-    rail_mining    = { id = 'rail_mining',    label = 'Rail & Mining Company', kind = 'neutral' },
-    settlers       = { id = 'settlers',       label = 'Settlers League',      kind = 'neutral' },
-    traders        = { id = 'traders',        label = 'Traders Guild',        kind = 'neutral' },
-    bounty_hunters = { id = 'bounty_hunters', label = 'Bounty Hunters',       kind = 'neutral' },
-    raiders        = { id = 'raiders',        label = 'Swamp Gang',           kind = 'outlaw' },
-    outlaws        = { id = 'outlaws',        label = 'Mountain Gang',        kind = 'outlaw' },
-    desert_gang    = { id = 'desert_gang',    label = 'Desert Gang',          kind = 'outlaw' },
+    lawmen         = { id = 'lawmen',         label = 'Lawmen',               kind = 'law',     home = 'heartlands' },
+    rhodes_law     = { id = 'rhodes_law',     label = 'Rhodes Law',           kind = 'law',     home = 'scarlett_meadows', alias_of = 'lawmen' },
+    rail_mining    = { id = 'rail_mining',    label = 'Rail & Mining Company', kind = 'neutral', home = 'roanoke_ridge' },
+    settlers       = { id = 'settlers',       label = 'Settlers League',      kind = 'neutral', home = 'heartlands' },
+    traders        = { id = 'traders',        label = 'Traders Guild',        kind = 'neutral', home = 'bayou_nwa' },
+    bounty_hunters = { id = 'bounty_hunters', label = 'Bounty Hunters',       kind = 'neutral', home = 'great_plains' },
+    raiders        = { id = 'raiders',        label = 'Swamp Gang',           kind = 'outlaw',  home = 'bayou_nwa' },
+    outlaws        = { id = 'outlaws',        label = 'Mountain Gang',        kind = 'outlaw',  home = 'heartlands' },
+    desert_gang    = { id = 'desert_gang',    label = 'Desert Gang',          kind = 'outlaw',  home = 'gaptooth_ridge' },
 }
 
 -- All 15 regions (no Guarma). `enabled` gates spawn/blip//where for the owner's first walk.
@@ -38,7 +40,7 @@ regions.regions = {
         },
         -- Starter homestead plot, approximate.
         homestead = { x = -300.0, y = 790.0, z = 118.0 },
-        factions = { 'lawmen', 'outlaws' },
+        factions = { 'lawmen', 'outlaws', 'traders', 'settlers' },
         territories = { 'heartlands_t1_camp' },
     },
     scarlett_meadows = {
@@ -52,7 +54,7 @@ regions.regions = {
         },
         -- Starter homestead plot, approximate (north of Rhodes). (unverified)
         homestead = { x = 1250.0, y = -1210.0, z = 77.0 },
-        factions = { 'rhodes_law', 'raiders' },
+        factions = { 'lawmen', 'raiders', 'traders' },
         territories = { 'scarlett_meadows_t1_camp' },
     },
     bayou_nwa = {
@@ -65,7 +67,7 @@ regions.regions = {
             { id = 'saint_denis', label = 'Saint Denis', x = 2694.69, y = -1448.48, z = 45.27 },
             { id = 'lagras',      label = 'Lagras',      x = 2174.0,  y = -1120.0,  z = 25.0 },
         },
-        factions = { 'raiders', 'traders', 'bounty_hunters' },
+        factions = { 'lawmen', 'raiders', 'traders', 'bounty_hunters' },
         territories = {},
     },
     bluewater_marsh = {
@@ -75,7 +77,7 @@ regions.regions = {
         state = 'lemoyne',
         enabled = false,
         towns = {},
-        factions = { 'raiders' },
+        factions = { 'lawmen', 'raiders' },
         territories = {},
     },
     roanoke_ridge = {
@@ -88,7 +90,7 @@ regions.regions = {
             { id = 'annesburg', label = 'Annesburg', x = 2921.0, y = 1290.0, z = 96.0 },
             { id = 'van_horn',  label = 'Van Horn',  x = 2973.0, y = 606.0,  z = 38.0 },
         },
-        factions = { 'outlaws', 'rail_mining' },
+        factions = { 'lawmen', 'outlaws', 'rail_mining' },
         territories = {},
     },
     grizzlies_east = {
@@ -100,7 +102,7 @@ regions.regions = {
         towns = {
             { id = 'wapiti', label = 'Wapiti', x = 1673.0, y = 1900.0, z = 200.0 },
         },
-        factions = { 'settlers' },
+        factions = { 'lawmen', 'outlaws', 'settlers' },
         territories = {},
     },
     grizzlies_west = {
@@ -112,7 +114,7 @@ regions.regions = {
         towns = {
             { id = 'colter', label = 'Colter', x = -1300.0, y = 1600.0, z = 240.0 },
         },
-        factions = { 'rail_mining', 'settlers' },
+        factions = { 'lawmen', 'outlaws', 'rail_mining', 'settlers' },
         territories = {},
     },
     cumberland_forest = {
@@ -124,7 +126,7 @@ regions.regions = {
         towns = {
             { id = 'bacchus_station', label = 'Bacchus Station', x = -810.0, y = 1340.0, z = 130.0 },
         },
-        factions = { 'settlers', 'rail_mining' },
+        factions = { 'lawmen', 'outlaws', 'settlers', 'rail_mining' },
         territories = {},
     },
     big_valley = {
@@ -137,7 +139,7 @@ regions.regions = {
             { id = 'strawberry',      label = 'Strawberry',      x = -1814.0, y = -440.0, z = 120.0 },
             { id = 'wallace_station', label = 'Wallace Station', x = -1340.0, y = -440.0, z = 130.0 },
         },
-        factions = { 'settlers', 'traders', 'rail_mining' },
+        factions = { 'lawmen', 'outlaws', 'settlers', 'traders', 'rail_mining' },
         territories = {},
     },
     great_plains = {
@@ -149,7 +151,7 @@ regions.regions = {
         towns = {
             { id = 'blackwater', label = 'Blackwater', x = -858.67, y = -1337.61, z = 44.49 },
         },
-        factions = { 'traders', 'bounty_hunters', 'settlers' },
+        factions = { 'lawmen', 'traders', 'bounty_hunters', 'settlers' },
         territories = {},
     },
     tall_trees = {
@@ -161,7 +163,7 @@ regions.regions = {
         towns = {
             { id = 'manzanita_post', label = 'Manzanita Post', x = -1795.0, y = -1600.0, z = 150.0 },
         },
-        factions = { 'outlaws', 'bounty_hunters' },
+        factions = { 'lawmen', 'outlaws', 'bounty_hunters' },
         territories = {},
     },
     hennigans_stead = {
@@ -174,7 +176,7 @@ regions.regions = {
             { id = 'macfarlanes_ranch', label = "MacFarlane's Ranch", x = -2283.0, y = -2493.0, z = 60.0 },
             { id = 'thieves_landing',   label = 'Thieves Landing',    x = -1445.0, y = -2224.0, z = 40.0 },
         },
-        factions = { 'desert_gang', 'settlers' },
+        factions = { 'lawmen', 'desert_gang', 'settlers' },
         territories = {},
     },
     cholla_springs = {
@@ -186,7 +188,7 @@ regions.regions = {
         towns = {
             { id = 'armadillo', label = 'Armadillo', x = -3711.0, y = -2581.0, z = 70.0 },
         },
-        factions = { 'desert_gang', 'bounty_hunters' },
+        factions = { 'lawmen', 'desert_gang', 'bounty_hunters' },
         territories = {},
     },
     gaptooth_ridge = {
@@ -198,7 +200,7 @@ regions.regions = {
         towns = {
             { id = 'tumbleweed', label = 'Tumbleweed', x = -5522.0, y = -2938.0, z = 90.0 },
         },
-        factions = { 'desert_gang' },
+        factions = { 'lawmen', 'desert_gang' },
         territories = {},
     },
     rio_bravo = {
@@ -208,7 +210,7 @@ regions.regions = {
         state = 'new_austin',
         enabled = false,
         towns = {},
-        factions = { 'desert_gang' },
+        factions = { 'lawmen', 'desert_gang' },
         territories = {},
     },
 }
