@@ -115,33 +115,72 @@ AddEventHandler('onResourceStart', function(res)
     end
 end)
 
----Claim the plot containing the player's server-side ped position. class (default 'claim') is the class the caller
----means to claim; the plot you stand in must be of that class (a town lot is never claimed by /fh_claim).
----@return boolean ok, string|nil reason
-local function claim(src, class)
-    if not ready then return false, 'fh_not_ready' end
-    class = classArg(class)
+local TOWN_LOT = 'town_lot'
+
+---Rep bump for buying a town lot, taken back on abandon (FhHomesteadConfig.townLot.rep; 0 = no rep change).
+local function lotRep()
+    local t = cfg.townLot
+    return type(t) == 'table' and math.tointeger(t.rep) or 0
+end
+
+---Price of a town lot: the plot's own `price`, else FhHomesteadConfig.townLot.price. nil = not a positive integer.
+local function lotPrice(plot)
+    local t = cfg.townLot
+    local price = math.tointeger(plot.price or (type(t) == 'table' and t.price) or nil)
+    if not price or price <= 0 then return nil end
+    return price
+end
+
+---Server id of the online player whose loaded character is citizenid, or nil (offline / any doubt).
+local function onlineSrcOf(citizenid)
+    local called, p = pcall(function() return core().Functions.GetPlayerByCitizenId(citizenid) end)
+    if not called or type(p) ~= 'table' or type(p.PlayerData) ~= 'table' then return nil end
+    if p.PlayerData.citizenid ~= citizenid then return nil end
+    local s = p.PlayerData.source
+    return type(s) == 'number' and s or nil
+end
+
+---Checks shared by claim and buyLot, all before any await: the plot the player stands in, of `class`, claimable by
+---them (plot_rules.canClaim), and not mid-write.
+---@return table|nil plot, string citizenid_or_reason
+local function precheck(src, class)
+    if not ready then return nil, 'fh_not_ready' end
     local citizenid = citizenidOf(src)
-    if not citizenid then return false, 'fh_no_character' end
+    if not citizenid then return nil, 'fh_no_character' end
     local ped = GetPlayerPed(src)
-    if ped == 0 then return false, 'fh_no_player' end
+    if ped == 0 then return nil, 'fh_no_player' end
     local coords = GetEntityCoords(ped)
     local plot = rules.plotAt(cfg.plots, coords)
-    if not plot then return false, 'fh_not_in_plot' end
-    if rules.classOf(plot) ~= class then return false, 'fh_wrong_plot_class' end
+    if not plot then return nil, 'fh_not_in_plot' end
+    if rules.classOf(plot) ~= class then return nil, 'fh_wrong_plot_class' end
     local ok, why = rules.canClaim(plot, coords, citizenid, claims)
-    if not ok then return false, why end
-    if busy[plot.id] then return false, 'fh_claim_busy' end
-    -- reserve in memory first so a second claim in the same tick is refused; DB unique keys are the backstop
+    if not ok then return nil, why end
+    if busy[plot.id] then return nil, 'fh_claim_busy' end
+    return plot, citizenid
+end
+
+---Reserve plot for citizenid in memory and take the per-plot lock. No await may sit between precheck and this, so a
+---second claim/buy in the same tick is refused by canClaim / busy; DB unique keys are the backstop.
+local function reserve(plot, citizenid, class)
     setClaim(plot.id, citizenid, class)
     busy[plot.id] = true
+end
+
+local function release(plot, citizenid, class)
+    busy[plot.id] = nil
+    clearClaim(plot.id, citizenid, class)
+end
+
+---Write a reserved claim: fh_plots row, chest row, chest registration. Releases the lock on every exit.
+---@return boolean ok, boolean|nil kept  kept = the write failed but its fh_plots row could not be rolled back, so the
+---plot stays held in memory and DB (unclaim it to retry).
+local function writeClaim(plot, citizenid, class)
     local plotRow = pcall(MySQL.insert.await, 'INSERT INTO fh_plots (plot_id, citizenid, class) VALUES (?, ?, ?)',
         { plot.id, citizenid, class })
     if not plotRow then
         -- our insert did not happen (e.g. a unique-key conflict with someone else's row): delete nothing
-        busy[plot.id] = nil
-        clearClaim(plot.id, citizenid, class)
-        return false, 'fh_claim_failed'
+        release(plot, citizenid, class)
+        return false
     end
     local done = pcall(MySQL.insert.await, 'INSERT INTO fh_plot_chests (plot_id, chest_id, stash_id) VALUES (?, 1, ?)',
         { plot.id, rules.chestStashId(plot.id, 1) })
@@ -158,19 +197,108 @@ local function claim(src, class)
         busy[plot.id] = nil
         if rolledBack and tonumber(affected) then
             clearClaim(plot.id, citizenid, class)
-        else
-            print(('^1[fh_homestead] claim of %s by %s failed and its fh_plots row could not be rolled back (%s); kept as claimed, unclaim it to retry^7')
-                :format(plot.id, citizenid, tostring(affected)))
+            return false
         end
-        return false, 'fh_claim_failed'
+        print(('^1[fh_homestead] claim of %s by %s failed and its fh_plots row could not be rolled back (%s); kept as claimed, unclaim it to retry^7')
+            :format(plot.id, citizenid, tostring(affected)))
+        return false, true
     end
     busy[plot.id] = nil
-    TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region })
+    return true
+end
+
+---Claim the plot containing the player's server-side ped position. class (default 'claim') is the class the caller
+---means to claim; the plot you stand in must be of that class (a town lot is never claimed by /fh_claim).
+---@return boolean ok, string|nil reason
+local function claim(src, class)
+    class = classArg(class)
+    local plot, citizenid = precheck(src, class)
+    if not plot then return false, citizenid end
+    reserve(plot, citizenid, class)
+    if not writeClaim(plot, citizenid, class) then return false, 'fh_claim_failed' end
+    TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region,
+        class = class })
     return true, plot.id
+end
+
+---Pay a successful lot charge back to the SAME character (by citizenid: online -> paid now, offline -> queued by
+---fh_economy). Called at most once per buy. Only a failed credit is MONEY LOST.
+local function refundLot(citizenid, price, plot, kept)
+    local called, ok, err = pcall(function()
+        return exports.fh_economy:credit(citizenid, price, 'town_lot_refund:' .. plot.id, plot.region)
+    end)
+    if not called or ok ~= true then
+        print(('^1[fh_homestead] MONEY LOST: town lot %s refund of $%d to citizenid=%s failed (%s); pay it back by hand^7')
+            :format(plot.id, price, citizenid, tostring(called and err or ok)))
+    end
+    if kept then
+        print(('^1[fh_homestead] town lot %s purchase by %s failed and was refunded, but its fh_plots row is still held; admin: fh_unclaim %s^7')
+            :format(plot.id, citizenid, plot.id))
+    end
+end
+
+---Buy the town lot the player stands in (class 'town_lot', claimable). Order: checks (a second lot is refused here,
+---before any money moves) -> reserve + per-plot lock -> fh_economy.charge -> the claim write. Any failure after the
+---charge credits the same amount back once. On success: rep +townLot.rep in the lot's region.
+---@return boolean ok, string plot_id_or_reason
+local function buyLot(src)
+    local plot, citizenid = precheck(src, TOWN_LOT)
+    if not plot then return false, citizenid end
+    local price = lotPrice(plot)
+    if not price then return false, 'fh_lot_unpriced' end
+    reserve(plot, citizenid, TOWN_LOT)
+    -- no await since precheck: charge debits the character read there
+    local called, charged, cerr = pcall(function()
+        return exports.fh_economy:charge(src, price, 'town_lot:' .. plot.id, plot.region)
+    end)
+    if not called or charged ~= true then
+        release(plot, citizenid, TOWN_LOT)
+        if not called then
+            print(('^3[fh_homestead] fh_economy:charge errored for lot %s: %s^7'):format(plot.id, tostring(charged)))
+            return false, 'fh_charge_unavailable'
+        end
+        return false, type(cerr) == 'string' and cerr or 'fh_charge_failed'
+    end
+    local ok, kept = writeClaim(plot, citizenid, TOWN_LOT)
+    if not ok then
+        refundLot(citizenid, price, plot, kept)
+        return false, 'fh_claim_failed'
+    end
+    local repDelta = lotRep()
+    if repDelta ~= 0 then
+        -- rep() credits whoever is loaded on src: skip it if the player switched character during the write
+        local repOk, repErr = false, 'character_changed'
+        if citizenidOf(src) == citizenid then
+            local rc, rok, rerr = pcall(function() return exports.fh_economy:rep(src, plot.region, repDelta, 'town_lot') end)
+            repOk, repErr = rc and rok == true, rc and rerr or rok
+        end
+        if not repOk then
+            print(('^3[fh_homestead] town lot %s bought by %s but rep +%d in %s failed (%s)^7')
+                :format(plot.id, citizenid, repDelta, tostring(plot.region), tostring(repErr)))
+        end
+    end
+    TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region,
+        class = TOWN_LOT })
+    TriggerEvent('fh:homestead:lot_bought', { src = src, citizenid = citizenid, plot_id = plot.id,
+        region_id = plot.region, price = price })
+    return true, plot.id
+end
+
+---Abandoning a town lot takes the purchase rep back from the owner (fh_economy.rep needs an online src; there is no
+---citizenid rep path). Returns the rep call's ok, the owner src used (nil = offline), and the reason when not ok.
+local function takeLotRep(ownerSrc, owner, region, delta, reason)
+    if not ownerSrc or citizenidOf(ownerSrc) ~= owner then return false, 'owner_offline' end
+    local rc, rok, rerr = pcall(function() return exports.fh_economy:rep(ownerSrc, region, delta, reason) end)
+    if rc and rok == true then return true end
+    return false, tostring(rc and rerr or rok)
 end
 
 ---Release a plot. Owner (by src) or admin (src 0 = console). Chest contents stay in the stash. With no plotId the
 ---caller's CLAIM is released; a town lot is only released by naming its id. The class comes from the plot's row.
+---Town lot (abandon, no money back): rep -townLot.rep in the lot's region for the owner, before the DELETE. The owner
+---abandoning their own lot is refused if that rep change fails (so buy/abandon/rebuy never farms rep). An admin can
+---always clear a lot: with the owner offline (or the rep call failing) the lot is released and the skipped rep-back is
+---logged.
 ---TODO: spill leftover chest items to a drop bag on unclaim; until then a later owner of the plot inherits them.
 ---@return boolean ok, string|nil reason
 local function unclaim(src, plotId)
@@ -185,17 +313,42 @@ local function unclaim(src, plotId)
     if busy[plotId] then return false, 'fh_claim_busy' end
     local owner = claims.byPlot[plotId]
     local class = claims.classByPlot[plotId] or rules.classOf(cfg.plots[plotId])
+    local region = cfg.plots[plotId] and cfg.plots[plotId].region
     busy[plotId] = true
+    local repBack = class == TOWN_LOT and lotRep() or 0
+    local ownerSrc, repTaken, repWhy = nil, false, nil
+    if repBack ~= 0 then
+        ownerSrc = (citizenid == owner and src ~= 0) and src or onlineSrcOf(owner)
+        repTaken, repWhy = takeLotRep(ownerSrc, owner, region, -repBack, 'town_lot_abandon')
+        if not repTaken and citizenid == owner then
+            busy[plotId] = nil
+            return false, 'fh_rep_failed'
+        end
+    end
     local deleted, affected = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plotId, owner })
-    busy[plotId] = nil
     affected = deleted and tonumber(affected) or nil
     if not affected or affected == 0 then
         -- 0 rows under the lock = the DB has no (plot, owner) row (removed outside this server): drop the stale memory
-        -- so memory matches the DB again. An error / unknown count = the row may still be there: keep memory.
-        if affected == 0 then clearClaim(plotId, owner, class) end
+        -- so memory matches the DB again (the lot is gone, so a rep-back stays taken). An error / unknown count = the
+        -- row may still be there: keep memory and give a rep-back taken above back to the owner.
+        if affected == 0 then
+            clearClaim(plotId, owner, class)
+        elseif repTaken then
+            local back, backWhy = takeLotRep(ownerSrc, owner, region, repBack, 'town_lot_abandon_undo')
+            if not back then
+                print(('^1[fh_homestead] unclaim of lot %s failed after its rep-back; restoring rep +%d in %s to %s failed (%s): fix by hand^7')
+                    :format(plotId, repBack, tostring(region), owner, tostring(backWhy)))
+            end
+        end
+        busy[plotId] = nil
         return false, 'fh_unclaim_failed'
     end
+    busy[plotId] = nil
     clearClaim(plotId, owner, class)
+    if repBack ~= 0 and not repTaken then
+        print(('^3[fh_homestead] town lot %s released by admin without rep-back: citizenid=%s region=%s amount=-%d (%s); fh_economy has no citizenid rep path^7')
+            :format(plotId, owner, tostring(region), repBack, tostring(repWhy)))
+    end
     TriggerEvent('fh:homestead:unclaimed', { src = src, citizenid = owner, plot_id = plotId })
     return true, plotId
 end
@@ -275,7 +428,12 @@ lib.addCommand('fh_claim', { help = 'Claim the homestead plot you are standing i
     reply(src, ok and ('fh_claim: claimed plot ' .. res) or ('fh_claim: ' .. tostring(res)))
 end)
 
-lib.addCommand('fh_unclaim', { help = 'Release your plot (admins: fh_unclaim <plot_id>)' }, function(src, args, raw)
+lib.addCommand('fh_buylot', { help = 'Buy the town lot you are standing in' }, function(src)
+    local ok, res = buyLot(src)
+    reply(src, ok and ('fh_buylot: bought lot ' .. res) or ('fh_buylot: ' .. tostring(res)))
+end)
+
+lib.addCommand('fh_unclaim', { help = 'Release your claim (a town lot: fh_unclaim <lot_id>; admins: any plot id)' }, function(src, args, raw)
     local plotId = tostring(raw or ''):match('^%S+%s+(%S+)')
     local ok, res = unclaim(src, plotId)
     reply(src, ok and ('fh_unclaim: released plot ' .. res) or ('fh_unclaim: ' .. tostring(res)))
@@ -283,6 +441,7 @@ end)
 
 exports('claim', claim)
 exports('unclaim', unclaim)
+exports('buyLot', buyLot)
 exports('getPlot', getPlot)
 exports('claimedPlots', claimedPlots)
 exports('isInSafeZone', isInSafeZone)

@@ -31,7 +31,8 @@ The emitting lane owns the name and documents it in its README.
 | `fh:economy:charged` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id }`: a `charge` debit (B7); `amount` is the positive sum taken |
 | `fh:economy:credited` | fh_economy | `{ src, citizenid, amount, reason, region_id, ledger_id, queued }`: money added by `credit` (core-04 E2). `queued = false`: paid online at once (`ledger_id` = its `credit` row); `queued = true`: a pending credit paid on character load (no `ledger_id`) |
 | `fh:buffs:applied` | fh_buffs | `{ src, buff_id, magnitude, expires_at, refreshed }` |
-| `fh:homestead:claimed` | fh_homestead | `{ src, citizenid, plot_id, region_id }` |
+| `fh:homestead:claimed` | fh_homestead | `{ src, citizenid, plot_id, region_id, class }`; `class` = `'claim'` or `'town_lot'` (homestead-02 H8; also fired for a bought lot) |
+| `fh:homestead:lot_bought` | fh_homestead | `{ src, citizenid, plot_id, region_id, price }`: a town lot bought with `/fh_buylot` / `buyLot` (after `claimed`); `price` = dollars charged |
 | `fh:homestead:open_chest` | fh_homestead (client -> server request) | `{ plot_id }` (string); server revalidates owner + reach, `src` from `source` |
 | `fh:homestead:unclaimed` | fh_homestead | `{ src, citizenid, plot_id }` (citizenid = former owner; src 0 = console) |
 | `fh:spawn:create` | fh_core (server -> chosen client) | `{ requestId, kind, model, modelHash, coords = {x,y,z}, heading, token }`; client creates a networked entity |

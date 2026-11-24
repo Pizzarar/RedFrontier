@@ -62,6 +62,9 @@ FhHomesteadConfig = {
     -- false = every slot uses its fallback prop (B6a model + offset). Flip to true only after propVerified is filled in.
     verifiedProps = false,
     baseSafeRadius = 25.0,
+    -- H8 town lots (class = 'town_lot'): /fh_buylot price in dollars (a plot's own `price` overrides it) and the rep
+    -- given in the lot's region on purchase (taken back on abandon).
+    townLot = { price = 300, rep = 25 },
     -- H4: trophy comfort counts only with the trophy wall built. Cap on total trophy points, and how many trophies
     -- (best-valued first) count per wall tier.
     trophyComfortCap = 20,
