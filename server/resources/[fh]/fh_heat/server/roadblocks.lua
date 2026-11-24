@@ -36,6 +36,28 @@ end
 
 local function mk(kind, cid, faction) return kind .. '\0' .. rules.key(cid, faction) end
 
+-- H9b (@homestead, NOT on main yet): an owned town lot is law-safe, so law encounters (roadblock / ambush / chase)
+-- must not spawn for a player standing inside their OWN lot. exports.fh_homestead:lawSafeAt(coords, citizenid) ->
+-- plotId|nil (nil for claims, unowned lots, a stranger's lot, bad coords; never throws). It must work without
+-- fh_homestead: call only when started, pcall'd; any missing export / error / nil = not safe = behave as today.
+local lawSafeLogged = {} -- "cid\0plotId" -> true: one debug log per player per plot (the sweep ticks often)
+local function lawSafeLookup(coords, cid)
+    if GetResourceState('fh_homestead') ~= 'started' then return nil end
+    return exports.fh_homestead:lawSafeAt(coords, cid)
+end
+
+---@return boolean blocked  true = inside the player's own law-safe lot: skip spawning this encounter
+local function lawSafeBlocked(src, cid, x, y, z)
+    local plot = rules.lawSafeBlocks(lawSafeLookup, { x = x, y = y, z = z }, cid)
+    if not plot then return false end
+    local key = tostring(cid) .. '\0' .. tostring(plot)
+    if not lawSafeLogged[key] then
+        lawSafeLogged[key] = true
+        log('%s/%s law-safe in own lot %s: skipping spawn', tostring(src), tostring(cid), tostring(plot))
+    end
+    return true
+end
+
 -- ---------------------------------------------------------------- group lifecycle
 
 local function clearGroup(g, reason)
@@ -95,6 +117,7 @@ local function tryRoadblock(src, cid, faction, oldLevel, level)
     if not fcfg then return log('roadblock: no ped config for faction %s', tostring(faction)) end
     local x, y, z = playerPos(src)
     if not x then return end
+    if lawSafeBlocked(src, cid, x, y, z) then return end
     local t = regions.territoryAt(x, y)
     local choke, cerr = rules.pickChokepoint(rc.chokepoints, t and t.region, x, y, rc.maxPlayerDistance)
     if not choke then return log('roadblock skipped for %s/%s: %s', tostring(cid), faction, tostring(cerr)) end
@@ -136,6 +159,7 @@ local function tryAmbush(src, cid, faction, level, quiet)
     local fcfg = ac.factions and ac.factions[faction]
     local x, y, z = playerPos(src)
     if not fcfg or not x then return end
+    if lawSafeBlocked(src, cid, x, y, z) then return end
     local plan = rules.ringPlan(fcfg, x, y, z, ac.radius, math.random(0, 359))
     local g = newGroup('ambush', src, cid, faction, ac.despawnMinutes)
     for _, p in ipairs(plan) do requestOne(g, p) end
@@ -166,6 +190,7 @@ local function tryChase(src, cid, faction, level, quiet)
     end
     local fcfg = cc.factions and cc.factions[faction]
     if not fcfg then return end
+    if lawSafeBlocked(src, cid, x, y, z) then return end
     local rad = math.rad(GetEntityHeading(ped))
     local bx, by = x + math.sin(rad) * cc.behind, y - math.cos(rad) * cc.behind -- behind = against the facing vector
     local plan = rules.pedPlan(fcfg, { coords = { x = bx, y = by, z = z }, heading = (GetEntityHeading(ped) + 180.0) % 360.0 }, 3.0) -- pedPlan adds 180: net = facing the player

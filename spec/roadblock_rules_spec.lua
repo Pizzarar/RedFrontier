@@ -122,4 +122,21 @@ case('claimMount: rider-first and horse-first each mount exactly once; dead grou
     T.eq(0, run({ 'rider', 'horse' }, false)); T.eq(0, run({ 'rider' }, true))
 end)
 
+case('lawSafeBlocks: own lot blocks; nil lookup / throw / nil result / stranger lot = not blocked', function()
+    local coords = { x = 1, y = 2, z = 3 }
+    local own = function(c, cid) if cid == 'CID1' then return 'town_lot_01' end end
+    -- owner in their own law-safe lot: the lookup returns the plot id -> blocked (returns that id)
+    T.eq('town_lot_01', R.lawSafeBlocks(own, coords, 'CID1'))
+    -- a stranger's lot returns nil (non-owner) -> not blocked
+    assert(R.lawSafeBlocks(own, coords, 'CID2') == nil)
+    -- nil citizenid -> not blocked (lawSafeAt returns nil for a non-owner / nil citizenid)
+    assert(R.lawSafeBlocks(own, coords, nil) == nil)
+    -- missing lookup -> not blocked
+    assert(R.lawSafeBlocks(nil, coords, 'CID1') == nil)
+    -- a throwing lookup -> not blocked
+    assert(R.lawSafeBlocks(function() error('boom') end, coords, 'CID1') == nil)
+    -- a nil result -> not blocked
+    assert(R.lawSafeBlocks(function() return nil end, coords, 'CID1') == nil)
+end)
+
 T.finish()

@@ -174,6 +174,21 @@ function M.chaseDecision(cfg, s)
     return true
 end
 
+---Does a law-safe owned town lot block fh_heat law encounters at `coords` for `citizenid`?
+---lookup = (coords, citizenid) -> plotId|nil (fh_homestead lawSafeAt, H9b; NOT on main yet). A missing lookup, a
+---lookup that throws, or a nil/false result all mean NOT blocked (behave exactly as today). A truthy plotId means the
+---player is inside their OWN law-safe lot (a stranger's lot returns nil, so outlaws can't hide in other people's lots).
+---@param lookup function|nil
+---@param coords table { x, y, z }
+---@param citizenid string|number|nil
+---@return string|nil plotId  the blocking plot id, or nil when not blocked
+function M.lawSafeBlocks(lookup, coords, citizenid)
+    if type(lookup) ~= 'function' then return nil end
+    local ok, plot = pcall(lookup, coords, citizenid)
+    if not ok or not plot then return nil end
+    return plot
+end
+
 if GetCurrentResourceName then
     FhRoadblockRules = M
 else

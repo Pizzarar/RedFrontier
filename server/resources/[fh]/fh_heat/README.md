@@ -78,6 +78,8 @@ Each decay tick and each player within it runs under `rules.safeTick` (pcall): a
 Pure decisions: `shared/roadblock_rules.lua` (specced in `spec/roadblock_rules_spec.lua`); natives and spawning:
 `server/roadblocks.lua`; hostile AI: `client/main.lua`. Config: `FhHeatConfig.roadblock / ambush / chase`.
 
+Law encounters (roadblock / ambush / chase) skip players inside their own town lot (fh_homestead `lawSafeAt`).
+
 **Roadblock (always on).** When a player's level for a faction RISES onto or past `roadblock.minLevel` (`wanted`) the
 server picks the chokepoint nearest the player (preferring chokepoints of the player's region, within
 `maxPlayerDistance`) and requests `ped.count` faction peds in a line across it with
