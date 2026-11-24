@@ -170,8 +170,8 @@ local function getBoard(src, region_id)
 end
 
 local function acceptOffer(src, offer_id)
-    local region_id = type(offer_id) == 'string' and offer_id:match('^([^:]+):') or nil
-    if not region_id or not regions()[region_id] then return false, 'fh_offer_gone' end
+    local region_id = B.offerRegion(offer_id, FhRegions.isEnabled) -- unknown or disabled region: refused
+    if not region_id then return false, 'fh_offer_gone' end
     return withPlayer(src, function(cid, states)
         local now = os.time()
         local offer = B.find(Q.boardFor(region_id, now).offers, offer_id)

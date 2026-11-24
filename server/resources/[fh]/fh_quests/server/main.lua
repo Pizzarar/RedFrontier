@@ -197,14 +197,10 @@ function Q.boardFor(region_id, now)
     local epoch = B.epoch(now, Q.ROTATE_MIN)
     local cached = Q.boards[region_id]
     if cached and cached.epoch == epoch then return cached end
-    local lists = {}
-    for name, jt in pairs(Q.jobTypes) do
-        local ok, offers = pcall(jt.hooks.offers, region_id)
-        if ok and type(offers) == 'table' then
-            lists[name] = offers
-        elseif not ok then
-            Q.log('job type %s offers(%s) failed: %s', name, region_id, tostring(offers))
-        end
+    -- Disabled regions (FhRegions.isEnabled) get an empty board: no job type is asked for offers there.
+    local lists, failed = B.collect(region_id, Q.jobTypes, FhRegions.isEnabled)
+    for _, f in ipairs(failed) do
+        Q.log('job type %s offers(%s) failed: %s', f.name, region_id, tostring(f.err))
     end
     local board = { epoch = epoch, expires_at = (epoch + 1) * Q.ROTATE_MIN * 60,
         offers = B.rotate(region_id, epoch, lists, { rotate_min = Q.ROTATE_MIN }) }

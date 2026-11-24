@@ -116,6 +116,34 @@ function M.find(board, offer_id)
     return nil
 end
 
+---Candidate offer lists of a region's board: each registered job type's hooks.offers(region_id) (jobTypes =
+---{ [name] = { hooks } }, the server registry). A region that is not enabled (isEnabled(region_id) false, e.g.
+---FhRegions.isEnabled; unknown counts as not enabled) gets no lists at all, and no hook is even asked, so this gates
+---every job type, external ones included. A hook that throws is skipped and listed in `failed`; a non-table result is
+---skipped silently.
+---@return table lists, table failed  lists = { [name] = offers }, failed = { { name, err } } (sorted by name)
+function M.collect(region_id, jobTypes, isEnabled)
+    local lists, failed = {}, {}
+    if not isEnabled(region_id) then return lists, failed end
+    for _, name in ipairs(sortedKeys(jobTypes or {})) do
+        local ok, offers = pcall(jobTypes[name].hooks.offers, region_id)
+        if ok and type(offers) == 'table' then
+            lists[name] = offers
+        elseif not ok then
+            failed[#failed + 1] = { name = name, err = offers }
+        end
+    end
+    return lists, failed
+end
+
+---Region of a board offer id ('<region_id>:<epoch>:<job_type>:<key>') that may be accepted: nil when the id is
+---malformed or its region is not enabled (isEnabled, as in collect). acceptOffer answers nil with fh_offer_gone.
+function M.offerRegion(offer_id, isEnabled)
+    local region_id = type(offer_id) == 'string' and offer_id:match('^([^:]+):') or nil
+    if not region_id or not isEnabled(region_id) then return nil end
+    return region_id
+end
+
 if GetCurrentResourceName then
     FhQuestsBoard = M
 else

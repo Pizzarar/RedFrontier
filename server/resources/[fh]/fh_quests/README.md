@@ -131,7 +131,10 @@ All player exports take `src` (player server id) and resolve the citizenid thems
   quest), plus `dialogue.offers = { quest_id... }`: quests whose `giver` is this npc that the player can start now
   (sorted). After the change is saved it emits `fh:quests:talked`.
 - `acceptOffer` takes the offer `id` from `getBoard` / the sync payload. `fh_offer_gone` = the board rotated, the
-  region is unknown, or the job type is no longer registered.
+  region is unknown or not enabled (`FhRegions.isEnabled`), or the job type is no longer registered.
+- Region gate: a region that is not enabled has an empty board (`getBoard` still answers, with 0 offers) and no job
+  type's `offers` hook is called for it; accepting one of its offer ids is `fh_offer_gone`. Turning a region on in
+  fh_core is the only change needed to show its offers (`board.collect` / `board.offerRegion`).
 - `registerQuest` replaces an existing def with the same id (so a restarting content resource re-registers cleanly).
   Ids starting with `job:` belong to job types (`fh_reserved_id`). Registrations live in memory: re-register on
   fh_quests (re)start, exactly as below.
@@ -156,7 +159,7 @@ All player exports take `src` (player server id) and resolve the citizenid thems
 | `fh_reward_pending` | `start`, `acceptOffer` | the previous completion of this quest still owes part of its reward |
 | `fh_not_active` | `abandon` | the player has no active quest with that id |
 | `fh_bad_region` | `getBoard` | unknown region id (`FhRegions`) |
-| `fh_offer_gone` | `acceptOffer` | the offer id is not on the current board (rotated, unknown region, job type gone) |
+| `fh_offer_gone` | `acceptOffer` | the offer id is not on the current board (rotated, unknown or disabled region, job type gone) |
 | `fh_bad_offer` | `acceptOffer` | the job type's offer has no `key` / `title` |
 | `fh_offer_no_event` | `acceptOffer` | the offer has no `on` and its job type has no `onEvent` hook (nothing could ever advance it) |
 | `fh_bad_job_snapshot` | `acceptOffer`, load (log only) | a job snapshot without `job_type` / `key`; on load such a job row is ignored (kept in the table, logged) |
