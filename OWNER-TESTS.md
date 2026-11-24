@@ -329,10 +329,10 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 
 Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hunting's `getTrophyComfort` (today step 6 shows the refusal). `<id>` is your server id (as in the fh_economy tests). Start from a character with no plot and an empty plot chest. Materials are taken from the plot chest, never from your pockets. If a `/giveitem` is refused as too heavy, give 20 at a time and move each batch into the chest.
 
-1. Stand inside the plot circle at (-300, 790, 118) and run `/fh_claim`.
+1. Stand inside the plot circle at (-500, 750, 105) and run `/fh_claim`.
    Expected: `fh_claim: claimed plot heartlands_01`. Run it again: it refuses (you already own a plot).
    RESULT:
-2. Press E at the chest (-296, 790, 118) and put 1 bread in.
+2. Press E at the chest (-496, 750, 105) and put 1 bread in.
    Expected: the plot chest opens and takes it.
    RESULT:
 3. Build. Prepare: `/giveitem <id> lumber 65` (or buy 65 lumber at any trade post, $3 each, then give yourself that money back), move all 65 lumber into the plot chest, then `/givemoney <id> cash 500`. Note your cash (call it C).
@@ -346,7 +346,7 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
       `/fh_build station_1` -> `fh_build: built station_1 tier 1 ($60, 10 lumber)` (27 left)
       `/fh_build station_2` -> `fh_build: built station_2 tier 1 ($25, 5 lumber)` (22 left)
       `/fh_build station_3` -> `fh_build: built station_3 tier 1 ($80, 12 lumber)` (10 left)
-      Expected: cash is now C - 355. A placeholder prop (`p_chest01x`) stands at each built slot. Walk up to the chest_2 prop at about (-304, 790): `[E] Homestead chest 2` shows, and E opens an empty chest.
+      Expected: cash is now C - 355. A placeholder prop (`p_chest01x`) stands at each built slot. Walk up to the chest_2 prop at about (-504, 750): `[E] Homestead chest 2` shows, and E opens an empty chest.
    d. No trophy wall yet: `/fh_trophy place bread` (the bread from step 2; the wall is checked before anything else).
       Expected: `fh_trophy: fh_no_trophy_wall`. The bread is still in the chest (count 1).
    e. `/fh_build trophy_wall`
@@ -361,11 +361,11 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
       Expected: exactly 7 rows, all `charge`, `homestead build`, amounts 150, 40, 60, 25, 80, 120, 100. No row for the refused attempts and no `homestead build refund` row.
       The server console shows no red errors and no `ITEM LOST` / `MONEY LOST` line.
    RESULT:
-4. Stations (what @crafting will ask through `isNearStation`). Prop spots: workbench about (-294, 794), campfire (-294, 786), tanning rack (-290, 790).
+4. Stations (what @crafting will ask through `isNearStation`). Prop spots: workbench about (-494, 754), campfire (-494, 746), tanning rack (-490, 750).
    Expected:
    - At the workbench: `/fh_station workbench` -> `fh_station: workbench near=true`; `/fh_station campfire` -> `fh_station: campfire near=false`.
    - At the campfire: `/fh_station campfire` -> `fh_station: campfire near=true`.
-   - Walk to the plot center (-300, 790): `/fh_station workbench` -> `fh_station: workbench near=false` (more than 3 m away).
+   - Walk to the plot center (-500, 750): `/fh_station workbench` -> `fh_station: workbench near=false` (more than 3 m away).
    - A second player with no plot stands at your workbench and runs `/fh_station workbench` -> `fh_station: workbench near=false` (owner-only).
    RESULT:
 5. Comfort. Built after step 3: cabin 1 (10), chest_2 (2), the three stations (3 each), trophy wall (5), fence (5).
@@ -399,6 +399,38 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
     - E at the chest shows the bread and the leftover lumber.
     After Hunting: also build the trophy wall and place a trophy before the restart; after it, the trophy is still on the wall (`/fh_trophy remove` works once) and comfort is the same as before the restart.
     RESULT:
+
+### Town lots (H8-H10): buy, build, abandon, law-safe
+
+Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one claim per character. Lots are found with `/where` (listed as `<name> (town lot)`), not `/where plot` (claims only). The Valentine lot `heartlands_lot_01` is at (-180, 620, 113), radius 14 m; its chest is at the center. Start with no lot, at least $500 cash (note it as C) and 0 rep in heartlands (`SELECT value FROM fh_rep WHERE region_id = 'heartlands' AND citizenid = '<cid>';`).
+
+1. Buy. Stand in the lot and run `/fh_buylot`.
+   Expected: `fh_buylot: bought lot heartlands_lot_01`. Cash C - 300. heartlands rep +25. E at the lot chest opens it.
+   DB: `SELECT plot_id, class FROM fh_plots WHERE citizenid = '<cid>';` -> `heartlands_lot_01 town_lot` (plus your claim if you hold one). `SELECT kind, amount, reason FROM fh_ledger WHERE reason LIKE 'town_lot%';` -> one `charge` 300 `town_lot:heartlands_lot_01`.
+   RESULT:
+2. Refusals (no money moves). `/fh_buylot` again in the same lot -> `fh_buylot: fh_plot_taken`; walk to the Emerald Ranch lot (1420, 345, 96) and run it -> `fh_buylot: fh_already_has_lot`; stand in a claim and run `/fh_buylot` -> `fh_buylot: fh_wrong_plot_class`. Cash still C - 300 after all three.
+   RESULT:
+3. One of each. Walk to a free claim (for example heartlands_01 at (-500, 750, 105)) and `/fh_claim`.
+   Expected: `fh_claim: claimed plot heartlands_01` while you still own the lot.
+   RESULT:
+4. Build on the lot. Put 20 lumber in the LOT chest, have $100+ cash, stand in the lot.
+   - `/fh_build` -> `fh_build: plot heartlands_lot_01: chest_2 0/1 next: $40, 8 lumber; station_1 0/1 next: $60, 10 lumber` (no cabin, fence or trophy wall).
+   - `/fh_build cabin` -> `fh_build: fh_unknown_slot`, nothing taken.
+   - `/fh_build station_1` -> `fh_build: built station_1 tier 1 ($60, 10 lumber)`; `/fh_build chest_2` -> `fh_build: built chest_2 tier 1 ($40, 8 lumber)` (no cabin needed). The lumber came out of the lot chest, not the claim chest.
+   - At the workbench prop about (-174, 624): `/fh_station workbench` -> `near=true`. `[E] Homestead chest 2` at about (-184, 620) opens.
+   - `/fh_comfort` is the same as before the lot builds (a lot gives no comfort).
+   RESULT:
+5. Cannot afford. With a second character (no lot) holding less than $300, stand in a free lot and `/fh_buylot`.
+   Expected: `fh_buylot: fh_insufficient_funds`, cash unchanged, no `fh_plots` row for that lot.
+   RESULT:
+6. Abandon (no refund, rep taken back). In or out of the lot, run `/fh_unclaim heartlands_lot_01`.
+   Expected: `fh_unclaim: released plot heartlands_lot_01`. Cash unchanged (no refund). heartlands rep -25 (back to what it was before step 1). The lot props disappear; your claim is untouched (`/fh_build` at the claim still works). A bare `/fh_unclaim` would release the claim, not the lot.
+   Buy it again (`/fh_buylot` in the lot): cash -300, rep +25 again, so buy-abandon-buy nets one +25 bump.
+   RESULT:
+7. Law encounters skipped in your own lot, not in a stranger's. Roadblocks fire when heat CROSSES the roadblock level (as in M5 step 17), so each check is: heat to 0, then to 55. Own heartlands_lot_01 (step 6) and stand in the middle of it. Run `exports.fh_heat:set(<yourId>, "outlaws", 0)`, then `exports.fh_heat:set(<yourId>, "outlaws", 55)`.
+   Expected: no roadblock spawns; the console shows once `[fh_heat] <id>/<cid> law-safe in own lot heartlands_lot_01: skipping spawn`. Walk out of the lot (more than 14 m from its center), set heat 0 then 55 again: the roadblock spawns as in M5 step 17 (the skipped one started no cooldown). Set heat back to 0.
+   Second character (no lot of their own) stands in YOUR lot and does the same 0 -> 55: their roadblock spawns normally and there is no law-safe line for them. Also at your wilderness claim (step 3) a 0 -> 55 spawns normally (claims are not law-safe).
+   RESULT:
 
 ## Q5: quests (fh_quests)
 

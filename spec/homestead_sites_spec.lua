@@ -57,12 +57,12 @@ case('every claim is >=150 m (2D) from every town center and every other claim',
     end
 end)
 
-case('town lots are claimable=false and radius 12-15', function()
+case('town lots are claimable (buyable, homestead H10) and radius 12-15', function()
     local lotsByRegion = {}
     for id, p in pairs(cfg.plots) do
         if p.class == 'town_lot' then
             lotsByRegion[p.region] = (lotsByRegion[p.region] or 0) + 1
-            assert(p.claimable == false, id .. ' town lot must be claimable=false')
+            assert(p.claimable == true, id .. ' town lot must be claimable=true (H10)')
             assert(type(p.radius) == 'number' and p.radius >= 12.0 and p.radius <= 15.0,
                 id .. ' town lot radius out of 12-15: ' .. tostring(p.radius))
         end
@@ -92,6 +92,25 @@ case('claims are claimable (no claimable=false)', function()
     for id, p in pairs(cfg.plots) do
         if p.class == 'claim' then assert(p.claimable ~= false, id .. ' claim must be claimable') end
     end
+end)
+
+case('H10 every town lot has a whole positive price (own or townLot.price), a known region, no overlap', function()
+    local n = 0
+    for id, p in pairs(cfg.plots) do
+        if p.class == 'town_lot' then
+            n = n + 1
+            local price = math.tointeger(p.price or (cfg.townLot and cfg.townLot.price))
+            assert(price and price > 0, id .. ' price')
+            assert(type(p.region) == 'string' and regions.regions[p.region], id .. ' region')
+            for oid, o in pairs(cfg.plots) do
+                if oid ~= id then
+                    local d = math.sqrt((p.center.x - o.center.x) ^ 2 + (p.center.y - o.center.y) ^ 2 + (p.center.z - o.center.z) ^ 2)
+                    assert(d > p.radius + o.radius, id .. ' overlaps ' .. oid)
+                end
+            end
+        end
+    end
+    T.eq(6, n)
 end)
 
 T.finish()
