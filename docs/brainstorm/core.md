@@ -57,3 +57,4 @@
 - core-04 COMPLETE main 018df02 (playtest-ready). core-05 handed to Cor2.
 - 11-23 core-05 COMPLETE: K1 gun_parts outlaw loot (0.8, 2-3) + rollLoot ranges + crafting_sources_spec unpend merged main (ae7a8ff, a488aba; Gemini PASS 0/0/2 folded; venv 71/1385/0). idea-721 declined (fix is fence-side). Core merges on hold until playtest gate docs land.
 - 11-24 core-06 COMPLETE: I1 (743 ACE grants before ensures, 744 Meshnet Media-Host IP/docs) merged main 47b4fd5 by Red3; 750 already on main 90a8278 (hub rf-inboxfix). I1-nit Get-MeshnetIp null guard 0b72271. tools/test-firstrun.ps1 needs a Windows run (no pwsh on forge). Core inbox empty.
+- 11-24 R1 COMPLETE: idea-804 fh_economy.repByCitizenid (offline rep for homestead H8 abandon; shared applyRep, src re-resolve after awaits) 59c688b+f9a7316, Gemini PASS 0/0/2 folded; venv 87/1595/0.

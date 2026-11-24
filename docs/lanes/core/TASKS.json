@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T13:39:36.438Z",
+  "updatedAt": "2026-11-24T17:13:05.821Z",
   "units": [
     {
       "id": "B5",
@@ -239,6 +239,15 @@
       "status": "done",
       "branch": "core-i1nit",
       "commit": "0b72271"
+    },
+    {
+      "id": "R1",
+      "goal": "idea-804 fh_economy repByCitizenid (offline rep for homestead H8 lot abandon)",
+      "files": [],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "core-r1",
+      "commit": "f9a7316"
     }
   ]
 }
