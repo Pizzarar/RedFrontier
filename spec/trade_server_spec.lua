@@ -49,7 +49,13 @@ local function boot(rows)
     T.eq(0, B.nUpserts, 'nothing written before the first flush')
     ok, why = coroutine.resume(co)                    -- one save tick: flush() writes exactly the dirty rows
     assert(ok and why == 'wait', 'flush tick failed: ' .. tostring(why))
-    B.quote = function(region, item) return select(2, B.exported.quote(region, item)) end
+    -- Strict: quote returns `price, detail` or `nil, 'unknown_region'|...`; only a real quote passes.
+    B.quote = function(region, item)
+        local price, detail = B.exported.quote(region, item)
+        assert(type(price) == 'number' and type(detail) == 'table',
+            ('%s|%s does not quote: %s, %s'):format(tostring(region), tostring(item), tostring(price), tostring(detail)))
+        return detail
+    end
     B.cfg = env.FhTradeConfig
     return B
 end
@@ -64,7 +70,9 @@ T.describe('fh_trade startup seeding (stubbed server, idea-792)', function()
     T.it('fixture: config has >= 2 initialShortages, all on known goods/regions', function()
         local B = boot({})
         assert(#B.cfg.initialShortages >= 2, 'need at least 2 initialShortages for these cases')
-        for _, k in ipairs(seedKeys(B.cfg)) do assert(B.quote(k.e.region, k.e.item), k.key .. ' does not quote') end
+        for _, k in ipairs(seedKeys(B.cfg)) do
+            assert(type(B.quote(k.e.region, k.e.item).shortage) == 'number', k.key .. ' quote has no shortage')
+        end
     end)
 
     T.it('load fails -> nothing seeded, nothing marked dirty, nothing written over the persisted rows', function()
