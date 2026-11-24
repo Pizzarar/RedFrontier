@@ -3,7 +3,7 @@
 Quests are jobs from a board, three one-time family stories, and the intro. Everything is built, but **none of it is checked in game yet** (unverified). Rewards pay money and reputation once, through [Economy](fh_economy.md).
 
 ## The jobs board
-- Type `/jobs` to open the board. It works anywhere, and there is also a notice-board spot in the Heartlands.
+- Type `/jobs` to open the board for the region you are standing in (the nearest board). There is a notice-board spot in each region (Heartlands and Scarlett Meadows).
 - The board holds 3 to 5 offers and refreshes every 60 minutes.
 - Job types:
   - **Hunt request:** sell a pelt of the star rating asked for. See [Hunting](fh_hunting.md).

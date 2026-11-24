@@ -4,7 +4,7 @@
 local B = FhQuestsBoardSpots
 local function openBoard(region_id) TriggerServerEvent('fh:quests:ui_open', region_id) end
 
-RegisterCommand('jobs', function() openBoard(B.DEFAULT_REGION) end, false)
+RegisterCommand('jobs', function() openBoard(B.regionFor(GetEntityCoords(PlayerPedId()))) end, false)
 
 -- Board spots (rsg-target is optional: without it only /jobs works). Zones and props are removed on stop.
 local zones, props, stopping = {}, {}, false

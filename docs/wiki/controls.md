@@ -32,7 +32,7 @@ Skinning an animal, the jobs-board notice board and quest givers use the rsg-tar
 | `/fh_trophy place <item>` / `remove <trophy_id>` | Place or remove a trophy on your plot | `server/resources/[fh]/fh_homestead/server/build.lua:374` |
 | `/fh_station <type>` | Is that station (`workbench`, `campfire`, `tanning_rack`) within reach on your plot | `server/resources/[fh]/fh_homestead/server/build.lua:386` |
 | `/fh_comfort` | Show your homestead comfort | `server/resources/[fh]/fh_homestead/server/build.lua:394` |
-| `/jobs` | Open the jobs board (works anywhere) | `server/resources/[fh]/fh_quests/client/board.lua:11` |
+| `/jobs` | Open the jobs board for the region you are standing in (nearest board) | `server/resources/[fh]/fh_quests/client/board.lua:7` |
 | `/journal` | Open your quest journal | `server/resources/[fh]/fh_quests/client/journal.lua:3` |
 | `/refill` | Refill your canteen (stand in water) | `server/resources/[fh]/fh_survival/client/actions.lua:17` |
 | `/wash` | Wash to get the `clean` buff (stand in water, 300 s cooldown by default) | `server/resources/[fh]/fh_survival/client/actions.lua:18` |

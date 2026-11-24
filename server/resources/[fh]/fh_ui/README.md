@@ -147,10 +147,11 @@ aggregates them into a canonical place list. `FhUiPlaces` is pure and specced un
 
 - `config.lua` `FhUiConfig.blips = false` hides the whole blip layer (the `/where` destination marker still works).
 - `client/blips.lua` draws the layer; `client/where.lua` registers `/where` (list, or pick + destination marker).
-- Homestead plots, trade post, trapper, quest givers, jobs board, outlaw camp, crafting dev-stations and fence stops
-  are blipped and named. `/where plot` picks the nearest **unclaimed** plot: fh_ui reads the claimed plot ids through
-  the `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead `claimedPlots` export) and passes them as
-  `FhUiPlaces.gather`'s `claimed` set.
+- Homestead plots, trade posts, trapper, quest givers, jobs boards, outlaw camps, crafting dev-stations and fence
+  stops are blipped and named. Every entry in the `@`-included configs is picked up (so a second region's posts,
+  camps, plots and board appear automatically). `/where plot` picks the nearest **unclaimed** plot: fh_ui reads the
+  claimed plot ids through the `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead `claimedPlots` export) and
+  passes them as `FhUiPlaces.gather`'s `claimed` set.
 - **RedM has no set-waypoint native** (only `SET_WAYPOINT_OFF` / `IS_WAYPOINT_ACTIVE`), so `/where <place>` marks the
   destination with a named blip instead of the pause-map red X. A true GPS route is a queued follow-up if a native
   appears.

@@ -269,9 +269,11 @@ type (types are interleaved, so every type is on the board while templates last)
 (`fh:quests:board_changed`). The pick is a pure function of (region, epoch, templates), kept in memory and
 regenerated on restart: the same epoch gives the same board and the same offer ids.
 
-**Entry points.** `/jobs` and an rsg-target sphere zone (plus a client-local notice-board prop) at the board spot
-(`client/board.lua`) fire `fh:quests:ui_open`, which opens the fh_ui jobs screen (`server/ui.lua`). The `/jobs`
-command works anywhere (no proximity check). The old ox_lib fallback menu and its lib callbacks are gone.
+**Entry points.** `/jobs` and an rsg-target sphere zone (plus a client-local notice-board prop) at each board spot
+(`shared/board_spots.lua`, consumed by `client/board.lua`) fire `fh:quests:ui_open`, which opens the fh_ui jobs
+screen (`server/ui.lua`). There is one board spot per region (Heartlands and Scarlett Meadows); `/jobs` opens the
+board for the **nearest** spot (`FhQuestsBoardSpots.regionFor`, no proximity check — it just picks the closest).
+The old ox_lib fallback menu and its lib callbacks are gone.
 
 ## Emitted events (server, `TriggerEvent`, one table argument)
 
