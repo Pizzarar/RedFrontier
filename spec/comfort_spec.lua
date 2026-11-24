@@ -566,19 +566,109 @@ case('server: unclaim right after the INSERT commits: no trophy_placed, no free 
     assert(S.count('fh:homestead:trophy_placed') == 0)
     assert(S.X.getComfort('A') == 0)
 end)
-case('server H9: comfort is claim-based; a town lot adds none, a lot-only character has 0', function()
+-- ---- H15: comfort = the character's best home, max(claim, town lot) ----
+local LOT = 'heartlands_lot_01'
+local function withLot(S, cid, tiers) S.lots[cid], S.plots[LOT], S.tiers[LOT] = LOT, cid, tiers end
+local function changes(S) return S.count('fh:homestead:comfort_changed') end
+
+case('server H15: claim only', function()
     local S = server()
-    local LOT = 't_lot'
-    S.lots.A, S.plots[LOT] = LOT, 'A'
-    S.tiers[LOT] = { station_1 = 1, chest_2 = 1 } -- built on the lot: would be 3 + 2 if it counted
     S.tiers[PLOT] = { trophy_wall = 1, cabin = 1 }
-    T.eq(5 + 10, S.X.getComfort('A'), 'claim only')
-    S.handlers['fh:homestead:slot_changed'](LOT, 'station_1', 1) -- a lot build never moves the claim comfort
-    T.eq(0, S.count('fh:homestead:comfort_changed') - 1, 'only the first computation emitted')
-    T.eq(5 + 10, S.X.getComfort('A'))
-    S.lots.B, S.plots['t_lot2'], S.tiers['t_lot2'] = 't_lot2', 'B', { station_1 = 1, chest_2 = 1 }
-    T.eq(0, S.X.getComfort('B'), 'lot-only character')
-    local ok, why = S.X.placeTrophy(2, 'trophy_deer')
+    T.eq(15, S.X.getComfort('A'))
+    T.eq(1, changes(S))
+end)
+case('server H15: lot only scores its own slots', function()
+    local S = server()
+    S.unclaim(PLOT)
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 }) -- 3 + 2
+    T.eq(5, S.X.getComfort('A'))
+    T.eq(0, S.X.getComfort('Z'), 'no home')
+    local ok, why = S.X.placeTrophy(1, 'trophy_deer') -- trophies stay claim-only
     T.eq(false, ok); T.eq('fh_no_plot', why)
+end)
+case('server H15: both homes, the larger wins either way', function()
+    local S = server()
+    S.tiers[PLOT] = { trophy_wall = 1, cabin = 1 } -- 15
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 }) -- 5
+    T.eq(15, S.X.getComfort('A'), 'claim wins')
+    S.tiers[PLOT] = { trophy_wall = 1 }            -- 5
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 })
+    S.handlers['fh:homestead:slot_changed'](PLOT, 'cabin', 0)
+    T.eq(5, S.X.getComfort('A'), 'tie')
+    S.tiers[PLOT] = {}                              -- 0, trophy wall gone
+    S.handlers['fh:homestead:slot_changed'](PLOT, 'trophy_wall', 0)
+    T.eq(5, S.X.getComfort('A'), 'lot wins')
+    T.eq(2, changes(S) - 0, 'first value 15, then 5 (tie emitted nothing)')
+end)
+case('server H15: trophies add to the claim side only', function()
+    local S = server()
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 }) -- 5
+    T.eq(5, S.X.getComfort('A'))                     -- claim = wall 5, equal
+    assert(S.X.placeTrophy(1, 'trophy_deer'))        -- claim 9
+    T.eq(9, S.X.getComfort('A'))
+    local cc = S.last('fh:homestead:comfort_changed')
+    T.eq(9, cc[2]); T.eq(5, cc[3])
+end)
+case('server H15: unclaiming one home recomputes to the other, one event', function()
+    local S = server()
+    S.tiers[PLOT] = { trophy_wall = 1, cabin = 1 } -- 15
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 }) -- 5
+    T.eq(15, S.X.getComfort('A'))
+    local n = changes(S)
+    S.unclaim(PLOT)
+    T.eq(n + 1, changes(S))
+    local cc = S.last('fh:homestead:comfort_changed')
+    T.eq('A', cc[1]); T.eq(5, cc[2]); T.eq(15, cc[3])
+    T.eq(5, S.X.getComfort('A'))
+    T.eq(n + 1, changes(S), 'reading again emits nothing')
+    -- now the lot goes too
+    S.lots.A, S.plots[LOT] = nil, nil
+    S.handlers['fh:homestead:unclaimed']({ citizenid = 'A', plot_id = LOT })
+    cc = S.last('fh:homestead:comfort_changed')
+    T.eq(0, cc[2]); T.eq(5, cc[3]); T.eq(n + 2, changes(S))
+    T.eq(0, S.X.getComfort('A'))
+end)
+case('server H15: abandoning the lot keeps the claim value and fires nothing', function()
+    local S = server()
+    S.tiers[PLOT] = { trophy_wall = 1, cabin = 1 } -- 15
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 })
+    T.eq(15, S.X.getComfort('A'))
+    local n = changes(S)
+    S.lots.A, S.plots[LOT] = nil, nil
+    S.handlers['fh:homestead:unclaimed']({ citizenid = 'A', plot_id = LOT })
+    T.eq(n, changes(S), 'best home unchanged: no event')
+    T.eq(15, S.X.getComfort('A'))
+end)
+case('server H15: a lot build moves comfort only when it becomes the best home; no-op builds are silent', function()
+    local S = server()
+    S.unclaim(PLOT)
+    withLot(S, 'A', { station_1 = 1 }) -- 3
+    T.eq(3, S.X.getComfort('A'))
+    local n = changes(S)
+    S.handlers['fh:homestead:slot_changed'](LOT, 'station_1', 1) -- same tiers: no real change
+    T.eq(n, changes(S))
+    S.tiers[LOT] = { station_1 = 1, chest_2 = 1 }
+    S.handlers['fh:homestead:slot_changed'](LOT, 'chest_2', 1)
+    T.eq(n + 1, changes(S))
+    local cc = S.last('fh:homestead:comfort_changed')
+    T.eq(5, cc[2]); T.eq(3, cc[3])
+    -- lot owner not cached yet (fresh server): slot_changed finds the owner by SQL and emits from 0
+    local S2 = server()
+    S2.unclaim(PLOT)
+    withLot(S2, 'B', { chest_2 = 1 })
+    S2.handlers['fh:homestead:slot_changed'](LOT, 'chest_2', 1)
+    cc = S2.last('fh:homestead:comfort_changed')
+    T.eq('B', cc[1]); T.eq(2, cc[2]); T.eq(0, cc[3])
+end)
+case('server H15: claim unclaimed mid-load still aborts with a lot held (gen guard)', function()
+    local S = server()
+    S.unclaim(PLOT)
+    withLot(S, 'A', { chest_2 = 1 })
+    S.claim(PLOT, 'A')
+    S.hold.query = true
+    local finish = S.start(function() return S.X.getComfort('A') end)
+    S.unclaim(PLOT) -- claim released while its trophy rows were loading
+    T.eq(2, finish(), 'stale claim ignored, lot value reported')
+    T.eq(2, S.X.getComfort('A'))
 end)
 T.finish()

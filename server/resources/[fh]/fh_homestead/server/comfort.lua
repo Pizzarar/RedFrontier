@@ -1,7 +1,8 @@
 -- fh_homestead H4 comfort (server). Cache per citizenid; value = FhComfort.compute(plot, tiers, trophies, cfg).
 -- Reads tiers from H3's FhHomesteadSlots (guarded: if absent, tiers are empty). Homestead does NOT apply buffs.
 --
--- Exports: getComfort(citizenid) -> number (0 if no plot);
+-- Exports: getComfort(citizenid) -> number (0 if no plot). Best home (H15): max(claim comfort, town lot comfort); trophies
+--          exist only on claims, so they add to the claim side only;
 --          placeTrophy(src, itemId) -> ok, err|trophy_id ; unplaceTrophy(src, trophy_id) -> ok, err  (owner-only, H2 wires the command)
 --          addTrophy(citizenid, trophy_id, points) / removeTrophy(citizenid, trophy_id): internal/admin, no item movement.
 -- Placement: item leaves the plot chest via fh_core removeItem (core B7; pcall'd, refused 'fh_removeitem_unavailable' if absent),
@@ -23,8 +24,8 @@ local cfg = FhHomesteadConfig
 local calc = FhComfort
 local rules = FhPlotRules
 
-local cache = {}   -- citizenid -> { plotId, trophies = { [id] = points }, value }
-local byPlot = {}  -- plotId -> citizenid (only for cached entries)
+local cache = {}   -- citizenid -> { plotId (claim|nil), lotId (town lot|nil), trophies = { [id] = points }, value }
+local byPlot = {}  -- plotId (claim or lot) -> citizenid (only for cached entries)
 local busy = {}    -- plotId -> true while a trophy change is in flight
 local gen = {}     -- plotId -> unclaim counter
 
@@ -32,12 +33,15 @@ local function log(level, msg) print(('%s[fh_homestead] %s^7'):format(level == '
 
 local function genOf(plotId) return gen[plotId] or 0 end
 
--- Comfort is claim-based (H9, owner Q3 default): only the wilderness claim counts; a town lot never gives comfort.
-local function plotOf(citizenid)
+-- Comfort is the character's best home (H15): max(claim comfort, town lot comfort). plotOf = the claim (trophies live
+-- only there), lotOf = the town lot (its own slots only).
+local function classPlotOf(citizenid, class)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    if FhHomesteadSlots and FhHomesteadSlots.plotOf then return FhHomesteadSlots.plotOf(citizenid, 'claim') end
+    if FhHomesteadSlots and FhHomesteadSlots.plotOf then return FhHomesteadSlots.plotOf(citizenid, class) end
     return nil
 end
+local function plotOf(citizenid) return classPlotOf(citizenid, 'claim') end
+local function lotOf(citizenid) return classPlotOf(citizenid, 'town_lot') end
 
 local function isReady()
     if FhHomesteadSlots and FhHomesteadSlots.isReady then return FhHomesteadSlots.isReady() == true end
@@ -58,7 +62,18 @@ local function stillOwns(citizenid, plotId, g)
     return genOf(plotId) == g and plotOf(citizenid) == plotId
 end
 
----Cached entry for the citizen's plot, loading its trophies on first use.
+---Replace the citizen's cache entry with one for claim plotId (nil = lot-only), keeping the last value and the lot link
+---so comfort_changed still compares against what Survival last heard.
+local function rebind(citizenid, plotId, trophies)
+    local prev = cache[citizenid]
+    if prev and prev.plotId then byPlot[prev.plotId] = nil end
+    local e = { plotId = plotId, lotId = prev and prev.lotId or nil, trophies = trophies or {}, value = prev and prev.value or nil }
+    cache[citizenid] = e
+    if plotId then byPlot[plotId] = citizenid end
+    return e
+end
+
+---Cached entry for the citizen's claim, loading its trophies on first use.
 ---@return table|nil entry, string|nil reason
 local function entryFor(citizenid, plotId)
     local e = cache[citizenid]
@@ -74,48 +89,72 @@ local function entryFor(citizenid, plotId)
     -- another caller may have loaded it while we were suspended in the query
     e = cache[citizenid]
     if e and e.plotId == plotId then return e end
-    if e then byPlot[e.plotId] = nil end
     local trophies = {}
     for _, r in ipairs(rows or {}) do trophies[r.trophy_id] = tonumber(r.points) or 0 end
-    e = { plotId = plotId, trophies = trophies, value = nil }
-    cache[citizenid], byPlot[plotId] = e, citizenid
-    return e
+    return rebind(citizenid, plotId, trophies)
 end
 
 local function drop(citizenid)
     local e = cache[citizenid]
-    if e then byPlot[e.plotId] = nil end
+    if e then
+        if e.plotId then byPlot[e.plotId] = nil end
+        if e.lotId then byPlot[e.lotId] = nil end
+    end
     cache[citizenid] = nil
 end
 
 -- Recompute, store, and fire comfort_changed when it differs from the last known value (first computation counts from 0).
-local function refresh(citizenid)
+local refresh
+function refresh(citizenid)
     if not isReady() then
         -- slots/claims still loading: plotOf/tiers are not trustworthy yet. Report the last known value, cache nothing,
         -- emit nothing; the first refresh after the load counts from there.
         local c = cache[citizenid]
         return c and c.value or 0
     end
-    local plotId = plotOf(citizenid)
-    if not plotId then
+    local plotId, lotId = plotOf(citizenid), lotOf(citizenid)
+    if not plotId and not lotId then
         local old = cache[citizenid] and cache[citizenid].value or 0
         drop(citizenid)
         if old ~= 0 then TriggerEvent('fh:homestead:comfort_changed', citizenid, 0, old) end
         return 0
     end
-    local e = entryFor(citizenid, plotId)
-    if not e then
-        -- could not load (DB error / unclaimed meanwhile): report the last known value, emit nothing
-        local c = cache[citizenid]
-        return c and c.value or 0
+    local e
+    if plotId then
+        local why
+        e, why = entryFor(citizenid, plotId)
+        -- released while its trophies loaded: the lot (if any) still counts, so recompute once from the new state
+        if not e and why == 'fh_no_plot' and plotOf(citizenid) ~= plotId then return refresh(citizenid) end
+        if not e then
+            -- could not load (DB error / unclaimed meanwhile): report the last known value, emit nothing
+            local c = cache[citizenid]
+            return c and c.value or 0
+        end
+    else
+        e = cache[citizenid]
+        if not e or e.plotId then e = rebind(citizenid, nil, nil) end -- lot-only (or the claim is gone)
     end
-    local tiers, twhy = tiersOf(plotId)
-    if twhy then return e.value or 0 end
-    local new = calc.compute(cfg.plots[plotId], tiers, e.trophies, cfg)
+    if e.lotId ~= lotId then
+        if e.lotId then byPlot[e.lotId] = nil end
+        e.lotId = lotId
+        if lotId then byPlot[lotId] = citizenid end
+    end
+    local best = 0
+    if plotId then
+        local tiers, twhy = tiersOf(plotId)
+        if twhy then return e.value or 0 end
+        best = calc.compute(cfg.plots[plotId], tiers, e.trophies, cfg)
+    end
+    if lotId then
+        local tiers, twhy = tiersOf(lotId)
+        if twhy then return e.value or 0 end
+        local lot = calc.compute(cfg.plots[lotId], tiers, nil, cfg) -- no trophies on a lot
+        if lot > best then best = lot end
+    end
     local old = e.value or 0
-    e.value = new
-    if new ~= old then TriggerEvent('fh:homestead:comfort_changed', citizenid, new, old) end
-    return new
+    e.value = best
+    if best ~= old then TriggerEvent('fh:homestead:comfort_changed', citizenid, best, old) end
+    return best
 end
 
 local function getComfort(citizenid)
@@ -247,8 +286,8 @@ AddEventHandler('fh:homestead:slot_changed', function(plotId)
     if owner then refresh(owner) end
 end)
 
--- Plot released: its trophies are gone with it. Clear the cache for whoever had it cached, tell Survival the comfort
--- is now 0, and bump the generation so any trophy change suspended mid-await aborts instead of writing.
+-- Plot released: its trophies are gone with it. Drop it from the cache for whoever had it cached and recompute (their other
+-- home may remain; Survival hears one comfort_changed only if the best-home value moved), and bump the generation so any trophy change suspended mid-await aborts instead of writing.
 AddEventHandler('fh:homestead:unclaimed', function(data)
     if type(data) ~= 'table' or type(data.plot_id) ~= 'string' then return end
     local plotId = data.plot_id
@@ -258,10 +297,12 @@ AddEventHandler('fh:homestead:unclaimed', function(data)
     if byPlot[plotId] then holders[byPlot[plotId]] = true end
     for cid in pairs(holders) do
         local e = cache[cid]
-        if e and e.plotId == plotId then
-            local old = e.value or 0
-            drop(cid)
-            if old ~= 0 then TriggerEvent('fh:homestead:comfort_changed', cid, 0, old) end
+        if e and (e.plotId == plotId or e.lotId == plotId) then
+            -- forget the released plot, then recompute from whatever home is left (0 and one event if none)
+            if e.plotId == plotId then e.plotId, e.trophies = nil, {} end
+            if e.lotId == plotId then e.lotId = nil end
+            byPlot[plotId] = nil
+            refresh(cid)
         end
     end
     byPlot[plotId] = nil
