@@ -343,21 +343,35 @@ function RSGCore.Player.CreatePlayer(PlayerData, Offline)
     end
 
     local function onMoneyChanged(moneytype, amount, operation, reason, hudAmount, hudIsMinus)
-        if not IsMoneyItemEnabled(moneytype) then
-            TriggerClientEvent('hud:client:OnMoneyChange', self.PlayerData.source, moneytype, hudAmount, hudIsMinus)
-        end
+        TriggerClientEvent('hud:client:OnMoneyChange', self.PlayerData.source, moneytype, hudAmount, hudIsMinus)
         TriggerClientEvent('RSGCore:Client:OnMoneyChange', self.PlayerData.source, moneytype, amount, operation, reason)
         TriggerEvent('RSGCore:Server:OnMoneyChange', self.PlayerData.source, moneytype, amount, operation, reason)
+    end
+
+    ---FH (core M2): with money items on, the items ARE the balance (moneyitems.lua SynchronizeMoneyItems re-reads it
+    ---from them). Move the items before reporting success: AddMoney / RemoveMoney / SetMoney return false, with the
+    ---balance put back, when they could not (no slot, over weight, no room for change), so callers (fh_economy's
+    ---checked add) see the failure instead of a true for money the next sync drops.
+    ---@return boolean moved
+    local function moveMoney(moneytype, before, amount, operation)
+        if IsMoneyItemEnabled(moneytype) and not ApplyMoneyItems(self, moneytype, amount, operation) then
+            self.PlayerData.money[moneytype] = before
+            self.Functions.UpdatePlayerData()
+            return false
+        end
+        self.Functions.UpdatePlayerData()
+        return true
     end
 
     function self.Functions.AddMoney(moneytype, amount, reason)
         reason = reason or 'unknown'
         moneytype, amount = prepMoney(moneytype, amount)
         if not moneytype then return false end
-        self.PlayerData.money[moneytype] = self.PlayerData.money[moneytype] + amount
+        local before = self.PlayerData.money[moneytype]
+        self.PlayerData.money[moneytype] = before + amount
 
         if not self.Offline then
-            self.Functions.UpdatePlayerData()
+            if not moveMoney(moneytype, before, amount, 'add') then return false end
             moneyLog(self, 'AddMoney', 'lightgreen', moneytype, amount, reason, 'added')
             onMoneyChanged(moneytype, amount, 'add', reason, amount, false)
         end
@@ -374,10 +388,11 @@ function RSGCore.Player.CreatePlayer(PlayerData, Offline)
             if mtype == moneytype and newBalance < 0 then return false end
         end
         if newBalance < RSGCore.Config.Money.MinusLimit then return false end
+        local before = self.PlayerData.money[moneytype]
         self.PlayerData.money[moneytype] = newBalance
 
         if not self.Offline then
-            self.Functions.UpdatePlayerData()
+            if not moveMoney(moneytype, before, amount, 'remove') then return false end
             moneyLog(self, 'RemoveMoney', 'red', moneytype, amount, reason, 'removed')
             onMoneyChanged(moneytype, amount, 'remove', reason, amount, true)
         end
@@ -389,11 +404,12 @@ function RSGCore.Player.CreatePlayer(PlayerData, Offline)
         reason = reason or 'unknown'
         moneytype, amount = prepMoney(moneytype, amount)
         if not moneytype then return false end
-        local difference = amount - self.PlayerData.money[moneytype]
+        local before = self.PlayerData.money[moneytype]
+        local difference = amount - before
         self.PlayerData.money[moneytype] = amount
 
         if not self.Offline then
-            self.Functions.UpdatePlayerData()
+            if not moveMoney(moneytype, before, amount, 'set') then return false end
             moneyLog(self, 'SetMoney', 'green', moneytype, amount, reason, 'set')
             onMoneyChanged(moneytype, amount, 'set', reason, math.abs(difference), difference < 0)
         end

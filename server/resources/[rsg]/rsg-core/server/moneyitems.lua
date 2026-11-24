@@ -55,12 +55,15 @@ local function refreshInventory(src)
     end
 end
 
+-- FH (core M2): re-reads the stacks before every removal (each RemoveItem commits, and a commit can merge cents into
+-- dollars, so a list read once can name slots that changed); stops when nothing is left or a removal is refused.
 local function removeItems(player, itemName, amountToRemove, reason)
-    for _, item in ipairs(player.Functions.GetItemsByName(itemName) or {}) do
+    while amountToRemove > 0 do
+        local item = (player.Functions.GetItemsByName(itemName) or {})[1]
+        if not item then break end
         local removeAmount = math.min(item.amount, amountToRemove)
-        player.Functions.RemoveItem(item.name, removeAmount, item.slot, reason)
+        if not player.Functions.RemoveItem(item.name, removeAmount, item.slot, reason) then break end
         amountToRemove = amountToRemove - removeAmount
-        if amountToRemove <= 0 then break end
     end
 end
 
@@ -90,42 +93,44 @@ end
 ----------------------------
 -- Money operations handlers
 ----------------------------
+-- FH (core M2): every handler is all-or-nothing and returns true only when the items moved by exactly the amount.
+-- The items ARE the balance (SynchronizeMoneyItems re-reads it from them), so a handler that could not place its
+-- items used to leave the balance short while AddMoney / RemoveMoney / SetMoney still returned true.
+-- Shape: every add first, then every remove. An add can fail (no slot, over weight); a remove of items counted a
+-- moment earlier with no yield in between cannot, so a failed add is undone by removing the adds already done, never
+-- by adding anything back (which could fail again).
 
-local function handleAddMoney(src, moneytype, amount)
-    local player = RSGCore.Functions.GetPlayer(src)
-    if not player or not moneyItems[moneytype] then return end
-
-    if moneytype == 'gold' then
-        if amount > 0 then
-            giveMoneyItem(player, moneyItems.gold.unit, amount)
+local function applyMoves(player, adds, removes)
+    local done = {}
+    for _, a in ipairs(adds) do
+        if a[2] > 0 then
+            if not giveMoneyItem(player, a[1], a[2]) then
+                for i = #done, 1, -1 do removeItems(player, done[i][1], done[i][2], 'money-item-rollback') end
+                return false
+            end
+            done[#done + 1] = a
         end
-        refreshInventory(src)
-        return
     end
-
-    local dollars, cents = getParts(amount)
-
-    if dollars > 0 then
-        giveMoneyItem(player, moneyItems[moneytype].dollar, dollars)
+    for _, r in ipairs(removes) do
+        if r[2] > 0 then removeItems(player, r[1], r[2]) end
     end
-    if cents > 0 then
-        giveMoneyItem(player, moneyItems[moneytype].cent, cents)
-    end
-
-    refreshInventory(src)
+    return true
 end
 
-local function handleRemoveMoney(src, moneytype, amount)
-    local player = RSGCore.Functions.GetPlayer(src)
-    if not player or not moneyItems[moneytype] then return false end
+local function handleAddMoney(player, moneytype, amount)
+    if moneytype == 'gold' then
+        return applyMoves(player, { { moneyItems.gold.unit, amount } }, {})
+    end
+    local dollars, cents = getParts(amount)
+    return applyMoves(player, { { moneyItems[moneytype].dollar, dollars }, { moneyItems[moneytype].cent, cents } }, {})
+end
 
+local function handleRemoveMoney(player, moneytype, amount)
     local inventoryMoney = getInventoryMoney(player.PlayerData)
 
     if moneytype == 'gold' then
         if inventoryMoney.gold < amount then return false end
-        removeItems(player, moneyItems.gold.unit, amount)
-        refreshInventory(src)
-        return true
+        return applyMoves(player, {}, { { moneyItems.gold.unit, amount } })
     end
 
     local centName = moneyItems[moneytype].cent
@@ -140,54 +145,73 @@ local function handleRemoveMoney(src, moneytype, amount)
         return false
     end
 
-    local centsToRemove = math.min(availableCents, requiredCents)
-    local remainingRequired = requiredCents - centsToRemove
+    if requiredCents <= availableCents then
+        return applyMoves(player, {}, { { centName, requiredCents } })
+    end
+
+    -- every cent goes, then whole dollars; the change comes back as cents. Net cent change = change - availableCents:
+    -- added first when positive (the cents left stay under 100, so ConvertCoins never turns them into dollars).
+    local remainingRequired = requiredCents - availableCents
     local dollarsToRemove = math.ceil(remainingRequired / 100)
     local changeInCents = (dollarsToRemove * 100) - remainingRequired
+    local centDelta = changeInCents - availableCents
 
-    if centsToRemove > 0 then 
-        removeItems(player, centName, centsToRemove) 
-    end
-    
-    if dollarsToRemove > 0 then 
-        removeItems(player, dollarName, dollarsToRemove) 
-    end
-    
-    if changeInCents > 0 then 
-        giveMoneyItem(player, centName, changeInCents) 
-    end
-
-    refreshInventory(src)
-
-    return true
+    return applyMoves(player,
+        { { centName, math.max(centDelta, 0) } },
+        { { centName, math.max(-centDelta, 0) }, { dollarName, dollarsToRemove } })
 end
 
-local function handleSetMoney(src, moneytype, amount)
-    local player = RSGCore.Functions.GetPlayer(src)
-    if not player or not moneyItems[moneytype] then return end
+-- the value the items hold, in whole cents (gold: units)
+local function itemValue(player, moneytype)
+    local money = getInventoryMoney(player.PlayerData)
+    if moneytype == 'gold' then return money.gold end
+    local dollarName, centName = moneyItems[moneytype].dollar, moneyItems[moneytype].cent
+    return (money[moneyMap[dollarName]] or 0) * 100 + (money[moneyMap[centName]] or 0)
+end
 
-    local function removeAllItems(itemName)
-        for _, item in ipairs(player.Functions.GetItemsByName(itemName) or {}) do
-            player.Functions.RemoveItem(item.name, item.amount, item.slot)
-        end
+local function toUnits(moneytype, amount)
+    if moneytype == 'gold' then return amount end
+    return math.floor(amount * 100 + 0.5)
+end
+
+-- set = an add or a remove of the difference, so it takes the same all-or-nothing paths
+local function handleSetMoney(player, moneytype, amount)
+    local diff = toUnits(moneytype, amount) - itemValue(player, moneytype)
+    if diff == 0 then return true end
+    local delta = moneytype == 'gold' and math.abs(diff) or math.abs(diff) / 100
+    if diff > 0 then return handleAddMoney(player, moneytype, delta) end
+    return handleRemoveMoney(player, moneytype, delta)
+end
+
+local moneyHandlers = {
+    add = handleAddMoney,
+    remove = handleRemoveMoney,
+    set = handleSetMoney,
+}
+
+---FH (core M2): called by player.lua AddMoney / RemoveMoney / SetMoney (no longer an RSGCore:Server:OnMoneyChange
+---listener, whose result nobody could read). -> true when the items now hold the change, false when nothing moved.
+---The item value is checked before and after: only an exact move counts. A partial move (an inventory that changed
+---under the handler) is logged, never reported as done.
+function ApplyMoneyItems(player, moneytype, amount, operation)
+    local handler = moneyHandlers[operation]
+    if not handler or not player or not moneyItems[moneytype] then return false end
+    local before = itemValue(player, moneytype)
+    local want = toUnits(moneytype, amount)
+    if operation == 'remove' then want = before - want elseif operation == 'add' then want = before + want end
+    local done = handler(player, moneytype, amount) == true
+    local after = itemValue(player, moneytype)
+    refreshInventory(player.PlayerData.source)
+    if done and after == want then return true end
+    if after ~= before then
+        local src = player.PlayerData.source
+        print(('^1[rsg-core] money items for %s (%s) moved %s instead of %s (%s %s %s)^7'):format(
+            tostring(player.PlayerData.citizenid), tostring(src), after - before, want - before, operation, amount, moneytype))
+        TriggerEvent('rsg-log:server:CreateLog', 'moneyitems', 'Money item mismatch', 'red',
+            ('**%s** (%s): %s %s %s moved %s units instead of %s'):format(GetPlayerName(src) or 'unknown',
+                player.PlayerData.citizenid, operation, amount, moneytype, after - before, want - before))
     end
-
-    if moneytype == 'gold' then
-        removeAllItems(moneyItems.gold.unit)
-        if amount > 0 then giveMoneyItem(player, moneyItems.gold.unit, amount) end
-        refreshInventory(src)
-        return
-    end
-
-    removeAllItems(moneyItems[moneytype].cent)
-    removeAllItems(moneyItems[moneytype].dollar)
-
-    local dollars, cents = getParts(amount)
-
-    if dollars > 0 then giveMoneyItem(player, moneyItems[moneytype].dollar, dollars) end
-    if cents > 0 then giveMoneyItem(player, moneyItems[moneytype].cent, cents) end
-
-    refreshInventory(src)
+    return false
 end
 
 -----------------------------------------------------------------
@@ -209,11 +233,11 @@ RegisterNetEvent('RSGCore:Server:OnPlayerLoaded', function()
         local bloodmoney = calculateTotal(money.bloodDollars, money.bloodCents)
 
         if cash ~= player.PlayerData.money.cash then
-            handleSetMoney(src, 'cash', player.PlayerData.money.cash)
+            ApplyMoneyItems(player, 'cash', player.PlayerData.money.cash, 'set')
         end
 
         if bloodmoney ~= player.PlayerData.money.bloodmoney then
-            handleSetMoney(src, 'bloodmoney', player.PlayerData.money.bloodmoney)
+            ApplyMoneyItems(player, 'bloodmoney', player.PlayerData.money.bloodmoney, 'set')
         end
     else
         removeItems(player, moneyItems.cash.cent, math.huge, 'money-item-cleanup')
@@ -224,7 +248,7 @@ RegisterNetEvent('RSGCore:Server:OnPlayerLoaded', function()
 
     if RSGCore.Config.Gold.EnableGoldItems then
         if money.gold ~= player.PlayerData.money.gold then
-            handleSetMoney(src, 'gold', player.PlayerData.money.gold)
+            ApplyMoneyItems(player, 'gold', player.PlayerData.money.gold, 'set')
         end
     else
         removeItems(player, moneyItems.gold.unit, math.huge, 'gold-item-cleanup')
@@ -258,21 +282,6 @@ function IsMoneyItemEnabled(moneytype)
 end
 
 if RSGCore.Config.Money.EnableMoneyItems or RSGCore.Config.Gold.EnableGoldItems then
-
-    local moneyHandlers = {
-        add = handleAddMoney,
-        remove = handleRemoveMoney,
-        set = handleSetMoney,
-    }
-
-    AddEventHandler('RSGCore:Server:OnMoneyChange', function(src, moneytype, amount, operation, reason)
-        if not IsMoneyItemEnabled(moneytype) then return end
-        local handler = moneyHandlers[operation]
-        if handler then
-            handler(src, moneytype, amount)
-            TriggerClientEvent('hud:client:OnMoneyChange', src, moneytype, amount, operation == 'remove')
-        end
-    end)
 
     function SynchronizeMoneyItems(playerData)
         if not initialized[playerData.citizenid] then return playerData end
