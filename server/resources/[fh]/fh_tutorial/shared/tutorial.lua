@@ -18,11 +18,19 @@ M.CHECKS = {
     inventory = 'tutorial_inventory',
     trade     = 'tutorial_trade',
     jobs      = 'tutorial_jobs',
+    stash     = 'tutorial_stash',
+    gunsmith  = 'tutorial_gunsmith',
+    fence     = 'tutorial_fence',
 }
 
 -- The survival step advances on the server-local `fh:buffs:applied` event (see server/main.lua), not a client check.
 M.SURVIVAL_NPC = 'tutorial_survival'
 M.SURVIVAL_BUFFS = { well_fed = true, hydrated = true }
+
+-- The cargo step advances on the server-local `fh:cargo:wagon_spawned` event (see server/main.lua): the tutorial's
+-- own server calls talk when the player's wagon spawns. Like survival, it is a synthetic talk, not a client check.
+M.CARGO_NPC = 'tutorial_cargo'
+M.CARGO_EVENT = 'fh:cargo:wagon_spawned'
 
 -- Waypoints for the steps that have a location. Coordinates are copied from the owning lanes' configs (never invented
 -- here); re-sync if a lane moves one. All are approximate / unverified in game, like their sources.
@@ -30,7 +38,8 @@ M.WAYPOINTS = {
     trader     = { x = -176.0, y = 630.0, z = 114.0, label = 'Valentine Trade Post' }, -- fh_trade/config.lua:37
     homestead  = { x = -500.0, y = 750.0, z = 105.0, label = 'Homestead plot' },        -- fh_homestead/config.lua heartlands_01.center (nearest Heartlands claim)
     trapper    = { x = -299.0, y = 792.0, z = 118.2, label = 'Trapper' },                -- fh_hunting/config.lua:39
-    giver_hale = { x = -296.0, y = 788.0, z = 118.2, label = 'Ruth Hale' },               -- fh_quests/shared/givers.lua:8
+    giver_hale = { x = -296.0, y = 788.0, z = 118.2, label = 'Ruth Hale' },               -- fh_quests/shared/givers.lua:9
+    homestead_chest = { x = -496.0, y = 750.0, z = 105.0, label = 'Homestead chest' },    -- fh_homestead/config.lua:107 heartlands_01.chest.coords
 }
 
 -- Step bodies, keyed by stable id. The order comes from FhTutorialConfig.order (config.lua), never from this file:
@@ -51,22 +60,35 @@ M.STEPS = {
     claim_plot = {
         on = 'fh:homestead:claimed', waypoint = 'homestead',
         text = 'Find a homestead plot and claim it with /fh_claim.' },
+    stash = {
+        talk = { npc = 'tutorial_stash' }, check = 'stash', waypoint = 'homestead_chest',
+        text = 'Open your homestead chest to stash what you cannot carry.' },
     trade_post = {
         talk = { npc = 'tutorial_trade' }, check = 'trade', waypoint = 'trader',
         text = 'Ride to the Valentine Trade Post and open its menu to quote or sell goods.' },
     hunt = {
         on = 'fh:hunting:pelt_sold', waypoint = 'trapper',
         text = 'Hunt an animal, skin it, then sell the pelt to the trapper — your first sale.' },
+    gunsmith = {
+        talk = { npc = 'tutorial_gunsmith' }, check = 'gunsmith',
+        text = 'Restore a worn gun at your workbench with /fh_restore.' },
     jobs = {
         talk = { npc = 'tutorial_jobs' }, check = 'jobs',
         text = 'Open the jobs board with /jobs to take on paid work.' },
+    cargo = {
+        talk = { npc = 'tutorial_cargo' }, check = 'cargo',
+        text = 'Haul a cargo run: get a wagon and move a crate into it.' },
+    fence = {
+        talk = { npc = 'tutorial_fence' }, check = 'fence',
+        text = 'Find the fence and sell your illicit goods.' },
     family = {
         talk = { npc = 'npc_hale' }, waypoint = 'giver_hale',
         text = 'Meet a family quest giver — find Ruth Hale and introduce yourself.' },
 }
 
 -- Used when config.lua is absent or its order is unusable. Keep in sync with config.lua's documented default.
-M.DEFAULT_ORDER = { 'greeting', 'inventory', 'eat_drink', 'claim_plot', 'trade_post', 'hunt', 'jobs', 'family' }
+M.DEFAULT_ORDER = { 'greeting', 'inventory', 'eat_drink', 'claim_plot', 'stash', 'trade_post', 'hunt', 'gunsmith',
+    'jobs', 'cargo', 'fence', 'family' }
 
 -- Only these must be in the order; the rest may be omitted by a config that wants a shorter intro.
 M.MANDATORY = { greeting = true, inventory = true }
@@ -141,12 +163,13 @@ end
 function M.checkOf(step) return step and step.check or nil end
 
 ---How a step advances: 'event' (fh_quests intake), 'client_check' (client reports a signal),
----'buff' (survival fh:buffs:applied), or 'giver' (a real family giver talk).
+---'buff' (survival fh:buffs:applied), 'event_talk' (cargo fh:cargo:wagon_spawned), or 'giver' (a real family giver talk).
 function M.advancesOn(step)
     if not step then return nil end
     if step.on then return 'event' end
     if step.talk then
         if step.check == 'survival' then return 'buff' end
+        if step.check == 'cargo' then return 'event_talk' end
         if M.CHECKS[step.check] then return 'client_check' end
         return 'giver'
     end

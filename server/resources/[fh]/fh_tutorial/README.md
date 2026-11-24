@@ -13,37 +13,45 @@ The intro tutorial (plan guide-02, `@guide`), built on the fh_quests API. One qu
 
 ## Flow (steps)
 
-The order comes from `FhTutorialConfig.order` in `config.lua`: greeting, inventory, eat/drink, claim plot, trade post,
-hunt, jobs, family giver. Teach needs before they bite, home and stash before shopping, jobs after the first sale
-proves the money loop, and the family giver is the graduation. Unknown ids in the list are dropped with a warning;
-`greeting` and `inventory` are mandatory (an order missing either falls back to the built-in default order).
+The order comes from `FhTutorialConfig.order` in `config.lua`: greeting, inventory, eat/drink, claim plot, stash,
+trade post, hunt, gunsmith, jobs, cargo, fence, family giver. Teach needs before they bite, home and stash before
+shopping, jobs after the first sale proves the money loop, and the family giver is the graduation; the fence comes
+last because it is the crime loop. Unknown ids in the list are dropped with a warning; `greeting` and `inventory` are
+mandatory (an order missing either falls back to the built-in default order).
 
 Steps advance on the fh_quests intake whitelist plus `fh:quests:talked`. Where a real `fh:*` event exists we use it;
 otherwise a talk step (a real giver) or a client check (reported to the server, which calls `talk`). Every step with a
 location sets a GPS waypoint (drawn as the yellow multi-route, since RDR3 has no `SET_NEW_WAYPOINT`).
 
-| # | id | Prompt (summary) | Advances on | Waypoint (source) |
+| # | id | Prompt (summary) | Advances on (signal, source) | Waypoint (source) |
 |---|---|---|---|---|
-| 1 | `greeting` | Welcome; read this, then the inventory prompt follows | client check `fh:tutorial:check greeting` (client ack after 2.5s on screen) | — |
-| 2 | `inventory` | Open your inventory (`I`) | client check `rsg-inventory:client:open` | — |
-| 3 | `eat_drink` | Eat and drink | server event `fh:buffs:applied` (`well_fed`/`hydrated`) | — |
-| 4 | `claim_plot` | Claim a homestead plot (`/fh_claim`) | `fh:homestead:claimed` | homestead = `fh_homestead/config.lua` `heartlands_01.center` |
-| 5 | `trade_post` | Go to the Valentine Trade Post, quote/sell | client check `fh:trade:menu` | trader = `fh_trade/config.lua:37` |
-| 6 | `hunt` | Hunt, skin, sell a pelt to the trapper | `fh:hunting:pelt_sold` | trapper = `fh_hunting/config.lua:39` |
-| 7 | `jobs` | Open the jobs board (`/jobs`) | client check `fh:ui:open` screen `jobs` | — |
-| 8 | `family` | Meet a family quest giver (Ruth Hale) | `talk` npc `npc_hale` | giver = `fh_quests/shared/givers.lua:8` |
+| 1 | `greeting` | Welcome; read this, then the inventory prompt follows | client check `fh:tutorial:check greeting` (client ack after 2.5s on screen; `fh_tutorial/client/main.lua:42`) | — |
+| 2 | `inventory` | Open your inventory (`I`) | client check `rsg-inventory:client:open` (`fh_inventory/server/main.lua:1066`) | — |
+| 3 | `eat_drink` | Eat and drink | server event `fh:buffs:applied` (`well_fed`/`hydrated`; `fh_buffs/server/main.lua:19`) | — |
+| 4 | `claim_plot` | Claim a homestead plot (`/fh_claim`) | `fh:homestead:claimed` (`fh_homestead/server/main.lua:219`) | homestead = `fh_homestead/config.lua:105` `heartlands_01.center` |
+| 5 | `stash` | Open your homestead chest | client check `rsg-inventory:client:open` where `other.id` = `fh:chest:<plot>:<n>` (`fh_inventory/server/main.lua:1066`; id prefix `fh_homestead/shared/plot_rules.lua:107`) | chest = `fh_homestead/config.lua:107` `heartlands_01.chest.coords` |
+| 6 | `trade_post` | Go to the Valentine Trade Post, quote/sell | client check `fh:trade:menu` (`fh_trade/server/main.lua:276`) | trader = `fh_trade/config.lua:37` |
+| 7 | `hunt` | Hunt, skin, sell a pelt to the trapper | `fh:hunting:pelt_sold` (`fh_hunting/shared/sell.lua:157`) | trapper = `fh_hunting/config.lua:39` |
+| 8 | `gunsmith` | Restore a worn gun at your workbench (`/fh_restore`) | client check `fh_gunsmith:conditionChanged` (after a successful restore; `fh_gunsmith/server/main.lua:94`) | — |
+| 9 | `jobs` | Open the jobs board (`/jobs`) | client check `fh:ui:open` screen `jobs` (`fh_quests/server/ui.lua:11`) | — |
+| 10 | `cargo` | Haul a cargo run | server event `fh:cargo:wagon_spawned` (`fh_cargo/server/main.lua:83`) | — |
+| 11 | `fence` | Find the fence, sell illicit goods | client check `fh:ui:open` screen `fence` (`fh_fence/client/main.lua:17`) | — |
+| 12 | `family` | Meet a family quest giver (Ruth Hale) | `talk` npc `npc_hale` (`fh_quests/shared/givers.lua:5`) | giver = `fh_quests/shared/givers.lua:9` |
 
 Waypoint coordinates are copied from the owning lanes' configs (never invented here); re-sync if a lane moves one. All
 are approximate / unverified in game, like their sources.
 
 ## How the non-event steps advance
 
-`registerQuest` only advances steps on the intake whitelist or `fh:quests:talked`. The steps without a real event
-(greeting, inventory, trade, jobs, survival) are `talk` steps with a synthetic npc id, and fh_tutorial's own server
-calls `exports.fh_quests:talk(src, npc)` when the matching signal is seen. `talk` is a no-op unless the current step
-expects that npc, so a stray or forged report can never skip a step. The greeting has no player action: the prompt
-carries `ack = { check = 'greeting', after_ms = 2500 }` and the client reports the check after the text has been on
-screen; opening the inventory during that window is simply a no-op until the greeting advances.
+`registerQuest` only advances steps on the intake whitelist or `fh:quests:talked`. The steps without a real intake
+event (greeting, inventory, stash, trade, gunsmith, jobs, fence, survival, cargo) are `talk` steps with a synthetic
+npc id, and fh_tutorial's own server calls `exports.fh_quests:talk(src, npc)` when the matching signal is seen. `talk`
+is a no-op unless the current step expects that npc, so a stray or forged report can never skip a step. Stash reuses
+the inventory open event but distinguishes the homestead chest by the container id prefix `fh:chest:`; the gunsmith
+has no menu, so it advances on `fh_gunsmith:conditionChanged` after a successful `/fh_restore`. The greeting has no
+player action: the prompt carries `ack = { check = 'greeting', after_ms = 2500 }` and the client reports the check
+after the text has been on screen; opening the inventory during that window is simply a no-op until the greeting
+advances.
 
 ## Commands
 
@@ -70,12 +78,13 @@ screen; opening the inventory during that window is simply a no-op until the gre
 ## Events
 
 - Consumes (server): `fh:quests:started`, `fh:quests:step`, `fh:quests:completed` (prompt routing),
-  `fh:buffs:applied` (survival step), `RSGCore:Server:PlayerLoaded` / `RSGCore:Server:OnPlayerUnload` /
-  `playerDropped` (lifecycle; on load it re-shows an in-flight run's current prompt), `onResourceStart`
-  (register/re-register).
-- Consumes (client, net): `fh:tutorial:prompt` (prompt + waypoint), `rsg-inventory:client:open`,
-  `fh:trade:menu`, `fh:ui:open` (client-check signals).
-- Emits (client -> server, net): `fh:tutorial:check` `check = 'greeting'|'inventory'|'trade'|'jobs'`.
+  `fh:buffs:applied` (survival step), `fh:cargo:wagon_spawned` (cargo step), `RSGCore:Server:PlayerLoaded` /
+  `RSGCore:Server:OnPlayerUnload` / `playerDropped` (lifecycle; on load it re-shows an in-flight run's current
+  prompt), `onResourceStart` (register/re-register).
+- Consumes (client, net): `fh:tutorial:prompt` (prompt + waypoint), `rsg-inventory:client:open` (inventory + stash),
+  `fh:trade:menu`, `fh_gunsmith:conditionChanged`, `fh:ui:open` (jobs + fence) — the client-check signals.
+- Emits (client -> server, net): `fh:tutorial:check`
+  `check = 'greeting'|'inventory'|'stash'|'trade'|'gunsmith'|'jobs'|'fence'`.
 - Emits (server -> client, net): `fh:tutorial:prompt` `{ text, waypoint = { x, y, z, label } | nil,
   ack = { check, after_ms } | nil }`.
 
@@ -105,7 +114,8 @@ surviving a reorder. Syntax: `~/.venvs/rf/bin/python tools/run-specs.py --syntax
    eat/drink step.
 2. `/tutorial` re-shows the current step and route; `/tutorial skip` stops it and survives a relog; `/tutorial restart`
    brings it back from step 1 (also after completing it).
-3. Eating/drinking, claiming a plot, opening the trade menu, selling a pelt, opening the jobs board, and talking to
-   Ruth Hale each advance the matching step.
+3. Eating/drinking, claiming a plot, opening the homestead chest, opening the trade menu, selling a pelt, restoring
+   a gun at a workbench, opening the jobs board, spawning a wagon, opening the fence, and talking to Ruth Hale each
+   advance the matching step.
 4. A finished tutorial never re-starts on its own (fh_tutorial_state row), and never blocks the family quests.
 5. Reordering `FhTutorialConfig.order` and relogging does not move an in-flight character to a different step.

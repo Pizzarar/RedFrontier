@@ -89,7 +89,7 @@ local function saveRecord(cid, skipped)
     pcall(MySQL.update.await, SKIP_UPSERT, { cid, skipped and 1 or 0, os.time() })
 end
 
--- ------------------------------------------------------------------ client checks + survival
+-- ------------------------------------------------------------------ client checks + survival + cargo
 -- Client reports a check; the server maps it to a synthetic talk npc. talk() only advances when the current step is
 -- that npc's talk step, so a stray or forged report is a no-op.
 RegisterNetEvent('fh:tutorial:check', function(checkId)
@@ -107,6 +107,16 @@ AddEventHandler('fh:buffs:applied', function(p)
     if GetGameTimer() - (lastLoad[src] or 0) < 10000 then return end
     if not questsReady() then return end
     exports.fh_quests:talk(src, T.SURVIVAL_NPC)
+end)
+
+-- Cargo: a real server event (fh:cargo:wagon_spawned). The payload carries the owner's src, so the tutorial calls
+-- talk for that source directly; only the wagon owner's tutorial can advance.
+AddEventHandler(T.CARGO_EVENT, function(p)
+    if type(p) ~= 'table' then return end
+    local src = p.src
+    if type(src) ~= 'number' or src < 1 then return end
+    if not questsReady() then return end
+    exports.fh_quests:talk(src, T.CARGO_NPC)
 end)
 
 -- ------------------------------------------------------------------ commands

@@ -17,7 +17,8 @@ local def = Tut.def
 
 -- The owner-approved order: teach needs before they bite; home and stash before shopping; jobs after the first
 -- sale proves the money loop; the family giver is the graduation.
-local WANT_ORDER = { 'greeting', 'inventory', 'eat_drink', 'claim_plot', 'trade_post', 'hunt', 'jobs', 'family' }
+local WANT_ORDER = { 'greeting', 'inventory', 'eat_drink', 'claim_plot', 'stash', 'trade_post', 'hunt',
+    'gunsmith', 'jobs', 'cargo', 'fence', 'family' }
 
 -- Payload that satisfies a step's event (mirrors spec/quests_families_spec.lua payloadFor).
 local function payloadFor(step, cid)
@@ -92,17 +93,19 @@ describe('tutorial definition', function()
             T.ok(E.isIntake(ev), ('step %d event %s'):format(i, tostring(ev)))
         end
     end)
-    it('classifies every step (client_check / event / giver / buff)', function()
+    it('classifies every step (client_check / event / giver / buff / event_talk)', function()
         local want = {
             greeting = 'client_check', inventory = 'client_check', eat_drink = 'buff', claim_plot = 'event',
-            trade_post = 'client_check', hunt = 'event', jobs = 'client_check', family = 'giver',
+            stash = 'client_check', trade_post = 'client_check', hunt = 'event', gunsmith = 'client_check',
+            jobs = 'client_check', cargo = 'event_talk', fence = 'client_check', family = 'giver',
         }
         for i, s in ipairs(def.steps) do eq(want[s.id], Tut.advancesOn(s), s.id) end
     end)
     it('resolves waypoints only for the location steps', function()
         local want = {
             greeting = nil, inventory = nil, eat_drink = nil, claim_plot = 'Homestead plot',
-            trade_post = 'Valentine Trade Post', hunt = 'Trapper', jobs = nil, family = 'Ruth Hale',
+            stash = 'Homestead chest', trade_post = 'Valentine Trade Post', hunt = 'Trapper', gunsmith = nil,
+            jobs = nil, cargo = nil, fence = nil, family = 'Ruth Hale',
         }
         for _, s in ipairs(def.steps) do
             local wp = Tut.waypointOf(s)
@@ -114,6 +117,9 @@ describe('tutorial definition', function()
         eq('tutorial_inventory', Tut.checkNpc('inventory'))
         eq('tutorial_trade', Tut.checkNpc('trade'))
         eq('tutorial_jobs', Tut.checkNpc('jobs'))
+        eq('tutorial_stash', Tut.checkNpc('stash'))
+        eq('tutorial_gunsmith', Tut.checkNpc('gunsmith'))
+        eq('tutorial_fence', Tut.checkNpc('fence'))
         eq(nil, Tut.checkNpc('survival'))
         eq(nil, Tut.checkNpc('nope'))
     end)
@@ -125,6 +131,21 @@ describe('tutorial step order comes from config', function()
             T.ok(Tut.STEPS[id] ~= nil, 'unknown id in config: ' .. tostring(id))
         end
         T.ok(Tut.STEPS.greeting and Tut.STEPS.inventory, 'mandatory steps exist')
+    end)
+    it('builds the four T1 steps (stash, gunsmith, cargo, fence)', function()
+        local inOrder = {}
+        for i, s in ipairs(def.steps) do inOrder[s.id] = i end
+        local want = { stash = true, gunsmith = true, cargo = true, fence = true }
+        for id in pairs(want) do
+            T.ok(Tut.STEPS[id] ~= nil, 'missing step ' .. id)
+            T.ok(type(Tut.STEPS[id].text) == 'string' and Tut.STEPS[id].text ~= '', id .. ' has prompt text')
+            T.ok(inOrder[id] ~= nil, id .. ' is in the built order')
+        end
+        -- the new client checks map to their synthetic npcs; cargo is a server event, not a client check
+        eq('tutorial_stash', Tut.checkNpc('stash'))
+        eq('tutorial_gunsmith', Tut.checkNpc('gunsmith'))
+        eq('tutorial_fence', Tut.checkNpc('fence'))
+        eq(nil, Tut.checkNpc('cargo'))
     end)
     it('builds a shorter intro from a subset order', function()
         local _, warn = warningsOf()
@@ -205,14 +226,17 @@ describe('tutorial step machine: advance', function()
 end)
 
 describe('tutorial progress survives a reorder', function()
-    it('resolves the current step by id, not by index', function()
-        local defA = withSteps(Tut.buildSteps(WANT_ORDER))
-        local defB = withSteps(Tut.buildSteps({ 'greeting', 'inventory', 'claim_plot', 'trade_post', 'hunt', 'jobs',
-            'family', 'eat_drink' }))
+    it('resolves the current step by id, not by index (an old saved step id survives the 12-step reorder)', function()
+        -- defA is the pre-T1 8-step order; defB is today's 12-step order. A character saved under defA keeps
+        -- progress.step_id = 'trade_post' at index 5; after the reorder that id lands at index 6, not on 'stash'.
+        local oldOrder = { 'greeting', 'inventory', 'eat_drink', 'claim_plot', 'trade_post', 'hunt', 'jobs', 'family' }
+        local defA = withSteps(Tut.buildSteps(oldOrder))
+        local defB = withSteps(Tut.buildSteps(WANT_ORDER))
         local st = E.start(defA, {}, CID, T0)
         while currentId(defA, st) ~= 'trade_post' do st = feedCurrent(defA, st) end
-        eq(5, E.stepIndexOf(defA, st))
-        eq(4, E.stepIndexOf(defB, st), 'trade_post moved to 4 in the reordered def')
+        eq(5, E.stepIndexOf(defA, st), 'trade_post at 5 in the old order')
+        eq(6, E.stepIndexOf(defB, st), 'trade_post resolved to 6 by id in the new order, not to index 5 (stash)')
+        eq('trade_post', currentId(defB, st))
 
         st = feedCurrent(defB, st) -- the current step's own event still advances it
         eq('hunt', currentId(defB, st))

@@ -46,14 +46,29 @@ end)
 
 -- Client-check signals. The server only advances when the current step matches (talk is a no-op otherwise), so these
 -- fire unconditionally and cost nothing. Each is a net event the owning lane already sends to this client.
-FH.onNet('rsg-inventory:client:open', function()
-    TriggerServerEvent('fh:tutorial:check', 'inventory')
+-- `rsg-inventory:client:open` fires for the player's own inventory (other = the ground 'newdrop' pane) AND for any
+-- container they open (other = that container). A homestead chest opens with other.id 'fh:chest:<plot>:<n>'
+-- (fh_homestead/shared/plot_rules.lua chestStashId), so the stash step is that open, not the plain I press.
+FH.onNet('rsg-inventory:client:open', function(player, other)
+    if type(other) == 'table' and type(other.id) == 'string' and other.id:match('^fh:chest:') then
+        TriggerServerEvent('fh:tutorial:check', 'stash')
+    else
+        TriggerServerEvent('fh:tutorial:check', 'inventory')
+    end
 end)
 FH.onNet('fh:trade:menu', function()
     TriggerServerEvent('fh:tutorial:check', 'trade')
 end)
+-- The gunsmith has no menu: /fh_restore at a workbench emits fh_gunsmith:conditionChanged after a successful
+-- restore (fh_gunsmith/server/main.lua:94). That is the "used the gunsmith" signal.
+FH.onNet('fh_gunsmith:conditionChanged', function()
+    TriggerServerEvent('fh:tutorial:check', 'gunsmith')
+end)
 FH.onNet('fh:ui:open', function(data)
-    if type(data) == 'table' and data.screen == 'jobs' then
+    if type(data) ~= 'table' then return end
+    if data.screen == 'jobs' then
         TriggerServerEvent('fh:tutorial:check', 'jobs')
+    elseif data.screen == 'fence' then
+        TriggerServerEvent('fh:tutorial:check', 'fence')
     end
 end)

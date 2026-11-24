@@ -62,7 +62,7 @@ After recording, flip with `set fh_spike_gated false` in the console only for th
 
 ## Tutorial (fh_tutorial): first-join intro
 
-Resource: `fh_tutorial` (plan guide-02), built on fh_quests (quest `tutorial_intro`, kind `tutorial`; step order is `FhTutorialConfig.order` = greeting, inventory, eat_drink, claim_plot, trade_post, hunt, jobs, family). It auto-starts once on a character's first load (no `fh_tutorial_state` row), is skippable and never blocks anything. Prompts are plain `ox_lib` notifications titled `Tutorial`; steps with a place also draw a yellow GPS route. Needs `ensure fh_tutorial` after `fh_quests`, plus `fh_homestead`, `fh_trade`, `fh_hunting`, `fh_buffs`/`fh_survival` for their steps. Do this with a NEW character (create a second slot; an existing character that already has a row will not auto-start, see step 11). Everything here is read from code and is unverified in game; items that code cannot confirm say TODO-verify-in-game. Waypoint coordinates are copied from other lanes' configs and are approximate.
+Resource: `fh_tutorial` (plan guide-02), built on fh_quests (quest `tutorial_intro`, kind `tutorial`; step order is `FhTutorialConfig.order` = greeting, inventory, eat_drink, claim_plot, stash, trade_post, hunt, gunsmith, jobs, cargo, fence, family). It auto-starts once on a character's first load (no `fh_tutorial_state` row), is skippable and never blocks anything. Prompts are plain `ox_lib` notifications titled `Tutorial`; steps with a place also draw a yellow GPS route. Needs `ensure fh_tutorial` after `fh_quests`, plus `fh_homestead`, `fh_trade`, `fh_hunting`, `fh_buffs`/`fh_survival`, `fh_gunsmith`, `fh_cargo`, `fh_fence` for their steps. Do this with a NEW character (create a second slot; an existing character that already has a row will not auto-start, see step 15). Everything here is read from code and is unverified in game; items that code cannot confirm say TODO-verify-in-game. Waypoint coordinates are copied from other lanes' configs and are approximate.
 
 1. New character spawns clothed. Create a new character in the creator and finish it WITHOUT picking any clothes, then spawn.
    Expected: the character is wearing the default outfit (shirt, pants and boots from `RSG.DefaultClothes` in `rsg-character/shared/config.lua`, the frontier shirt/pants/boots for male or chemise/pants/boots for female), not underwear. TODO-verify-in-game: the hashes are from a data file and were never seen on screen.
@@ -82,22 +82,34 @@ Resource: `fh_tutorial` (plan guide-02), built on fh_quests (quest `tutorial_int
 6. Claim a plot (step `claim_plot`). Follow the yellow route to the Heartlands plot (about -500, 750, 105) and run `/fh_claim`.
    Expected: prompt `Find a homestead plot and claim it with /fh_claim.` with a route labelled `Homestead plot`; `fh_claim: claimed plot heartlands_01` advances it (event `fh:homestead:claimed`). TODO-verify-in-game: the route draws (RDR3 has no SET_NEW_WAYPOINT; the multi-route natives and `COLOR_YELLOW` are a guess).
    RESULT:
-7. Trade post (step `trade_post`). Ride to the Valentine Trade Post (about -176, 630, 114) and open its menu.
+7. Stash (step `stash`). At your claimed plot, walk to the homestead chest and press `E` to open it.
+   Expected: prompt `Open your homestead chest to stash what you cannot carry.` with a route labelled `Homestead chest` (about -496, 750, 105); opening the chest advances (client event `rsg-inventory:client:open` where the opened container id starts `fh:chest:`). TODO-verify-in-game: that pressing `E` on the chest opens `fh:chest:<plot>:1`, and that pressing `I` here does NOT advance it (plain inventory reports `inventory`, not `stash`).
+   RESULT:
+8. Trade post (step `trade_post`). Ride to the Valentine Trade Post (about -176, 630, 114) and open its menu.
    Expected: prompt `Ride to the Valentine Trade Post and open its menu to quote or sell goods.` with a route labelled `Valentine Trade Post`; opening the trade menu (client event `fh:trade:menu`) advances. You do not have to sell anything.
    RESULT:
-8. Hunt (step `hunt`). Hunt an animal, skin it and sell the pelt to the trapper (about -299, 792, 118).
+9. Hunt (step `hunt`). Hunt an animal, skin it and sell the pelt to the trapper (about -299, 792, 118).
    Expected: prompt `Hunt an animal, skin it, then sell the pelt to the trapper — your first sale.` with a route labelled `Trapper`; the pelt sale (`fh:hunting:pelt_sold`) advances. Fastest in a test session: any pelt, see Hunting H2/H3.
    RESULT:
-9. Jobs (step `jobs`). Run `/jobs`.
+10. Gunsmith (step `gunsmith`). Restore a worn gun at your workbench with `/fh_restore` (needs a built workbench on your plot, or `fh_dev 1` dev stations, plus a worn gun and gun parts).
+   Expected: prompt `Restore a worn gun at your workbench with /fh_restore.`; a successful restore advances it (client event `fh_gunsmith:conditionChanged`, emitted after `/fh_restore`). TODO-verify-in-game: the gunsmith has no menu — opening the workbench alone does NOT advance it, only a successful restore does.
+   RESULT:
+11. Jobs (step `jobs`). Run `/jobs`.
    Expected: prompt `Open the jobs board with /jobs to take on paid work.`; the board opens (`fh:ui:open` screen `jobs`) and the step advances. Close the board.
    RESULT:
-10. Family giver (step `family`, the last). Walk to Ruth Hale (about -296, 788, 118) and talk to her (E, see Q5 step 10 for the dialogue).
+12. Cargo (step `cargo`). Spawn a wagon and move a cargo crate into it.
+   Expected: prompt `Haul a cargo run: get a wagon and move a crate into it.`; the step advances on the server event `fh:cargo:wagon_spawned` (fires when a wagon actually spawns). TODO-verify-in-game: wagons are not player-spawnable yet (`/fh_wagon` is admin-only; fh_core spawn kind `wagon` is unmerged), so an admin must `/fh_wagon t1` for the owner to advance this step.
+   RESULT:
+13. Fence (step `fence`). Find the roving fence and open its menu (press `E` near the current stop; it roves between two Heartlands stops every ~20 min).
+   Expected: prompt `Find the fence and sell your illicit goods.` (no route: the fence roves); opening the fence screen (`fh:ui:open` screen `fence`) advances. You do not have to sell anything. TODO-verify-in-game: the fence moves, so find it by its map blip / `/where fence`, not a fixed route.
+   RESULT:
+14. Family giver (step `family`, the last). Walk to Ruth Hale (about -296, 788, 118) and talk to her (E, see Q5 step 10 for the dialogue).
    Expected: prompt `Meet a family quest giver — find Ruth Hale and introduce yourself.` with a route labelled `Ruth Hale`; talking to her advances it (fh_quests `talk` npc `npc_hale`), then the final notification `Tutorial complete — you know your way around now. Stay sharp out there.` TODO-verify-in-game: that opening Hale's dialogue counts as a `talk` for this step even before you accept her quest. The tutorial never blocks her normal family quest.
    RESULT:
-11. Commands and persistence. At any step run `/tutorial`; then `/tutorial skip`; relog; then `/tutorial restart`.
+15. Commands and persistence. At any step run `/tutorial`; then `/tutorial skip`; relog; then `/tutorial restart`.
    Expected: `/tutorial` re-shows the current step prompt and re-sets its route (with none active: `No active tutorial. Use /tutorial restart to replay it.`). `/tutorial skip` shows `Tutorial skipped. Bring it back any time with /tutorial restart.` and it does not return after a relog (row in `fh_tutorial_state`: `SELECT * FROM fh_tutorial_state WHERE citizenid = '<cid>';` shows `skipped = 1`). `/tutorial restart` clears the skip and starts again from the greeting, also after a completed run (the quest is repeatable with no cooldown). A relog mid-tutorial re-shows the current step. A finished tutorial never auto-starts again. To rerun it on an old character use `/tutorial restart`, not a new row; no admin command exists to delete the row.
    RESULT:
-12. Never blocking. Skip the tutorial at step 1 (new character again, or `/tutorial restart` then `/tutorial skip`) and do the claim, a sale and Ruth Hale's quest normally.
+16. Never blocking. Skip the tutorial at step 1 (new character again, or `/tutorial restart` then `/tutorial skip`) and do the claim, a sale and Ruth Hale's quest normally.
    Expected: all of them work exactly as without the tutorial; no step is refused because the tutorial is skipped or incomplete.
    RESULT:
 

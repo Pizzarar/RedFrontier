@@ -11,9 +11,13 @@ FhTutorialConfig = {
         'inventory',
         'eat_drink',
         'claim_plot',
+        'stash',
         'trade_post',
         'hunt',
+        'gunsmith',
         'jobs',
+        'cargo',
+        'fence',
         'family',
     },
 }
