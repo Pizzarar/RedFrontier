@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor2
-- Workers: 4
+- Workers: 2
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -61,3 +61,4 @@
 - 11-24 R1 COMPLETE: idea-804 fh_economy.repByCitizenid (offline rep for homestead H8 abandon; shared applyRep, src re-resolve after awaits) 59c688b+f9a7316, Gemini PASS 0/0/2 folded; venv 87/1595/0.
 - 11-24 R1 idea-804 merged 7bb75f6; core-06 I1 (743/744/750) by lead. core-07 handed to Cor2 rn-d9e827279687 (4 parallel blocks). Remaining owner-gated: B1-live, B6f flip.
 - 11-24 core-07 S1 PASS: fh_core edge specs (49 tests: carried refs offline src, bulky veto, setItemInfo races, netId after despawn, spawn timeouts, snap) d29dc30+4393738, Gemini PASS 0/0/3 folded; venv 93/1699/0.
+- 11-24 core-07 A1 PASS: fh_economy money audit, 3 fixes (logout-window guard, checked add/remove in integer cents, whole-cent amounts) + unload tracker cleanup; 2d43a30+3da975a, Gemini tierA FAIL 0/1/1 then PASS 0/0/0; venv 96/1732/0. Follow-ups M2/M3 queued, siblings idea-862..867.

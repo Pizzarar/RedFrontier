@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T22:11:01.277Z",
+  "updatedAt": "2026-11-24T22:58:24.927Z",
   "units": [
     {
       "id": "B5",
@@ -265,9 +265,9 @@
       "goal": "tierA fh_economy money audit (core-07)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-a1",
-      "commit": "dadc1bc"
+      "commit": "3da975a"
     },
     {
       "id": "S1",
@@ -298,7 +298,8 @@
       "files": [],
       "doneCheck": "",
       "status": "running",
-      "branch": "core-x1"
+      "branch": "core-x1",
+      "commit": "0d4c637"
     }
   ]
 }
