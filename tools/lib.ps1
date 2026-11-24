@@ -72,6 +72,16 @@ function Initialize-AccessCfgs([string]$Dir = $Server) {
         }
     }
 }
+# Picks the host's NordVPN Meshnet IP from Get-NetIPAddress-shaped objects: a 100.64.0.0/10 address on a NordLynx/Meshnet
+# adapter (a stale Tailscale 100.x adapter is ignored). Falls back to Media-Host's known Meshnet IP.
+function Get-MeshnetIp($Addresses, [string]$Fallback = '100.102.50.11') {
+    $m = @($Addresses | Where-Object {
+        $_.IPAddress -match '^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.' -and $_.InterfaceAlias -match 'NordLynx|Meshnet'
+    } | Select-Object -ExpandProperty IPAddress)
+    if ($m) { return $m[0] }
+    return $Fallback
+}
+
 # Classifies boot-log lines: 'license' | 'error' | 'ok' | 'pending'. Shared by boot-check and first-run.
 $script:BootErrPat = 'SCRIPT ERROR|Couldn''t start resource|Couldn''t find resource|Failed to load|ECONNREFUSED|Unable to establish connection|Access denied for user'
 function Get-BootState([string[]]$Lines, [string[]]$Expected) {

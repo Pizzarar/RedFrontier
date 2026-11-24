@@ -123,10 +123,12 @@ Initialize-AccessCfgs $(if ($CfgDir) { $CfgDir } else { $Server })
 
 # ---- 4. Start ----
 if ($NoStart) { Write-Host '[start] skipped (-NoStart)'; return }
-# Host is Media-Host on NordVPN Meshnet; same-LAN clients use the address printed below.
-$ip = '100.102.50.11'
-$lan = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -match '^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.' -and $_.InterfaceAlias -notmatch 'vEthernet|Loopback' } |
+# Host is Media-Host on NordVPN Meshnet: print its Meshnet (NordLynx 100.x) IP, falling back to 100.102.50.11.
+# Same-LAN clients use the LAN address printed below (NordLynx's 10.x VPN tunnel address is not a LAN).
+$addrs = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue)
+$ip = Get-MeshnetIp $addrs
+$lan = @($addrs |
+    Where-Object { $_.IPAddress -match '^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.' -and $_.InterfaceAlias -notmatch 'vEthernet|Loopback|NordLynx|Meshnet' } |
     Select-Object -ExpandProperty IPAddress)
 
 function Show-Connect($state) {

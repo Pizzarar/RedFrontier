@@ -302,7 +302,7 @@ exports.fh_core:requestOfNetId(netId) -- requestId | nil
 
 ## Access (B-access, private server)
 
-Private dev server: the owner plus up to 5 friends over Tailscale (`sv_maxclients 6`, unlisted via `sv_master1 ""`).
+Private dev server: the owner plus up to 5 friends over NordVPN Meshnet (host Media-Host, `100.102.50.11`) (`sv_maxclients 6`, unlisted via `sv_master1 ""`).
 Files: `shared/access_rules.lua` (`FhAccessRules`, pure, `spec/access_rules_spec.lua`), `server/access.lua` (natives, io).
 
 - **Auto-admin:** with `fh_dev 1` and `fh_dev_autoadmin 1` (server.cfg, private dev server only) and no admin line in

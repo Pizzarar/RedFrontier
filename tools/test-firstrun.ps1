@@ -55,6 +55,13 @@ try {
     $env:FH_CFX_KEY = $null
 } finally { Remove-Item $t -ErrorAction SilentlyContinue; Remove-Item $cd -Recurse -Force -ErrorAction SilentlyContinue }
 
+# Meshnet IP pick: NordLynx 100.64/10 address wins; Tailscale 100.x and LAN are ignored; fallback is Media-Host's IP
+$na = { param($ip, $alias) [pscustomobject]@{ IPAddress = $ip; InterfaceAlias = $alias } }
+Check 'meshnet detect'   ((Get-MeshnetIp @((& $na '192.168.1.135' 'Ethernet'), (& $na '100.99.1.2' 'NordLynx'))) -eq '100.99.1.2')
+Check 'meshnet no ts'    ((Get-MeshnetIp @((& $na '100.83.196.251' 'Tailscale'))) -eq '100.102.50.11')
+Check 'meshnet no tunnel' ((Get-MeshnetIp @((& $na '10.5.0.2' 'NordLynx'))) -eq '100.102.50.11')
+Check 'meshnet fallback' ((Get-MeshnetIp @()) -eq '100.102.50.11')
+
 $ok = @('Started resource a', 'Started resource b', 'Database server connection established')
 Check 'boot ok'      ((Get-BootState $ok @('a', 'b')) -eq 'ok')
 Check 'boot pending' ((Get-BootState $ok @('a', 'b', 'c')) -eq 'pending')

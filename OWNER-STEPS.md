@@ -5,7 +5,7 @@ Two machines. **DevPC** hosts the repo, FXServer, MariaDB and the Cfx license ke
 ## 1. Prerequisites
 
 - **Main PC:** your own legit RDR2 copy + the RedM client.
-- **DevPC:** Windows, this repo checked out, PowerShell, NordVPN Meshnet (the Main PC and friends reach the host through it, no router port-forward). FXServer and MariaDB are downloaded for you by `tools/setup-server.ps1`; nothing to install by hand.
+- **DevPC:** the server host is **Media-Host**, Windows, this repo checked out, PowerShell, NordVPN Meshnet (the Main PC and friends reach it through Meshnet, no router port-forward; friends join via a Meshnet invite, see section 6). FXServer and MariaDB are downloaded for you by `tools/setup-server.ps1`; nothing to install by hand.
 - **Cfx key:** from https://portal.cfx.re (Server Keys). Where it asks for an IP/name, give the host's Meshnet IP `100.102.50.11` (LAN `192.168.1.135` on the same network; not `localhost`).
 
 ## 2. First-time setup (DevPC, about 10 minutes of downloads)
@@ -30,7 +30,7 @@ Open RedM, press F8, type `connect 100.102.50.11:30120` (or `192.168.1.135:30120
 
 ## 6. Friends (max 6 players)
 
-1. Share Media-Host with your friend through NordVPN Meshnet; they install NordVPN + RedM and F8 `connect 100.102.50.11:30120` (`192.168.1.135:30120` on the same LAN). They are rejected the first time.
+1. Send your friend a NordVPN Meshnet invite to Media-Host (NordVPN app > Meshnet > Invite, using their NordVPN account email; leave "Allow remote access" on for them); they install NordVPN + RedM, accept the invite, and F8 `connect 100.102.50.11:30120` (`192.168.1.135:30120` on the same LAN). They are rejected the first time.
 2. In the DevPC server window copy the license from the `allowlist: rejected <name> license:<hash>` line and type `fh_allow license:<hash>` there (or in game F8 as admin).
 3. They connect again and get in (not as admin).
 
