@@ -73,10 +73,8 @@ migration (`server/migrations/0007_quest_state.sql`) applied by
 A non-optional predicate fails when the field is absent. `eq` cannot combine with `min`/`max`/`any`, nor `any` with
 `min`/`max`; `{ optional = true }` alone and unknown keys are rejected by `validate`.
 
-Why `optional`: @hunting's `fh:hunting:pelt_sold` payload is `{ citizenid, item_id, animal, size_class, quality,
-price, region_id }`, but `animal` and `size_class` land with Hunting H3. A `hunt_request` step written as
-`where = { animal = { optional = true, eq = 'wolf' }, quality = { min = 2 } }` matches on quality alone until H3
-ships, then also on animal, with no def change.
+Use `optional` only for a field an emitter may leave out. `fh:hunting:pelt_sold` always carries `animal` and
+`size_class` (Q0b, fh_hunting `shared/sell.lua`), so match them plainly: `where = { animal = 'wolf', quality = { min = 2 } }`.
 
 ## Event intake (server events only)
 
@@ -237,12 +235,12 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 
 | Type | Offer `on` / `where` | Advances when | Offer-only fields |
 |---|---|---|---|
-| `hunt_request` | `fh:hunting:pelt_sold`, `where = { quality = { min = N }, animal = { optional = true, eq = X } }` | a pelt of quality >= N is sold (and of animal X when the payload carries `animal`) by the job holder | `animal`, `stars` |
+| `hunt_request` | `fh:hunting:pelt_sold`, `where = { quality = { min = N }, animal = { eq = X } }` | a pelt of animal X and quality >= N is sold by the job holder | `animal`, `stars` |
 | `camp_clear` | `fh:zones:camp_cleared`, `where = { camp_id = X }` | the camp is cleared and the holder is in `payload.participants` | `camp_id` |
 | `bounty` | `fh:quests:bounty_down` (a type event, local server only) | the watched wanted NPC dies; completes the job | `name`, `model`, `coords`, `heading` |
 
-- **`hunt_request`:** `animal` is optional on purpose: until Hunting H3 (Q0b) puts `animal` in the `pelt_sold`
-  payload it matches on quality only, afterwards on animal too, with no change here.
+- **`hunt_request`:** `animal` is required: fh_hunting's `pelt_sold` always carries it (Q0b), so a pelt of another
+  animal, or a payload without `animal`, never credits the job.
 - **`camp_clear`:** credit comes from the `participants` list (core idea-614, landed): fh_zones sends the citizenids
   of the players within `activationRadius` when the camp clears (an empty table when there are none), and each of them
   is credited. An empty list credits nobody.

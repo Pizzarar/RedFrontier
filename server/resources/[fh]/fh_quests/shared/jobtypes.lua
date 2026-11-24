@@ -43,8 +43,8 @@ local function huntOffers(region_id, d)
             title = ('Pelt wanted: %d-star %s'):format(stars, animal),
             text = ('Sell a %d-star or better %s pelt.'):format(stars, animal),
             on = 'fh:hunting:pelt_sold',
-            -- `animal` is optional until the pelt_sold payload carries it (Q0b / Hunting H3): quality alone decides now.
-            where = { quality = { min = stars }, animal = { optional = true, eq = animal } },
+            -- pelt_sold always carries `animal` (fh_hunting sell.lua, Q0b): both quality and animal must match.
+            where = { quality = { min = stars }, animal = { eq = animal } },
             rewards = rewards(region_id, money, 1), region_id = region_id, animal = animal, stars = stars,
         }
     end

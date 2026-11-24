@@ -419,12 +419,12 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    Accept a hunt offer: its row shows `Accepted` instead of the button and an inline notice confirms. Abandon it in `/journal`: click
    Abandon, then click the `Confirm abandon?` button a second time; the job leaves the journal and its offer is selectable on the board again.
    RESULT:
-3. hunt_request. Take a pelt offer from step 2 and note its title (animal and stars, e.g. 2-star wolf). Sell a pelt of that animal
-   and quality (or better) at the trapper (until @hunting H3 puts `animal` in the sold payload, any pelt of that quality counts).
+3. hunt_request. Take a pelt offer from step 2 and note its title (animal and stars, e.g. 2-star wolf). First sell a pelt of
+   another animal with enough stars at the trapper (e.g. a deer pelt for a wolf request): the job stays in My active jobs and
+   no `quest:` row is paid. Then sell a pelt of that animal and quality (or better).
    Expected: the job leaves My active jobs and pays its money once (+1 rep); the newest `fh_ledger` pay row has reason
    `quest:job:hunt_request:<animal>_<stars>star` (e.g. `quest:job:hunt_request:wolf_2star`). Sell a second matching pelt: no
-   second payment and no second `quest:` row (no double reward). If this build has no trapper sell point yet (@hunting H3 not
-   landed), the pelt cannot be sold: `RESULT: SKIP expected-blocked on @hunting H3`, and rerun this step then.
+   second payment and no second `quest:` row (no double reward).
    RESULT:
 4. bounty. Find a "Wanted: ..." offer, accept it and ride to the wanted NPC (Silas Crow about -128, 826, 117; Mabel Teague about
    -170, 860, 118).
