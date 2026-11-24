@@ -31,9 +31,10 @@ claims and `fh_plot_slots` has finished.
 
 | Export | Returns | Notes |
 |---|---|---|
-| `claim(src)` | `true, plot_id` or `false, reason` | reasons: `fh_not_ready`, `fh_no_character`, `fh_no_player`, `fh_not_in_plot`, plus the `plot_rules` refusals (plot taken, already own one), `fh_claim_failed` |
-| `unclaim(src, plot_id?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_unclaim_failed` |
-| `getPlot(citizenid)` | plot id or `nil` | |
+| `claim(src, class?)` | `true, plot_id` or `false, reason` | `class` defaults to `'claim'`; the plot you stand in must be of that class (`/fh_claim` = class `claim` only; town lots are bought, H8). One plot per character per class. Reasons: `fh_not_ready`, `fh_no_character`, `fh_no_player`, `fh_not_in_plot`, `fh_wrong_plot_class`, plus the `plot_rules` refusals (`fh_plot_taken`, `fh_already_has_plot`, `fh_already_has_lot`, `fh_not_claimable`), `fh_claim_failed` |
+| `unclaim(src, plot_id?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. The class comes from the plot's row. No `plot_id` = the caller's **claim** (a town lot is only released by naming its id). `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_claim_busy` (that plot's claim is still writing; retry), `fh_unclaim_failed` |
+| `getPlot(citizenid, class?)` | plot id or `nil` | `class` defaults to `'claim'`: `getPlot(cid)` is the homestead claim only, never a town lot (`nil` for a lot-only owner). `getPlot(cid, 'town_lot')` = the lot |
+| `claimedPlots()` | `{ plot_id, ... }` | every claimed plot, all classes (fh_ui `/where plot`) |
 | `isInSafeZone(coords)` | boolean | true within the safe radius of a CLAIMED plot: `baseSafeRadius` (else the plot radius) plus the built fence's `safeRadiusBonus` (+10 m). Unclaimed plots never count; `false` until claims are loaded; before the slot cache is loaded the fence bonus is not counted. Query only: nothing enforces it yet (TODO fh_zones) |
 | `getStations(citizenid)` | `{ {plot_id, slot_id, station_type, coords}, ... }` | built stations on that character's own plot; `{}` before the load or without a plot. Used by @crafting |
 | `stationAt(coords, maxDist)` | `{plot_id, slot_id, station_type}` or `nil` | nearest built station on ANY plot within `maxDist` (default 3.0 m). Used by @crafting |

@@ -91,7 +91,7 @@ local function newWorld(config)
     local function key(p, s) return p .. '|' .. s end
     local function exec(sql, p)
         p = p or {}
-        if sql:find('^SELECT plot_id, citizenid FROM fh_plots') then
+        if sql:find('^SELECT %* FROM fh_plots') then -- rows carry no class: loaded as claims (H7 fallback)
             local rows = {}
             for pid, cid in pairs(W.db.plots) do rows[#rows + 1] = { plot_id = pid, citizenid = cid } end
             return rows

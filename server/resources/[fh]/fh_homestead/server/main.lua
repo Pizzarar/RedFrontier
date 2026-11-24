@@ -4,14 +4,53 @@
 local cfg = FhHomesteadConfig
 local rules = FhPlotRules
 
-local claims = { byPlot = {}, byOwner = {} }
+-- byPlot[plot_id] = citizenid; byOwner[class][citizenid] = plot_id (one plot per character per class, mirrors
+-- UNIQUE(citizenid, class)); classByPlot[plot_id] = the class the row was written / loaded with.
+local claims = { byPlot = {}, byOwner = { claim = {}, town_lot = {} }, classByPlot = {} }
 local ready = false
+local claiming = {} -- plot_id -> true while a claim's DB writes are in flight (unclaim waits for it)
+
+local DEFAULT_CLASS = 'claim'
+---Normalise a class arg / DB value: missing or empty = 'claim'.
+local function classArg(class)
+    if type(class) ~= 'string' or class == '' then return DEFAULT_CLASS end
+    return class
+end
+
+local function ownerBucket(class)
+    class = classArg(class)
+    local b = claims.byOwner[class]
+    if not b then b = {}; claims.byOwner[class] = b end
+    return b
+end
+
+---Plot id citizenid holds in class (default 'claim'), or nil.
+local function plotOfClass(citizenid, class)
+    if citizenid == nil then return nil end
+    local b = claims.byOwner[classArg(class)]
+    return b and b[citizenid] or nil
+end
+
+local function setClaim(plotId, citizenid, class)
+    claims.byPlot[plotId], claims.classByPlot[plotId] = citizenid, class
+    ownerBucket(class)[citizenid] = plotId
+end
+
+---Clear plotId / citizenid from the maps, but only the entries that still point at each other: never wipe a newer
+---claim another call made meanwhile.
+local function clearClaim(plotId, citizenid, class)
+    if claims.byPlot[plotId] == citizenid then claims.byPlot[plotId], claims.classByPlot[plotId] = nil, nil end
+    local b = claims.byOwner[classArg(class)]
+    if b and b[citizenid] == plotId then b[citizenid] = nil end
+end
+
 -- Read-only view for server/slots.lua; the claim tables themselves stay private to this file.
 FhHomesteadClaims = setmetatable({}, {
     __index = {
         isReady = function() return ready end,
         ownerOf = function(plotId) return claims.byPlot[plotId] end,
-        plotOf = function(citizenid) return claims.byOwner[citizenid] end,
+        ---plotOf(citizenid, class?) -> plot_id or nil; class defaults to 'claim' (slots/build/comfort read the claim).
+        plotOf = function(citizenid, class) return plotOfClass(citizenid, class) end,
     },
     __newindex = function() error('FhHomesteadClaims is read-only', 2) end,
     __metatable = false,
@@ -39,12 +78,24 @@ local function registerChest(plot)
 end
 
 local function loadClaims()
-    local rows = MySQL.query.await('SELECT plot_id, citizenid FROM fh_plots') or {}
+    -- SELECT * so a DB without the 0018 class column still loads (every row is then a claim)
+    local rows = MySQL.query.await('SELECT * FROM fh_plots') or {}
     for _, r in ipairs(rows) do
         local plot = cfg.plots[r.plot_id]
         if plot then
-            claims.byPlot[r.plot_id], claims.byOwner[r.citizenid] = r.citizenid, r.plot_id
-            registerChest(plot)
+            local class = classArg(r.class)
+            if class ~= rules.classOf(plot) then
+                print(('^3[fh_homestead] fh_plots row %s has class %s but config.lua says %s; using the row^7')
+                    :format(r.plot_id, class, rules.classOf(plot)))
+            end
+            local held = plotOfClass(r.citizenid, class)
+            if held and held ~= r.plot_id then
+                print(('^1[fh_homestead] %s holds %s and %s in class %s (UNIQUE key missing?); %s ignored^7')
+                    :format(r.citizenid, held, r.plot_id, class, r.plot_id))
+            else
+                setClaim(r.plot_id, r.citizenid, class)
+                registerChest(plot)
+            end
         else
             print(('^3[fh_homestead] fh_plots row %s has no plot in config.lua; ignored^7'):format(r.plot_id))
         end
@@ -61,10 +112,12 @@ AddEventHandler('onResourceStart', function(res)
     end
 end)
 
----Claim the plot containing the player's server-side ped position.
+---Claim the plot containing the player's server-side ped position. class (default 'claim') is the class the caller
+---means to claim; the plot you stand in must be of that class (a town lot is never claimed by /fh_claim).
 ---@return boolean ok, string|nil reason
-local function claim(src)
+local function claim(src, class)
     if not ready then return false, 'fh_not_ready' end
+    class = classArg(class)
     local citizenid = citizenidOf(src)
     if not citizenid then return false, 'fh_no_character' end
     local ped = GetPlayerPed(src)
@@ -72,56 +125,71 @@ local function claim(src)
     local coords = GetEntityCoords(ped)
     local plot = rules.plotAt(cfg.plots, coords)
     if not plot then return false, 'fh_not_in_plot' end
+    if rules.classOf(plot) ~= class then return false, 'fh_wrong_plot_class' end
     local ok, why = rules.canClaim(plot, coords, citizenid, claims)
     if not ok then return false, why end
     -- reserve in memory first so a second claim in the same tick is refused; DB unique keys are the backstop
-    claims.byPlot[plot.id], claims.byOwner[citizenid] = citizenid, plot.id
-    local plotRow = pcall(MySQL.insert.await, 'INSERT INTO fh_plots (plot_id, citizenid) VALUES (?, ?)', { plot.id, citizenid })
+    setClaim(plot.id, citizenid, class)
+    claiming[plot.id] = true
+    local plotRow = pcall(MySQL.insert.await, 'INSERT INTO fh_plots (plot_id, citizenid, class) VALUES (?, ?, ?)',
+        { plot.id, citizenid, class })
     if not plotRow then
         -- our insert did not happen (e.g. a unique-key conflict with someone else's row): delete nothing
-        claims.byPlot[plot.id], claims.byOwner[citizenid] = nil, nil
+        claiming[plot.id] = nil
+        clearClaim(plot.id, citizenid, class)
         return false, 'fh_claim_failed'
     end
     local done = pcall(MySQL.insert.await, 'INSERT INTO fh_plot_chests (plot_id, chest_id, stash_id) VALUES (?, 1, ?)',
         { plot.id, rules.chestStashId(plot.id, 1) })
-    done = done and registerChest(plot)
+    if done then
+        -- pcall: an fh_core error must roll back, not leave this plot reserved and `claiming` stuck
+        local called, registered = pcall(registerChest, plot)
+        done = called and registered
+    end
     if not done then
         -- roll back only the row this call inserted
         pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plot.id, citizenid })
-        claims.byPlot[plot.id], claims.byOwner[citizenid] = nil, nil
+        claiming[plot.id] = nil
+        clearClaim(plot.id, citizenid, class)
         return false, 'fh_claim_failed'
     end
+    claiming[plot.id] = nil
     TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region })
     return true, plot.id
 end
 
----Release a plot. Owner (by src) or admin (src 0 = console). Chest contents stay in the stash.
+---Release a plot. Owner (by src) or admin (src 0 = console). Chest contents stay in the stash. With no plotId the
+---caller's CLAIM is released; a town lot is only released by naming its id. The class comes from the plot's row.
 ---TODO: spill leftover chest items to a drop bag on unclaim; until then a later owner of the plot inherits them.
 ---@return boolean ok, string|nil reason
 local function unclaim(src, plotId)
     if not ready then return false, 'fh_not_ready' end
     local isAdmin = src == 0 or IsPlayerAceAllowed(src, 'command.fh_unclaim')
     local citizenid = src ~= 0 and citizenidOf(src) or nil
-    if not plotId then plotId = citizenid and claims.byOwner[citizenid] end
+    if not plotId then plotId = plotOfClass(citizenid, DEFAULT_CLASS) end
     if not plotId then return false, 'fh_no_plot' end
     local ok, why = rules.canUnclaim(plotId, citizenid, isAdmin, claims)
     if not ok then return false, why end
+    -- the claim's own writes (row, chest row, chest register) are still in flight: it either lands or rolls back
+    if claiming[plotId] then return false, 'fh_claim_busy' end
     local owner = claims.byPlot[plotId]
+    local class = claims.classByPlot[plotId] or rules.classOf(cfg.plots[plotId])
     local deleted, affected = pcall(MySQL.update.await, 'DELETE FROM fh_plots WHERE plot_id = ? AND citizenid = ?', { plotId, owner })
     -- a concurrent unclaim that already deleted the row affects 0 rows: only one caller emits the event
     if not deleted or (tonumber(affected) or 0) == 0 then
-        if deleted and claims.byPlot[plotId] == owner then claims.byPlot[plotId], claims.byOwner[owner] = nil, nil end
+        if deleted then clearClaim(plotId, owner, class) end
         return false, 'fh_unclaim_failed'
     end
-    claims.byPlot[plotId], claims.byOwner[owner] = nil, nil
+    clearClaim(plotId, owner, class)
     TriggerEvent('fh:homestead:unclaimed', { src = src, citizenid = owner, plot_id = plotId })
     return true, plotId
 end
 
----Plot id the character owns, or nil.
-local function getPlot(citizenid) return claims.byOwner[citizenid] end
+---Plot id the character holds in class (default 'claim'), or nil. getPlot(cid) is the homestead claim only, never
+---a town lot (fh_hands and the other callers rely on that).
+local function getPlot(citizenid, class) return plotOfClass(citizenid, class) end
 
----Plot ids claimed by anyone, as a list. Read-only (for fh_ui's /where plot "unclaimed" pick).
+---Plot ids claimed by anyone (every class), as a list. Read-only (for fh_ui's /where plot "unclaimed" pick).
 local function claimedPlots()
     local out = {}
     for plotId in pairs(claims.byPlot) do out[#out + 1] = plotId end
