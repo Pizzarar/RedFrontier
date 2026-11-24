@@ -61,6 +61,7 @@ Check 'meshnet detect'   ((Get-MeshnetIp @((& $na '192.168.1.135' 'Ethernet'), (
 Check 'meshnet no ts'    ((Get-MeshnetIp @((& $na '100.83.196.251' 'Tailscale'))) -eq '100.102.50.11')
 Check 'meshnet no tunnel' ((Get-MeshnetIp @((& $na '10.5.0.2' 'NordLynx'))) -eq '100.102.50.11')
 Check 'meshnet fallback' ((Get-MeshnetIp @()) -eq '100.102.50.11')
+Check 'meshnet null'     ((Get-MeshnetIp $null) -eq '100.102.50.11')
 
 $ok = @('Started resource a', 'Started resource b', 'Database server connection established')
 Check 'boot ok'      ((Get-BootState $ok @('a', 'b')) -eq 'ok')

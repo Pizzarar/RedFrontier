@@ -75,8 +75,9 @@ function Initialize-AccessCfgs([string]$Dir = $Server) {
 # Picks the host's NordVPN Meshnet IP from Get-NetIPAddress-shaped objects: a 100.64.0.0/10 address on a NordLynx/Meshnet
 # adapter (a stale Tailscale 100.x adapter is ignored). Falls back to Media-Host's known Meshnet IP.
 function Get-MeshnetIp($Addresses, [string]$Fallback = '100.102.50.11') {
+    if (-not $Addresses) { return $Fallback }
     $m = @($Addresses | Where-Object {
-        $_.IPAddress -match '^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.' -and $_.InterfaceAlias -match 'NordLynx|Meshnet'
+        $_ -and $_.IPAddress -match '^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.' -and $_.InterfaceAlias -match 'NordLynx|Meshnet'
     } | Select-Object -ExpandProperty IPAddress)
     if ($m) { return $m[0] }
     return $Fallback
