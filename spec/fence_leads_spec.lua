@@ -91,7 +91,9 @@ case('area: the spot is inside the circle, never its centre, and the centre is s
         local t = info(l).target
         local a = logic.area(t, cfg.leads.areaRadius)
         local d = math.sqrt((a.x - t.x) ^ 2 + (a.y - t.y) ^ 2)
-        assert(d >= cfg.leads.areaRadius * 0.25 - 1e-6 and d <= cfg.leads.areaRadius * 0.65 + 1e-6, 'offset ' .. d)
+        local slack = math.sqrt(2) * logic.AREA_GRID / 2 -- grid rounding moves the centre at most this far
+        assert(d >= cfg.leads.areaRadius * 0.25 - slack and d <= cfg.leads.areaRadius * 0.65 + slack, 'offset ' .. d)
+        T.eq(math.floor(a.x), a.x); T.eq(math.floor(a.y), a.y); T.eq(math.floor(a.z), a.z)
         assert(d + cfg.leads.digRadius <= cfg.leads.areaRadius, 'whole dig circle inside the area')
         T.same(a, logic.area(t, cfg.leads.areaRadius))
     end
@@ -171,11 +173,13 @@ local function world(o)
             W.added[#W.added + 1] = { name = name, qty = qty }
             return true
         end,
-        pay = function(src, amount, reason, region)
+        pay = function(src, amount, reason, region) -- fh_economy: citizenid fixed at the call, re-checked after yield
+            local cid0 = W.srcs[src]
             step('pay')
             if W.fail.pay then return false, W.fail.pay end
+            if W.srcs[src] ~= cid0 then return false, 'player_changed' end
             P(src).money = P(src).money + amount
-            W.paid[#W.paid + 1] = { amount = amount, reason = reason, region = region }
+            W.paid[#W.paid + 1] = { amount = amount, reason = reason, region = region, cid = cid0 }
             return true
         end,
         knownRegion = function(id) return id == 'heartlands' end,
@@ -264,7 +268,7 @@ case('dig: success removes the lead and pays money + parts', function()
     T.eq(true, ok)
     T.same({ money = 100, item = 'fh_part_gunsmith', qty = 2, label = 'Gunsmith Parts' }, res)
     T.eq(0, W.leads())
-    T.same({ { amount = 100, reason = 'fence_lead_dig', region = 'heartlands' } }, W.paid)
+    T.same({ { amount = 100, reason = 'fence_lead_dig', region = 'heartlands', cid = 'C1' } }, W.paid)
     T.same({ { name = 'fh_part_gunsmith', qty = 2 } }, W.added)
     T.eq(100, W.C1.money)
     assert(logged(W, 'lead dug: citizenid=C1'), 'audit line')
@@ -410,6 +414,125 @@ case('leadsFor: one area per target with the hint, no exact target', function()
         assert(l.hint == ROAD.hint or l.hint == CAMP.hint)
         T.eq(nil, l.target)
     end
+end)
+
+---Every number and string in a client payload, recursively (keys included).
+local function leaves(v, out)
+    out = out or {}
+    if type(v) == 'table' then
+        for k, x in pairs(v) do leaves(k, out); leaves(x, out) end
+    else
+        out[#out + 1] = v
+    end
+    return out
+end
+
+local function assertNoExact(payload, l)
+    local t = info(l).target
+    for _, v in ipairs(leaves(payload)) do
+        if type(v) == 'number' then
+            for _, c in ipairs({ t.x, t.y, t.z }) do
+                assert(math.abs(v - c) >= 0.05, ('payload number %s equals a target coord %s'):format(v, c))
+            end
+        elseif type(v) == 'string' then
+            for _, c in ipairs({ t.x, t.y, t.z }) do
+                for _, f in ipairs({ '%.1f', '%.0f', '%d' }) do
+                    local txt = f == '%d' and tostring(math.floor(c)) or f:format(c)
+                    assert(not v:find(txt, 1, true), ('payload string %q contains target coord %s'):format(v, txt))
+                end
+            end
+        end
+    end
+end
+
+case('client payloads (leadsFor, use event view) carry no exact target coords anywhere, key included', function()
+    for _, l in ipairs({ ROAD, CAMP }) do
+        local W = world(withLead('backpack', l))
+        local list = W.D.leadsFor(1)
+        T.eq(1, #list)
+        assertNoExact(list, l)
+        assert(list[1].key and list[1].area, 'key + area present')
+        local v = W.D.leadView(info(l))  -- what the item-use event sends
+        T.same(list[1], v)
+        assertNoExact(v, l)
+    end
+    T.eq(nil, world().D.leadView({ hint = 'no target' }))
+end)
+
+case('src validation: NaN, inf, floats, 0, -1 and strings are refused', function()
+    local W = world(withLead('backpack', ROAD))
+    for _, bad in ipairs({ 0 / 0, math.huge, -math.huge, 1.5, 0, -1, '1' }) do
+        T.same({ false, 'no_player', n = 2 }, table.pack(W.D.dig(bad)))
+        T.same({}, W.D.leadsFor(bad))
+        T.eq(false, logic.validSrc(bad))
+    end
+    T.eq(true, logic.validSrc(1))
+    T.eq(1, W.leads()); T.eq(nil, W.calls.snapshot)
+end)
+
+-- ---------------------------------------------------------------- character switch on the same src mid-dig
+
+local function withC2(W)
+    W.players.C2 = { pos = copy(SPOT), money = 0, equipped = {},
+        backpack = { [7] = { name = LEAD, amount = 1, info = info(ROAD) } }, room = 10 }
+    W.C2 = W.players.C2
+    return W
+end
+local function switchAt(W, name) W.hooks[name] = function(w) w.srcs[1] = 'C2' end end
+
+case('switch during snapshot / canFit: refused before removal, nobody loses a lead or gets paid', function()
+    for _, at in ipairs({ 'snapshot', 'canFit' }) do
+        local W = withC2(world(withLead('backpack', ROAD)))
+        W.rngq = copy(GUN_ROLL) -- loot with a part, so canFit runs
+        switchAt(W, at)
+        T.same({ false, 'player_changed', n = 2 }, table.pack(W.D.dig(1)))
+        T.eq(nil, W.calls.removeItem)
+        T.eq(1, count(W.C1.backpack, LEAD)); T.eq(1, count(W.C2.backpack, LEAD))
+        T.eq(0, #W.paid); T.eq(0, #W.added)
+        T.eq(nil, logged(W, 'WARNING'))
+    end
+end)
+
+case('switch during removeItem: nothing paid to anyone, WARNING names both characters and the owed roll', function()
+    local W = withC2(world(withLead('backpack', ROAD)))
+    W.rngq = copy(GUN_ROLL)
+    switchAt(W, 'removeItem')
+    T.same({ false, 'dig_player_changed', n = 2 }, table.pack(W.D.dig(1)))
+    T.eq(nil, W.calls.pay); T.eq(nil, W.calls.addItem)
+    T.eq(0, W.C1.money); T.eq(0, W.C2.money); T.eq(0, #W.added)
+    local line = assert(logged(W, 'WARNING lead dig: character switched during removeItem'))
+    for _, want in ipairs({ 'citizenid=C1 (dig owner)', 'now=C2', 'target=-520.0,910.0,120.0', 'region=heartlands',
+                            'paid_money=0', 'owed_money=100', 'owed_item=fh_part_gunsmith x2' }) do
+        assert(line:find(want, 1, true), want .. ' in ' .. line)
+    end
+    -- C2's lead went (the fake removes from whoever holds src): never re-granted, and C2 cannot dig it twice
+    T.eq(1, count(W.C1.backpack, LEAD)); T.eq(0, count(W.C2.backpack, LEAD))
+    T.eq(false, W.D.busy('C1'))
+    T.eq('Your character changed during the dig. An admin has been told.', logic.notice(false, 'dig_player_changed'))
+end)
+
+case('switch during pay: the money is not paid to C2, the part is not given to C2, WARNING logged', function()
+    local W = withC2(world(withLead('backpack', ROAD)))
+    W.rngq = copy(GUN_ROLL)
+    switchAt(W, 'pay')
+    T.same({ false, 'dig_player_changed', n = 2 }, table.pack(W.D.dig(1)))
+    T.eq(0, #W.paid); T.eq(0, W.C2.money); T.eq(nil, W.calls.addItem)
+    T.eq(0, count(W.C1.backpack, LEAD)); T.eq(1, count(W.C2.backpack, LEAD))
+    local line = assert(logged(W, 'WARNING lead dig: character switched before addItem'))
+    assert(line:find('owed_money=100', 1, true) and line:find('owed_item=fh_part_gunsmith x2', 1, true), line)
+end)
+
+case('switch between pay and addItem: money stays with C1, the part is not given to C2', function()
+    local W = withC2(world(withLead('backpack', ROAD)))
+    W.rngq = copy(GUN_ROLL)
+    local realPay = W.deps.pay
+    W.deps.pay = function(...) local r = table.pack(realPay(...)); W.srcs[1] = 'C2'; return table.unpack(r, 1, r.n) end
+    W.D = leads.new(cfg, logic, W.deps)
+    T.same({ false, 'dig_player_changed', n = 2 }, table.pack(W.D.dig(1)))
+    T.same({ { amount = 100, reason = 'fence_lead_dig', region = 'heartlands', cid = 'C1' } }, W.paid)
+    T.eq(nil, W.calls.addItem); T.eq(0, count(W.C2.backpack, 'fh_part_gunsmith'))
+    local line = assert(logged(W, 'WARNING lead dig: character switched before addItem'))
+    assert(line:find('paid_money=100', 1, true) and line:find('owed_money=0', 1, true), line)
 end)
 
 T.finish()

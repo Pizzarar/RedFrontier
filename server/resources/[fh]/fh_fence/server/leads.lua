@@ -12,6 +12,11 @@
 --     so N leads can be spent at most N times: one payout per removed lead, even if a stale lock were reclaimed.
 --  4. After the lead is removed it is never given back (that would allow a second dig). A failed pay / addItem is
 --     logged as a WARNING with citizenid, target, region and the exact amounts owed, for an admin to pay by hand.
+--  5. The character is re-checked (citizenOf(src) == the dig's citizenid, no yield in between) right before every
+--     side effect (removeItem, pay, addItem) and right after removeItem. A switch before removal refuses the dig
+--     ('player_changed', nothing taken); a switch after it pays nothing more to anyone and logs a WARNING with both
+--     citizenids, the target and what is owed.
+--  6. The client never gets an exact target: lead views carry the grid-rounded offset area, keyed by that area.
 local M = {}
 
 local CARRIED = { 'equipped', 'backpack' } -- lead search order
@@ -60,6 +65,7 @@ function M.new(cfg, logic, deps)
         if last[cid] and now - last[cid] < (L.cooldownSeconds or 0) then return false, 'dig_cooldown' end
         last[cid] = now
 
+        local function same() return deps.citizenOf(src) == cid end -- no yield: valid up to the next dep call
         local pos = deps.pedCoords(src)
         if not pos then return false, 'no_player' end
         local sections, serr = carried(src)
@@ -89,6 +95,7 @@ function M.new(cfg, logic, deps)
         end
 
         -- the one-shot step: from here on the lead is spent and the roll is owed
+        if not same() then return false, 'player_changed' end
         local ok, err = deps.removeItem(pick.ref, L.item, 1)
         if not ok then
             if not CLEAN[err] then
@@ -101,12 +108,28 @@ function M.new(cfg, logic, deps)
         state.removed = { target = pick.target, region = region, loot = loot }
 
         local res, owed = { money = 0, qty = 0 }, nil
+        ---Character switched after the lead was taken: nothing more is handed to anyone on this src.
+        local function switched(step)
+            owed = owed or {}
+            if loot.money > 0 and res.money == 0 and not owed.money then owed.money, owed.payErr = loot.money, 'player_changed' end
+            if loot.item and not res.item then owed.item, owed.qty, owed.addErr = loot.item, loot.qty, 'player_changed' end
+            log('WARNING lead dig: character switched %s, pay by hand: citizenid=%s (dig owner) now=%s src=%s '
+                .. 'target=%s section=%s region=%s roll=%d paid_money=%d owed_money=%d owed_item=%s x%d; the lead '
+                .. 'came from whichever character held src during removeItem', step, tostring(cid),
+                tostring(deps.citizenOf(src)), tostring(src), where(pick.target), pick.ref.type, region, loot.index,
+                res.money, owed.money or 0, owed.item or '-', owed.qty or 0)
+            return false, 'dig_player_changed'
+        end
+        if not same() then return switched('during removeItem') end
+
         if loot.money > 0 then
+            if not same() then return switched('before pay') end
             local pok, perr = deps.pay(src, loot.money, 'fence_lead_dig', region)
             if pok then res.money = loot.money
             else owed = { money = loot.money, payErr = tostring(perr or 'pay_failed') } end
         end
         if loot.item then
+            if not same() then return switched('before addItem') end
             local aok, aerr = deps.addItem(backpack, loot.item, loot.qty)
             if aok then
                 res.item, res.qty, res.label = loot.item, loot.qty, deps.label and deps.label(loot.item) or nil
@@ -129,7 +152,7 @@ function M.new(cfg, logic, deps)
 
     ---@return boolean ok, table|string resultOrCode  result = { money, item, qty, label, owed? } (what was handed over)
     function D.dig(src)
-        if type(src) ~= 'number' or src <= 0 then return false, 'no_player' end
+        if not logic.validSrc(src) then return false, 'no_player' end
         local cid = deps.citizenOf(src)
         if not cid then return false, 'no_player' end
         local tok = acquire(cid, src) -- no yield between the lookup and here
@@ -149,21 +172,26 @@ function M.new(cfg, logic, deps)
         return false, 'dig_error'
     end
 
-    ---Map areas + hints for the leads the player carries (one per target). The exact target is not sent.
+    ---Client view of one lead's item info: { key, area, radius, hint } or nil. No exact target anywhere: area is the
+    ---grid-rounded offset circle and key is derived from that area only.
+    function D.leadView(info)
+        local t = logic.targetOf(info)
+        if not t then return nil end
+        local a = logic.area(t, L.areaRadius)
+        return { key = ('%d:%d'):format(a.x, a.y), area = a, radius = L.areaRadius, hint = tostring(info.hint or '') }
+    end
+
+    ---Map areas + hints for the leads the player carries (one per area).
     function D.leadsFor(src)
-        if type(src) ~= 'number' or src <= 0 then return {} end
+        if not logic.validSrc(src) then return {} end
         local sections = carried(src)
         local out, seen = {}, {}
         for _, sec in ipairs(sections or {}) do
             for _, it in pairs(sec.items) do
-                local t = type(it) == 'table' and it.name == L.item and logic.targetOf(it.info)
-                if t then
-                    local key = where(t)
-                    if not seen[key] then
-                        seen[key] = true
-                        out[#out + 1] = { key = key, area = logic.area(t, L.areaRadius), radius = L.areaRadius,
-                            hint = tostring(it.info.hint or '') }
-                    end
+                local v = type(it) == 'table' and it.name == L.item and D.leadView(it.info)
+                if v and not seen[v.key] then
+                    seen[v.key] = true
+                    out[#out + 1] = v
                 end
             end
         end
@@ -197,11 +225,13 @@ if _G.GetCurrentResourceName and _G.lib then
     local ok, why = logic.validLoot(cfg.leads.loot)
     if not ok then log('ERROR leads loot table invalid (' .. tostring(why) .. '): every dig is refused') end
 
+    local function citizenOf(src)
+        local okp, P = pcall(function() return exports['rsg-core']:GetPlayer(src) end)
+        return okp and P and P.PlayerData and P.PlayerData.citizenid or nil
+    end
+
     local digger = M.new(cfg, logic, {
-        citizenOf = function(src)
-            local okp, P = pcall(function() return exports['rsg-core']:GetPlayer(src) end)
-            return okp and P and P.PlayerData and P.PlayerData.citizenid or nil
-        end,
+        citizenOf = citizenOf,
         pedCoords = function(src)
             local ped = GetPlayerPed(src)
             if not ped or ped == 0 then return nil end
@@ -224,18 +254,20 @@ if _G.GetCurrentResourceName and _G.lib then
     lib.callback.register('fh:fence:leads', function(src) return digger.leadsFor(src) end)
 
     -- Using the lead item shows its hint + area on that client (rsg-core usable item; info = the lead's item info).
+    -- src must be one loaded player: a bad src (e.g. -1 = every client) or a non-table item does nothing.
     local function onUse(src, item)
-        local t = item and logic.targetOf(item.info)
-        if not t then return end
-        TriggerClientEvent('fh:fence:lead_used', src, {
-            key = ('%.1f,%.1f,%.1f'):format(t.x, t.y, t.z), area = logic.area(t, cfg.leads.areaRadius),
-            radius = cfg.leads.areaRadius, hint = tostring(item.info.hint or ''),
-        })
+        if not logic.validSrc(src) or not citizenOf(src) or type(item) ~= 'table' then return end
+        local v = digger.leadView(item.info)
+        if v then TriggerClientEvent('fh:fence:lead_used', src, v) end
     end
-    CreateThread(function()
-        while GetResourceState('rsg-core') ~= 'started' do Wait(500) end
+    -- Re-registered when rsg-core restarts (its usable-item table is rebuilt), like fh_crafting/server/apothecary.lua.
+    local function registerUsable()
+        if GetResourceState('rsg-core') ~= 'started' then return end
         local rok, err = pcall(function() exports['rsg-core']:CreateUseableItem(cfg.leads.item, onUse) end)
         if not rok then log('CreateUseableItem ' .. cfg.leads.item .. ' failed: ' .. tostring(err)) end
+    end
+    AddEventHandler('onResourceStart', function(res)
+        if res == GetCurrentResourceName() or res == 'rsg-core' then registerUsable() end
     end)
 end
 

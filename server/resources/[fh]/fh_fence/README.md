@@ -7,8 +7,8 @@ Roving black-market fence: schedule, tiered stock, treasure leads. Trades: `serv
 A `fh_treasure_lead` bought from the fence carries `{ target = {x,y,z}, hint }` in its item info.
 
 - **Client** (`client/leads.lua`): for every lead the player carries, the hint shows once as a notify, plus a map
-  **area** blip (`leads.areaRadius`). The blip centre is offset 25-65 % of the radius from the spot, so it never
-  marks the spot. Using the item shows the hint again. Inside the area, `[E] Dig for the cache` calls `fh:fence:dig`.
+  **area** blip (`leads.areaRadius`). The blip centre is offset 25-65 % of the radius from the spot and rounded to a
+  5 m grid, so it never marks the spot. The client payload (area, key, hint) never carries the exact target. Using the item shows the hint again. Inside the area, `[E] Dig for the cache` calls `fh:fence:dig`.
   No fh_ui screen.
 - **Server** (`server/leads.lua`, pure rules in `shared/leads_logic.lua`): `fh:fence:dig` takes no client input. It
   uses the server-side ped coords and the player's own equipped + backpack items. Order:
@@ -22,6 +22,9 @@ A `fh_treasure_lead` bought from the fence carries `{ target = {x,y,z}, hint }` 
      the part via `fh_core addItem`. If either fails, the lead is **not** given back. A
      `WARNING lead dig: lead taken but payout incomplete, pay by hand: ...` line lists citizenid, target, region and
      the exact money / item owed, with the error code. Pay it by hand.
+- **Character switch:** the citizenid is re-checked right before `removeItem`, `pay` and `addItem` and right after
+  `removeItem`. A switch before removal refuses (`player_changed`, nothing taken). A switch after it hands nothing
+  more to anyone and logs `WARNING lead dig: character switched ...` with both citizenids and what is owed.
 - Config: `FhFenceConfig.leads` (item, digRadius, areaRadius, cooldownSeconds, lockStaleSeconds, regionId, loot).
   Keep loot money under fh_economy `maxPay`.
 - Spec: `spec/fence_leads_spec.lua`.

@@ -5,6 +5,12 @@ local M = {}
 local function isInt(n) return type(n) == 'number' and n == n and n == math.floor(n) end
 local function isNum(n) return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge end
 
+---Player server id: a positive whole number (same rule as fh_economy FhLedgerLogic.validSrc; NaN, inf, floats,
+---0 and -1 = every client are refused).
+function M.validSrc(src)
+    return type(src) == 'number' and src == src and src > 0 and src % 1 == 0
+end
+
 ---Lead item info -> target {x,y,z} or nil. Info is written by trade.lua (FhFenceLogic.leadInfo): { target, hint }.
 function M.targetOf(info)
     local t = type(info) == 'table' and info.target
@@ -101,17 +107,24 @@ function M.pick(sections, pos, digRadius, leadItem)
     return nil, 'lead_mixed'
 end
 
+M.AREA_GRID = 5   -- metres: the area centre (x, y) is rounded to this grid
+M.AREA_ZGRID = 10 -- metres: and its height to this one
+
 ---Map area for a lead: a circle of areaRadius whose centre is offset from the target by 25-65 % of the radius, in a
----direction fixed by the target coords (stable across polls, so the blip does not jump). The target is always
----inside the circle, never at its centre.
----@return table { x, y, z }
+---direction fixed by the target coords (stable across polls, so the blip does not jump), then rounded to a 5 m grid
+---(10 m in z, offset by half a cell) so the client cannot invert the offset back to the exact spot (this file is a
+---shared script: clients have the code). The target stays inside the circle (rounding moves the centre <= 3.6 m).
+---@return table { x, y, z } whole numbers
 function M.area(target, areaRadius)
     local ix = math.floor(target.x * 10)
     local iy = math.floor(target.y * 10)
     local h = ((ix * 73856093) ~ (iy * 19349663)) & 0x7fffffff
     local angle = math.rad(h % 360)
     local dist = areaRadius * (0.25 + 0.4 * ((h // 360) % 101) / 100)
-    return { x = target.x + math.cos(angle) * dist, y = target.y + math.sin(angle) * dist, z = target.z }
+    local g, zg = M.AREA_GRID, M.AREA_ZGRID
+    local function snap(v, step) return math.floor(v / step + 0.5) * step end
+    return { x = snap(target.x + math.cos(angle) * dist, g), y = snap(target.y + math.sin(angle) * dist, g),
+        z = math.floor(target.z / zg) * zg + zg // 2 }
 end
 
 ---Pay region for a lead: the region of the stop whose stock lists a lead with this target, else cfg.leads.regionId.
@@ -137,6 +150,8 @@ M.messages = {
     dig_busy = 'You are already digging.',
     dig_cooldown = 'Catch your breath before you dig again.',
     no_player = 'Your character is not loaded.',
+    player_changed = 'Your character changed during the dig. Nothing was taken.',
+    dig_player_changed = 'Your character changed during the dig. An admin has been told.',
     fh_player_offline = 'Your character is not loaded.',
     lead_bad_config = 'This lead cannot be dug right now. Your lead was not used.',
     dig_error = 'The dig went wrong. Your lead was not used.',
