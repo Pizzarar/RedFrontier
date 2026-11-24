@@ -41,7 +41,9 @@ function M.parseHeat(args)
     return { target = target, faction = faction, value = value }
 end
 
----`fh_tp <x> <y> <z>` or `fh_tp <id>`
+---`fh_tp <x> <y> <z>` | `fh_tp <playerId>` | `fh_tp <placeId>`. A bare integer stays a player id (unchanged);
+---anything non-numeric is a place id (a claim/lot/camp/post/town/ambush id, resolved by the caller). Numeric-but-not-
+---integer input ('1.5') stays `fh_bad_target`, exactly as before.
 function M.parseTp(args)
     if args[3] ~= nil then
         local x, y, z = tonumber(args[1]), tonumber(args[2]), tonumber(args[3])
@@ -49,9 +51,38 @@ function M.parseTp(args)
         return { coords = { x = x + 0.0, y = y + 0.0, z = z + 0.0 } }
     end
     if args[2] ~= nil then return nil, 'fh_bad_coords' end
-    local target = int(args[1])
-    if not target or target <= 0 then return nil, 'fh_bad_target' end
-    return { target = target }
+    local arg = args[1]
+    if arg == nil then return nil, 'fh_bad_target' end
+    local target = int(arg)
+    if target then
+        if target <= 0 then return nil, 'fh_bad_target' end
+        return { target = target }
+    end
+    if tonumber(arg) ~= nil then return nil, 'fh_bad_target' end -- numeric but not a positive integer
+    if type(arg) ~= 'string' or arg == '' then return nil, 'fh_bad_place' end
+    return { place = arg }
+end
+
+---`fh_tour <region>` | `fh_tour next`
+function M.parseTour(args)
+    local arg = args[1]
+    if arg == 'next' then return { next = true } end
+    if type(arg) ~= 'string' or arg == '' then return nil, 'fh_bad_region' end
+    if args[2] ~= nil then return nil, 'fh_bad_region' end
+    return { region = arg }
+end
+
+---`fh_mark ok|bad [note...]`: the note is the remaining words joined by a single space (nil when absent).
+function M.parseMark(args)
+    local verdict = args[1]
+    if verdict ~= 'ok' and verdict ~= 'bad' then return nil, 'fh_bad_verdict' end
+    local note
+    if args[2] ~= nil then
+        local parts = {}
+        for i = 2, #args do parts[#parts + 1] = args[i] end
+        note = table.concat(parts, ' ')
+    end
+    return { verdict = verdict, note = note }
 end
 
 ---`fh_dump <containerType> <id>`: carried types need a numeric id, others a string id (see fh_core server/inventory.lua)

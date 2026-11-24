@@ -31,6 +31,7 @@ local ALLOW = {
     'PlaceObjectOnGroundProperly', 'PlayerId', 'PlayerPedId', 'RemoveAnimDict', 'RemoveBlip', 'RemoveWeaponFromPed',
     'RequestAnimDict', 'RequestClipSet', 'RequestCollisionAtCoord', 'RequestModel', 'SetBlipScale', 'SetBlipSprite',
     'SetBlockingOfNonTemporaryEvents', 'SetCurrentPedWeapon', 'SetEntityAsMissionEntity', 'SetEntityCollision',
+    'SetEntityCoords',
     'SetEntityHeading',
     'SetEntityInvincible', 'SetModelAsNoLongerNeeded', 'SetPedCanRagdoll', 'SetPedCombatAttributes',
     'SetPedFleeAttributes', 'SetPedRelationshipGroupHash', 'SetRelationshipBetweenGroups',

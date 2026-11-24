@@ -21,3 +21,6 @@ tools/.tmp/
 server/.boot-check.cfg
 __pycache__/
 *.pyc
+
+# world-03 J walk verdicts (fh_mark appends here at runtime; never committed)
+server/resources/[fh]/fh_core/world_walk.json

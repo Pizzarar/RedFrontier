@@ -1112,6 +1112,19 @@ Unverified entries show `(unverified)`; the four enabled regions are heartlands,
 great_plains. Only those four should show anything — the other 11 regions are disabled and must show no blip, no
 `/where` entry, no camp and no `/jobs` board.
 
+world-03 J adds the fast path: `fh_tour <region>` steps you through that region's unverified places in riding order
+(`fh_tour next` advances; it tells you when the tour is done), `fh_mark ok|bad [note]` records a verdict for the
+nearest place within 30 m into `fh_core`'s `world_walk.json` (append-only, never committed), and `fh_tp <placeId>`
+teleports straight to any claim/lot/camp/post/town/ambush id with a ground snap.
+
+0. Fast path (world-03 J): `fh_tour heartlands`, then repeatedly `fh_tour next`; at each stop run `fh_mark ok`, or
+   `fh_mark bad <note>` when it floats/buries (name the fix in the note). When the tour reports "complete", repeat for
+   `fh_tour scarlett_meadows`, `fh_tour bayou_nwa`, `fh_tour great_plains`.
+   Expected: each stop teleports you to the place with a ground snap; `fh_mark` appends a `{id,verdict,note,x,y,z,ts,by}`
+   record to `world_walk.json` (and says "no place within 30 m" when you are not standing at one); the tour never
+   revisits its origin town. `fh_tp heartlands_01` lands you on that claim the same way.
+   RESULT:
+
 1. Heartlands claims: `/where plot`, then ride to each named claim — Dakota Bend, Creekside Pines, Cattail Marsh,
    Larkspur Meadow (town lots show "coming soon").
    Expected: each claim's chest sits on the ground (no floating/buried prop) and the blip/destination is at ground

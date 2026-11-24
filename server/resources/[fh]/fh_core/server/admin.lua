@@ -22,6 +22,28 @@ local function targetPed(id)
     return ped
 end
 
+-- ---------------------------------------------------------------- world-03 J: walk tooling (fh_tp place ids, fh_tour, fh_mark)
+-- Cached place index (FhPlaceResolver.index) over FhRegions + the `@`-included lane configs (see fxmanifest).
+local walkPlaces, walkById
+local function walkIndex()
+    if not walkPlaces then
+        walkPlaces, walkById = FhPlaceResolver.index(FhRegions, { homestead = FhHomesteadConfig, zones = FhZonesConfig })
+    end
+    return walkPlaces, walkById
+end
+
+local tours = {} -- [src] = { region, order, index }
+
+-- Teleport src to a place's z-hint, then ask that client to ground-snap (fh:tp:snap, client/ground_snap.lua).
+-- Returns false when src has no ped (the caller replies with its own fh_no_player prefix).
+local function teleportPlace(src, place)
+    local ped = targetPed(src)
+    if not ped then return false end
+    SetEntityCoords(ped, place.x, place.y, place.z, false, false, false, false)
+    TriggerClientEvent('fh:tp:snap', src, { id = place.id, x = place.x, y = place.y, z = place.z, verified = place.verified })
+    return true
+end
+
 lib.addCommand('fh_give', {
     help = 'Give an item via the container API: fh_give <id> <item> [count]',
     restricted = 'group.admin',
@@ -62,12 +84,20 @@ lib.addCommand('fh_heat', {
 end)
 
 lib.addCommand('fh_tp', {
-    help = 'Teleport yourself: fh_tp <x> <y> <z> | fh_tp <id>',
+    help = 'Teleport yourself: fh_tp <x> <y> <z> | fh_tp <id> | fh_tp <placeId>',
     restricted = 'group.admin',
 }, function(src, args, raw)
     if src == 0 then return reply(src, 'fh_tp: in-game only') end
     local p, err = FhAdminArgs.parseTp(split(raw))
     if not p then return reply(src, 'fh_tp: ' .. err) end
+    if p.place then
+        local _, byId = walkIndex()
+        local place = byId[p.place]
+        if not place then return reply(src, 'fh_tp: fh_unknown_place') end
+        if not teleportPlace(src, place) then return reply(src, 'fh_tp: fh_no_player') end
+        return reply(src, ('fh_tp: moved to %s (%s) %.0f %.0f %.0f'):format(place.label or place.id, place.kind,
+            place.x, place.y, place.z))
+    end
     local c = p.coords
     if p.target then
         local tped = targetPed(p.target)
@@ -78,6 +108,56 @@ lib.addCommand('fh_tp', {
     if not ped then return reply(src, 'fh_tp: fh_no_player') end
     SetEntityCoords(ped, c.x, c.y, c.z, false, false, false, false)
     reply(src, ('fh_tp: moved to %.1f %.1f %.1f'):format(c.x, c.y, c.z))
+end)
+
+lib.addCommand('fh_tour', {
+    help = 'Tour a region\'s unverified places: fh_tour <region> | fh_tour next',
+    restricted = 'group.admin',
+}, function(src, args, raw)
+    if src == 0 then return reply(src, 'fh_tour: in-game only') end
+    local p, err = FhAdminArgs.parseTour(split(raw))
+    if not p then return reply(src, 'fh_tour: ' .. err) end
+    if p.next then
+        local t = tours[src]
+        if not t then return reply(src, 'fh_tour: no active tour (start one with fh_tour <region>)') end
+        local place = FhPlaceResolver.advanceTour(t)
+        if not place then
+            tours[src] = nil
+            return reply(src, ('fh_tour: %s complete (%d places)'):format(t.region, #t.order))
+        end
+        if not teleportPlace(src, place) then return reply(src, 'fh_tour: fh_no_player') end
+        return reply(src, ('fh_tour: %d/%d %s (%s)'):format(t.index, #t.order, place.label or place.id, place.kind))
+    end
+    if not FhRegions.getRegion(p.region) then return reply(src, 'fh_tour: fh_unknown_region') end
+    local order = FhPlaceResolver.tour(walkIndex(), p.region)
+    if #order == 0 then return reply(src, ('fh_tour: %s has no unverified places'):format(p.region)) end
+    tours[src] = { region = p.region, order = order, index = 1 }
+    if not teleportPlace(src, order[1]) then return reply(src, 'fh_tour: fh_no_player') end
+    reply(src, ('fh_tour: %s — 1/%d %s (%s) [fh_tour next]'):format(p.region, #order, order[1].label or order[1].id,
+        order[1].kind))
+end)
+
+lib.addCommand('fh_mark', {
+    help = 'Mark the nearest place within 30 m: fh_mark ok|bad [note]',
+    restricted = 'group.admin',
+}, function(src, args, raw)
+    if src == 0 then return reply(src, 'fh_mark: in-game only') end
+    local p, err = FhAdminArgs.parseMark(split(raw))
+    if not p then return reply(src, 'fh_mark: ' .. err) end
+    local ped = targetPed(src)
+    if not ped then return reply(src, 'fh_mark: fh_no_player') end
+    local here = FhSpawnRules.readCoords(GetEntityCoords(ped))
+    local place, dist = FhPlaceResolver.nearest(walkIndex(), here, 30)
+    if not place then return reply(src, 'fh_mark: no place within 30 m') end
+    local record = FhPlaceResolver.markRecord(place, p.verdict, p.note, here, os.time(), src)
+    local saved, werr = FhPlaceResolver.recordWalkMark({
+        load = function() return LoadResourceFile(GetCurrentResourceName(), 'world_walk.json') end,
+        save = function(s) SaveResourceFile(GetCurrentResourceName(), 'world_walk.json', s, -1) end,
+        encode = json.encode, decode = json.decode,
+    }, record)
+    if not saved then return reply(src, 'fh_mark: ' .. tostring(werr)) end
+    reply(src, ('fh_mark: %s %s (%s) at %.0f %.0f %.0f%s'):format(place.id, p.verdict, place.kind, here.x, here.y,
+        here.z, dist and (' — %d m'):format(math.floor(dist + 0.5)) or ''))
 end)
 
 lib.addCommand('fh_dump', {

@@ -13,6 +13,10 @@ shared_scripts {
 }
 
 server_scripts {
+    -- world-03 J: fh_core admin (fh_tp place ids, fh_tour, fh_mark) builds its place index from the lane configs.
+    -- Read-only `@`-include (no dependency on those resources), same as fh_ui; fh_zones/config.lua resolves camps here.
+    '@fh_homestead/config.lua',
+    '@fh_zones/config.lua',
     'server/*.lua',
 }
 

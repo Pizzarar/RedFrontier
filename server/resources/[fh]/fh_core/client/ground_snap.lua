@@ -26,3 +26,15 @@ function FhSnap.groundZAt(id, x, y, z, above)
     end
     return z, false
 end
+
+-- fh_tp place-id arrival snap (world-03 J): the server teleports to the z-hint, then asks this client to snap to the
+-- real ground on the same FhSnap path client/spawn.lua uses. No new probe native. `verified` picks the probe depth
+-- (verified/town lots use the tight downward probe, unverified claims/camps the wide one), same as spawn placement.
+FH.onNet('fh:tp:snap', function(d)
+    if type(d) ~= 'table' or type(d.x) ~= 'number' or type(d.y) ~= 'number' or type(d.z) ~= 'number' then return end
+    local ped = PlayerPedId()
+    if not ped or ped == 0 then return end
+    local above = FhGroundSnap.probeAboveFor({ verified = d.verified })
+    local z = FhGroundSnap.snapZ(d.z + 0.0, FhSnap.groundZAt(d.id, d.x, d.y, d.z, above), FhGroundSnap.SNAP_TOLERANCE)
+    SetEntityCoords(ped, d.x + 0.0, d.y + 0.0, z, false, false, false, false)
+end)
