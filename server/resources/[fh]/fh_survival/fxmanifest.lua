@@ -12,6 +12,7 @@ shared_scripts {
     'shared/needs.lua',
     'shared/items.lua',
     'shared/rest.lua',
+    'shared/homestead_heat.lua',
     'shared/effects.lua',
 }
 
@@ -21,6 +22,7 @@ server_scripts {
     'server/actions.lua',
     'server/homestead_adapter.lua',
     'server/rest.lua',
+    'server/homestead_heat.lua',
 }
 
 client_scripts {
