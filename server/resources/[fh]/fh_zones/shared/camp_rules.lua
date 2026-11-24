@@ -47,6 +47,14 @@ function M.shouldActivate(state, camp, positions)
     return false
 end
 
+---Should the camp wake right now? The activation check plus the A-life law-held skip: a law-held camp never
+---activates even with a player inside. lawHeld is the boolean from fh_alife:isLawHeld(campId); nil (fh_alife absent
+---or the export failed) is treated as not held, so the camp behaves exactly as before this feature existed.
+function M.shouldWake(state, camp, positions, lawHeld)
+    if lawHeld == true then return false end
+    return M.shouldActivate(state, camp, positions)
+end
+
 ---Citizenids of the players inside the radius. entries = array of { citizenid = string|nil, pos = vec3 }; entries with no
 ---citizenid or bad coords are skipped. Always returns a table (empty when nobody is in range), never nil.
 function M.participants(center, radius, entries)
@@ -99,6 +107,16 @@ end
 
 function M.respawnDue(now, respawnAt)
     return type(now) == 'number' and type(respawnAt) == 'number' and now >= respawnAt
+end
+
+---Pick the loot table for a camp's current owner: lootByFaction[owner] when the owner has an entry, else the camp's
+---own table (camp.loot.table). owner is a faction id (e.g. 'outlaws') or nil (fh_alife absent / export failed) -> fall back.
+function M.pickLootTable(lootByFaction, owner, campTable)
+    if type(lootByFaction) == 'table' and type(owner) == 'string' then
+        local t = lootByFaction[owner]
+        if type(t) == 'table' then return t end
+    end
+    return campTable
 end
 
 ---Roll a loot table. rng(a, b) -> integer in [a, b] (default math.random); chance is compared on a 0..1000000 scale.

@@ -1,7 +1,7 @@
 -- Run from repo root: `lua spec/camp_rules_spec.lua` (or via tools/run-specs.py).
 local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
-local case, eq = T.it, T.eq
+local case, eq, same = T.it, T.eq, T.same
 local R = dofile(here .. '../server/resources/[fh]/fh_zones/shared/camp_rules.lua')
 local Containers = require('containers')
 local Items = require('items')
@@ -192,6 +192,37 @@ case('safeParticipants: throwing lookup falls back to {} with the error', functi
     eq('table', type(got)); eq(0, #got); assert(err and err:find('rsg-core down', 1, true))
     local ok, e2 = R.safeParticipants(c, 45.0, function() return { { citizenid = 'A1', pos = { x = 1, y = 0, z = 0 } } } end)
     eq(1, #ok); eq('A1', ok[1]); eq(nil, e2)
+end)
+
+case('shouldWake: law-held camp never wakes; unknown (nil) behaves as today', function()
+    local near, far = { x = -145, y = 845, z = 117 }, { x = 500, y = 0, z = 0 }
+    -- lawHeld = true skips activation even with a player inside the radius
+    assert(not R.shouldWake('idle', camp, { near }, true))
+    assert(not R.shouldWake('idle', camp, { far, near }, true))
+    -- lawHeld = false / nil = today's behaviour (cooldown is the caller's concern)
+    assert(R.shouldWake('idle', camp, { far, near }, false))
+    assert(R.shouldWake('idle', camp, { far, near }, nil))
+    assert(not R.shouldWake('idle', camp, { far }, false))
+    -- non-idle never wakes regardless of lawHeld
+    for _, st in ipairs({ 'active', 'cleared', 'respawn_wait' }) do assert(not R.shouldWake(st, camp, { near }, nil), st) end
+end)
+
+case('pickLootTable: owner map entry, else fall back to the camp table', function()
+    local heart = cfg.lootByFaction.outlaws
+    local raider = cfg.lootByFaction.raiders
+    eq(heart, R.pickLootTable(cfg.lootByFaction, 'outlaws', camp.loot.table))
+    eq(raider, R.pickLootTable(cfg.lootByFaction, 'raiders', camp.loot.table))
+    -- unknown owner / nil owner / nil map -> the camp's own table
+    eq(camp.loot.table, R.pickLootTable(cfg.lootByFaction, 'lawmen', camp.loot.table))
+    eq(camp.loot.table, R.pickLootTable(cfg.lootByFaction, nil, camp.loot.table))
+    eq(camp.loot.table, R.pickLootTable(nil, 'outlaws', camp.loot.table))
+end)
+
+case('config: lootByFaction ships copies of the per-camp tables, keys not reshaped into camps', function()
+    same(cfg.camps.heartlands_t1_01.loot.table, cfg.lootByFaction.outlaws)
+    same(cfg.camps.scarlett_meadows_t1_01.loot.table, cfg.lootByFaction.raiders)
+    eq(nil, cfg.camps.heartlands_t1_01.lootByFaction) -- top-level only; @world's per-camp tables untouched
+    eq(nil, cfg.camps.scarlett_meadows_t1_01.lootByFaction)
 end)
 
 T.finish()

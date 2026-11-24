@@ -863,3 +863,36 @@ Prereqs (all must be merged before this card is meaningful):
 24. `restart fh_heat`; then spawn roadblocks as 5 different players.
    Expected: restart: all roadblock peds gone; the 5th simultaneous roadblock is refused (`max_concurrent`). Heat values survive the restart (decayed).
    RESULT:
+
+## A-life: camp ownership (fh_alife, fh_zones)
+
+A-life camp ownership (plan a-life-01): a cleared camp flips to the region's law faction, which stops it waking, changes
+whose loot is in the stash, and shifts the region's trade prices; the sim later retakes it. Console lines start with
+`[fh_alife]`. Needs `fh_alife` ensured (after `fh_zones`). Admin: `group.admin`.
+
+1. Ride to the Heartlands camp (-145, 845, 117) and kill all four outlaws (clears the camp as usual).
+   Expected: the console broadcasts `Valentine Law has taken the Heartlands Outlaw Camp`, and `fh:alife:camp_flipped`
+   fires with `{camp_id='heartlands_t1_01', region_id='heartlands', from='outlaws', to='lawmen'}`.
+   RESULT:
+2. Run `/alife`.
+   Expected: the Heartlands camp shows owner `lawmen` (Valentine Law); the Scarlett Meadows camp still shows `raiders`.
+   RESULT:
+3. Walk into the Heartlands camp (within ~40 m of the center).
+   Expected: no bandits spawn (a law-held camp does not activate); no `camp heartlands_t1_01 activated` console line.
+   RESULT:
+4. Go to the Valentine trade post and check prices.
+   Expected: the camp's region trade prices moved now that the law holds the camp; note which prices changed in RESULT.
+   RESULT:
+5. Check your outlaw heat.
+   Expected: clearing the camp raised outlaw heat (`fh:heat:changed` reason `camp_clear`, +25 for everyone in the territory).
+   RESULT:
+6. Run `/alife tick 30` (advance the sim 30 ticks) and watch the console.
+   Expected: the outlaws retake the camp; a retake broadcast fires and `fh:alife:camp_flipped` fires with
+   `{from='lawmen', to='outlaws'}`.
+   RESULT:
+7. Walk back into the camp.
+   Expected: `camp heartlands_t1_01 activated`; the four outlaws spawn again and are hostile.
+   RESULT:
+8. Restart the server (or `restart fh_alife`), then run `/alife`.
+   Expected: ownership is persisted (still shows the last owner, e.g. `outlaws` after the retake); no error lines.
+   RESULT:

@@ -9,5 +9,6 @@ Implemented RedM server base — Thanks to these projects:
 - **MariaDB** portable server and **FXServer** are downloaded at setup time, not redistributed.
 
 - Implemented the friend allowlist (B-access) on rsg-core's ACE whitelist — Thanks to rsg-core by Rexshack-RedM
+- Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game World
 
 See server/VENDORED.md for exact versions.

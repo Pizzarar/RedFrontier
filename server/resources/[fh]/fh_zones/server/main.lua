@@ -11,6 +11,26 @@ local camps = {} -- [campId] = { cfg, state, peds = { [i] = { reqId, netId, dead
 local function log(fmt, ...) print(('[fh_zones] ' .. fmt):format(...)) end
 local function stashRef(camp) return { type = 'chest', id = rules.stashId(camp.cfg.id) } end
 
+-- ---------------------------------------------------------------- a-life ownership (fh_alife)
+-- Camp ownership lives in fh_alife (built separately). These lookups are guarded: only consulted when fh_alife is
+-- started, and wrapped in pcall; any failure or a missing fh_alife behaves exactly as today (nil owner, not law-held).
+
+---@return boolean|nil lawHeld  (nil = unknown: fh_alife absent or the export failed)
+local function isLawHeld(campId)
+    if GetResourceState('fh_alife') ~= 'started' then return nil end
+    local ok, res = pcall(function() return exports.fh_alife:isLawHeld(campId) end)
+    if not ok then return nil end
+    return res
+end
+
+---@return string|nil owner  (faction id, e.g. 'outlaws' | 'raiders' | 'lawmen' | 'rhodes_law')
+local function getOwner(campId)
+    if GetResourceState('fh_alife') ~= 'started' then return nil end
+    local ok, res = pcall(function() return exports.fh_alife:getOwner(campId) end)
+    if not ok then return nil end
+    return res
+end
+
 for id, c in pairs(cfg.camps) do
     camps[id] = { cfg = c, state = 'idle', peds = {} }
 end
@@ -118,7 +138,8 @@ end
 local function rollIntoStash(camp)
     local ref = stashRef(camp)
     exports.fh_core:clearContainer(ref)
-    local items = rules.rollLoot(camp.cfg.loot.table)
+    local table_ = rules.pickLootTable(cfg.lootByFaction, getOwner(camp.cfg.id), camp.cfg.loot.table)
+    local items = rules.rollLoot(table_)
     local placed = {}
     for _, it in ipairs(items) do
         local ok, why = exports.fh_core:addItem(ref, it.name, it.amount, it.info)
@@ -208,7 +229,7 @@ CreateThread(function()
             local ok, err = pcall(function()
                 if camp.state == 'idle' then
                     positions = positions or playerPositions()
-                    if rules.cooldownOver(GetGameTimer(), camp.retryAt) and rules.shouldActivate(camp.state, camp.cfg, positions) then activate(camp) end
+                    if rules.cooldownOver(GetGameTimer(), camp.retryAt) and rules.shouldWake(camp.state, camp.cfg, positions, isLawHeld(camp.cfg.id)) then activate(camp) end
                 elseif camp.state == 'active' then
                     evaluate(camp)
                 elseif camp.state == 'respawn_wait' and rules.respawnDue(GetGameTimer(), camp.respawnAt) then

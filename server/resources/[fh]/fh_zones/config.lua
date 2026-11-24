@@ -61,4 +61,20 @@ FhZonesConfig = {
         worn_rifle = { label = 'Worn Rifle', weight = 4000, size_class = 'bulky', stackable = false, value_base = 25 },
         small_safe = { label = 'Small Safe', weight = 25000, size_class = 'bulky', stackable = false, value_base = 60, illicit = true },
     },
+    -- Optional loot override by OWNING faction (A-life camp ownership, plan a-life-01). FhZonesConfig.camps is @world's
+    -- data (do not add keys there); this top-level map is keyed by fh_core faction id (regions.factions). Entries are
+    -- copies of today's per-camp tables; rules.pickLootTable falls back to camp.loot.table when the owner has no entry
+    -- or fh_alife is absent.
+    lootByFaction = {
+        outlaws = {
+            { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+            { name = 'small_safe', chance = 1.0, amount = 1 },
+            { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
+        },
+        raiders = {
+            { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+            { name = 'small_safe', chance = 1.0, amount = 1 },
+            { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
+        },
+    },
 }
