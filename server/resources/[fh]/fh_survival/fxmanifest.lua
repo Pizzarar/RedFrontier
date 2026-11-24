@@ -30,4 +30,4 @@ client_scripts {
     'client/effects.lua',
 }
 
-dependencies { 'fh_core', 'fh_buffs', 'oxmysql', 'rsg-core' }
+dependencies { 'fh_core', 'fh_buffs', 'fh_homestead', 'oxmysql', 'rsg-core' }

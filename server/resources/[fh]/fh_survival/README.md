@@ -38,7 +38,7 @@ Warm is only a bonus: `ColdRegions` stays `{}`.
 
 ## Rest and comfort (S4)
 Server: `restBedroll(src)` (rested 1.0), `restAtBed(src)` (needs a homestead `bed` station nearby; magnitude 1.0 + comfort x `ComfortK`, capped at `RestedCap`). Both return `ok, magnitude|err`. Net event `fh:survival:restBed` (client asks; server re-checks proximity). Bedroll item `bedroll` (usable) is defined in `shared/items.lua` `ITEMS` and registered with the S3 items by `server/actions.lua` through `fh_core:registerItems`; `server/rest.lua` only registers its usable callback (again on `rsg-core` restart).
-Homestead exports `isNearStation(src,'bed')` (H3) and `getComfort(citizenid)` (H4) are called through a pcall adapter (`server/homestead_adapter.lua`); missing = bedroll only, comfort 0 (S4b drops the fallback).
+Homestead exports `isNearStation(src,'bed')` (H3) and `getComfort(citizenid)` (H4) are called directly by `server/homestead_adapter.lua` (fh_homestead is a declared dependency); if fh_homestead is not started the adapter reports no bed and comfort 0.
 
 ## Events
 - Emits (server -> client) `fh:survival:state`, payload `{ level = 0..3, missing = { 'food', 'water', 'rest', 'clean', 'warmth' } }`

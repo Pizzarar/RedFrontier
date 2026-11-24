@@ -1,20 +1,18 @@
 -- Rest + comfort decisions (plan survival-01, S4). Pure Lua: no FiveM/RedM globals.
--- The homestead exports (H3 isNearStation, H4 getComfort) may be missing; the adapter passes in the raw pcall
--- results and this module decides. A missing/failed export means no bed (bedroll only) and comfort 0.
+-- The homestead adapter calls fh_homestead's H3 isNearStation / H4 getComfort directly (S4b) and passes the raw
+-- values in; this module decides. Not near a bed means no bed (bedroll only) and comfort 0.
 local R = {}
 
 local function isNum(v) return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge end
 
----Interpret the two pcall results of the homestead adapter.
----@param nearOk boolean pcall status of isNearStation(src,'bed')
----@param nearVal any its return value (only `true` counts)
----@param comfortOk boolean pcall status of getComfort(citizenid)
----@param comfortVal any its return value (number >= 0, else 0)
+---Interpret the homestead adapter's raw export results.
+---@param nearVal any isNearStation(src,'bed') return value (only `true` counts)
+---@param comfortVal any getComfort(citizenid) return value (number >= 0, else 0)
 ---@return { bed: boolean, comfort: number }
-function R.resolve(nearOk, nearVal, comfortOk, comfortVal)
-    local bed = nearOk == true and nearVal == true
+function R.resolve(nearVal, comfortVal)
+    local bed = nearVal == true
     local comfort = 0
-    if bed and comfortOk == true and isNum(comfortVal) and comfortVal > 0 then comfort = comfortVal end
+    if bed and isNum(comfortVal) and comfortVal > 0 then comfort = comfortVal end
     return { bed = bed, comfort = comfort }
 end
 
