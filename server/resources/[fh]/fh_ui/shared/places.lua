@@ -54,15 +54,26 @@ function M.sprite(place)
     return M.SPRITES[place.kind] or 'blip_location_higher'
 end
 
-local function push(places, id, kind, label, x, y, z)
-    places[#places + 1] = { id = id, kind = kind, label = label, x = x, y = y, z = z }
+---"(unverified)" suffix for a place/row with verified == false, else '' (for /where, world-01 block D).
+function M.tag(place)
+    if type(place) == 'table' and place.verified == false then return ' (unverified)' end
+    return ''
+end
+
+local function push(places, id, kind, label, x, y, z, region, verified)
+    local p = { id = id, kind = kind, label = label, x = x, y = y, z = z }
+    if region ~= nil then p.region = region end
+    if verified ~= nil then p.verified = verified end
+    places[#places + 1] = p
 end
 
 ---Build the canonical place list from the lane configs. sources = {
 ---  homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig, zones = FhZonesConfig,
 ---  crafting = FhCraftingConfig, fence = FhFenceConfig, quests = { givers = FhQuestsGivers, boards = FhQuestsBoardSpots } }.
 --- Any source (or nested field) may be nil; missing data is skipped, never an error.
---- opts = { claimed = { [plot_id] = true }, mine = <own plot_id> } marks homestead plots (for /where plot and sprites).
+--- opts = { claimed = { [plot_id] = true }, mine = <own plot_id>, isEnabled = <fn(region_id)->bool> }.
+--- isEnabled (world-01 block D enabled gate): when given, a place with a region is dropped when isEnabled(region) is
+--- false; places with no region (givers/trapper/fence/stations) are never region-gated.
 function M.gather(sources, opts)
     local places = {}
     sources = sources or {}
@@ -78,7 +89,8 @@ function M.gather(sources, opts)
                 local x, y, z = M.coords(p.center)
                 if x then
                     local label = (p.class == 'town_lot') and ((p.name or 'Town lot') .. ' (coming soon)') or (p.name or 'Homestead plot')
-                    local place = { id = id, kind = 'plot', label = label, x = x, y = y, z = z, claimable = (p.claimable ~= false) }
+                    local place = { id = id, kind = 'plot', label = label, x = x, y = y, z = z, claimable = (p.claimable ~= false),
+                        region = p.region, verified = p.verified }
                     if claimed[id] then place.claimed = true end
                     if type(mine) == 'string' and mine == id then place.mine = true end
                     places[#places + 1] = place
@@ -93,7 +105,7 @@ function M.gather(sources, opts)
         for _, post in ipairs(tr.posts) do
             if type(post) == 'table' then
                 local x, y, z = M.coords(post)
-                if x then push(places, post.id, 'tradepost', post.label or 'Trade Post', x, y, z) end
+                if x then push(places, post.id, 'tradepost', post.label or 'Trade Post', x, y, z, post.region, post.verified) end
             end
         end
     end
@@ -111,7 +123,7 @@ function M.gather(sources, opts)
         for id, camp in pairs(zn.camps) do
             if type(camp) == 'table' then
                 local x, y, z = M.coords(camp.center)
-                if x then push(places, id, 'camp', 'Outlaw camp', x, y, z) end
+                if x then push(places, id, 'camp', 'Outlaw camp', x, y, z, camp.region, camp.verified) end
             end
         end
     end
@@ -157,9 +169,19 @@ function M.gather(sources, opts)
         for _, b in ipairs(bs.spots) do
             if type(b) == 'table' then
                 local x, y, z = M.coords(b.coords)
-                if x then push(places, b.id or b.region_id, 'board', b.label or 'Jobs board', x, y, z) end
+                if x then push(places, b.id or b.region_id, 'board', b.label or 'Jobs board', x, y, z, b.region_id) end
             end
         end
+    end
+
+    -- Enabled gate (world-01 block D): drop places whose region is disabled. Places with no region (givers,
+    -- trapper, fence, stations) are not region-gated and stay. isEnabled is optional (nil = show everything).
+    if type(opts.isEnabled) == 'function' then
+        local kept = {}
+        for _, p in ipairs(places) do
+            if p.region == nil or opts.isEnabled(p.region) then kept[#kept + 1] = p end
+        end
+        places = kept
     end
 
     return places
@@ -212,7 +234,8 @@ end
 function M.list(places, player)
     local rows = {}
     for _, p in ipairs(places or {}) do
-        rows[#rows + 1] = { id = p.id, kind = p.kind, label = p.label, x = p.x, y = p.y, z = p.z, dist = M.distance(p, player) }
+        rows[#rows + 1] = { id = p.id, kind = p.kind, label = p.label, x = p.x, y = p.y, z = p.z, dist = M.distance(p, player),
+            verified = p.verified }
     end
     table.sort(rows, function(a, b)
         if a.dist == nil then return false end

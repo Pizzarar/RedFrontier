@@ -69,13 +69,13 @@ end
 
 local function run(query)
     local player = playerPos()
-    local places = P.gather(sources(), { claimed = claimedSet() })
+    local places = P.gather(sources(), { claimed = claimedSet(), isEnabled = FhRegions and FhRegions.isEnabled })
 
     if (query or ''):gsub('%s+', '') == '' then
         local rows = P.list(places, player)
         if #rows == 0 then return chat('/where: no places known') end
         for _, r in ipairs(rows) do
-            chat(('%s (%s)%s'):format(r.label, r.id, r.dist and (' — ' .. ('%d m'):format(math.floor(r.dist + 0.5))) or ''))
+            chat(('%s%s (%s)%s'):format(r.label, P.tag(r), r.id, r.dist and (' — ' .. ('%d m'):format(math.floor(r.dist + 0.5))) or ''))
         end
         return
     end
@@ -86,7 +86,7 @@ local function run(query)
         if why == 'none' then return chat('/where: no place of that kind') end
         return chat('/where: unknown place "' .. query .. '"')
     end
-    chat(('%s (%s): %s'):format(place.label, place.id, distText(place, player)))
+    chat(('%s%s (%s): %s'):format(place.label, P.tag(place), place.id, distText(place, player)))
     setDest(place)
 end
 

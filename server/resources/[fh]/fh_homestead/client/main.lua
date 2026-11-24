@@ -15,7 +15,7 @@ local function spawn(p)
     local t = GetGameTimer()
     while not HasModelLoaded(model) and GetGameTimer() - t < 5000 do Wait(50) end
     if not HasModelLoaded(model) then return end
-    local obj = CreateObject(model, p.coords.x, p.coords.y, p.coords.z, false, false, false) -- isNetwork = false
+    local obj = CreateObject(model, p.coords.x, p.coords.y, FhSnap.groundZAt(p.id, p.coords.x, p.coords.y, p.coords.z), false, false, false) -- isNetwork = false
     if not obj or obj == 0 then
         SetModelAsNoLongerNeeded(model)
         return
@@ -71,7 +71,7 @@ local function spawnSlot(set, p)
         SetModelAsNoLongerNeeded(model)
         return
     end
-    local obj = CreateObject(model, p.coords.x, p.coords.y, p.coords.z, false, false, false) -- isNetwork = false
+    local obj = CreateObject(model, p.coords.x, p.coords.y, FhSnap.groundZAt(p.plot_id .. ':' .. p.slot_id, p.coords.x, p.coords.y, p.coords.z), false, false, false) -- isNetwork = false
     SetModelAsNoLongerNeeded(model)
     if not obj or obj == 0 then return end
     SetEntityHeading(obj, p.heading or 0.0)

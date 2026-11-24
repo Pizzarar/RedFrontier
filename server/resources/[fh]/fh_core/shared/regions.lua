@@ -385,6 +385,14 @@ function regions.isKnownRegion(id)
     return type(id) == 'string' and regions.regions[id] ~= nil
 end
 
+---Enabled gate (world-01 block D): true only for a known region with enabled == true. Unknown/missing = false,
+---so a place referencing a bogus region id is hidden rather than shown.
+---@return boolean
+function regions.isEnabled(id)
+    local r = regions.regions[id]
+    return r ~= nil and r.enabled == true
+end
+
 ---Return the territory containing (x, y), or nil. 2D distance; the nearest center wins on overlap.
 function regions.territoryAt(x, y)
     if type(x) ~= 'number' or type(y) ~= 'number' then return nil end

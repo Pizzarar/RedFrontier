@@ -4,7 +4,7 @@
 local B = FhQuestsBoardSpots
 local function openBoard(region_id) TriggerServerEvent('fh:quests:ui_open', region_id) end
 
-RegisterCommand('jobs', function() openBoard(B.regionFor(GetEntityCoords(PlayerPedId()))) end, false)
+RegisterCommand('jobs', function() openBoard(B.regionFor(GetEntityCoords(PlayerPedId()), B.spots, FhRegions.isEnabled)) end, false)
 
 -- Board spots (rsg-target is optional: without it only /jobs works). Zones and props are removed on stop.
 local zones, props, stopping = {}, {}, false
@@ -12,23 +12,25 @@ local zones, props, stopping = {}, {}, false
 CreateThread(function()
     if GetResourceState('rsg-target') ~= 'started' then return end
     for _, b in ipairs(B.spots) do
-        zones[#zones + 1] = exports['rsg-target']:addSphereZone({
-            coords = vector3(b.coords.x, b.coords.y, b.coords.z), radius = 1.5, debug = false,
-            options = { { label = b.label, icon = 'fa-solid fa-clipboard-list', distance = 2.0,
-                onSelect = function() openBoard(b.region_id) end } },
-        })
-        local hash = joaat(b.model)
-        if IsModelValid(hash) then -- unverified model: skip the prop when RedM does not know it
-            RequestModel(hash)
-            local t = GetGameTimer() + 3000
-            while not HasModelLoaded(hash) and GetGameTimer() < t and not stopping do Wait(50) end
-            if HasModelLoaded(hash) and not stopping then
-                local prop = CreateObject(hash, b.coords.x, b.coords.y, b.coords.z, false, false, false)
-                props[#props + 1] = prop
-                PlaceObjectOnGroundProperly(prop)
-                FreezeEntityPosition(prop, true)
+        if FhRegions.isEnabled(b.region_id) then -- world-01 block D: no board prop/zone in a disabled region
+            zones[#zones + 1] = exports['rsg-target']:addSphereZone({
+                coords = vector3(b.coords.x, b.coords.y, b.coords.z), radius = 1.5, debug = false,
+                options = { { label = b.label, icon = 'fa-solid fa-clipboard-list', distance = 2.0,
+                    onSelect = function() openBoard(b.region_id) end } },
+            })
+            local hash = joaat(b.model)
+            if IsModelValid(hash) then -- unverified model: skip the prop when RedM does not know it
+                RequestModel(hash)
+                local t = GetGameTimer() + 3000
+                while not HasModelLoaded(hash) and GetGameTimer() < t and not stopping do Wait(50) end
+                if HasModelLoaded(hash) and not stopping then
+                    local prop = CreateObject(hash, b.coords.x, b.coords.y, b.coords.z, false, false, false)
+                    props[#props + 1] = prop
+                    PlaceObjectOnGroundProperly(prop)
+                    FreezeEntityPosition(prop, true)
+                end
+                SetModelAsNoLongerNeeded(hash)
             end
-            SetModelAsNoLongerNeeded(hash)
         end
     end
 end)

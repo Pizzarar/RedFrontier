@@ -47,11 +47,13 @@ function M.shouldActivate(state, camp, positions)
     return false
 end
 
----Should the camp wake right now? The activation check plus the A-life law-held skip: a law-held camp never
----activates even with a player inside. lawHeld is the boolean from fh_alife:isLawHeld(campId); nil (fh_alife absent
----or the export failed) is treated as not held, so the camp behaves exactly as before this feature existed.
+---Should the camp wake right now? The activation check plus two skips: a law-held camp never activates even with a
+---player inside (lawHeld is the boolean from fh_alife:isLawHeld(campId); nil = fh_alife absent / export failed, so the
+---camp behaves exactly as before), and a camp in a disabled region (camp.enabled == false, world-01 block D) never
+---activates.
 function M.shouldWake(state, camp, positions, lawHeld)
     if lawHeld == true then return false end
+    if camp.enabled == false then return false end
     return M.shouldActivate(state, camp, positions)
 end
 

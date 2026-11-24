@@ -24,17 +24,21 @@ end
 
 ---Nearest board spot's region_id for a player position, or M.DEFAULT_REGION when no spot has a usable position.
 --- player = {x,y,z} (or vector3). spots defaults to M.spots; pass an empty list to force the fallback.
-function M.regionFor(player, spots)
+--- isEnabled (optional fn(region_id) -> bool, world-01 block D): spots whose region is disabled are skipped, so the
+--- /jobs pick never offers a disabled region.
+function M.regionFor(player, spots, isEnabled)
     spots = spots or M.spots
     local best, bestD = nil, nil
     for _, s in ipairs(spots) do
-        local bx, by, bz = coords(s and s.coords)
-        local px, py, pz = coords(player)
-        if bx and px then
-            local dx, dy, dz = px - bx, py - by, pz - bz
-            local d = math.sqrt(dx * dx + dy * dy + dz * dz)
-            if bestD == nil or d < bestD then
-                best, bestD = s.region_id, d
+        if isEnabled == nil or isEnabled(s.region_id) then
+            local bx, by, bz = coords(s and s.coords)
+            local px, py, pz = coords(player)
+            if bx and px then
+                local dx, dy, dz = px - bx, py - by, pz - bz
+                local d = math.sqrt(dx * dx + dy * dy + dz * dz)
+                if bestD == nil or d < bestD then
+                    best, bestD = s.region_id, d
+                end
             end
         end
     end

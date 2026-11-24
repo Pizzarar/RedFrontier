@@ -39,10 +39,10 @@ FhTradeConfig = {
     -- WORKAROUND world-01: dup of regions.lua territories, collapse later -- post positions are local (FhRegions has no
     -- `posts` table yet); keep them in sync with the town centers in fh_core/shared/regions.lua.
     posts = {
-        { id = 'valentine_post', label = 'Valentine Trade Post', region = 'heartlands', x = -176.0, y = 630.0, z = 114.0, radius = 6.0 },
-        { id = 'rhodes_post', label = 'Rhodes Trade Post', region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0, radius = 6.0 },
-        { id = 'saint_denis_post', label = 'Saint Denis Trade Post', region = 'bayou_nwa', x = 2700.0, y = -1430.0, z = 45.0, radius = 6.0 },
-        { id = 'blackwater_post', label = 'Blackwater Trade Post', region = 'great_plains', x = -865.0, y = -1350.0, z = 44.0, radius = 6.0 },
+        { id = 'valentine_post', label = 'Valentine Trade Post', verified = false, region = 'heartlands', x = -176.0, y = 630.0, z = 114.0, radius = 6.0 },
+        { id = 'rhodes_post', label = 'Rhodes Trade Post', verified = false, region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0, radius = 6.0 },
+        { id = 'saint_denis_post', label = 'Saint Denis Trade Post', verified = false, region = 'bayou_nwa', x = 2700.0, y = -1430.0, z = 45.0, radius = 6.0 },
+        { id = 'blackwater_post', label = 'Blackwater Trade Post', verified = false, region = 'great_plains', x = -865.0, y = -1350.0, z = 44.0, radius = 6.0 },
     },
 
     -- Freight contracts (R4): a fh_quests job type generated from shortages. Destinations are where your OWN wagon

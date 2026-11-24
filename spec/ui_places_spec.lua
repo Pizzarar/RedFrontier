@@ -162,4 +162,51 @@ case('list sorts by distance ascending, nil dist last', function()
     T.eq(#rows, #noPlayer)
 end)
 
+case('enabled gate: gather drops places in disabled regions, keeps regionless places', function()
+    local src = { homestead = { plots = {
+        a = { id = 'a', center = { x = 0, y = 0, z = 0 }, region = 'heartlands' },
+        b = { id = 'b', center = { x = 10, y = 0, z = 0 }, region = 'tall_trees' },
+        c = { id = 'c', center = { x = 20, y = 0, z = 0 } }, -- no region: never gated
+    } } }
+    local enabled = { heartlands = true, tall_trees = false }
+    local places = P.gather(src, { isEnabled = function(id) return enabled[id] == true end })
+    local ids = {}
+    for _, p in ipairs(places) do ids[p.id] = true end
+    T.eq(true, ids.a)
+    T.eq(nil, ids.b)  -- disabled region dropped
+    T.eq(true, ids.c) -- no region kept
+    T.eq(3, #P.gather(src)) -- without isEnabled nothing is dropped
+end)
+
+case('gather carries region and verified onto region-associated places', function()
+    local src = {
+        homestead = { plots = { h1 = { id = 'h1', center = { x = 0, y = 0, z = 0 }, region = 'heartlands', verified = false } } },
+        zones = { camps = { c1 = { center = { x = 1, y = 0, z = 0 }, region = 'heartlands', verified = false } } },
+        trade = { posts = { { id = 'p1', label = 'Post', x = 2, y = 0, z = 0, region = 'heartlands', verified = false } } },
+        quests = { boards = { spots = { { id = 'b1', region_id = 'heartlands', label = 'Board', coords = { x = 3, y = 0, z = 0 } } } } },
+    }
+    local places = P.gather(src)
+    local byId = {}
+    for _, p in ipairs(places) do byId[p.id] = p end
+    T.eq('heartlands', byId.h1.region)
+    T.eq(false, byId.h1.verified)
+    T.eq(false, byId.c1.verified)
+    T.eq(false, byId.p1.verified)
+    T.eq('heartlands', byId.b1.region) -- board region comes from region_id
+    T.eq(nil, byId.b1.verified)
+end)
+
+case('tag appends "(unverified)" only for verified == false', function()
+    T.eq(' (unverified)', P.tag({ verified = false }))
+    T.eq('', P.tag({ verified = true }))
+    T.eq('', P.tag({}))
+    T.eq('', P.tag(nil))
+end)
+
+case('list rows carry verified for the /where tag', function()
+    local src = { homestead = { plots = { h1 = { id = 'h1', center = { x = 0, y = 0, z = 0 }, verified = false } } } }
+    local rows = P.list(P.gather(src), { x = 0, y = 0, z = 0 })
+    T.eq(false, rows[1].verified)
+end)
+
 T.finish()

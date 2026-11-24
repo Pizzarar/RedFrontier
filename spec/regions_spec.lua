@@ -79,6 +79,16 @@ case('enabled is true only for the four spawn-anchored regions', function()
     end
 end)
 
+case('isEnabled is true only for enabled regions, false for unknown/missing', function()
+    for _, id in ipairs(ALL_REGIONS) do
+        T.eq(ENABLED[id] == true, regions.isEnabled(id), id)
+    end
+    T.eq(false, regions.isEnabled('guarma'))
+    T.eq(false, regions.isEnabled('bogus'))
+    T.eq(false, regions.isEnabled(nil))
+    T.eq(false, regions.isEnabled(42))
+end)
+
 -- ---------------------------------------------------------------- world-01: 8 factions + alias
 
 local FACTION_KIND = {

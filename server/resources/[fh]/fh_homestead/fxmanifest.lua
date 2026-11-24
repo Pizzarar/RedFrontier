@@ -25,6 +25,8 @@ server_scripts {
 
 client_scripts {
     '@fh_core/client/safe.lua',
+    '@fh_core/shared/ground_snap.lua',
+    '@fh_core/client/ground_snap.lua',
     'client/main.lua',
 }
 

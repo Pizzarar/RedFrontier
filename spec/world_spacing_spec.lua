@@ -56,6 +56,12 @@ case('every camp is owned (via territory) by an outlaw faction in an enabled reg
     end
 end)
 
+case('every camp.enabled mirrors FhRegions.isEnabled(region) (world-01 block D gate)', function()
+    for id, c in pairs(zones.camps) do
+        assert((c.enabled == true) == regions.isEnabled(c.region), id .. ' enabled mismatch')
+    end
+end)
+
 case('each enabled region has 3-4 camps', function()
     local counts = {}
     for _, c in pairs(zones.camps) do counts[c.region] = (counts[c.region] or 0) + 1 end

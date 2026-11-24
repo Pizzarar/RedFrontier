@@ -68,7 +68,7 @@ FH.refreshCamps = function() loadCamps() return true end
 FH.thread(function()
     for _, c in ipairs(loadCamps()) do
         lib.points.new({
-            coords = c.loot, distance = 2.0,
+            coords = vector3(c.loot.x, c.loot.y, FhSnap.groundZAt(c.id, c.loot.x, c.loot.y, c.loot.z)), distance = 2.0,
             onEnter = FH.wrap(function() lib.showTextUI('[E] Outlaw camp stash') end),
             onExit = FH.wrap(function() lib.hideTextUI() end),
             nearby = FH.wrap(function()

@@ -896,3 +896,45 @@ whose loot is in the stash, and shifts the region's trade prices; the sim later 
 8. Restart the server (or `restart fh_alife`), then run `/alife`.
    Expected: ownership is persisted (still shows the last owner, e.g. `outlaws` after the retake); no error lines.
    RESULT:
+
+## World-01: walk the claims (fh_core regions, fh_homestead, fh_zones, fh_trade, fh_ui)
+
+Ground-snap + enabled-gate check (plan world-01 block D). `/where` is the fix-up tool: run `/where plot` to get a
+named claim, ride to it, and report any coordinate that floats/buries with the corrected coords from `/where`.
+Unverified entries show `(unverified)`; the four enabled regions are heartlands, scarlett_meadows, bayou_nwa and
+great_plains. Only those four should show anything — the other 11 regions are disabled and must show no blip, no
+`/where` entry, no camp and no `/jobs` board.
+
+1. Heartlands claims: `/where plot`, then ride to each named claim — Dakota Bend, Creekside Pines, Cattail Marsh,
+   Larkspur Meadow (town lots show "coming soon").
+   Expected: each claim's chest sits on the ground (no floating/buried prop) and the blip/destination is at ground
+   level; nothing logs `fh:world:unsnapped <id>` for a claim whose area has streamed in.
+   RESULT:
+2. Heartlands camps: ride to Heartland Bluffs, Heartland Overflow, Dakota West, Dakota South.
+   Expected: each camp's stash prompt appears at ground level; the four outlaw peds spawn on the ground and sit away
+   from every claim and town; `camp <id> activated` on approach.
+   RESULT:
+3. Heartlands trade post: the Valentine Trade Post.
+   Expected: shows on `/where` (as `(unverified)`), reachable, prices move with the region.
+   RESULT:
+4. Scarlett Meadows claims: Red Cane, Wildcat Hollow, Cedar Flat, Sorghum Furrow.
+   Expected: ground snap as step 1; camps Hill Haven, Cedar Bottoms, Catfish Bottom spawn on ground away from claims;
+   Rhodes Trade Post reachable.
+   RESULT:
+5. Bayou Nwa claims: Cypress Reach, Sugar Cane, Tupelo Gut.
+   Expected: ground snap as step 1; camps Moss Bog, Bayou Railroad, Lagras Swamp, Cypress Hollow on ground; Saint
+   Denis Trade Post reachable.
+   RESULT:
+6. Great Plains claims: Cottonwood Ford, Sage Creek, Pine Timber.
+   Expected: ground snap as step 1; camps Bison Bluff, Great Plains North, Great Plains East on ground; Blackwater
+   Trade Post reachable.
+   RESULT:
+7. Disabled regions (11): bluewater_marsh, roanoke_ridge, grizzlies_east, grizzlies_west, cumberland_forest,
+   big_valley, tall_trees, hennigans_stead, cholla_springs, gaptooth_ridge, rio_bravo.
+   Expected: `/where` shows no plot/camp/post for any of them; no blip; `/jobs` never offers one of them. Confirm and
+   note anything that still appears.
+   RESULT:
+8. `/where` unverified tag: run `/where` with no argument and skim the list.
+   Expected: every claim, camp and trade post shows `(unverified)` until you stand there and fix it; verified entries
+   (after a fix) show no tag.
+   RESULT:

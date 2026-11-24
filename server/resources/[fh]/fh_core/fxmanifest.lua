@@ -18,6 +18,7 @@ server_scripts {
 
 client_scripts {
     'client/safe.lua',
+    'client/ground_snap.lua',
     'client/spawn.lua',
     'client/saddlebag.lua',
 }

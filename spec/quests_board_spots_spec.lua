@@ -31,4 +31,14 @@ case('regionFor falls back to DEFAULT_REGION when the position or spots are unus
     T.eq('heartlands', B.regionFor({ x = 0, y = 0, z = 0 }, { { region_id = 'other', coords = { x = 1, y = 2 } } })) -- unusable spot
 end)
 
+case('regionFor skips disabled-region spots (enabled gate)', function()
+    local enabled = { heartlands = true, scarlett_meadows = false }
+    local isEnabled = function(id) return enabled[id] == true end
+    -- nearest board is Rhodes (disabled): skipped, so the pick falls back to Heartlands
+    T.eq('heartlands', B.regionFor({ x = 1288, y = -1278, z = 77 }, B.spots, isEnabled))
+    T.eq('heartlands', B.regionFor({ x = 1300, y = -1300, z = 77 }, B.spots, isEnabled))
+    -- no filter: today's behaviour
+    T.eq('scarlett_meadows', B.regionFor({ x = 1288, y = -1278, z = 77 }, B.spots, nil))
+end)
+
 T.finish()

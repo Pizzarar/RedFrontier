@@ -207,6 +207,16 @@ case('shouldWake: law-held camp never wakes; unknown (nil) behaves as today', fu
     for _, st in ipairs({ 'active', 'cleared', 'respawn_wait' }) do assert(not R.shouldWake(st, camp, { near }, nil), st) end
 end)
 
+case('shouldWake: a camp in a disabled region (enabled=false) never wakes', function()
+    local near = { x = -145, y = 845, z = 117 }
+    local function mk(enabled)
+        return { enabled = enabled, center = camp.center, activationRadius = camp.activationRadius }
+    end
+    assert(not R.shouldWake('idle', mk(false), { near }, nil))
+    assert(R.shouldWake('idle', mk(true), { near }, nil))
+    assert(R.shouldWake('idle', mk(nil), { near }, nil)) -- nil enabled = today's behaviour
+end)
+
 case('pickLootTable: owner map entry, else fall back to the camp table', function()
     local heart = cfg.lootByFaction.outlaws
     local raider = cfg.lootByFaction.raiders
