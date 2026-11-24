@@ -4,6 +4,8 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local describe, it, eq = T.describe, T.it, T.eq
 local base = here .. '../server/resources/[fh]/fh_hunting/'
 local A = dofile(base .. 'shared/animals.lua')
+-- The legendary registry animals.lua derived its extra rows from (the loader's default registry singleton).
+local L = package.loaded.fh_hunting_legendaries or dofile(base .. 'shared/legendaries.lua')
 -- fh_core's item validator is the contract registerItems applies, so the definitions must pass it.
 local Items = dofile(here .. '../server/resources/[fh]/fh_core/shared/items.lua')
 
@@ -28,7 +30,7 @@ describe('hunting animals: size_class per animal', function()
 end)
 
 describe('hunting animals: table shape', function()
-    it('has the eleven animals plus the legendary bear', function() eq(12, #A.list) end)
+    it('has the eleven plain animals plus one row per legendary entry', function() eq(11 + #L.list, #A.list) end)
     it('pelt ids are unique, pelt_<key>, and every animal has a positive base value', function()
         local seen = {}
         for _, a in ipairs(A.list) do
@@ -72,11 +74,12 @@ end)
 
 describe('hunting animals: item definitions', function()
     local defs = A.itemDefs()
-    it('one definition per animal plus the trophy', function()
+    it('one definition per animal plus one trophy per legendary', function()
         local n = 0
         for _ in pairs(defs) do n = n + 1 end
-        eq(#A.list + 1, n)
+        eq(#A.list + #L.list, n)
         for _, a in ipairs(A.list) do assert(defs[a.pelt], a.pelt) end
+        for _, e in ipairs(L.list) do assert(defs[e.trophy.item], e.trophy.item) end
     end)
     it('every definition passes the fh_core validator and keeps the animal size_class', function()
         for name, d in pairs(defs) do
