@@ -24,7 +24,7 @@
 - Q0a DONE: core idea-614 on local main b63a340. camp_cleared carries `participants` (players within activationRadius at clear; `{}` if none or on error). Q3 intake.lua already reads it. Sent Que2 rn-97a2281b22df the stale README lines (90, 246) plus a spec ask.
 
 ## Open
-- Q0b @hunting: ACCEPTED 2026-11-23. pelt_sold gets `{citizenid,item_id,animal,size_class,quality,price,region_id}` in Hunting H3 (after H2). Until then, hunt_request matches on quality only.
+- Q0b DONE on main: fh_hunting/shared/sell.lua:157 emits pelt_sold with animal/size_class/quality/region_id. Closed by q7 4978178: hunt_request requires the animal (wrong-animal spec), stale text fixed.
 
 ## In flight
 - MERGED 2026-11-23 (Que2): Q1-Q5 + Q0a follow-up on local main b53979a (q1 2296099, q2 d2173f3, q3 ff8031d, q4 738ad8a, q5 b53979a); migration 0007_quest_state; venv specs 35/681/0. Plan quests-01 complete. Not pushed.
