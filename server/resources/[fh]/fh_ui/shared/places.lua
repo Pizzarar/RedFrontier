@@ -3,17 +3,18 @@
 -- the `@`-includes in fxmanifest) so fh_ui never hardcodes a coordinate. Coords may be a vector3 or a {x,y,z} table.
 local M = {}
 
--- RDR2 blip sprite name per place kind. The client joaat()s these for BLIP_ADD_FOR_COORDS. UNVERIFIED in-game:
--- names are community-known RDR2 blip sprites; verify each renders, then adjust.
+-- RDR2 blip sprite name per place kind. The client joaat()s these and passes them to SET_BLIP_SPRITE. Names are
+-- VERIFIED against femga/rdr3_discoveries `textures/blips` (the list the alloc8or DB links to); still unverified
+-- in-game (confirm each renders, then adjust).
 M.SPRITES = {
-    plot      = 'blip_location_area',
-    tradepost = 'blip_shop_store',
-    trapper   = 'blip_shop_trapper',
-    giver     = 'blip_shop_store',
-    board     = 'blip_shop_store',
-    camp      = 'blip_location_area',
-    station   = 'blip_shop_gunsmith',
-    fence     = 'blip_shop_store',
+    plot      = 'blip_proc_home',           -- 1586273744
+    tradepost = 'blip_shop_store',          -- 1475879922
+    trapper   = 'blip_shop_animal_trapper', -- -1406874050
+    giver     = 'blip_ambient_npc',         -- 305281166
+    board     = 'blip_proc_bounty_poster',  -- -1636832113
+    camp      = 'blip_region_hideout',      -- -428972082
+    station   = 'blip_shop_gunsmith',       -- -145868367
+    fence     = 'blip_shop_shady_store',    -- 531267562
 }
 
 -- /where query aliases -> place kind. A query that is not an alias is matched against a place id/label instead.
@@ -47,10 +48,10 @@ function M.distance(a, b)
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
----The blip sprite name for a place (falls back to the generic location marker).
+---The blip sprite name for a place (falls back to a generic location marker).
 function M.sprite(place)
     if type(place) ~= 'table' then return nil end
-    return M.SPRITES[place.kind] or 'blip_location_area'
+    return M.SPRITES[place.kind] or 'blip_location_higher'
 end
 
 local function push(places, id, kind, label, x, y, z)

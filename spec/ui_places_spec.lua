@@ -53,9 +53,10 @@ case('distance is euclidean and nil on unusable input', function()
 end)
 
 case('sprite returns per-kind name and a generic fallback', function()
-    T.eq('blip_shop_trapper', P.sprite({ kind = 'trapper' }))
+    T.eq('blip_shop_animal_trapper', P.sprite({ kind = 'trapper' }))
     T.eq('blip_shop_gunsmith', P.sprite({ kind = 'station' }))
-    T.eq('blip_location_area', P.sprite({ kind = 'madeup' }))
+    T.eq('blip_shop_shady_store', P.sprite({ kind = 'fence' }))
+    T.eq('blip_location_higher', P.sprite({ kind = 'madeup' }))
     T.eq(nil, P.sprite(nil))
 end)
 

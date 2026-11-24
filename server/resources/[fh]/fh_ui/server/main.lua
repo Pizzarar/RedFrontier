@@ -21,6 +21,15 @@ AddEventHandler('playerDropped', function()
     relay.forget(limiter, source)
 end)
 
+-- Map blips: claimed homestead plot ids, read from fh_homestead (read-only, presentation only). `/where plot` uses
+-- this to pick the nearest UNCLAIMED plot. Returns {} while fh_homestead is down or not ready.
+lib.callback.register('fh:ui:plot_claims', function()
+    if GetResourceState('fh_homestead') ~= 'started' or not exports.fh_homestead.claimedPlots then return {} end
+    local ok, list = pcall(function() return exports.fh_homestead:claimedPlots() end)
+    if not ok or type(list) ~= 'table' then return {} end
+    return list
+end)
+
 -- Dev demo (U3): `fh_ui_demo <screen|close [screen]>` opens a fixture screen for the caller. Gated by the command ACE (same pattern as fh_homestead's fh_unclaim); console has no client.
 local fx = FhUiFixtures
 local function reply(src, msg)

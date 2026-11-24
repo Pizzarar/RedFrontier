@@ -5,19 +5,18 @@
 -- and IS_WAYPOINT_ACTIVE 0x202B1BBFC6AB5EE4 exist), so `/where <place>` marks the destination with a named blip
 -- instead of the pause-map red X. A true GPS route is a queued follow-up if a native is ever found.
 --
--- Natives (hashes verified against alloc8or rdr3-nativedb-data natives.json):
---   BLIP_ADD_FOR_COORDS 0x554D9D53F696D002 (blipHash, x, y, z) -> blip
---   _SET_BLIP_NAME      0x9CB1A1623062F402 (blip, name string)
---   SET_BLIP_SCALE      0xD38744167B2FA257 (blip, scale)
---   DOES_BLIP_EXIST     0xCD82FA174080B3B1 (blip)
---   REMOVE_BLIP         0xF2C3C9DA47AAA54A (blip)
+-- Blip natives, copied from the known-working pattern in rsg-character/client/clothes.lua (CreateBlips, lines 796-823):
+--   BLIP_ADD_FOR_COORDS 0x554D9D53F696D002 (STYLE hash, x, y, z) -> blip   first arg is a blip STYLE, not a sprite
+--   SetBlipSprite(blip, spriteHash, 1)   [exposed by name]
+--   SetBlipScale(blip, scale)            [exposed by name]
+--   _SET_BLIP_NAME      0x9CB1A1623062F402 (blip, name)   plain string, not a VarString
+--   RemoveBlip(blip)                     [exposed by name]  REMOVE_BLIP 0xF2C3C9DA47AAA54A takes Blip* (pointer)
+-- Style 1664425300 = BLIP_STYLE_PICKUP_WEAPON (base style rsg-character uses; the sprite is overridden anyway).
 local P = FhUiPlaces
 
 local BLIP_ADD_FOR_COORDS = 0x554D9D53F696D002
+local BLIP_STYLE = 1664425300 -- BLIP_STYLE_PICKUP_WEAPON
 local _SET_BLIP_NAME = 0x9CB1A1623062F402
-local SET_BLIP_SCALE = 0xD38744167B2FA257
-local DOES_BLIP_EXIST = 0xCD82FA174080B3B1
-local REMOVE_BLIP = 0xF2C3C9DA47AAA54A
 
 local dest = nil -- the current /where destination blip
 
@@ -35,25 +34,44 @@ local function distText(place, player)
     return ('%d m'):format(math.floor(d + 0.5))
 end
 
+-- The lane configs, read from the `@`-includes (read-only). nil when a lane did not provide one.
+local function sources()
+    return {
+        homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig,
+        zones = FhZonesConfig, crafting = FhCraftingConfig, fence = FhFenceConfig,
+        quests = { givers = FhQuestsGivers, boards = FhQuestsBoardSpots },
+    }
+end
+
+-- Claimed homestead plots, from the read-only `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead getClaims).
+-- nil when the fetch fails (then every plot looks unclaimed, same as before).
+local function claimedSet()
+    local claimed
+    if lib and lib.callback then
+        local ok, list = pcall(function() return lib.callback.await('fh:ui:plot_claims', false) end)
+        if ok and type(list) == 'table' then
+            claimed = {}
+            for _, id in ipairs(list) do claimed[id] = true end
+        end
+    end
+    return claimed
+end
+
 local function setDest(place)
-    if dest and Citizen.InvokeNative(DOES_BLIP_EXIST, dest) then Citizen.InvokeNative(REMOVE_BLIP, dest) end
-    dest = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, joaat(P.sprite(place)), place.x + 0.0, place.y + 0.0, place.z + 0.0)
+    if dest then RemoveBlip(dest) end
+    dest = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, BLIP_STYLE, place.x + 0.0, place.y + 0.0, place.z + 0.0)
     if dest and dest ~= 0 then
+        SetBlipSprite(dest, joaat(P.sprite(place)), 1)
+        SetBlipScale(dest, 1.0)
         Citizen.InvokeNative(_SET_BLIP_NAME, dest, 'Destination: ' .. place.label)
-        Citizen.InvokeNative(SET_BLIP_SCALE, dest, 1.0)
     end
 end
 
 local function run(query)
     local player = playerPos()
-    local places = P.gather({
-        homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig,
-        zones = FhZonesConfig, crafting = FhCraftingConfig, fence = FhFenceConfig,
-        quests = { givers = FhQuestsGivers, boards = FhQuestsBoardSpots },
-    })
+    local places = P.gather(sources(), { claimed = claimedSet() })
 
-    local q = type(query) == 'string' and query or ''
-    if q:gsub('%s+', '') == '' then
+    if (query or ''):gsub('%s+', '') == '' then
         local rows = P.list(places, player)
         if #rows == 0 then return chat('/where: no places known') end
         for _, r in ipairs(rows) do
@@ -62,16 +80,23 @@ local function run(query)
         return
     end
 
-    local place, why = P.pick(places, q, player)
+    local place, why = P.pick(places, query, player)
     if not place then
         if why == 'all_claimed' then return chat('/where plot: every plot is claimed') end
         if why == 'none' then return chat('/where: no place of that kind') end
-        return chat('/where: unknown place "' .. q .. '"')
+        return chat('/where: unknown place "' .. query .. '"')
     end
     chat(('%s (%s): %s'):format(place.label, place.id, distText(place, player)))
     setDest(place)
 end
 
 RegisterCommand('where', function(_, args)
-    run(args and args[1])
+    local query = args and table.concat(args, ' ') or ''
+    FH.thread(function() run(query) end)
 end, false)
+
+FH.on('onResourceStop', function(res)
+    if res ~= GetCurrentResourceName() then return end
+    if dest then RemoveBlip(dest) end
+    dest = nil
+end)

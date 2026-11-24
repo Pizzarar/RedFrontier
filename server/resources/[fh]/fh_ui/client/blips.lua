@@ -2,20 +2,20 @@
 -- `@`-includes in fxmanifest (read-only; never hardcoded here). The place list is pure (FhUiPlaces.gather); this file
 -- only draws it. Gated by FhUiConfig.blips.
 --
--- Natives (hashes verified against alloc8or rdr3-nativedb-data natives.json):
---   BLIP_ADD_FOR_COORDS 0x554D9D53F696D002 (blipHash, x, y, z) -> blip
---   _SET_BLIP_NAME      0x9CB1A1623062F402 (blip, name string)
---   SET_BLIP_SCALE      0xD38744167B2FA257 (blip, scale)
---   DOES_BLIP_EXIST     0xCD82FA174080B3B1 (blip)
---   REMOVE_BLIP         0xF2C3C9DA47AAA54A (blip)
--- Sprite names are RDR2 blip sprites (joaat()'d at call time); UNVERIFIED in-game. Not runtime-tested (no Cfx key).
+-- Blip natives, copied from the known-working pattern in rsg-character/client/clothes.lua (CreateBlips, lines 796-823),
+-- hashes verified against alloc8or rdr3-nativedb-data natives.json:
+--   BLIP_ADD_FOR_COORDS 0x554D9D53F696D002 (STYLE hash, x, y, z) -> blip   first arg is a blip STYLE, not a sprite
+--   SetBlipSprite(blip, spriteHash, 1)   [exposed by name]  sprite comes from FhUiPlaces.sprite (joaat'd)
+--   SetBlipScale(blip, scale)            [exposed by name]
+--   _SET_BLIP_NAME      0x9CB1A1623062F402 (blip, name)   plain string, not a VarString (rsg-character passes RSG.BlipName)
+--   RemoveBlip(blip)                     [exposed by name]  REMOVE_BLIP 0xF2C3C9DA47AAA54A takes Blip* (pointer)
+-- Style 1664425300 = BLIP_STYLE_PICKUP_WEAPON (the base style rsg-character uses; the sprite is overridden anyway).
+-- Sprite names are verified against femga/rdr3_discoveries textures/blips; still unverified in-game. Not runtime-tested.
 local P = FhUiPlaces
 
 local BLIP_ADD_FOR_COORDS = 0x554D9D53F696D002
+local BLIP_STYLE = 1664425300 -- BLIP_STYLE_PICKUP_WEAPON
 local _SET_BLIP_NAME = 0x9CB1A1623062F402
-local SET_BLIP_SCALE = 0xD38744167B2FA257
-local DOES_BLIP_EXIST = 0xCD82FA174080B3B1
-local REMOVE_BLIP = 0xF2C3C9DA47AAA54A
 
 local blips = {}
 
@@ -33,11 +33,11 @@ local function sources()
 end
 
 local function addBlip(place)
-    local hash = joaat(P.sprite(place))
-    local blip = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, hash, place.x + 0.0, place.y + 0.0, place.z + 0.0)
+    local blip = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, BLIP_STYLE, place.x + 0.0, place.y + 0.0, place.z + 0.0)
     if blip and blip ~= 0 then
+        SetBlipSprite(blip, joaat(P.sprite(place)), 1)
+        SetBlipScale(blip, 0.8)
         Citizen.InvokeNative(_SET_BLIP_NAME, blip, place.label)
-        Citizen.InvokeNative(SET_BLIP_SCALE, blip, 0.8)
         return blip
     end
     return nil
@@ -45,7 +45,7 @@ end
 
 local function clear()
     for _, b in ipairs(blips) do
-        if Citizen.InvokeNative(DOES_BLIP_EXIST, b) then Citizen.InvokeNative(REMOVE_BLIP, b) end
+        RemoveBlip(b) -- Blip* handled by the named-native wrapper (rsg-character does the same)
     end
     blips = {}
 end

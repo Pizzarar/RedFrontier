@@ -148,22 +148,25 @@ aggregates them into a canonical place list. `FhUiPlaces` is pure and specced un
 - `config.lua` `FhUiConfig.blips = false` hides the whole blip layer (the `/where` destination marker still works).
 - `client/blips.lua` draws the layer; `client/where.lua` registers `/where` (list, or pick + destination marker).
 - Homestead plots, trade post, trapper, quest givers, jobs board, outlaw camp, crafting dev-stations and fence stops
-  are blipped and named. Plot claim state ("own" vs "unclaimed") is not wired yet: `/where plot` returns the nearest
-  plot and needs a fh_homestead claim-state export to filter truly-unclaimed plots (queued follow-up).
+  are blipped and named. `/where plot` picks the nearest **unclaimed** plot: fh_ui reads the claimed plot ids through
+  the `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead `claimedPlots` export) and passes them as
+  `FhUiPlaces.gather`'s `claimed` set.
 - **RedM has no set-waypoint native** (only `SET_WAYPOINT_OFF` / `IS_WAYPOINT_ACTIVE`), so `/where <place>` marks the
   destination with a named blip instead of the pause-map red X. A true GPS route is a queued follow-up if a native
   appears.
 
-Natives (hashes verified against alloc8or `rdr3-nativedb-data` `natives.json`):
+Blip natives, copied from the known-working pattern in `rsg-character/client/clothes.lua` (`CreateBlips`, lines
+796-823); hashes verified against alloc8or `rdr3-nativedb-data` `natives.json`:
 
-| Native | Hash | Used by |
+| Native | Hash / call | Notes |
 |---|---|---|
-| `BLIP_ADD_FOR_COORDS` | `0x554D9D53F696D002` | blips, where |
-| `_SET_BLIP_NAME` | `0x9CB1A1623062F402` | blips, where |
-| `SET_BLIP_SCALE` | `0xD38744167B2FA257` | blips, where |
-| `DOES_BLIP_EXIST` | `0xCD82FA174080B3B1` | blips, where |
-| `REMOVE_BLIP` | `0xF2C3C9DA47AAA54A` | blips, where |
+| `BLIP_ADD_FOR_COORDS` | `0x554D9D53F696D002` | first arg is a **blip STYLE** hash, not a sprite; we pass `1664425300` (`BLIP_STYLE_PICKUP_WEAPON`, the base style rsg-character uses) |
+| `SetBlipSprite` | exposed by name | `(blip, joaat(sprite), 1)` overrides the sprite |
+| `SetBlipScale` | exposed by name | `(blip, scale)` |
+| `_SET_BLIP_NAME` | `0x9CB1A1623062F402` | plain string, not a VarString (rsg-character passes `RSG.BlipName`, a locale string) |
+| `RemoveBlip` | exposed by name | `REMOVE_BLIP 0xF2C3C9DA47AAA54A` takes `Blip*`; the named wrapper handles the pointer |
 
-Blip **sprite names** are not in `natives.json` (that file is native-hash only); they are RDR2 blip sprites
-(`FhUiPlaces.SPRITES`, `blip_shop_store` / `blip_shop_trapper` / `blip_shop_gunsmith` / `blip_location_area`),
-joaat'd at call time. **Unverified in-game**: verify each sprite renders, then adjust.
+Blip **sprite names** (`FhUiPlaces.SPRITES`) are verified against femga/`rdr3_discoveries` `textures/blips` (the list
+the alloc8or DB links to): `blip_proc_home`, `blip_shop_store`, `blip_shop_animal_trapper`, `blip_ambient_npc`,
+`blip_proc_bounty_poster`, `blip_region_hideout`, `blip_shop_gunsmith`, `blip_shop_shady_store`, joaat'd at call time.
+**Unverified in-game**: confirm each renders, then adjust.

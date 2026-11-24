@@ -121,6 +121,13 @@ end
 ---Plot id the character owns, or nil.
 local function getPlot(citizenid) return claims.byOwner[citizenid] end
 
+---Plot ids claimed by anyone, as a list. Read-only (for fh_ui's /where plot "unclaimed" pick).
+local function claimedPlots()
+    local out = {}
+    for plotId in pairs(claims.byPlot) do out[#out + 1] = plotId end
+    return out
+end
+
 ---Safe zone query (spec L139: homestead is a safe zone). True when coords are within the safe radius of a CLAIMED
 ---plot: FhHomesteadConfig.baseSafeRadius (else the plot radius) plus the built fence's safeRadiusBonus. Unclaimed plots
 ---and everything before the claim load are not safe. Before the slot cache is loaded the fence bonus is not counted.
@@ -194,4 +201,5 @@ end)
 exports('claim', claim)
 exports('unclaim', unclaim)
 exports('getPlot', getPlot)
+exports('claimedPlots', claimedPlots)
 exports('isInSafeZone', isInSafeZone)
