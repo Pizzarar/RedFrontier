@@ -123,6 +123,14 @@ function M.safeRadius(plot, currentTiers, baseRadius)
     return base + M.unlockedState(plot, type(currentTiers) == 'table' and currentTiers or {}).safeRadiusBonus
 end
 
+---H9 safe radius by plot class: a town lot is exactly its plot.radius (no base, no fence bonus); a claim (or no class)
+---is safeRadius above. Callers check ownership; this is geometry only.
+function M.safeRadiusFor(plot, currentTiers, baseRadius)
+    if type(plot) ~= 'table' then return 0 end
+    if plot.class == 'town_lot' then return tonumber(plot.radius) or 0 end
+    return M.safeRadius(plot, currentTiers, baseRadius)
+end
+
 ---Chest number of a chest-kind slot ('chest_2' -> 2), or nil. Chest 1 is the claim chest, never a slot.
 function M.chestNumber(slotId, slot)
     if type(slot) ~= 'table' or slot.kind ~= 'chest' or type(slotId) ~= 'string' then return nil end

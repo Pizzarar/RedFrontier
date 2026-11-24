@@ -49,10 +49,22 @@ end
 
 local function chestRef(plotId, n) return { type = 'chest', id = plotRules.chestStashId(plotId, n or 1) } end
 
--- Same character, same plot, no unclaim since generation g was read.
+-- Same character, same plot, no unclaim since generation g was read. The plot may be a claim or a town lot (H9).
 local function stillOwns(cid, plotId, g)
     local c = claims()
-    return genOf(plotId) == g and c ~= nil and c.plotOf(cid) == plotId and c.ownerOf(plotId) == cid
+    return genOf(plotId) == g and c ~= nil and c.ownerOf(plotId) == cid and c.plotOf(cid, c.classOf(plotId)) == plotId
+end
+
+---H9: the owned plot (claim or town lot) whose radius contains coords; plotId, plot. Else nil + why: fh_no_plot when
+---the character owns none, fh_not_in_plot when they own one but stand in none of theirs.
+local function ownedPlotAt(cid, coords)
+    local owned = slots().plotsOf(cid)
+    if #owned == 0 then return nil, 'fh_no_plot' end
+    for _, plotId in ipairs(owned) do
+        local plot = cfg.plots[plotId]
+        if plot and plotRules.inRadius(plot, coords) then return plotId, plot end
+    end
+    return nil, cfg.plots[owned[1]] and 'fh_not_in_plot' or 'fh_no_plot'
 end
 
 local function vec(c)
@@ -203,19 +215,19 @@ local function buildLocked(st, plot, slotId)
     return true, tier, cost
 end
 
----Build the next tier of `slotId` on the caller's own plot. Returns true, tier, cost | false, reason, detail.
+---Build the next tier of `slotId` on the caller's own plot they stand in (claim or town lot, H9; each class has its
+---own slot template, so e.g. `cabin` on a lot is fh_unknown_slot). Returns true, tier, cost | false, reason, detail.
 function B.build(src, slotId)
     local S = slots()
     if not (S and S.isReady()) then return false, 'fh_not_ready' end
     if type(slotId) ~= 'string' or slotId == '' then return false, 'fh_unknown_slot' end
     local cid = citizenidOf(src)
     if not cid then return false, 'fh_no_character' end
-    local plotId = S.plotOf(cid)
-    local plot = plotId and cfg.plots[plotId]
-    if not plot then return false, 'fh_no_plot' end
+    if #S.plotsOf(cid) == 0 then return false, 'fh_no_plot' end
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return false, 'fh_no_player' end
-    if not plotRules.inRadius(plot, GetEntityCoords(ped)) then return false, 'fh_not_in_plot' end
+    local plotId, plot = ownedPlotAt(cid, GetEntityCoords(ped))
+    if not plotId then return false, plot end
     if busyPlot[plotId] or busyCid[cid] then return false, 'fh_build_busy' end
     busyPlot[plotId], busyCid[cid] = true, true
     local st = { src = src, cid = cid, plotId = plotId, slotId = slotId, region = plot.region, taken = {}, charged = 0, done = false }
@@ -252,12 +264,18 @@ function B.build(src, slotId)
     return table.unpack(out, 1, out.n)
 end
 
----Status lines for `/fh_build` with no argument: every slot, its tier, and the next tier's cost.
+---Status lines for `/fh_build` with no argument: every slot, its tier, and the next tier's cost. Plot = the owned plot
+---you stand in, else your claim, else your town lot.
 function B.status(src)
     local S = slots()
     if not (S and S.isReady()) then return nil, 'fh_not_ready' end
     local cid = citizenidOf(src)
-    local plotId = cid and S.plotOf(cid)
+    local plotId = cid and S.plotsOf(cid)[1]
+    if plotId then
+        local ped = GetPlayerPed(src)
+        local here = ped and ped ~= 0 and ownedPlotAt(cid, GetEntityCoords(ped)) or nil
+        plotId = here or plotId
+    end
     local plot = plotId and cfg.plots[plotId]
     if not plot then return nil, 'fh_no_plot' end
     local tiers = S.getTiers(plotId)
@@ -356,7 +374,7 @@ local function describe(why, detail)
 end
 
 lib.addCommand('fh_build', { help = 'Build the next tier of a homestead slot (no argument: list slots and costs)',
-    params = { { name = 'slot', type = 'string', help = 'cabin, fence, station_1..3, trophy_wall, chest_2, chest_3', optional = true } } },
+    params = { { name = 'slot', type = 'string', help = 'claim: cabin, fence, station_1..3, trophy_wall, chest_2, chest_3; town lot: chest_2, station_1', optional = true } } },
     function(src, args)
         local slotId = args and args.slot
         if not slotId then

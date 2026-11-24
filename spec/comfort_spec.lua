@@ -157,7 +157,7 @@ local PLOT = 'heartlands_01'
 local function server()
     local S = { plots = { [PLOT] = 'A' }, rows = { [PLOT] = {} }, owners = { A = PLOT }, tiers = { [PLOT] = { trophy_wall = 1 } },
         chest = { trophy_deer = 3 }, points = { trophy_deer = 4 }, hold = {}, events = {}, handlers = {}, X = {}, logs = {},
-        ready = true,
+        ready = true, lots = {},
         order = {}, calls = { addItem = 0, removeItem = 0 } }
     local function await(tag) S.order[#S.order + 1] = tag if S.hold[tag] then S.hold[tag] = nil coroutine.yield(tag) end end
     local players = { [1] = { PlayerData = { citizenid = 'A' } }, [2] = { PlayerData = { citizenid = 'B' } } }
@@ -230,7 +230,11 @@ local function server()
         FhHomesteadConfig = cfg, FhComfort = C, FhPlotRules = dofile(dir .. 'shared/plot_rules.lua'),
         FhHomesteadSlots = {
             isReady = function() return S.ready end,
-            plotOf = function(cid) return S.owners[cid] end,
+            -- like FhHomesteadClaims.plotOf: class defaults to 'claim'; S.lots = town lots (H9)
+            plotOf = function(cid, class)
+                if class == 'town_lot' then return S.lots[cid] end
+                if class == nil or class == 'claim' then return S.owners[cid] end
+            end,
             getTiers = function(plotId)
                 if S.tiersThrow then error('tiers boom') end
                 if not S.ready then return {}, 'fh_not_ready' end
@@ -528,5 +532,20 @@ case('server: unclaim right after the INSERT commits: no trophy_placed, no free 
     assert(S.calls.addItem == 0 and S.chest.trophy_deer == 2, 'trophy went with the plot; no refund')
     assert(S.count('fh:homestead:trophy_placed') == 0)
     assert(S.X.getComfort('A') == 0)
+end)
+case('server H9: comfort is claim-based; a town lot adds none, a lot-only character has 0', function()
+    local S = server()
+    local LOT = 't_lot'
+    S.lots.A, S.plots[LOT] = LOT, 'A'
+    S.tiers[LOT] = { station_1 = 1, chest_2 = 1 } -- built on the lot: would be 3 + 2 if it counted
+    S.tiers[PLOT] = { trophy_wall = 1, cabin = 1 }
+    T.eq(5 + 10, S.X.getComfort('A'), 'claim only')
+    S.handlers['fh:homestead:slot_changed'](LOT, 'station_1', 1) -- a lot build never moves the claim comfort
+    T.eq(0, S.count('fh:homestead:comfort_changed') - 1, 'only the first computation emitted')
+    T.eq(5 + 10, S.X.getComfort('A'))
+    S.lots.B, S.plots['t_lot2'], S.tiers['t_lot2'] = 't_lot2', 'B', { station_1 = 1, chest_2 = 1 }
+    T.eq(0, S.X.getComfort('B'), 'lot-only character')
+    local ok, why = S.X.placeTrophy(2, 'trophy_deer')
+    T.eq(false, ok); T.eq('fh_no_plot', why)
 end)
 T.finish()

@@ -32,9 +32,10 @@ local function log(level, msg) print(('%s[fh_homestead] %s^7'):format(level == '
 
 local function genOf(plotId) return gen[plotId] or 0 end
 
+-- Comfort is claim-based (H9, owner Q3 default): only the wilderness claim counts; a town lot never gives comfort.
 local function plotOf(citizenid)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    if FhHomesteadSlots and FhHomesteadSlots.plotOf then return FhHomesteadSlots.plotOf(citizenid) end
+    if FhHomesteadSlots and FhHomesteadSlots.plotOf then return FhHomesteadSlots.plotOf(citizenid, 'claim') end
     return nil
 end
 

@@ -69,7 +69,10 @@ case('20 plots, unique ids/centers, all slot configs valid', function()
         seen[key] = true
         local bad = R.validatePlot(p)
         assert(#bad == 0, id .. ': ' .. table.concat(bad, '; '))
-        for _, sid in ipairs({ 'cabin', 'fence', 'station_1', 'station_2', 'station_3', 'trophy_wall', 'chest_2', 'chest_3' }) do
+        -- H9: slots by class (claim = full template, town_lot = chest_2 + station_1)
+        local want = p.class == 'town_lot' and { 'chest_2', 'station_1' }
+            or { 'cabin', 'fence', 'station_1', 'station_2', 'station_3', 'trophy_wall', 'chest_2', 'chest_3' }
+        for _, sid in ipairs(want) do
             assert(p.slots[sid], id .. ' missing ' .. sid)
         end
     end
@@ -95,5 +98,66 @@ case('no two plots overlap at max fenced radius', function()
             assert(d > maxR(a) + maxR(b), ids[i] .. ' overlaps ' .. ids[j])
         end
     end
+end)
+-- ---- H9: per-class slot templates (plan homestead-02) ----
+local function keys(t) local o = {} for k in pairs(t) do o[#o + 1] = k end table.sort(o) return o end
+case('H9 town_lot template: chest_2 + station_1 workbench only, no cabin/fence/trophy wall, valid', function()
+    local lot = cfg.slotTemplates.town_lot()
+    T.same({ 'chest_2', 'station_1' }, keys(lot))
+    assert(lot.cabin == nil and lot.fence == nil and lot.trophy_wall == nil)
+    T.eq('workbench', lot.station_1.stationType)
+    T.eq(nil, lot.chest_2.requires, 'no cabin on a lot: chest_2 has no prerequisite')
+    local lp = { id = 'lot_x', class = 'town_lot', center = { x = 0, y = 0, z = 0 }, radius = 14.0, slots = lot }
+    T.same({}, R.validatePlot(lp))
+    T.eq('fh_unknown_slot', select(2, R.canBuild(lp, 'cabin', {}, 'A', 'A')))
+    T.eq('fh_unknown_slot', select(2, R.canBuild(lp, 'fence', {}, 'A', 'A')))
+    assert(R.canBuild(lp, 'chest_2', {}, 'A', 'A'))
+    assert(R.canBuild(lp, 'station_1', {}, 'A', 'A'))
+    T.same({ 'workbench' }, R.unlockedState(lp, { station_1 = 1 }).stations)
+    -- fresh tables per call: editing one lot's template never leaks into another plot or the claim template
+    lot.station_1.maxTier = 9
+    T.eq(1, cfg.slotTemplates.town_lot().station_1.maxTier)
+    T.eq(1, cfg.slotTemplates.claim().station_1.maxTier)
+end)
+case('H9 claim template unchanged: every claim plot carries exactly slotTemplates.claim()', function()
+    local claimT = cfg.slotTemplates.claim()
+    T.same({ 'cabin', 'chest_2', 'chest_3', 'fence', 'station_1', 'station_2', 'station_3', 'trophy_wall' }, keys(claimT))
+    T.same({ cabin = 1 }, claimT.chest_2.requires)
+    for id, p in pairs(cfg.plots) do
+        if (p.class or 'claim') == 'claim' then T.same(claimT, p.slots, id) end
+    end
+end)
+case('H9 config applies the template by class (a lot entry listing claim slots still gets the lot template)', function()
+    local saved = FhHomesteadConfig
+    local fh = assert(io.open(dir .. 'config.lua', 'rb')); local src = fh:read('a'); fh:close()
+    -- inject two test entries into a fresh copy of the plots table (real lot entries come from @world block B)
+    src = src:gsub('    plots = {\n', "    plots = {\n        t_lot = { id = 't_lot', class = 'town_lot', slots = slotTemplate() },\n"
+        .. "        t_lot2 = { id = 't_lot2', class = 'town_lot' },\n        t_odd = { id = 't_odd', class = 'mystery' },\n", 1)
+    assert(load(src, '@config.lua', 't', _ENV))()
+    local c = FhHomesteadConfig
+    FhHomesteadConfig = saved
+    T.same({ 'chest_2', 'station_1' }, keys(c.plots.t_lot.slots))
+    T.same({ 'chest_2', 'station_1' }, keys(c.plots.t_lot2.slots))
+    T.same({}, c.plots.t_odd.slots, 'unknown class: no slots')
+    T.same(c.slotTemplates.claim(), c.plots.heartlands_01.slots)
+end)
+case('H9 every world town_lot entry gets the lot template (chest_2 + station_1 only)', function()
+    local n = 0
+    for id, p in pairs(cfg.plots) do
+        if p.class == 'town_lot' then
+            n = n + 1
+            T.same({ 'chest_2', 'station_1' }, keys(p.slots), id)
+            T.same(cfg.slotTemplates.town_lot(), p.slots, id)
+        end
+    end
+    assert(n > 0, 'config has town lots')
+end)
+case('H9 safeRadiusFor: claim = base + fence; town lot = plot.radius, no fence bonus', function()
+    T.eq(25.0, R.safeRadiusFor(plot, {}, cfg.baseSafeRadius))
+    T.eq(35.0, R.safeRadiusFor(plot, { fence = 1 }, cfg.baseSafeRadius))
+    local lp = { class = 'town_lot', radius = 13.0, slots = cfg.slotTemplates.claim() }
+    T.eq(13.0, R.safeRadiusFor(lp, {}, cfg.baseSafeRadius))
+    T.eq(13.0, R.safeRadiusFor(lp, { fence = 1 }, cfg.baseSafeRadius), 'even a stray fence row adds nothing')
+    T.eq(0, R.safeRadiusFor(nil, {}, 25))
 end)
 T.finish()

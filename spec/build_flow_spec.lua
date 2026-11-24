@@ -68,8 +68,9 @@ local function readSrc(p) local fh = assert(io.open(p, 'rb')); local s = fh:read
 local MAIN_SRC, SLOTS_SRC, BUILD_SRC = readSrc(dir .. 'server/main.lua'), readSrc(dir .. 'server/slots.lua'),
     readSrc(dir .. 'server/build.lua')
 
-local function newWorld()
-    local W = { db = { plots = {}, slots = {} }, events = {}, handlers = {}, threads = {}, ex = {}, logs = {}, client = {},
+local function newWorld(wcfg)
+    local cfg = wcfg or cfg -- H9: a world may run on a config with extra (town lot) plots
+    local W = { db = { plots = {}, slots = {}, class = {} }, events = {}, handlers = {}, threads = {}, ex = {}, logs = {}, client = {},
         commands = {}, callbacks = {}, players = { [1] = 'A', [2] = 'B' }, peds = {}, hold = {}, order = {},
         chest = {}, cash = { A = 1000, B = 1000 }, containers = {}, opened = {}, registeredItems = {},
         pending = {}, known = { A = true, B = true },
@@ -86,9 +87,9 @@ local function newWorld()
     local function key(p, s) return p .. '|' .. s end
     local function exec(sql, p)
         p = p or {}
-        if sql:find('^SELECT %* FROM fh_plots') then -- rows carry no class: loaded as claims (H7 fallback)
+        if sql:find('^SELECT %* FROM fh_plots') then -- rows carry no class unless W.db.class says: claims (H7 fallback)
             local rows = {}
-            for pid, cid in pairs(W.db.plots) do rows[#rows + 1] = { plot_id = pid, citizenid = cid } end
+            for pid, cid in pairs(W.db.plots) do rows[#rows + 1] = { plot_id = pid, citizenid = cid, class = W.db.class[pid] } end
             return rows
         elseif sql:find('^SELECT plot_id, slot_id, tier FROM fh_plot_slots') then
             local rows = {}
@@ -660,6 +661,117 @@ T.describe('server/build.lua', function()
         T.eq('fh_station: workbench near=false', say(2, 'workbench'))
         W.peds[1] = at(p1, 6, 10)
         T.eq('fh_station: workbench near=false', say(1, 'workbench'), 'walked away (> 3 m)')
+    end)
+end)
+-- ------------------------------------------------------------------------------------------- H9 town lots
+-- Real lot entries come from @world block B; here a config copy with two test lots (radius 14) next to the claims.
+local LOT, LOT2 = 'lot_t1', 'lot_t2'
+local lotCfg = setmetatable({ plots = {} }, { __index = cfg })
+for id, p in pairs(cfg.plots) do lotCfg.plots[id] = p end
+local function lotPlot(id, x)
+    return { id = id, class = 'town_lot', region = 'heartlands', center = { x = x, y = 0.0, z = 0.0 }, radius = 14.0,
+        chest = { coords = { x = x + 4, y = 0.0, z = 0.0 }, heading = 0.0, model = 'p_chest01x' },
+        slots = cfg.slotTemplates.town_lot() }
+end
+lotCfg.plots[LOT], lotCfg.plots[LOT2] = lotPlot(LOT, 5000.0), lotPlot(LOT2, 6000.0)
+local lot = lotCfg.plots[LOT]
+
+-- A owns claim P1 and lot LOT (B owns nothing); both chests stocked.
+local function lotWorld(tiers)
+    local W = newWorld(lotCfg)
+    W.db.plots[P1], W.db.plots[LOT], W.db.class[LOT] = 'A', 'A', 'town_lot'
+    for sid, t in pairs(tiers or {}) do W.db.slots[LOT .. '|' .. sid] = t end
+    W.boot()
+    for _, pid in ipairs({ P1, LOT }) do local c = W.chest1(pid); c.lumber, c.nails = 100, 50 end
+    W.peds[1] = at(lot)
+    return W
+end
+
+T.describe('H9 town lots: slots, stations, safety, plotInfo', function()
+    case('/fh_build on a lot: cabin/fence/trophy_wall unknown, nothing taken', function()
+        local W = lotWorld()
+        for _, sid in ipairs({ 'cabin', 'fence', 'trophy_wall', 'station_2', 'chest_3' }) do
+            T.eq('fh_unknown_slot', select(2, W.build(1, sid)), sid)
+        end
+        W.commands.fh_build(1, { slot = 'cabin' })
+        T.eq('fh_build: fh_unknown_slot', W.client[#W.client].args[1].args[2])
+        T.eq(0, W.calls.removeItem); T.eq(0, W.calls.charge); T.eq(1000, W.cash.A)
+    end)
+    case('station_1 on the lot: built from the lot chest, listed by getStations/stationAt/isNearStation', function()
+        local W = lotWorld()
+        T.eq(1, select(2, W.build(1, 'station_1')))
+        T.eq('fh_max_tier', select(2, W.build(1, 'station_1')))
+        T.eq(90, W.chest1(LOT).lumber, 'materials from the lot chest'); T.eq(100, W.chest1(P1).lumber)
+        T.eq(1, W.db.slots[LOT .. '|station_1']); T.eq(nil, W.db.slots[P1 .. '|station_1'])
+        local st = W.ex.getStations('A')
+        T.eq(1, #st); T.eq(LOT, st[1].plot_id); T.eq('workbench', st[1].station_type)
+        local wb = { x = lot.center.x + 6.0, y = lot.center.y + 4.0, z = lot.center.z }
+        T.same({ plot_id = LOT, slot_id = 'station_1', station_type = 'workbench' }, W.ex.stationAt(wb, 1.0))
+        W.peds[1] = wb
+        T.eq(true, W.ex.isNearStation(1, 'workbench'))
+        W.peds[2] = wb
+        T.eq(false, W.ex.isNearStation(2, 'workbench'), 'owner-only')
+        T.eq(0, #W.ex.getStations('B'))
+        -- claim workbench too: both listed, claim first
+        W.peds[1] = at(p1)
+        assert(W.build(1, 'station_1'))
+        st = W.ex.getStations('A')
+        T.eq(2, #st); T.eq(P1, st[1].plot_id); T.eq(LOT, st[2].plot_id)
+        W.commands.fh_station(1, { type = 'workbench' })
+        T.eq('fh_station: workbench near=false', W.client[#W.client].args[1].args[2], 'at the claim center, > 3 m')
+    end)
+    case('chest_2 on a lot needs no cabin and registers its container', function()
+        local W = lotWorld()
+        T.eq(1, select(2, W.build(1, 'chest_2')))
+        assert(W.containers['fh:chest:' .. LOT .. ':2'], 'lot chest_2 registered')
+    end)
+    case('the build goes to the owned plot you stand in; claim behaviour unchanged', function()
+        local W = lotWorld()
+        W.peds[1] = at(p1)
+        T.eq(1, select(2, W.build(1, 'cabin')), 'claim still has its cabin')
+        T.eq(1, W.db.slots[P1 .. '|cabin']); T.eq(nil, W.db.slots[LOT .. '|cabin'])
+        W.peds[1] = at(lotCfg.plots[LOT2])
+        T.eq('fh_not_in_plot', select(2, W.build(1, 'station_1')), 'someone else\'s (free) lot')
+        W.peds[1] = { x = 9000.0, y = 0.0, z = 0.0 }
+        T.eq('fh_not_in_plot', select(2, W.build(1, 'station_1')))
+        T.eq('fh_no_plot', select(2, W.build(2, 'station_1')), 'B owns nothing')
+        -- status lists the plot you stand in
+        W.peds[1] = at(lot)
+        W.commands.fh_build(1, {})
+        local msg = W.client[#W.client].args[1].args[2]
+        assert(msg:find('plot ' .. LOT) and msg:find('station_1 0/1') and not msg:find('cabin'), msg)
+    end)
+    case('lot-only owner: builds on the lot; unclaim of the lot drops its slots and stations', function()
+        local W = newWorld(lotCfg)
+        W.db.plots[LOT2], W.db.class[LOT2] = 'B', 'town_lot'
+        W.boot()
+        W.chest1(LOT2).lumber = 100
+        W.peds[2] = at(lotCfg.plots[LOT2])
+        assert(W.build(2, 'station_1'))
+        T.eq(1, #W.ex.getStations('B'))
+        assert(W.unclaim(LOT2))
+        T.eq(0, #W.ex.getStations('B'))
+        T.eq('fh_no_plot', select(2, W.build(2, 'chest_2')))
+    end)
+    case('isInSafeZone: an owned lot counts out to its radius (no fence bonus); unowned lots do not', function()
+        local W = lotWorld()
+        T.eq(true, W.ex.isInSafeZone(at(lot, 14.0, 0)), 'lot edge')
+        T.eq(true, W.ex.isInSafeZone(at(lot, 0, -14.0)))
+        T.eq(false, W.ex.isInSafeZone(at(lot, 14.5, 0)), 'just outside: lot radius, not baseSafeRadius 25')
+        T.eq(false, W.ex.isInSafeZone(at(lot, 24.0, 0)))
+        local l2 = lotCfg.plots[LOT2]
+        T.eq(false, W.ex.isInSafeZone(at(l2)), 'unowned lot')
+        T.eq(true, W.ex.isInSafeZone(at(p1, 24.0, 0)), 'claim keeps its 25 m base')
+        assert(W.unclaim(LOT))
+        T.eq(false, W.ex.isInSafeZone(at(lot)), 'abandoned lot')
+    end)
+    case('plotInfo: claim = raidable, lot = lawSafe and not raidable; owner or nil; unknown id = nil', function()
+        local W = lotWorld()
+        T.same({ class = 'claim', raidable = true, lawSafe = false, owner = 'A' }, W.ex.plotInfo(P1))
+        T.same({ class = 'town_lot', raidable = false, lawSafe = true, owner = 'A' }, W.ex.plotInfo(LOT))
+        T.same({ class = 'town_lot', raidable = false, lawSafe = true }, W.ex.plotInfo(LOT2), 'unowned lot: owner nil')
+        T.same({ class = 'claim', raidable = true, lawSafe = false }, W.ex.plotInfo(P2))
+        T.eq(nil, W.ex.plotInfo('nope')); T.eq(nil, W.ex.plotInfo(nil)); T.eq(nil, W.ex.plotInfo(5))
     end)
 end)
 T.finish()

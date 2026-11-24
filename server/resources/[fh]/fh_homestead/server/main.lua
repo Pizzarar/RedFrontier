@@ -54,6 +54,8 @@ FhHomesteadClaims = setmetatable({}, {
         ownerOf = function(plotId) return claims.byPlot[plotId] end,
         ---plotOf(citizenid, class?) -> plot_id or nil; class defaults to 'claim' (slots/build/comfort read the claim).
         plotOf = function(citizenid, class) return plotOfClass(citizenid, class) end,
+        ---classOf(plotId) -> class the claimed plot is held as (DB row), or nil when unclaimed.
+        classOf = function(plotId) return claims.classByPlot[plotId] end,
     },
     __newindex = function() error('FhHomesteadClaims is read-only', 2) end,
     __metatable = false,
@@ -384,8 +386,9 @@ local function claimedPlots()
 end
 
 ---Safe zone query (spec L139: homestead is a safe zone). True when coords are within the safe radius of a CLAIMED
----plot: FhHomesteadConfig.baseSafeRadius (else the plot radius) plus the built fence's safeRadiusBonus. Unclaimed plots
----and everything before the claim load are not safe. Before the slot cache is loaded the fence bonus is not counted.
+---plot: FhHomesteadConfig.baseSafeRadius (else the plot radius) plus the built fence's safeRadiusBonus. An owned town
+---lot (H9) counts too, radius = its plot.radius, no fence bonus. Unclaimed plots (either class) and everything before
+---the claim load are not safe. Before the slot cache is loaded the fence bonus is not counted.
 ---TODO(fh_zones): AI/damage handling and the real zone registry live in fh_zones; nothing enforces this yet.
 local plotIds = {}
 for id in pairs(cfg.plots) do plotIds[#plotIds + 1] = id end
@@ -399,10 +402,21 @@ local function isInSafeZone(coords)
             local plot = cfg.plots[id]
             local tiers = slots and slots.getTiers and slots.getTiers(id) or {}
             local d = rules.dist(plot.center, coords)
-            if d and d <= FhBuildRules.safeRadius(plot, tiers, cfg.baseSafeRadius) then return true end
+            if d and d <= FhBuildRules.safeRadiusFor(plot, tiers, cfg.baseSafeRadius) then return true end
         end
     end
     return false
+end
+
+---H9 plot facts for other resources (@alife raids, law AI): { class, raidable, lawSafe, owner } or nil for an unknown
+---plot id. raidable = class 'claim', lawSafe = class 'town_lot'; owner = citizenid or nil (unclaimed). Class is the
+---held row's class, else config.lua's.
+-- Workaround: report only, nothing enforces lawSafe/raidable yet; follow-up idea-803 (@a-life) enforces it.
+local function plotInfo(plotId)
+    local plot = type(plotId) == 'string' and cfg.plots[plotId] or nil
+    if not plot then return nil end
+    local class = claims.classByPlot[plotId] or rules.classOf(plot)
+    return { class = class, raidable = class == DEFAULT_CLASS, lawSafe = class == TOWN_LOT, owner = claims.byPlot[plotId] }
 end
 
 ---Is chest n of the plot usable? 1 = the claim chest; 2+ = the matching chest_<n> slot must be built.
@@ -464,3 +478,4 @@ exports('buyLot', buyLot)
 exports('getPlot', getPlot)
 exports('claimedPlots', claimedPlots)
 exports('isInSafeZone', isInSafeZone)
+exports('plotInfo', plotInfo)

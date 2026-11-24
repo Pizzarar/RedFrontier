@@ -4,13 +4,16 @@
 -- the build flow and the money/item debit are H2 (server/build.lua). Slot ids are stable (stored in fh_plot_slots).
 local function V(x, y, z) if vector3 then return vector3(x, y, z) end return { x = x, y = y, z = z } end
 
--- Slot template shared by every plot. tiers[n] = what building tier n costs and gives; tier 0 = not built.
+-- Slot templates per plot class (H9): slotTemplates.claim = every wilderness claim, slotTemplates.town_lot = every town
+-- lot (applied by class at the end of this file; a lot never gets the claim's cabin/fence/trophy wall).
+-- tiers[n] = what building tier n costs and gives; tier 0 = not built.
 --   cost   = { money = <dollars>, items = { <item> = <count> } }   (debit: server/build.lua, items from the plot chest)
 --   comfort= comfort points that tier adds (build_rules.totalComfort sums every built tier)
 --   unlocks= { chests = {slot ids}, safeRadiusBonus = m, stationType = id, trophyComfort = bool }
 --   requires = { [slotId] = minTier } prerequisite slots
 --   prop   = fallback (B6a) model + offset from plot center; propVerified (optional) is used when verifiedProps is true.
-local function slotTemplate()
+local slotTemplates = {}
+function slotTemplates.claim()
     return {
         cabin = {
             kind = 'cabin', maxTier = 2,
@@ -57,6 +60,13 @@ local function slotTemplate()
         },
     }
 end
+-- Town lot (owner Q3 default): one extra chest and a workbench only. No cabin, so chest_2 has no cabin prerequisite.
+function slotTemplates.town_lot()
+    local c = slotTemplates.claim()
+    c.chest_2.requires = nil
+    return { chest_2 = c.chest_2, station_1 = c.station_1 }
+end
+local function slotTemplate() return slotTemplates.claim() end
 
 FhHomesteadConfig = {
     -- false = every slot uses its fallback prop (B6a model + offset). Flip to true only after propVerified is filled in.
@@ -318,3 +328,10 @@ FhHomesteadConfig = {
         },
     },
 }
+FhHomesteadConfig.slotTemplates = slotTemplates
+-- H9: a plot's slots come from its class template (missing class = 'claim'). Claims keep an explicit `slots`; any
+-- other class (town_lot) always gets its own template, even if the entry lists slots. Unknown class = no slots.
+for _, p in pairs(FhHomesteadConfig.plots) do
+    local class = (type(p.class) == 'string' and p.class ~= '') and p.class or 'claim'
+    if class ~= 'claim' or p.slots == nil then p.slots = slotTemplates[class] and slotTemplates[class]() or {} end
+end

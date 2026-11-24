@@ -1,5 +1,6 @@
 -- fh_homestead H3: slot tier cache + station API (server). Interface used by H2 (build) and H4 (comfort):
---   FhHomesteadSlots.load() / isReady() / getTiers(plot_id) / setTier(plot_id, slot_id, tier) / plotOf(citizenid)
+--   FhHomesteadSlots.load() / isReady() / getTiers(plot_id) / setTier(plot_id, slot_id, tier) / plotOf(citizenid, class?)
+--   / plotsOf(citizenid) (H9: claim + town lot)
 -- Server-local events: fh:homestead:slot_changed (plot_id, slot_id, tier);
 --   fh:homestead:station_built (citizenid, plot_id, slot_id, station_type).
 -- Stations are OWNER-ONLY (see shared/stations.lua). No money/item handling here: H2 charges, then calls setTier.
@@ -102,10 +103,23 @@ function S.getTiers(plotId)
     return out
 end
 
----Plot id the character owns, or nil (claim state lives in server/main.lua).
-function S.plotOf(citizenid)
+---Plot id the character owns in class (default 'claim'), or nil (claim state lives in server/main.lua).
+function S.plotOf(citizenid, class)
     local c = claims()
-    return c and c.plotOf(citizenid) or nil
+    return c and c.plotOf(citizenid, class) or nil
+end
+
+-- H9: classes whose plots carry slots/stations, in lookup order (the claim first).
+S.CLASSES = { 'claim', 'town_lot' }
+
+---Every plot id the character owns, claim first then town lot ({} if none).
+function S.plotsOf(citizenid)
+    local out = {}
+    for _, class in ipairs(S.CLASSES) do
+        local id = S.plotOf(citizenid, class)
+        if id then out[#out + 1] = id end
+    end
+    return out
 end
 
 ---Persist + cache a slot tier, then raise events. Validates ids, tier against the slot's maxTier/tiers, and that
@@ -181,11 +195,14 @@ local function listStations(plotId)
     return stations.allStations(cfg.plots, cache, cfg.verifiedProps, plotId)
 end
 
----Built stations on the character's own plot ({} before the load finishes).
+---Built stations on the character's own plots: claim, then town lot (H9) ({} before the load finishes).
 local function getStations(citizenid)
     if not S.isReady() or type(citizenid) ~= 'string' then return {} end
-    local plotId = S.plotOf(citizenid)
-    return plotId and listStations(plotId) or {}
+    local out = {}
+    for _, plotId in ipairs(S.plotsOf(citizenid)) do
+        for _, st in ipairs(listStations(plotId)) do out[#out + 1] = st end
+    end
+    return out
 end
 
 ---Nearest built station (any plot) to coords within maxDist, or nil (nil before the load finishes).
@@ -196,16 +213,18 @@ local function stationAt(coords, maxDist)
     return { plot_id = s.plot_id, slot_id = s.slot_id, station_type = s.station_type }
 end
 
----Owner-only: is the src's character within maxDist of a built station_type on their own plot? Uses the server ped.
+---Owner-only: is the src's character within maxDist of a built station_type on one of their own plots (claim or town
+---lot)? Uses the server ped.
 local function isNearStation(src, stationType, maxDist)
     if not S.isReady() or type(stationType) ~= 'string' then return false end
     local p = exports['rsg-core']:GetCoreObject().Functions.GetPlayer(src)
     local cid = p and p.PlayerData.citizenid
-    local plotId = cid and S.plotOf(cid)
-    if not plotId then return false end
+    if not cid then return false end
+    local owned = getStations(cid)
+    if #owned == 0 then return false end
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return false end
-    return stations.nearest(listStations(plotId), GetEntityCoords(ped), maxDist, stationType) ~= nil
+    return stations.nearest(owned, GetEntityCoords(ped), maxDist, stationType) ~= nil
 end
 
 exports('getStations', getStations)
