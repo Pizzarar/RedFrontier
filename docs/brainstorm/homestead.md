@@ -20,7 +20,7 @@
 - Plot count: 4 by default, one config value; owner can change it any time (closed 2026-11-23, no objection).
 
 ## Open
-- (none in lane) Tracked elsewhere: lumber/nails source → @crafting idea-712; offline money credit for refunds → @core idea-700; in-game checks (plots 2-4 coords, prop offsets, fallback chest model) → OWNER-TESTS homestead card; 6 stale homestead worktrees (pre-rebase hashes) need manual sweep, owner OK first.
+- (none in lane) Resolved: lumber $3 / nails $2 at every trade post (fh_trade/config.lua:25, roads supplies); build money refund via fh_economy.credit (018df02, H2c d19146d). Tracked elsewhere: nails.png icon → idea-724; in-game checks (plots 2-4 coords, prop offsets, fallback chest model) → OWNER-TESTS homestead card; 6 stale homestead worktrees (pre-rebase hashes) need manual sweep, owner OK first.
 
 ## In flight
 - DONE-WHEN MET: H1-H5 on local main (H2 8bbc891 2e696ce 42baa30 + docs 2775580; venv 59/1205/0; no migration). Logged `homestead playtest-ready 2775580` 22:24Z. Nothing pushed.

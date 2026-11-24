@@ -1,6 +1,6 @@
 {
   "laneId": "progression",
-  "updatedAt": "2026-11-23T22:54:04.026Z",
+  "updatedAt": "2026-11-23T23:16:01.056Z",
   "units": [
     {
       "id": "prog-p1b",
@@ -13,10 +13,10 @@
     },
     {
       "id": "prog-fence-window",
-      "goal": "fh_fence residual: one fh_core call blocking >=120s can land items in a stash a newer trade is using (documented in trade.lua header, Prg9 handoff). Revisit if the lock-reclaim timeout is ever tuned or fh_core calls get timeouts.",
+      "goal": "ACCEPTED LOW residual (trade.lua:8-11): a fh_core call landing >=120s late can write into a newer trade's stash. core declined timeouts (idea-721: late write still lands). Fix path if ever needed: fence-side per-trade stash id or generation token checked on settle. Reopen on a real 'reclaimed a stale trade lock' log hit in playtest.",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done"
     }
   ]
 }

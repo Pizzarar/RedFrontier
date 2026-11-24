@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: RiffBot
-- Lead: ★ Red2
-- Workers: 0
+- Lead: ★ Red3
+- Workers: 2
 
 ## Done when
 - Every lane in the spec (L0–L10) is merged on local main, with one install/start doc (OWNER-STEPS.md) and one combined test card. Then Aub playtests. The Overlord owns this gate.
@@ -26,6 +26,7 @@
 - Spike verdicts S1/S2 still need Aub in-game; flags flip after.
 
 ## In flight
+- 2026-11-24 PASS first-play (Red3): rf-firstplay, rf-inboxfix, rf-region2, rf-mapblips, rf-tutorial on main f17d3ce (78/1443/0, migs to 0016). fh_tutorial + blips + /where + Scarlett Meadows + natives fix + default outfit.
 - 2026-11-23 PASS merge queue (Red2): quests, core C3c+C3a/b, survival S1-S3b, guide W1-W2, progression P1-P4, roads A, hunting H2-H6, homestead H1-H5, crafting C1-C6 on main 2775580 (59/1205/0, migs to 0012). playtest-ready: @guide 415a736, @core 018df02, @ui db06ed0, @quests b53979a, @homestead 2775580, @roads 9a9ed6c, @hunting 5c70876, @survival e9a2efc, @progression 7c66833, @crafting 9211816.
 - 2026-11-23 PASS playtest gate (Red2): late merges core K1, roads supplies (idea-716), homestead H2c/H2d, then OWNER-STEPS/OWNER-TESTS gate docs e3d83de on main (73/1407/0, migs to 0015). Owner playtest ready; no push.
 - 2026-11-23 PASS @core: B-access 495621d, B7 334642c, idea-614 b63a340 merged local main (specs 23/431/0). Specs unblocked via user-site lupa 2.8 wheel. Merge queue: ui > quests > guide > progression > hunting > homestead; roads/survival/crafting on ask.
@@ -45,3 +46,4 @@
 - §4 contracts merged in @core (B4a container API, B4b ledger/buffs/regions/events; main 6307f28+). Only B4c spawn contract still flagged on S1.
 - NEXT LANE lined up (2026-11-22): L2 Survival (`fh_survival`). Needs only fh_buffs.apply/get (fh_buffs/README.md). Owns fh_survival only; fh_buffs client effects (currently a stub) go via contract request to @core. Well-Rested-from-comfort waits on L1 comfort score. Spin-off block posted, waiting on owner click.
 - Later: L5 Weapons/Crafting (needs homestead station slots), L10 UI shell, L8 Hunting (needs S2 pelt verdict). L4 death and L3 zones stay inside @core (M1 slice).
+- 2026-11-24 World riff (owner via Red3): owner wants all RDR2 regions (~15, no Guarma), a faction count, and a STALKER-style A-Life sim. Proposed spin-off @world (region and faction data, plots, camps, posts, ground-snap) and @alife (server-side squad sim on a node graph, spawns only near players). Waiting on owner click. Replaces the narrow redfrontier-04-world plan.

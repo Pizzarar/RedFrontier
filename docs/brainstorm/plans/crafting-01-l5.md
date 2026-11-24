@@ -27,6 +27,10 @@ in-game test card. No push.
 
 - 2026-11-23 H3 on main (2a7d98a, main fad2417). Homestead station types are workbench/campfire/tanning_rack (fh_homestead/config.lua:29-40); crafting uses gunsmith/reload/apothecary (fh_crafting config devStations). Crafting owns a `stationTypeMap` in fh_crafting/config.lua: gunsmith→workbench, reload→workbench, apothecary→campfire. No homestead change. Adapter treats fh_not_ready/{}/nil/false as "no station" (README:29). isNearStation is owner-only (README:40), so crafting is home-only, which fits. Restore's container-reach check uses getStations(citizenid) coords.
 
+- 2026-11-23 idea-712 material sources ruling (C8). lumber, nails, lead, casings: BUY at fh_trade posts through a new `supplies` buy list, owned by @roads (fh_trade is sell-only today, server/main.lua:143). gun_parts: LOOT only, added to the outlaw camp loot table in fh_zones/config.lua (owner @core, B6b), so restore stays tied to the M2 raid loop. Gathering (tree chopping) is out of scope: it would be an additive spike later, not a replacement, so buying is the root source, not a workaround. Crafting does not edit fh_trade or fh_zones. C8 in-lane = a spec that every recipe input and homestead station cost has a source + an OWNER-TESTS update. Checked: no [rsg] shop resource, fence stock is illicit-only (fh_fence/config.lua:30), fh_trade has no buy side.
+
+- 2026-11-23 idea-718 ruling: resource_gunpowder and herb_american_ginseng/oregano/red_sage/wild_mint (rsg-core items only, no gatherer in repo) = BUY, added to the same @roads `supplies` list (idea-716). One shop surface for all bought inputs. Herb gathering is parked as an additive spike (inbox), not a replacement.
+
 ## Contracts / stubs
 - **@homestead H3** (in review, c3d0dd2): `isNearStation(src, type)`, `getStations(citizenid)`, `stationAt(coords)`.
   `fh_crafting/server/stations.lua` adapter calls it when `GetResourceState('fh_homestead')=='started'` and the export
