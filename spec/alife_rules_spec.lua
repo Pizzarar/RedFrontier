@@ -90,7 +90,7 @@ case('onCampCleared: flips to law, shortage relief, broadcast, schedules retake,
     local effects = R.onCampCleared(ctx, st, heartlandsCamp, { 'CID1', 'CID2' }, seq(5, 25))
     same({
         { type = 'flipped', camp_id = heartlandsCamp, region_id = 'heartlands', from = 'outlaws', to = 'lawmen' },
-        { type = 'broadcast', message = 'Lawmen has taken the Heartland Bluffs Camp' },
+        { type = 'broadcast', message = 'New Hanover Law has taken the Heartland Bluffs Camp' },
         { type = 'shortage', region = 'heartlands', item = 'trade_salt', level = 0 },
     }, effects)
     for _, e in ipairs(effects) do
@@ -163,14 +163,14 @@ case('broadcast labels: Regions.factionLabel(faction, region) used when present,
     local seen = {}
     local c1 = withLabel(function(f, reg) seen[#seen + 1] = { f, reg } return 'STUB ' .. f .. '@' .. reg end)
     local e = R.onCampCleared(c1, R.newState(), heartlandsCamp, {}, seq(5, 25))
-    eq('STUB lawmen@heartlands has taken the Heartlands Outlaw Camp', e[2].message)
+    eq('STUB lawmen@heartlands has taken the Heartland Bluffs Camp', e[2].message)
     same({ 'lawmen', 'heartlands' }, seen[1])
     local st = R.newState()
     R.onCampCleared(c1, st, heartlandsCamp, {}, seq(4, 22))
-    eq('STUB outlaws@heartlands have retaken the Heartlands Outlaw Camp', R.tick(c1, st, 99, seq())[2].message)
+    eq('STUB outlaws@heartlands have retaken the Heartland Bluffs Camp', R.tick(c1, st, 99, seq())[2].message)
     for _, bad in ipairs({ function() error('boom') end, function() return nil end }) do
         local e2 = R.onCampCleared(withLabel(bad), R.newState(), heartlandsCamp, {}, seq(5, 25))
-        eq('Valentine Law has taken the Heartlands Outlaw Camp', e2[2].message)
+        eq('Lawmen has taken the Heartland Bluffs Camp', e2[2].message)
     end
 end)
 
