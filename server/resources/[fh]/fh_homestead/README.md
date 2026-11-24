@@ -198,6 +198,16 @@ by crafting via `isNearStation`). No comfort. Safety: `isInSafeZone` covers the 
 says `lawSafe = true, raidable = false`, and `lawSafeAt(coords, cid)` gives the owner's lot id (fh_heat uses it to skip
 law encounters for the owner only).
 
+## Plot check (H16, `/fh_plotcheck`)
+
+Admin-only (`group.admin`): `/fh_plotcheck [plotId|all]` (default `all`) checks every claim and town lot so the owner can verify the placeholder coords in one sitting. Per plot it prints:
+- **ground z vs config z**: `OK` within 2 m, `WARN` within 10 m (the ground snap corrects it), `BAD` beyond 10 m (the snap is rejected and props sit at the config z). `NOT FOUND` means the area was not streamed in: stand near it and re-run.
+- **water at center**: water surface above the ground at the centre (native unverified; reads "unknown" if unavailable).
+- **overlap at max radius**: other plots/lots whose max-radius circles intersect (claim = `max(radius, baseSafeRadius)` + the fence bonus; lot = its `radius`).
+- **nearest town** from `FhRegions` (fh_core). There is no road data in the repo, so roads are not checked.
+
+How it works: the server asks the admin's client to probe; the client reuses world-01 D's `FhSnap.groundZAt` (fh_core `client/ground_snap.lua`, read-only: it now also returns a second value, `true` when ground was really found, `false` on the hint fallback) and reports back with a one-shot token. A missing ped is refused, and no answer within `8 s + 3 s per plot` prints a timeout. Pure math and formatting: `shared/plotcheck.lua` (`spec/plotcheck_spec.lua`); session: `server/plotcheck.lua`. Nothing is written to the DB.
+
 ## Open
 
 - Nothing enforces "safe" beyond fh_heat's own-lot skip: `isInSafeZone` / `plotInfo` are queries only (law AI and raids:

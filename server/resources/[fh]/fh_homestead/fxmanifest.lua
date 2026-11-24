@@ -14,6 +14,7 @@ shared_scripts {
     'shared/build_rules.lua',
     'shared/stations.lua',
     'shared/comfort.lua',
+    'shared/plotcheck.lua', -- FhPlotCheck (H16 /fh_plotcheck pure math)
 }
 
 server_scripts {
@@ -22,6 +23,7 @@ server_scripts {
     'server/slots.lua',
     'server/comfort.lua',
     'server/build.lua',
+    'server/plotcheck.lua', -- H16 /fh_plotcheck (admin)
 }
 
 client_scripts {

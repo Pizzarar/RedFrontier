@@ -1,13 +1,14 @@
 -- Thin client wrapper around FhGroundSnap (shared/ground_snap.lua). Only this file calls the probe natives.
 -- FhSnap.groundZAt(id, x, y, z, above) -> the real ground z once the area has streamed in, else the hint z; on
 -- fallback it logs `fh:world:unsnapped <id>` once per id (FhGroundSnap.markUnsnapped). `above` is the probe start
--- offset above z (downward-only ray); default FhGroundSnap.PROBE_ABOVE, or FhGroundSnap.SPAWN_PROBE_ABOVE for spawns.
+-- offset above z (downward-only ray). Second return = true when the ground was really probed, false on the hint
+-- fallback (fh_homestead /fh_plotcheck reads it; every other caller takes the first value only). Default FhGroundSnap.PROBE_ABOVE, or FhGroundSnap.SPAWN_PROBE_ABOVE for spawns.
 -- Natives (unverified in-game, same pattern already used in the repo): RequestCollisionAtCoord,
 -- GetGroundZFor_3dCoord (rsg-core/client/functions.lua GetGroundZCoord, spikes/spk_camp/client.lua groundZ).
 FhSnap = FhSnap or {}
 
 function FhSnap.groundZAt(id, x, y, z, above)
-    if type(x) ~= 'number' or type(y) ~= 'number' or type(z) ~= 'number' then return z end
+    if type(x) ~= 'number' or type(y) ~= 'number' or type(z) ~= 'number' then return z, false end
     x, y, z = x + 0.0, y + 0.0, z + 0.0
     local offset = (type(above) == 'number' and above) or FhGroundSnap.PROBE_ABOVE
     RequestCollisionAtCoord(x, y, z)
@@ -17,11 +18,11 @@ function FhSnap.groundZAt(id, x, y, z, above)
     while FhGroundSnap.shouldRetry(attempt, FhGroundSnap.MAX_RETRIES, GetGameTimer(), deadline) do
         attempt = attempt + 1
         local found, gz = GetGroundZFor_3dCoord(x, y, startZ, false)
-        if FhGroundSnap.usable(found, gz) then return gz end
+        if FhGroundSnap.usable(found, gz) then return gz, true end
         Wait(FhGroundSnap.RETRY_MS)
     end
     if FhGroundSnap.markUnsnapped(id) then
         print(('fh:world:unsnapped %s'):format(tostring(id)))
     end
-    return z
+    return z, false
 end
