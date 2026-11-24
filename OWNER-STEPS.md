@@ -5,8 +5,8 @@ Two machines. **DevPC** hosts the repo, FXServer, MariaDB and the Cfx license ke
 ## 1. Prerequisites
 
 - **Main PC:** your own legit RDR2 copy + the RedM client.
-- **DevPC:** Windows, this repo checked out, PowerShell, Tailscale (the Main PC and friends reach the DevPC through it, no router port-forward). FXServer and MariaDB are downloaded for you by `tools/setup-server.ps1`; nothing to install by hand.
-- **Cfx key:** from https://portal.cfx.re (Server Keys). Where it asks for an IP/name, give the DevPC's Tailscale IP `100.83.196.251` (not `localhost`).
+- **DevPC:** Windows, this repo checked out, PowerShell, NordVPN Meshnet (the Main PC and friends reach the host through it, no router port-forward). FXServer and MariaDB are downloaded for you by `tools/setup-server.ps1`; nothing to install by hand.
+- **Cfx key:** from https://portal.cfx.re (Server Keys). Where it asks for an IP/name, give the host's Meshnet IP `100.102.50.11` (LAN `192.168.1.135` on the same network; not `localhost`).
 
 ## 2. First-time setup (DevPC, about 10 minutes of downloads)
 
@@ -20,7 +20,7 @@ Double-click `tools/first-run.cmd`, accept the UAC prompt (opens the firewall on
 
 ## 4. Connect (Main PC)
 
-Open RedM, press F8, type `connect 100.83.196.251:30120`. Then follow `OWNER-TESTS.md` "Playtest order".
+Open RedM, press F8, type `connect 100.102.50.11:30120` (or `192.168.1.135:30120` if the Main PC is on the same LAN). Then follow `OWNER-TESTS.md` "Playtest order".
 
 ## 5. Admin and dev mode
 
@@ -30,7 +30,7 @@ Open RedM, press F8, type `connect 100.83.196.251:30120`. Then follow `OWNER-TES
 
 ## 6. Friends (max 6 players)
 
-1. In the Tailscale admin console share the DevPC with your friend; they install Tailscale + RedM and F8 `connect 100.83.196.251:30120`. They are rejected the first time.
+1. Share Media-Host with your friend through NordVPN Meshnet; they install NordVPN + RedM and F8 `connect 100.102.50.11:30120` (`192.168.1.135:30120` on the same LAN). They are rejected the first time.
 2. In the DevPC server window copy the license from the `allowlist: rejected <name> license:<hash>` line and type `fh_allow license:<hash>` there (or in game F8 as admin).
 3. They connect again and get in (not as admin).
 
@@ -56,7 +56,7 @@ Note: if `fh_give` replies `fh_unknown_item` for `lumber`/`nails`, restart `fh_h
 ## If something breaks
 
 - Fresh DevPC: run `tools/setup-server.ps1` once, then step 3 again.
-- Declined UAC: LAN/Tailscale may still work; run `first-run.cmd` again to retry the firewall rules.
+- Declined UAC: LAN/Meshnet may still work; run `first-run.cmd` again to retry the firewall rules.
 - Report anything odd to Core with the last lines of `server/logs/fxserver.log` (DevPC). If the client log is needed, send the tail of `%LOCALAPPDATA%\RedM\RedM.app\logs\CitizenFX_log_*.log` from the Main PC (path to be confirmed).
 
 ## B5 admin commands (needs your account in `group.admin`; none of this is runtime-tested yet)

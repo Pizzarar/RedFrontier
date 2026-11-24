@@ -80,10 +80,10 @@ else {
             $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-FirewallOnly')
             Start-Process powershell -Verb RunAs -ArgumentList $a -Wait
             $left = @(Get-MissingFwRules)
-            if ($left) { Write-Host "[firewall] still missing: $($left.Name -join ', '). Continuing; LAN/Tailscale may still work." -ForegroundColor Yellow }
+            if ($left) { Write-Host "[firewall] still missing: $($left.Name -join ', '). Continuing; LAN/Meshnet may still work." -ForegroundColor Yellow }
             else { Write-Host '[firewall] rules added' }
         } catch {
-            Write-Host '[firewall] UAC declined or failed; continuing (LAN/Tailscale may still work).' -ForegroundColor Yellow
+            Write-Host '[firewall] UAC declined or failed; continuing (LAN/Meshnet may still work).' -ForegroundColor Yellow
         }
     }
 }
@@ -123,9 +123,8 @@ Initialize-AccessCfgs $(if ($CfgDir) { $CfgDir } else { $Server })
 
 # ---- 4. Start ----
 if ($NoStart) { Write-Host '[start] skipped (-NoStart)'; return }
-$ip = $null
-try { $ip = (& tailscale ip -4 2>$null | Select-Object -First 1) } catch {}
-if ($ip -notmatch '^\d+\.\d+\.\d+\.\d+$') { $ip = '100.83.196.251' }
+# Host is Media-Host on NordVPN Meshnet; same-LAN clients use the address printed below.
+$ip = '100.102.50.11'
 $lan = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -match '^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.' -and $_.InterfaceAlias -notmatch 'vEthernet|Loopback' } |
     Select-Object -ExpandProperty IPAddress)
