@@ -95,14 +95,12 @@ end
 
 -- ---------------------------------------------------------------- posts
 
+-- Pure selection lives in shared/posts.lua (FhTradePosts.nearestPost): scans the resolved posts with a region gate,
+-- so a post in a disabled region is never returned (world-02 G2). The server only supplies the player's coords here.
 local function nearestPost(src)
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return nil end
-    local c = GetEntityCoords(ped)
-    for _, p in ipairs(cfg.posts) do
-        local dx, dy, dz = c.x - p.x, c.y - p.y, c.z - p.z
-        if dx * dx + dy * dy + dz * dz <= p.radius * p.radius then return p end
-    end
+    return FhTradePosts.nearestPost(cfg.posts, GetEntityCoords(ped))
 end
 
 local function throttled(src)

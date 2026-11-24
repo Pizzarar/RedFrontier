@@ -99,4 +99,18 @@ case('every camp is >=200 m from every claim, town center and town lot', functio
     end
 end)
 
+case('every pair of camp territories does not overlap (center distance >= r1+r2)', function()
+    local ids = {}
+    for tid in pairs(regions.territories) do ids[#ids + 1] = tid end
+    table.sort(ids)
+    for i = 1, #ids do
+        for j = i + 1, #ids do
+            local a, b = regions.territories[ids[i]], regions.territories[ids[j]]
+            local d = dist2d(a.center, b.center)
+            assert(d >= a.radius + b.radius,
+                ids[i] .. ' overlaps ' .. ids[j] .. ' (' .. tostring(d) .. ' < ' .. tostring(a.radius + b.radius) .. ')')
+        end
+    end
+end)
+
 T.finish()

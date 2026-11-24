@@ -14,6 +14,7 @@ shared_scripts {
     'shared/trade_prices.lua',
     'shared/freight.lua',
     'shared/supplies.lua',
+    'shared/posts.lua',
 }
 
 server_scripts {

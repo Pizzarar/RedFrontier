@@ -27,3 +27,4 @@ Order: F first (shape), then E + G in parallel.
 
 ## Out of scope
 - Enabling the 11 regions (after the owner walks the first 4). Town-lot purchase (@homestead H10). Contracts/questlines/legendaries (@quests/@hunting).
+- Ambush points deferred: no consumer exists yet; queued as a follow-up.

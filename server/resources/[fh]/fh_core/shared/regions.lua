@@ -526,7 +526,7 @@ regions.territories = {
         region = 'tall_trees',
         faction = 'outlaws',
         tier = 'T1',
-        center = { x = -1600.0, y = -1300.0, z = 110.0 }, -- approximate (unverified)
+        center = { x = -2150.0, y = -1650.0, z = 130.0 }, -- approximate (unverified)
         radius = 60.0,
     },
     tall_trees_t1_camp_2 = {
@@ -544,7 +544,7 @@ regions.territories = {
         region = 'tall_trees',
         faction = 'outlaws',
         tier = 'T2',
-        center = { x = -1500.0, y = -1400.0, z = 115.0 }, -- approximate (unverified)
+        center = { x = -2250.0, y = -1400.0, z = 140.0 }, -- approximate (unverified)
         radius = 60.0,
     },
     -- Hennigan's Stead (desert_gang = Desert Gang)
@@ -661,9 +661,9 @@ regions.territories = {
     },
 }
 
--- world-02 (block F): one trade post per enabled region, town-adjacent. `region` + position here are the single
--- source for fh_trade posts (FhTradeConfig.posts keeps only gameplay fields and resolves these at load).
--- Coords APPROXIMATE / unverified in game.
+-- world-02 (block F): 1-2 trade posts per region (enabled and disabled), town-adjacent. `region` + position here
+-- are the single source for fh_trade posts (FhTradeConfig.posts keeps only gameplay fields and resolves these at
+-- load). Coords APPROXIMATE / unverified in game.
 regions.posts = {
     valentine_post = { id = 'valentine_post', region = 'heartlands', x = -176.0, y = 630.0, z = 114.0 },
     rhodes_post = { id = 'rhodes_post', region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0 },
@@ -677,7 +677,7 @@ regions.posts = {
     bacchus_station_post = { id = 'bacchus_station_post', region = 'cumberland_forest', x = -815.0, y = 1335.0, z = 130.0 },
     strawberry_post = { id = 'strawberry_post', region = 'big_valley', x = -1810.0, y = -435.0, z = 120.0 },
     wallace_station_post = { id = 'wallace_station_post', region = 'big_valley', x = -1345.0, y = -435.0, z = 130.0 },
-    manzanita_post_post = { id = 'manzanita_post_post', region = 'tall_trees', x = -1790.0, y = -1595.0, z = 150.0 },
+    manzanita_post = { id = 'manzanita_post', region = 'tall_trees', x = -1790.0, y = -1595.0, z = 150.0 },
     macfarlanes_ranch_post = { id = 'macfarlanes_ranch_post', region = 'hennigans_stead', x = -2275.0, y = -2485.0, z = 60.0 },
     thieves_landing_post = { id = 'thieves_landing_post', region = 'hennigans_stead', x = -1438.0, y = -2218.0, z = 40.0 },
     armadillo_post = { id = 'armadillo_post', region = 'cholla_springs', x = -3703.0, y = -2573.0, z = 70.0 },

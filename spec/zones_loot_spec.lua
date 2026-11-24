@@ -87,8 +87,9 @@ case('every loot item id exists in the item registry', function()
     assert(#bad == 0, 'unknown item ids: ' .. table.concat(bad, ', '))
 end)
 
-case('every one of the 14 camps has a T1/T2/T3 tier and resolves a tiered table', function()
-    local n = 0
+case('every camp has a T1/T2/T3 tier and resolves a tiered table', function()
+    local n, nTerritories = 0, 0
+    for _ in pairs(regions.territories) do nTerritories = nTerritories + 1 end
     for id, camp in pairs(cfg.camps) do
         n = n + 1
         local terr = regions.getTerritory(camp.territory)
@@ -101,7 +102,7 @@ case('every one of the 14 camps has a T1/T2/T3 tier and resolves a tiered table'
         local tbl = R.pickLootTable(cfg.lootByFaction, owner.id, camp.loot.table, camp.tier)
         eq(cfg.lootByFaction[owner.id][camp.tier], tbl, id .. ' tiered table ' .. owner.id .. '/' .. tostring(camp.tier))
     end
-    eq(14, n, 'expected 14 camps')
+    eq(nTerritories, n, 'expected one camp per territory')
 end)
 
 case('legacy rhodes_law owner canonicalises to lawmen before the loot lookup', function()

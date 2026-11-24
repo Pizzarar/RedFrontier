@@ -35,8 +35,8 @@ FhTradeConfig = {
     },
 
     -- Trade posts (server checks the player is within `radius` of the post). Position + region resolve from
-    -- FhRegions.posts at load (world-02 block F); this table keeps only gameplay fields. 1-2 posts per enabled
-    -- region, town-adjacent, APPROXIMATE / unverified in game.
+    -- FhRegions.posts at load (world-02 block F); this table keeps only gameplay fields. 1-2 posts per region
+    -- (enabled and disabled), town-adjacent, APPROXIMATE / unverified in game.
     posts = {
         { id = 'valentine_post', label = 'Valentine Trade Post', verified = false, radius = 6.0 },
         { id = 'rhodes_post', label = 'Rhodes Trade Post', verified = false, radius = 6.0 },
@@ -50,7 +50,7 @@ FhTradeConfig = {
         { id = 'bacchus_station_post', label = 'Bacchus Station Trade Post', verified = false, radius = 6.0 },
         { id = 'strawberry_post', label = 'Strawberry Trade Post', verified = false, radius = 6.0 },
         { id = 'wallace_station_post', label = 'Wallace Station Trade Post', verified = false, radius = 6.0 },
-        { id = 'manzanita_post_post', label = 'Manzanita Post Trade Post', verified = false, radius = 6.0 },
+        { id = 'manzanita_post', label = 'Manzanita Post', verified = false, radius = 6.0 },
         { id = 'macfarlanes_ranch_post', label = "MacFarlane's Ranch Trade Post", verified = false, radius = 6.0 },
         { id = 'thieves_landing_post', label = 'Thieves Landing Trade Post', verified = false, radius = 6.0 },
         { id = 'armadillo_post', label = 'Armadillo Trade Post', verified = false, radius = 6.0 },

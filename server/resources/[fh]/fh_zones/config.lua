@@ -800,13 +800,13 @@ FhZonesConfig = {
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1603.0, -1297.0, 110.0), heading = 90.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1596.0, -1303.0, 110.0), heading = 200.0, weapon = 'WEAPON_REPEATER_CARBINE' },
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1605.0, -1305.0, 110.0), heading = 45.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1594.0, -1296.0, 110.0), heading = 270.0, weapon = 'WEAPON_RIFLE_BOLTACTION' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2153.0, -1647.0, 130.0), heading = 90.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2146.0, -1653.0, 130.0), heading = 200.0, weapon = 'WEAPON_REPEATER_CARBINE' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2155.0, -1655.0, 130.0), heading = 45.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2144.0, -1646.0, 130.0), heading = 270.0, weapon = 'WEAPON_RIFLE_BOLTACTION' },
             },
             loot = {
-                coords = vector3(-1600.0, -1300.0, 110.0),
+                coords = vector3(-2150.0, -1650.0, 130.0),
                 label = 'Outlaw camp stash',
                 table = {
                     { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
@@ -848,13 +848,13 @@ FhZonesConfig = {
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1503.0, -1397.0, 115.0), heading = 90.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1496.0, -1403.0, 115.0), heading = 200.0, weapon = 'WEAPON_REPEATER_CARBINE' },
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1505.0, -1405.0, 115.0), heading = 45.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-                { model = 'g_m_m_unibanditos_01', coords = vector3(-1494.0, -1396.0, 115.0), heading = 270.0, weapon = 'WEAPON_RIFLE_BOLTACTION' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2253.0, -1397.0, 140.0), heading = 90.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2246.0, -1403.0, 140.0), heading = 200.0, weapon = 'WEAPON_REPEATER_CARBINE' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2255.0, -1405.0, 140.0), heading = 45.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(-2244.0, -1396.0, 140.0), heading = 270.0, weapon = 'WEAPON_RIFLE_BOLTACTION' },
             },
             loot = {
-                coords = vector3(-1500.0, -1400.0, 115.0),
+                coords = vector3(-2250.0, -1400.0, 140.0),
                 label = 'Outlaw camp stash',
                 table = {
                     { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
