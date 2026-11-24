@@ -101,6 +101,22 @@ RSG.StarterItems = {
     { item = 'bandage', amount = 1 },
 }
 
+-- Default outfit: applied to a brand new character that finishes the creator without picking any clothes.
+-- Without this their saved clothes is empty and they spawn in the default underwear. Values are
+-- `{ hash = <clothing hash> }` entries from data/clothing.lua (must pass ValidateClothesData for the gender).
+RSG.DefaultClothes = {
+    male = {
+        shirts_full = { hash = 2795762245 }, -- CLOTHING_ITEM_M_FRONTIER_SHIRT_000
+        pants       = { hash = 1094172669 }, -- CLOTHING_ITEM_M_FRONTIER_PANTS_000
+        boots       = { hash = 4076107613 }, -- CLOTHING_ITEM_M_BOOTS_000_TINT_001
+    },
+    female = {
+        shirts_full = { hash = 3726847883 }, -- CLOTHING_ITEM_F_CHEMISE_000_TINT_001
+        pants       = { hash = 3545812420 }, -- CLOTHING_ITEM_F_FRONTIER_PANTS_000
+        boots       = { hash = 3723064563 }, -- CLOTHING_ITEM_F_BOOTS_000_TINT_001
+    },
+}
+
 -- Character select: world location where the character-select peds line up
 RSG.CharSelectLocation = {
     coords = vector4(4234.78, -717.32, 50.12, 151.79),

@@ -115,6 +115,14 @@ RegisterNetEvent('rsg-character:server:SaveSkin', function(skin, clothes)
 
     local gender = tonumber(Player.PlayerData.charinfo and Player.PlayerData.charinfo.gender) or 0
     skin.sex = gender == 1 and 2 or 1 -- trust the character record, not the client
+
+    -- New characters that finish the creator without picking any clothes would otherwise save an empty
+    -- outfit and spawn in underwear: give them the configured default outfit instead.
+    if session.isNew and next(clothes) == nil then
+        local defaults = RSG.DefaultClothes or {}
+        clothes = (gender == 0 and defaults.male) or defaults.female or {}
+    end
+
     if not ValidateClothesData(clothes, gender == 0) then
         RSG.NotifyLoginFailed(src)
         return
