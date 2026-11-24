@@ -1,4 +1,4 @@
-// heat (passive HUD): data { factions: [{id,label,level 0-100,tier}], lay_low: {active, seconds_left?} }. Future event fh:heat:changed.
+// heat (passive HUD): data { factions: [{id,label,level 0-100,tier}], lay_low: {active, seconds_left?} }. fh_heat re-sends via fh:ui:update on fh:heat:changed and player load.
 const HEAT_MAX_ROWS = 3; // fits the 26vh card; the HUD cannot scroll (pointer-events none)
 // Pure: stable sort by level descending, split into shown rows and hidden count.
 function heatTopRows(factions, max) {
@@ -11,10 +11,13 @@ FH_UI.register('heat', {
   update: function (el, data) {
     const D = FH_DOM;
     D.clear(el);
+    const factions = D.asList(data && data.factions);
+    const any = factions.some(function (f) { return (Number(f && f.level) || 0) > 0; });
     const box = D.h('div', 'hud hud-heat');
+    box.hidden = !any; // hide when every faction level is 0 (or the list is empty); .hud is pointer-events none
     box.appendChild(D.h('h2', 'title small', 'Heat'));
     const body = D.h('div', 'body');
-    const top = heatTopRows(data && data.factions, HEAT_MAX_ROWS);
+    const top = heatTopRows(factions, HEAT_MAX_ROWS);
     top.shown.forEach(function (f) {
       const lvl = Math.max(0, Math.min(100, Number(f.level) || 0));
       const row = D.h('div', 'row');

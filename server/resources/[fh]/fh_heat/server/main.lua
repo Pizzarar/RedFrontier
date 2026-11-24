@@ -206,6 +206,29 @@ exports('getAll', getAll)
 exports('level', level)
 exports('payoff', payoff)
 
+-- ---------------------------------------------------------------- heat HUD (@ui, plan T3)
+-- Read-only: builds the fh_ui `heat` screen data from getAll(src) (pure: shared/heat_hud.lua) and pushes it to ONE
+-- player via fh:ui:update (the passive-widget path fh_ui's README names). No state is mutated, no heat value or rule
+-- changes, and nothing is saved (idea-669: no fire-and-forget writes). Other players' heat is never sent.
+local function pushHeatHud(src)
+    if not (type(src) == 'number' and src > 0) then return end
+    local all = getAll(src)
+    if not all then return end -- no character (console, or dropped mid-yield)
+    TriggerClientEvent('fh:ui:update', src, { screen = 'heat', data = FhHeatHud.build(all, regions.factions) })
+end
+
+-- Every change (gains, decay, admin set, bounty payoff) re-pushes that player's own heat HUD.
+AddEventHandler('fh:heat:changed', function(e)
+    if type(e) ~= 'table' then return end
+    pushHeatHud(e.src)
+end)
+
+-- Initial HUD on character load: restores persisted heat before any change event fires.
+AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
+    local pd = Player and Player.PlayerData
+    if pd and pd.source then pushHeatHud(pd.source) end
+end)
+
 -- ---------------------------------------------------------------- command: /paybounty [faction] [points]
 -- chat fallback (ox_lib not required); a HUD/menu from @ui can call exports.fh_heat:payoff instead.
 RegisterCommand('paybounty', function(src, args)

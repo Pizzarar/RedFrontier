@@ -10,6 +10,7 @@ shared_scripts {
     '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
     'config.lua',
     'shared/heat_rules.lua',
+    'shared/heat_hud.lua',
     'shared/roadblock_rules.lua',
 }
 
