@@ -113,4 +113,82 @@ case('every pair of camp territories does not overlap (center distance >= r1+r2)
     end
 end)
 
+-- ---------------------------------------------------------------- world-03 (block H): ambush nodes
+-- a-life-02 B1 (fh_alife shared/alife_rules.lua buildGraph) reads regions[id].ambush = { { id, x, y, z, label,
+-- verified }, ... }: a finite x/y/z makes a node; id/label/verified are optional but every node here carries them.
+-- No heading/radius: fh_alife owns ambushRadius. Ids are stable (saved squads key on them), so <region>_amb_N.
+local ambushIds = {}
+for _, r in pairs(regions.regions) do
+    for _, a in ipairs(r.ambush or {}) do ambushIds[a.id] = true end
+end
+
+case('every region has 2-3 ambush nodes in the a-life field shape', function()
+    for id, r in pairs(regions.regions) do
+        assert(type(r.ambush) == 'table', id .. ' missing ambush')
+        local n = #r.ambush
+        assert(n >= 2 and n <= 3, id .. ' has ' .. tostring(n) .. ' ambush nodes (want 2-3)')
+        for _, a in ipairs(r.ambush) do
+            assert(type(a.id) == 'string' and a.id ~= '', id .. ' ambush id')
+            assert(type(a.x) == 'number' and type(a.y) == 'number' and type(a.z) == 'number', a.id .. ' coords')
+            assert(type(a.label) == 'string' and a.label ~= '', a.id .. ' label')
+            assert(a.verified == false, a.id .. ' verified')
+            assert(a.radius == nil and a.heading == nil, a.id .. ' must not carry radius/heading')
+        end
+    end
+end)
+
+case('ambush ids are globally unique and follow <region>_amb_N', function()
+    local seen = {}
+    for id, r in pairs(regions.regions) do
+        for i, a in ipairs(r.ambush) do
+            assert(not seen[a.id], a.id .. ' duplicate id')
+            seen[a.id] = true
+            assert(a.id == id .. '_amb_' .. tostring(i), a.id .. ' expected ' .. id .. '_amb_' .. tostring(i))
+        end
+    end
+end)
+
+case('every ambush node is >=200 m from every claim, town center and town lot', function()
+    for _, r in pairs(regions.regions) do
+        for _, a in ipairs(r.ambush) do
+            for cid, p in pairs(claims) do
+                local d = dist2d(a, p.center)
+                assert(d >= 200.0, a.id .. ' is ' .. tostring(d) .. ' m from claim ' .. cid)
+            end
+            for _, rr in pairs(regions.regions) do
+                for _, town in ipairs(rr.towns or {}) do
+                    local d = dist2d(a, town)
+                    assert(d >= 200.0, a.id .. ' is ' .. tostring(d) .. ' m from town ' .. tostring(town.id))
+                end
+            end
+            for lid, p in pairs(lots) do
+                local d = dist2d(a, p.center)
+                assert(d >= 200.0, a.id .. ' is ' .. tostring(d) .. ' m from town lot ' .. lid)
+            end
+        end
+    end
+end)
+
+case('no ambush node sits inside any territory radius (enabled or not)', function()
+    for _, r in pairs(regions.regions) do
+        for _, a in ipairs(r.ambush) do
+            for tid, t in pairs(regions.territories) do
+                local d = dist2d(a, t.center)
+                assert(d >= t.radius, a.id .. ' sits inside territory ' .. tid)
+            end
+        end
+    end
+end)
+
+-- /where (fh_ui places.lua gather) never lists ambush nodes: they are not places, so no source feeds them in.
+local placesModule = dofile(fh .. 'fh_ui/shared/places.lua')
+case('/where gather does not list ambush nodes (they are not places)', function()
+    assert(next(ambushIds) ~= nil, 'expected ambush data present')
+    local gathered = placesModule.gather({ homestead = homestead, zones = zones }, { isEnabled = regions.isEnabled })
+    for _, p in ipairs(gathered) do
+        assert(ambushIds[p.id] == nil, p.id .. ' ambush node leaked into /where')
+        assert(p.kind ~= 'ambush', p.id .. ' unexpected ambush kind')
+    end
+end)
+
 T.finish()

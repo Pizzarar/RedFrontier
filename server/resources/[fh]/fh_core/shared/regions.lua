@@ -47,6 +47,11 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'traders', 'settlers' },
         territories = { 'heartlands_t1_camp', 'heartlands_t1_camp_2', 'heartlands_t1_camp_3', 'heartlands_t2_camp' },
+        ambush = {
+            { id = 'heartlands_amb_1', x = 640, y = 560, z = 100, label = 'East stage road bend', verified = false },
+            { id = 'heartlands_amb_2', x = -120, y = 260, z = 95, label = 'South river crossing', verified = false },
+            { id = 'heartlands_amb_3', x = -320, y = 1000, z = 115, label = 'North creekside trail', verified = false },
+        },
     },
     scarlett_meadows = {
         id = 'scarlett_meadows',
@@ -59,6 +64,11 @@ regions.regions = {
         },
         factions = { 'lawmen', 'raiders', 'traders' },
         territories = { 'scarlett_meadows_t1_camp', 'scarlett_meadows_t1_camp_2', 'scarlett_meadows_t2_camp' },
+        ambush = {
+            { id = 'scarlett_meadows_amb_1', x = 1000, y = -800, z = 70, label = 'North meadow road', verified = false },
+            { id = 'scarlett_meadows_amb_2', x = 1450, y = -900, z = 70, label = 'East meadow road', verified = false },
+            { id = 'scarlett_meadows_amb_3', x = 800, y = -1500, z = 60, label = 'South hollow road', verified = false },
+        },
     },
     bayou_nwa = {
         id = 'bayou_nwa',
@@ -72,6 +82,11 @@ regions.regions = {
         },
         factions = { 'lawmen', 'raiders', 'traders', 'bounty_hunters' },
         territories = { 'bayou_nwa_t1_camp', 'bayou_nwa_t1_camp_2', 'bayou_nwa_t1_camp_3', 'bayou_nwa_t2_camp' },
+        ambush = {
+            { id = 'bayou_nwa_amb_1', x = 1650, y = -950, z = 25, label = 'West swamp trail', verified = false },
+            { id = 'bayou_nwa_amb_2', x = 2480, y = -980, z = 25, label = 'North causeway', verified = false },
+            { id = 'bayou_nwa_amb_3', x = 2400, y = -1500, z = 22, label = 'South causeway', verified = false },
+        },
     },
     bluewater_marsh = {
         id = 'bluewater_marsh',
@@ -82,6 +97,10 @@ regions.regions = {
         towns = {},
         factions = { 'lawmen', 'raiders' },
         territories = { 'bluewater_marsh_t1_camp', 'bluewater_marsh_t1_camp_2', 'bluewater_marsh_t2_camp' },
+        ambush = {
+            { id = 'bluewater_marsh_amb_1', x = 2200, y = -500, z = 20, label = 'Causeway trail', verified = false },
+            { id = 'bluewater_marsh_amb_2', x = 2500, y = -500, z = 20, label = 'North marsh road', verified = false },
+        },
     },
     roanoke_ridge = {
         id = 'roanoke_ridge',
@@ -95,6 +114,11 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'rail_mining' },
         territories = { 'roanoke_ridge_t1_camp', 'roanoke_ridge_t1_camp_2', 'roanoke_ridge_t2_camp' },
+        ambush = {
+            { id = 'roanoke_ridge_amb_1', x = 2550, y = 950, z = 85, label = 'River valley road', verified = false },
+            { id = 'roanoke_ridge_amb_2', x = 2900, y = 1000, z = 100, label = 'Ridge pass trail', verified = false },
+            { id = 'roanoke_ridge_amb_3', x = 2500, y = 500, z = 60, label = 'Coast road', verified = false },
+        },
     },
     grizzlies_east = {
         id = 'grizzlies_east',
@@ -107,6 +131,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'settlers' },
         territories = { 'grizzlies_east_t1_camp', 'grizzlies_east_t1_camp_2', 'grizzlies_east_t2_camp' },
+        ambush = {
+            { id = 'grizzlies_east_amb_1', x = 1350, y = 1800, z = 230, label = 'Wapiti trail', verified = false },
+            { id = 'grizzlies_east_amb_2', x = 1750, y = 1550, z = 200, label = 'East ridge trail', verified = false },
+        },
     },
     grizzlies_west = {
         id = 'grizzlies_west',
@@ -119,6 +147,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'rail_mining', 'settlers' },
         territories = { 'grizzlies_west_t1_camp', 'grizzlies_west_t1_camp_2', 'grizzlies_west_t2_camp' },
+        ambush = {
+            { id = 'grizzlies_west_amb_1', x = -1650, y = 1100, z = 220, label = 'Colter road', verified = false },
+            { id = 'grizzlies_west_amb_2', x = -1250, y = 1800, z = 245, label = 'North pass trail', verified = false },
+        },
     },
     cumberland_forest = {
         id = 'cumberland_forest',
@@ -131,6 +163,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'settlers', 'rail_mining' },
         territories = { 'cumberland_forest_t1_camp', 'cumberland_forest_t1_camp_2', 'cumberland_forest_t2_camp' },
+        ambush = {
+            { id = 'cumberland_forest_amb_1', x = -850, y = 1000, z = 105, label = 'Forest stage road', verified = false },
+            { id = 'cumberland_forest_amb_2', x = -500, y = 1480, z = 130, label = 'North timber trail', verified = false },
+        },
     },
     big_valley = {
         id = 'big_valley',
@@ -144,6 +180,11 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'settlers', 'traders', 'rail_mining' },
         territories = { 'big_valley_t1_camp', 'big_valley_t1_camp_2', 'big_valley_t2_camp' },
+        ambush = {
+            { id = 'big_valley_amb_1', x = -1560, y = -440, z = 125, label = 'Valley stage road', verified = false },
+            { id = 'big_valley_amb_2', x = -1720, y = -980, z = 95, label = 'South valley road', verified = false },
+            { id = 'big_valley_amb_3', x = -2050, y = -500, z = 100, label = 'West pass road', verified = false },
+        },
     },
     great_plains = {
         id = 'great_plains',
@@ -156,6 +197,11 @@ regions.regions = {
         },
         factions = { 'lawmen', 'traders', 'bounty_hunters', 'settlers', 'outlaws' },
         territories = { 'great_plains_t1_camp', 'great_plains_t1_camp_2', 'great_plains_t2_camp' },
+        ambush = {
+            { id = 'great_plains_amb_1', x = -1000, y = -1000, z = 45, label = 'North plains road', verified = false },
+            { id = 'great_plains_amb_2', x = -1500, y = -1300, z = 40, label = 'West plains trail', verified = false },
+            { id = 'great_plains_amb_3', x = -600, y = -1600, z = 40, label = 'East plains road', verified = false },
+        },
     },
     tall_trees = {
         id = 'tall_trees',
@@ -168,6 +214,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'outlaws', 'bounty_hunters' },
         territories = { 'tall_trees_t1_camp', 'tall_trees_t1_camp_2', 'tall_trees_t2_camp' },
+        ambush = {
+            { id = 'tall_trees_amb_1', x = -1750, y = -1300, z = 135, label = 'North timber trail', verified = false },
+            { id = 'tall_trees_amb_2', x = -1750, y = -1950, z = 125, label = 'South forest road', verified = false },
+        },
     },
     hennigans_stead = {
         id = 'hennigans_stead',
@@ -181,6 +231,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'desert_gang', 'settlers' },
         territories = { 'hennigans_stead_t1_camp', 'hennigans_stead_t1_camp_2', 'hennigans_stead_t2_camp' },
+        ambush = {
+            { id = 'hennigans_stead_amb_1', x = -1850, y = -2350, z = 50, label = 'Ranch road', verified = false },
+            { id = 'hennigans_stead_amb_2', x = -2300, y = -2100, z = 65, label = 'North mesa road', verified = false },
+        },
     },
     cholla_springs = {
         id = 'cholla_springs',
@@ -193,6 +247,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'desert_gang', 'bounty_hunters' },
         territories = { 'cholla_springs_t1_camp', 'cholla_springs_t1_camp_2', 'cholla_springs_t2_camp' },
+        ambush = {
+            { id = 'cholla_springs_amb_1', x = -3300, y = -2200, z = 80, label = 'North desert road', verified = false },
+            { id = 'cholla_springs_amb_2', x = -3900, y = -2150, z = 80, label = 'West flat road', verified = false },
+        },
     },
     gaptooth_ridge = {
         id = 'gaptooth_ridge',
@@ -205,6 +263,10 @@ regions.regions = {
         },
         factions = { 'lawmen', 'desert_gang' },
         territories = { 'gaptooth_ridge_t1_camp', 'gaptooth_ridge_t1_camp_2', 'gaptooth_ridge_t2_camp' },
+        ambush = {
+            { id = 'gaptooth_ridge_amb_1', x = -5200, y = -2500, z = 90, label = 'Canyon road', verified = false },
+            { id = 'gaptooth_ridge_amb_2', x = -5600, y = -2600, z = 85, label = 'West canyon road', verified = false },
+        },
     },
     rio_bravo = {
         id = 'rio_bravo',
@@ -215,6 +277,10 @@ regions.regions = {
         towns = {},
         factions = { 'lawmen', 'desert_gang' },
         territories = { 'rio_bravo_t1_camp', 'rio_bravo_t1_camp_2', 'rio_bravo_t2_camp' },
+        ambush = {
+            { id = 'rio_bravo_amb_1', x = -1750, y = -2550, z = 55, label = 'River bench trail', verified = false },
+            { id = 'rio_bravo_amb_2', x = -2450, y = -2700, z = 60, label = 'West mesa trail', verified = false },
+        },
     },
 }
 
