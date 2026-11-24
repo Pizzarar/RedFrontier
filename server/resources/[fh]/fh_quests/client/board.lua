@@ -1,23 +1,19 @@
 -- Jobs board entry points: `/jobs` and an rsg-target sphere zone (plus prop) at each board spot open the fh_ui jobs
--- screen through the fh:quests:ui_open server event (server/ui.lua). Board spot coordinates and the prop model
--- are guesses: TODO-verify-in-game.
-local BOARDS = {
-    { region_id = 'heartlands', label = 'Jobs board', coords = vector3(-297.0, 795.0, 118.0),
-        model = 'p_notice_board01x' }, -- model unverified; if invalid only the target zone is made
-}
-local DEFAULT_REGION = 'heartlands'
+-- screen through the fh:quests:ui_open server event (server/ui.lua). Board spots come from shared/board_spots.lua
+-- (also read by fh_ui's map blips, so the coordinates are defined once). Spots are guesses: TODO-verify-in-game.
+local B = FhQuestsBoardSpots
 local function openBoard(region_id) TriggerServerEvent('fh:quests:ui_open', region_id) end
 
-RegisterCommand('jobs', function() openBoard(DEFAULT_REGION) end, false)
+RegisterCommand('jobs', function() openBoard(B.DEFAULT_REGION) end, false)
 
 -- Board spots (rsg-target is optional: without it only /jobs works). Zones and props are removed on stop.
 local zones, props, stopping = {}, {}, false
 
 CreateThread(function()
     if GetResourceState('rsg-target') ~= 'started' then return end
-    for _, b in ipairs(BOARDS) do
+    for _, b in ipairs(B.spots) do
         zones[#zones + 1] = exports['rsg-target']:addSphereZone({
-            coords = b.coords, radius = 1.5, debug = false,
+            coords = vector3(b.coords.x, b.coords.y, b.coords.z), radius = 1.5, debug = false,
             options = { { label = b.label, icon = 'fa-solid fa-clipboard-list', distance = 2.0,
                 onSelect = function() openBoard(b.region_id) end } },
         })

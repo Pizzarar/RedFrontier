@@ -42,6 +42,8 @@ Skinning an animal, the jobs-board notice board and quest givers use the rsg-tar
 | `/tradequote` | List trade post prices in chat | `server/resources/[fh]/fh_trade/server/main.lua:224` |
 | `/tradesell <item> <amount>` | Sell a trade good at the post | `server/resources/[fh]/fh_trade/server/main.lua:231` |
 | `/paybounty [faction] [points]` | Pay off heat with money | `server/resources/[fh]/fh_heat/server/main.lua:211` |
+| `/where` | List every findable place with its distance, nearest first | `server/resources/[fh]/fh_ui/client/where.lua:76` |
+| `/where <place>` | Mark a place as your destination and print its distance. `<place>` is one of `tradepost`/`trade`, `plot` (nearest unclaimed), `trapper`, `camp`, `board`, `giver`, `station`, `fence`, or a specific id/label | `server/resources/[fh]/fh_ui/client/where.lua:76` |
 
 ## Inside the inventory
 
@@ -76,3 +78,4 @@ Sources:
 - `server/resources/[fh]/fh_trade/client/main.lua`
 - `server/resources/[fh]/fh_trade/server/main.lua`
 - `server/resources/[fh]/fh_heat/server/main.lua`
+- `server/resources/[fh]/fh_ui/client/where.lua`

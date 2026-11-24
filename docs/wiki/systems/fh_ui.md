@@ -17,6 +17,23 @@ Other screens are made but their systems aren't wired in yet (unverified): heat,
 - On the jobs board and journal, Enter does nothing, so you can't accept something by accident.
 - Clicking too fast gets ignored (5 actions a second).
 
+## Map blips and `/where`
+
+fh_ui puts a **map blip** on every findable place so you can see where things are from the map or minimap: each
+homestead plot, the Valentine Trade Post, the trapper, the family quest givers, the jobs board, the outlaw camp,
+the crafting stations and the fence stops. Each blip is named ("Homestead plot", "Trade Post", …). Blips are
+unverified in game, and the sprite names are guesses that still need a real in-game check.
+
+**`/where`** lists those places and marks one as your destination:
+
+- `/where` lists every place with its distance, nearest first.
+- `/where tradepost` (or `trade`), `/where plot` (nearest **unclaimed** homestead plot), `/where trapper`,
+  `/where camp`, `/where board`, `/where giver`, `/where station`, `/where fence` mark the nearest of that kind and
+  print its name and distance.
+
+RedM has no "set GPS waypoint" native, so `/where` marks your destination with a named blip instead of the pause-map
+red X. See [Controls](../controls.md).
+
 ## Test panel
 A `placeholder` panel exists for testing, and admins have `/fh_ui_demo`.
 

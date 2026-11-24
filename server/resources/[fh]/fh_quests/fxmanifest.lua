@@ -19,6 +19,7 @@ shared_scripts {
     'shared/rewards.lua',
     'shared/store.lua',
     'shared/givers.lua', -- family giver npcs (Q4)
+    'shared/board_spots.lua', -- jobs board entry-point spots (shared by client/board.lua and fh_ui map blips)
     'shared/dialogue.lua', -- giver dialogue screen data builder (pure)
 }
 

@@ -135,3 +135,35 @@ revalidates everything. fh_fence maps its menu with `FhFenceLogic.screenData`, s
 `/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
+
+## Map blips and `/where` (mapblips)
+
+fh_ui owns presentation, so it draws a map blip for every findable place and answers `/where`. Coordinates are **not**
+hardcoded: `fxmanifest.lua` `@`-includes each lane's shared config (`fh_homestead/config.lua`, `fh_trade/config.lua`,
+`fh_hunting/config.lua`, `fh_zones/config.lua`, `fh_crafting/config.lua`, `fh_fence/config.lua`,
+`fh_quests/shared/givers.lua`, `fh_quests/shared/board_spots.lua`) and `shared/places.lua` (`FhUiPlaces.gather`)
+aggregates them into a canonical place list. `FhUiPlaces` is pure and specced under busted
+(`spec/ui_places_spec.lua`).
+
+- `config.lua` `FhUiConfig.blips = false` hides the whole blip layer (the `/where` destination marker still works).
+- `client/blips.lua` draws the layer; `client/where.lua` registers `/where` (list, or pick + destination marker).
+- Homestead plots, trade post, trapper, quest givers, jobs board, outlaw camp, crafting dev-stations and fence stops
+  are blipped and named. Plot claim state ("own" vs "unclaimed") is not wired yet: `/where plot` returns the nearest
+  plot and needs a fh_homestead claim-state export to filter truly-unclaimed plots (queued follow-up).
+- **RedM has no set-waypoint native** (only `SET_WAYPOINT_OFF` / `IS_WAYPOINT_ACTIVE`), so `/where <place>` marks the
+  destination with a named blip instead of the pause-map red X. A true GPS route is a queued follow-up if a native
+  appears.
+
+Natives (hashes verified against alloc8or `rdr3-nativedb-data` `natives.json`):
+
+| Native | Hash | Used by |
+|---|---|---|
+| `BLIP_ADD_FOR_COORDS` | `0x554D9D53F696D002` | blips, where |
+| `_SET_BLIP_NAME` | `0x9CB1A1623062F402` | blips, where |
+| `SET_BLIP_SCALE` | `0xD38744167B2FA257` | blips, where |
+| `DOES_BLIP_EXIST` | `0xCD82FA174080B3B1` | blips, where |
+| `REMOVE_BLIP` | `0xF2C3C9DA47AAA54A` | blips, where |
+
+Blip **sprite names** are not in `natives.json` (that file is native-hash only); they are RDR2 blip sprites
+(`FhUiPlaces.SPRITES`, `blip_shop_store` / `blip_shop_trapper` / `blip_shop_gunsmith` / `blip_location_area`),
+joaat'd at call time. **Unverified in-game**: verify each sprite renders, then adjust.
