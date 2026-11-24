@@ -89,10 +89,12 @@ end
 ---anything yields). observe(e) -> obs is asked ONLY for escort entries that are not pending or finished, once each;
 ---it may throw (that entry is skipped). Lost entries are marked e.lost (no more arrival) and listed again on every
 ---check until heal drops them (the row left active), so a fail that never landed is said again.
-function JT.escortCollectLost(watch, observe)
+---job_type (default 'escort'): the spawned-NPC kind to check (rescue reuses this for its captive, quests-02 C4).
+function JT.escortCollectLost(watch, observe, job_type)
+    job_type = job_type or 'escort'
     local keys, out = {}, {}
     for k, e in pairs(watch) do
-        if e.job_type == 'escort' and not e.pending and not WR.finished(e) then keys[#keys + 1] = k end
+        if e.job_type == job_type and not e.pending and not WR.finished(e) then keys[#keys + 1] = k end
     end
     table.sort(keys)
     for _, k in ipairs(keys) do

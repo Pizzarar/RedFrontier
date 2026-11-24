@@ -30,4 +30,10 @@ JT.registerRegion('heartlands', {
             destination = { x = -360.0, y = 795.0, z = 116.0 }, -- TODO-verify-in-game
         },
     },
+    rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game
+        { key = 'ada_brennan', name = 'Ada Brennan', camp = 'heartlands_t1_01', model = 'a_f_m_valtownfolk_01',
+            heading = 180.0, money = 34, rep = 3,
+            coords = { x = -143.0, y = 851.0, z = 117.0 }, -- TODO-verify-in-game (beside the Heartland Bluffs camp)
+        },
+    },
 })

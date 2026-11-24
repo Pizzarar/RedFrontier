@@ -13,7 +13,7 @@ shared_scripts {
     'shared/engine.lua',
     'shared/board.lua',
     'shared/jobs.lua',
-    'shared/watch_rules.lua', -- FhQuestsWatchRules: reach-watcher rules + kind registry (survey, escort; rescue C4)
+    'shared/watch_rules.lua', -- FhQuestsWatchRules: reach-watcher rules + kind registry (survey, escort, rescue)
     'shared/jobtypes.lua',   -- FhQuestsJobTypes (empty DATA/BUILDERS); the two globs below register into it
     'shared/jobtypes/*.lua', -- offer builders, one per built-in job type
     'data/regions/*.lua',    -- job templates, one per FhRegions id (all 15; empty = no offers)
@@ -31,7 +31,7 @@ server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua',
     'server/api.lua',
-    'server/watch.lua',    -- reach-watcher: polls only holders of a watched job (survey points; escortee arrival/lost)
+    'server/watch.lua',    -- reach-watcher: polls only holders of a watched job (survey points; escortee arrival/lost; captive freed/lost)
     'server/jobtypes.lua', -- built-in job types, registered through the public registerJobType
     'server/ui_text.lua',  -- pure error code -> notice text for the fh_ui jobs screen
     'server/ui.lua',       -- fh_ui glue (jobs open + ui_accept; journal open + ui_abandon; giver dialogue ui_talk + ui_start)

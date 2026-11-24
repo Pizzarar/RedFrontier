@@ -1,5 +1,5 @@
 -- fh_quests server reach-watcher (quests-02 C2). I/O only: every decision is in shared/watch_rules.lua (specced).
--- Polls ONLY players holding a watched job (survey, escort; rescue C4 registers a kind in its own
+-- Polls ONLY players holding a watched job (survey, escort, rescue; each registers a kind in its own
 -- shared/jobtypes/<type>.lua via FhQuestsWatchRules.registerKind), on a coarse tick, with server-side coords
 -- (GetEntityCoords(GetPlayerPed(src)), OneSync), and emits the kind's quest-owned local event
 -- (default fh:quests:point_reached { citizenid, offer_key, region_id, point }). Same shape as the bounty watcher in
@@ -267,6 +267,118 @@ do
     function W.escortHooks()
         local h = W.jobHooks('escort')
         h.events[#h.events + 1] = JT.ESCORT_LOST
+        return h
+    end
+end
+
+-- ================================================================ rescue (quests-02 C4)
+-- The rescue kind (shared/jobtypes/rescue.lua) gets its server-only parts here: onArm locks the entry to its camp
+-- (JT.rescueArm) and spawns the captive at the camp via fh_core requestSpawn; a listener on fh_zones' LOCAL
+-- fh:zones:camp_cleared unlocks entries whose holder is a listed participant (JT.rescueOnCampCleared); posOf is the
+-- holder, counted only once unlocked and within reach of the captive (JT.rescuePos), so the core tick emits
+-- fh:quests:captive_freed. A separate check on the same coarse tick emits fh:quests:captive_lost (captive dead /
+-- despawned before freed -> job failed; escort's lost rule). onDisarm despawns the captive (complete, fail,
+-- abandon, drop, resource stop). All quest events here are LOCAL server events (TriggerEvent only).
+-- Natives (unverified in-game, as for the escort section): NetworkGetEntityFromNetworkId, DoesEntityExist,
+-- GetEntityHealth, GetEntityCoords, GetPlayerPed.
+do
+    local kind = WR.KINDS.rescue
+    local DONE_DESPAWN_MS = 15000 -- a freed captive lingers a moment instead of vanishing on the spot
+
+    local function entityOf(netId)
+        if not netId then return nil end
+        local ent = NetworkGetEntityFromNetworkId(netId)
+        if not ent or ent == 0 or not DoesEntityExist(ent) then return nil end
+        return ent
+    end
+
+    local function despawnReq(reqId)
+        if reqId then pcall(function() exports.fh_core:despawn(reqId) end) end
+    end
+
+    kind.onArm = function(e, offer)
+        local c = offer.coords
+        if type(c) ~= 'table' or type(offer.model) ~= 'string' or not JT.rescueArm(e, offer) then
+            return false, 'fh_bad_offer'
+        end
+        local key = WR.key(e.cid, e.qid)
+        local reqId, err = exports.fh_core:requestSpawn({
+            kind = 'ped', model = offer.model, coords = vector4(c.x, c.y, c.z, offer.heading or 0.0),
+            owner = { kind = 'quest', id = e.cid }, tag = JT.rescueTag(e.region_id, e.offer_key, e.cid),
+        }, {
+            near = vector3(c.x, c.y, c.z),
+            onReady = function(netId, requestId) -- again with a new netId after a re-request (spawner drop)
+                if watch[key] ~= e then despawnReq(requestId) return end
+                e.netId = netId
+            end,
+            onFailed = function(reason)
+                if watch[key] ~= e then return end
+                e.spawnFailed = true -- the lost check fails the job
+                Q.log('rescue %s spawn failed: %s', key, tostring(reason))
+            end,
+        })
+        if not reqId then return false, type(err) == 'string' and err or 'fh_rescue_spawn_failed' end
+        e.reqId = reqId
+        return true
+    end
+
+    kind.onDisarm = function(e, why)
+        if why == 'done' then
+            local reqId = e.reqId
+            SetTimeout(DONE_DESPAWN_MS, function() despawnReq(reqId) end)
+        else
+            despawnReq(e.reqId)
+        end
+    end
+
+    kind.posOf = function(e)
+        if not e.cleared then return nil end -- locked: no ped read at all
+        local captive = nil
+        local ent = entityOf(e.netId)
+        if ent then
+            if GetEntityHealth(ent) <= 0 then return nil end
+            captive = GetEntityCoords(ent)
+        end
+        return JT.rescuePos(e, playerPos(e), captive)
+    end
+
+    -- fh_zones camp clears (local server event; a client source is dropped, as the intake does).
+    AddEventHandler(JT.CAMP_CLEARED, function(p)
+        local s = tonumber(source)
+        if s and s > 0 then return end
+        for _, key in ipairs(JT.rescueOnCampCleared(watch, p)) do Q.log('rescue %s: camp cleared, captive unlocked', key) end
+    end)
+
+    -- One observation for the lost rule (JT.escortObserve via JT.rescueCollectLost).
+    local function observe(e)
+        if not ownerOnline(e) then error('holder offline') end
+        local spawn = exports.fh_core:getSpawn(e.reqId)
+        if type(spawn) == 'table' and spawn.netId then e.netId = spawn.netId end
+        local ent = spawn and spawn.state == 'adopted' and entityOf(spawn.netId) or nil
+        return { spawn = spawn, exists = ent ~= nil, dead = ent ~= nil and GetEntityHealth(ent) <= 0,
+            failed = e.spawnFailed }
+    end
+
+    CreateThread(function()
+        while true do
+            Wait(WR.TICK_MS)
+            if next(watch) ~= nil then
+                -- Snapshot first (rescueCollectLost): TriggerEvent yields (the intake takes the quest lock).
+                for _, l in ipairs(JT.rescueCollectLost(watch, observe)) do
+                    if watch[l.key] == l.entry then
+                        local ok, err = pcall(TriggerEvent, JT.CAPTIVE_LOST, JT.rescuePayload(l.entry))
+                        if not ok then Q.log('^1rescue lost event for %s failed: %s^7', l.key, tostring(err)) end
+                        -- the entry stays (lost: never freed) until heal sees the row failed and drops it
+                    end
+                end
+            end
+        end
+    end)
+
+    ---registerJobType hooks for rescue: the watched-job hooks plus the lost event.
+    function W.rescueHooks()
+        local h = W.jobHooks('rescue')
+        h.events[#h.events + 1] = JT.CAPTIVE_LOST
         return h
     end
 end

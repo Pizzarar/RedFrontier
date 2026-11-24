@@ -151,6 +151,7 @@ CreateThread(function()
         bounty = hooks('bounty', { accept = accept, abandon = abandon, events = { JT.BOUNTY_EVENT } }),
         survey = hooks('survey', FhQuestsWatch.jobHooks('survey')), -- reach-watcher (server/watch.lua)
         escort = hooks('escort', FhQuestsWatch.escortHooks()),       -- reach-watcher escort section
+        rescue = hooks('rescue', FhQuestsWatch.rescueHooks()),       -- reach-watcher rescue section
     }
     for _, name in ipairs(JT.TYPES) do
         local ok, err = exports.fh_quests:registerJobType(name, defs[name])
