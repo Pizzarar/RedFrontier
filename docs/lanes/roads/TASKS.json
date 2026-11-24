@@ -1,0 +1,149 @@
+{
+  "laneId": "roads",
+  "updatedAt": "2026-11-24T21:06:26.327Z",
+  "units": [
+    {
+      "id": "R0",
+      "goal": "roads-01: @core request: spawn kind wagon + admin fh_heat delegates to exports.fh_heat (done by @core in B7)",
+      "files": [
+        "server/resources/[fh]/fh_core/shared/spawn_rules.lua",
+        "server/resources/[fh]/fh_core/server/admin.lua"
+      ],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-b7",
+      "commit": "771b951"
+    },
+    {
+      "id": "R1",
+      "goal": "roads-01: fh_cargo wagon tiers, cargo load/unload, canFastTravel veto, /fh_wagon dev spawn, nearestWagon export (idea-617). Slot A main b06fc58",
+      "files": [
+        "server/resources/[fh]/fh_cargo"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r1",
+      "commit": "6db6c2e"
+    },
+    {
+      "id": "R2",
+      "goal": "roads-01: wheel break roll, hammer/wagon_wheel repair, native wheel break gated (fh_spike_gated, S3). Slot B main 9a9ed6c",
+      "files": [
+        "server/resources/[fh]/fh_cargo"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r2",
+      "commit": "c5d9cb9"
+    },
+    {
+      "id": "R3",
+      "goal": "roads-01: fh_trade regional price model, shortages, trade-post sell (migration 0013). Slot B main 9a9ed6c",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "server/migrations/0013_fh_trade.sql"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r3",
+      "commit": "f41f5f3"
+    },
+    {
+      "id": "R4",
+      "goal": "roads-01: freight contracts as fh_quests job type, removeItem delivery, abandon undo (migration 0014). Slot B main 9a9ed6c",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "server/migrations/0014_fh_trade_contracts.sql"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r4",
+      "commit": "3624069"
+    },
+    {
+      "id": "R5",
+      "goal": "roads-01: fh_heat per-faction heat, decay, thresholds, bounty payoff + refund (migration 0008, renumbered b06fc58). Slot A main b06fc58",
+      "files": [
+        "server/resources/[fh]/fh_heat",
+        "server/migrations/0008_fh_heat.sql"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r5",
+      "commit": "b3fc0b0"
+    },
+    {
+      "id": "R6",
+      "goal": "roads-01: roadblocks (always on), night ambush + mounted chase gated (fh_spike_gated, S2). Slot A main b06fc58",
+      "files": [
+        "server/resources/[fh]/fh_heat"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r6",
+      "commit": "e294af6"
+    },
+    {
+      "id": "R7",
+      "goal": "roads-01: OWNER-TESTS ## Roads card (M4/M5) + playtest-ready 9a9ed6c (lane docs 081d746)",
+      "files": [
+        "OWNER-TESTS.md"
+      ],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "roads-r7",
+      "commit": "f1baace"
+    },
+    {
+      "id": "R8r",
+      "goal": "roads-02: request to @progression: add wagon_t3 = { region_id = heartlands, min_tier = 3 } (their config, not our edit); until then t3 refuses unknown_unlock",
+      "files": [
+        "server/resources/[fh]/fh_progression/config.lua"
+      ],
+      "doneCheck": "git grep -n wagon_t3 -- \"server/resources/[fh]/fh_progression/config.lua\"",
+      "status": "blocked"
+    },
+    {
+      "id": "R8",
+      "goal": "roads-02: wagon tier gate: spawnWagon (+ any tier-upgrade path) checks fh_progression canUnlock(wagon_t2/wagon_t3) for t2/t3, fail closed fh_locked, reason to player; specs allowed/tier_too_low/not started/throws",
+      "files": [
+        "server/resources/[fh]/fh_cargo",
+        "spec"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "todo",
+      "branch": "roads-r8"
+    },
+    {
+      "id": "R9",
+      "goal": "roads-02: T2 freight: offer tier, T2 templates, accept gates T2 on canUnlock(contracts_t2) + wagon tier fits qty, locked flag on gated offers; specs",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "spec"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "todo",
+      "branch": "roads-r9"
+    },
+    {
+      "id": "R10",
+      "goal": "roads-02: seed docs/lanes/roads/SPEC.md + TASKS.json from roads-01 + roads-02",
+      "files": [
+        "docs/lanes/roads/SPEC.md",
+        "docs/lanes/roads/TASKS.json"
+      ],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "roads-r10"
+    },
+    {
+      "id": "R11",
+      "goal": "roads-02: OWNER-TESTS ## Roads rep-gate steps (admin set rep -> tier 2 -> t2 wagon + T2 contract unlock; tier 1 refused). Last, after R8+R9",
+      "files": [
+        "OWNER-TESTS.md"
+      ],
+      "doneCheck": "",
+      "status": "todo"
+    }
+  ]
+}
