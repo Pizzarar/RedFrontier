@@ -6,29 +6,33 @@ file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need 
 
 ## Playtest order (start here)
 
-One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 315 minutes total.
+One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 390 minutes total.
 
 | # | Section | ~min | Notes |
 |---|---|---|---|
 | 1 | [Core: B-access (owner auto-admin, friend allowlist) - do this first](#core-b-access-owner-auto-admin-friend-allowlist---do-this-first) | 5 | Steps 4-5 need a friend (second account); skip them if solo |
-| 2 | [B4c: spawn-request contract (fh_core)](#b4c-spawn-request-contract-fh_core) | 10 | solo |
-| 3 | [B6b: one T1 outlaw camp (fh_zones)](#b6b-one-t1-outlaw-camp-fh_zones) | 15 | solo; also feeds spike S1 |
-| 4 | [B6c: soft death (fh_death)](#b6c-soft-death-fh_death) | 15 | needs two characters (second client or character switch) |
-| 5 | [B6d: M1 stash home + end-to-end card (fh_homestead, fh_zones, fh_death)](#b6d-m1-stash-home--end-to-end-card-fh_homestead-fh_zones-fh_death) | 10 | solo |
-| 6 | [M1 end-to-end](#m1-end-to-end) | 20 | solo; the main one-pass check, do it with an empty inventory |
-| 7 | [B6e saddlebag](#b6e-saddlebag) | 10 | solo |
-| 8 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); get `lumber`/`nails` first: buy at the Valentine trade post or give via OWNER-STEPS section 7 |
-| 9 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
-| 10 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
-| 11 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
-| 12 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
-| 13 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
-| 14 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7; giver talk/accept now opens the fh_ui dialogue screen (reach steps need walking >5 m away) |
-| 15 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 40 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away) |
+| 2 | [Tutorial (fh_tutorial): first-join intro](#tutorial-fh_tutorial-first-join-intro) | 15 | needs a NEW character (second slot); solo. Do it before anything else touches that character; the claim/pelt/jobs steps double as early checks of homestead, hunting and jobs |
+| 3 | [World-01: walk the claims (fh_core regions, fh_homestead, fh_zones, fh_trade, fh_ui)](#world-01-walk-the-claims-fh_core-regions-fh_homestead-fh_zones-fh_trade-fh_ui) | 30 | solo; do early: it verifies and fixes coordinates (claims, camps, trade posts) that later sections walk to. Ride it; note corrected coords from `/where` |
+| 4 | [B4c: spawn-request contract (fh_core)](#b4c-spawn-request-contract-fh_core) | 10 | solo |
+| 5 | [B6b: one T1 outlaw camp (fh_zones)](#b6b-one-t1-outlaw-camp-fh_zones) | 15 | solo; also feeds spike S1 |
+| 6 | [B6c: soft death (fh_death)](#b6c-soft-death-fh_death) | 15 | needs two characters (second client or character switch) |
+| 7 | [B6d: M1 stash home + end-to-end card (fh_homestead, fh_zones, fh_death)](#b6d-m1-stash-home--end-to-end-card-fh_homestead-fh_zones-fh_death) | 10 | solo |
+| 8 | [M1 end-to-end](#m1-end-to-end) | 20 | solo; the main one-pass check, do it with an empty inventory |
+| 9 | [A-life: camp ownership (fh_alife, fh_zones)](#a-life-camp-ownership-fh_alife-fh_zones) | 15 | solo; right after M1 (needs the Heartlands camp cleared and `ensure fh_alife`); step 6 uses `/alife tick 30` (admin) |
+| 10 | [B6e saddlebag](#b6e-saddlebag) | 10 | solo |
+| 11 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); get `lumber`/`nails` first: buy at the Valentine trade post or give via OWNER-STEPS section 7 |
+| 12 | [Homestead > Town lots (H8-H10): buy, build, abandon, law-safe](#town-lots-h8-h10-buy-build-abandon-law-safe) | 15 | right after Homestead; needs $500 cash and lumber; step 5 needs a second character with under $300 and step 7 (law-safe) a second character too; find a lot with `/where lot` |
+| 13 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
+| 14 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
+| 15 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
+| 16 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
+| 17 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
+| 18 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7; giver talk/accept now opens the fh_ui dialogue screen (reach steps need walking >5 m away) |
+| 19 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 40 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away) |
 
-Needs another person (table rows): 1 (B-access steps 4-5), 4 (death, two characters), 8 (Homestead second player), 12 (step 15 permission check as non-admin), 13 (`fh_not_owner` from a second character). Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
+Needs another person (table rows): 1 (B-access steps 4-5), 6 (death, two characters), 11 (Homestead second player), 12 (Town lots steps 5 and 7, second character), 16 (step 15 permission check as non-admin), 17 (`fh_not_owner` from a second character). Row 2 (Tutorial) needs a brand-new character slot, not a friend. Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
 
-Out of order is fine for the HUD-only checks in UI, but run sections 1-6 first so there is state to look at. The Hunting subsections sit under one `## Hunting` heading ([Hunting](#hunting)).
+Out of order is fine for the HUD-only checks in UI, but run sections 1-8 first so there is state to look at. The Hunting subsections sit under one `## Hunting` heading ([Hunting](#hunting)).
 
 ### Spike verdicts you must record
 
@@ -54,6 +58,47 @@ After recording, flip with `set fh_spike_gated false` in the console only for th
 4. Friend (optional, needs a second account): a not-yet-allowlisted connect is rejected with "You're not on this private server's allowlist. Ask the owner to add you..." (rsg-core's message; no `[RSGCORE]` prefix, shown once), and the server console prints one `allowlist: rejected <name> license:<hash>` line.
    RESULT:
 5. Run `fh_allow license:<hash>` with that license; the friend reconnects and gets in, and `fh_dump backpack <theirId>` from THEIR client says no permission (they are not admin).
+   RESULT:
+
+## Tutorial (fh_tutorial): first-join intro
+
+Resource: `fh_tutorial` (plan guide-02), built on fh_quests (quest `tutorial_intro`, kind `tutorial`; step order is `FhTutorialConfig.order` = greeting, inventory, eat_drink, claim_plot, trade_post, hunt, jobs, family). It auto-starts once on a character's first load (no `fh_tutorial_state` row), is skippable and never blocks anything. Prompts are plain `ox_lib` notifications titled `Tutorial`; steps with a place also draw a yellow GPS route. Needs `ensure fh_tutorial` after `fh_quests`, plus `fh_homestead`, `fh_trade`, `fh_hunting`, `fh_buffs`/`fh_survival` for their steps. Do this with a NEW character (create a second slot; an existing character that already has a row will not auto-start, see step 11). Everything here is read from code and is unverified in game; items that code cannot confirm say TODO-verify-in-game. Waypoint coordinates are copied from other lanes' configs and are approximate.
+
+1. New character spawns clothed. Create a new character in the creator and finish it WITHOUT picking any clothes, then spawn.
+   Expected: the character is wearing the default outfit (shirt, pants and boots from `RSG.DefaultClothes` in `rsg-character/shared/config.lua`, the frontier shirt/pants/boots for male or chemise/pants/boots for female), not underwear. TODO-verify-in-game: the hashes are from a data file and were never seen on screen.
+   RESULT:
+2. Wardrobe. Run `/wardrobe` (anywhere outside the clothing store and character select).
+   Expected: the saved-outfits menu opens (`exports['rsg-character']:OpenWardrobe`); it is a no-op in a clothing store or character select. TODO-verify-in-game: whether a fresh character's default outfit is listed in it or the list starts empty.
+   RESULT:
+3. Greeting (step `greeting`). On first load, watch the notification area.
+   Expected: a `Tutorial` notification: `Welcome to RedFrontier. This short guide covers your first day and never blocks you (skip any time with /tutorial skip).` No action needed: about 2.5 s later (client ack) it advances by itself to the next prompt. Console has no `[fh_tutorial] registerQuest failed`.
+   RESULT:
+4. Inventory (step `inventory`). Press `I`.
+   Expected: prompt `Press I to open your inventory and see what you are carrying.` appears after the greeting; opening the inventory (client event `rsg-inventory:client:open`) advances to the eat/drink prompt. Pressing `I` during the 2.5 s greeting window does nothing (no skip). TODO-verify-in-game: that `I` really fires `rsg-inventory:client:open` in this build.
+   RESULT:
+5. Eat and drink (step `eat_drink`). Eat a food item and drink water (or any item that applies the `well_fed` or `hydrated` buff).
+   Expected: prompt `Eat and drink to keep your needs up — a hungry rider is a slow one.`; the step advances on server event `fh:buffs:applied` with `well_fed` or `hydrated`. Buffs re-applied within 10 s of loading the character are ignored, so a relog does not skip the step. If you only ate, check whether one buff alone is enough (code accepts either); note which you used.
+   RESULT:
+6. Claim a plot (step `claim_plot`). Follow the yellow route to the Heartlands plot (about -500, 750, 105) and run `/fh_claim`.
+   Expected: prompt `Find a homestead plot and claim it with /fh_claim.` with a route labelled `Homestead plot`; `fh_claim: claimed plot heartlands_01` advances it (event `fh:homestead:claimed`). TODO-verify-in-game: the route draws (RDR3 has no SET_NEW_WAYPOINT; the multi-route natives and `COLOR_YELLOW` are a guess).
+   RESULT:
+7. Trade post (step `trade_post`). Ride to the Valentine Trade Post (about -176, 630, 114) and open its menu.
+   Expected: prompt `Ride to the Valentine Trade Post and open its menu to quote or sell goods.` with a route labelled `Valentine Trade Post`; opening the trade menu (client event `fh:trade:menu`) advances. You do not have to sell anything.
+   RESULT:
+8. Hunt (step `hunt`). Hunt an animal, skin it and sell the pelt to the trapper (about -299, 792, 118).
+   Expected: prompt `Hunt an animal, skin it, then sell the pelt to the trapper — your first sale.` with a route labelled `Trapper`; the pelt sale (`fh:hunting:pelt_sold`) advances. Fastest in a test session: any pelt, see Hunting H2/H3.
+   RESULT:
+9. Jobs (step `jobs`). Run `/jobs`.
+   Expected: prompt `Open the jobs board with /jobs to take on paid work.`; the board opens (`fh:ui:open` screen `jobs`) and the step advances. Close the board.
+   RESULT:
+10. Family giver (step `family`, the last). Walk to Ruth Hale (about -296, 788, 118) and talk to her (E, see Q5 step 10 for the dialogue).
+   Expected: prompt `Meet a family quest giver — find Ruth Hale and introduce yourself.` with a route labelled `Ruth Hale`; talking to her advances it (fh_quests `talk` npc `npc_hale`), then the final notification `Tutorial complete — you know your way around now. Stay sharp out there.` TODO-verify-in-game: that opening Hale's dialogue counts as a `talk` for this step even before you accept her quest. The tutorial never blocks her normal family quest.
+   RESULT:
+11. Commands and persistence. At any step run `/tutorial`; then `/tutorial skip`; relog; then `/tutorial restart`.
+   Expected: `/tutorial` re-shows the current step prompt and re-sets its route (with none active: `No active tutorial. Use /tutorial restart to replay it.`). `/tutorial skip` shows `Tutorial skipped. Bring it back any time with /tutorial restart.` and it does not return after a relog (row in `fh_tutorial_state`: `SELECT * FROM fh_tutorial_state WHERE citizenid = '<cid>';` shows `skipped = 1`). `/tutorial restart` clears the skip and starts again from the greeting, also after a completed run (the quest is repeatable with no cooldown). A relog mid-tutorial re-shows the current step. A finished tutorial never auto-starts again. To rerun it on an old character use `/tutorial restart`, not a new row; no admin command exists to delete the row.
+   RESULT:
+12. Never blocking. Skip the tutorial at step 1 (new character again, or `/tutorial restart` then `/tutorial skip`) and do the claim, a sale and Ruth Hale's quest normally.
+   Expected: all of them work exactly as without the tutorial; no step is refused because the tutorial is skipped or incomplete.
    RESULT:
 
 ## B4c: spawn-request contract (fh_core)
@@ -449,6 +494,7 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    Also: fh_quests starts with no ox_lib or script errors in the server console (ox_lib dependency removed).
    RESULT:
 2. Board. Run `/jobs` (it works anywhere; the board spot/prop is at about -297, 795, 118).
+   The board region is picked automatically from where you stand (`/jobs` uses the nearest enabled board spot in `fh_quests/client/board.lua`; there is no region selector). TODO-verify-in-game: stand near another enabled region's board (Rhodes, Saint Denis, Blackwater) and confirm `/jobs` shows that region's offers; the Cormier and Ashby family steps (Lemoyne, West Elizabeth) are covered by their own blocks, not here.
    Expected: 3-5 Heartlands offers (pelt requests, "Clear out: Heartlands outlaw camp", wanted NPCs), each with a reward and an Accept button.
    Accept a hunt offer: its row shows `Accepted` instead of the button and an inline notice confirms. Abandon it in `/journal`: click
    Abandon, then click the `Confirm abandon?` button a second time; the job leaves the journal and its offer is selectable on the board again.
