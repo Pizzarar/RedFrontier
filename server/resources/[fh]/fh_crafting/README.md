@@ -1,9 +1,10 @@
 # fh_crafting (spec L5)
 
-Reload press and apothecary recipes, plus the station and carried-inventory adapters that `fh_gunsmith` (C3) calls.
-Pure rules live in `shared/craft_rules.lua` (global `FhCraftRules`; load from another resource with
-`'@fh_crafting/shared/craft_rules.lua'`). Recipes: `shared/recipes.lua` (global `FhCraftRecipes`). Config: `config.lua`
-(global `FhCraftingConfig`; there is no `Config` table). Server flow (C2): `/fh_craft <recipe>` = station check ->
+Reload press and apothecary recipes, herb gathering (C9), plus the station and carried-inventory adapters that
+`fh_gunsmith` (C3) calls. Pure rules live in `shared/craft_rules.lua` (global `FhCraftRules`; load from another resource
+with `'@fh_crafting/shared/craft_rules.lua'`) and `shared/gather_rules.lua` (global `FhGatherRules`). Recipes:
+`shared/recipes.lua` (global `FhCraftRecipes`). Config: `config.lua` (global `FhCraftingConfig`; there is no `Config`
+table). Server flow (C2): `/fh_craft <recipe>` = station check ->
 canCraft -> remove inputs -> add outputs, all-or-nothing; any failed step undoes the applied ones newest-first (pure:
 `shared/craft_flow.lua`, spec `spec/crafting_flow_spec.lua`). An undo that fails is logged as `ROLLBACK INCOMPLETE`
 with what was not undone.
@@ -46,6 +47,7 @@ Internal globals (not exports): `FhCraftStations` (`isNearStation`, alias `isNea
 | `devStations` | table, station type -> `{x, y, z}` | Dev-only fallback stations (`gunsmith` at `-280.0, 805.0, 119.0`, `reload` at `-283.0, 805.0, 119.0`, `apothecary` at `-286.0, 805.0, 119.0`), consulted only while convar `fh_dev = 1`. Placeholder coordinates: TODO verify in game. |
 | `stationTypeMap` | table, crafting type -> H3 type | `gunsmith` and `reload` -> `workbench`, `apothecary` -> `campfire`. Applied in `server/stations.lua` before every `fh_homestead` call (homestead only builds workbench/campfire/tanning_rack). |
 | `stationMaxDist` | number | Default reach used by `isNearStation` / `stationAt` when no `maxDist` is passed (3.0). |
+| `herbPatches` | list of `{ id, herb, coords, yield, respawnSeconds }` | 8 wild herb patches (2 per herb). Press E at a patch to pick: the server grants `yield` (1-2) of `herb` and starts a shared per-patch cooldown (`respawnSeconds`, in-memory, cleared on restart). Coordinates are `TODO-verify-in-game` placeholders. |
 
 Items registered by `fh_crafting`:
 
@@ -112,28 +114,38 @@ come from `FhCraftRules.tonicFor` (`TONICS` + `TonicDurations`).
 
 | Kind | Event | Payload |
 |---|---|---|
-| Emits (client) | `chat:addMessage` | `/fh_craft` replies: `{ args = { 'Crafting', msg } }` |
+| Emits (client) | `chat:addMessage` | `/fh_craft` and `fh:crafting:gather` replies: `{ args = { 'Crafting', msg } }` |
 | Consumes (server) | `onResourceStart` | validates recipes for this resource; re-registers items for this resource or `fh_core` |
-| Consumes (server) | `playerDropped` | clears the per-player `busy` craft flag |
+| Consumes (server) | `playerDropped` | clears the per-player `busy` craft and gather flags |
+| Consumes (server) | `fh:crafting:gather` | `{ patchId }` -> pick that patch (server decides reach, cooldown and grant; replies via `chat:addMessage`) |
 | Registers | rsg-core usable items | `tonic_vigor`, `tonic_steady` -> `exports['rsg-core']:CreateUseableItem`; results go out via `exports['rsg-core']:Notify` |
 
-No custom net events are emitted by this resource.
+The only custom net event is `fh:crafting:gather` (consumed by the server; nothing else is emitted).
+
+## Herb gathering (C9)
+
+Wild herb patches (plan crafting-02). Walk up, press E at the `[E] Pick <Herb>` prompt, a ~4 s progress bar plays, and
+the server grants 1-2 of the patch's herb into your backpack. The server decides everything: your position comes from
+`GetPlayerPed` + `GetEntityCoords` (never client coords), reach matches `FhContainers.canReach` (3.5 m, pure rules in
+`shared/gather_rules.lua`), and the grant goes through the fh_core carried `addItem` on a backpack ref. Each patch has a
+**shared, per-patch** cooldown (`respawnSeconds`, 900 by default, held in server memory and cleared on restart): a patch
+is shared frontier, so everyone waits on the same regrowth. Patches are invisible except for the `[E]` prompt (a plant
+prop/blip is a queued `spk_herb` spike); find them by the `herbPatches` coordinates in `config.lua` (`TODO-verify-in-game`).
+The herbs stay buyable at trade posts (idea-716/719); gathering is a free, slower second source.
 
 ## Pending contracts
 
-- **@homestead H2 `/fh_build`** (not on main yet): stations are real (H3 on main) but only exist once built, so in-game
-  crafting needs H2 or `fh_dev 1`. Crafting types map to homestead types through `stationTypeMap`. Before the homestead
-  slot load finishes, H3 returns `{}` / `nil` / `false` / `'fh_not_ready'`; all read as `no_station`. `isNearStation`
-  is owner-only (own plot), so crafting works only on the player's own plot. `/fh_restore` reach reads
-  `getStations(citizenid)` filtered to `workbench` and compares coordinates with the open container.
-  `stationAt` returns the raw H3 type (`workbench`), not the crafting type.
+None. All previously-pending contracts are on main:
 
-- **@roads idea-716** (not built): trade post `supplies` list sells all 9 buy items: `lumber`, `nails`, `lead`,
-  `casings`, `resource_gunpowder`, `herb_american_ginseng`, `herb_oregano`, `herb_red_sage`, `herb_wild_mint`. Until
-  then they need admin `/giveitem`. `spec/crafting_sources_spec.lua` tracks this in its `PENDING` set (target: empty).
-  Herb gathering is a parked later spike.
-- **@core idea-717** (not built): `gun_parts` added to the outlaw camp loot table in `fh_zones/config.lua`. Until then
-  admin `/giveitem`; same `PENDING` tracking.
+- **@homestead H2 `/fh_build`** (on main): stations are real (H3 on main) and built on your own plot. Crafting types map
+  to homestead types through `stationTypeMap`. Before the homestead slot load finishes, H3 returns
+  `{}` / `nil` / `false` / `'fh_not_ready'`; all read as `no_station`. `isNearStation` is owner-only (own plot), so
+  crafting works only on the player's own plot. `/fh_restore` reach reads `getStations(citizenid)` filtered to
+  `workbench` and compares coordinates with the open container. `stationAt` returns the raw H3 type (`workbench`), not
+  the crafting type.
+- **@roads idea-716/719** (on main): trade post `supplies` sells all 9 buy items: `lumber`, `nails`, `lead`, `casings`,
+  `resource_gunpowder`, `herb_american_ginseng`, `herb_oregano`, `herb_red_sage`, `herb_wild_mint`.
+- **@core idea-717** (on main): `gun_parts` drops from the outlaw camp loot table (`fh_zones/config.lua`).
 
 Resolved: idea-612 (`fh_buffs` caps `tonic_vigor` 1.15 / `tonic_steady` 1.10 on main; `TONICS` equal the caps, and
 `fh_buffs` validate does not reject magnitude == cap); core-03 carried `addItem`/`removeItem` (refs `{ type = 'backpack'|'equipped', id = src }`; idea-615) and

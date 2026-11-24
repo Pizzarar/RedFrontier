@@ -733,13 +733,13 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
 ## Crafting (fh_crafting, fh_gunsmith)
 
 Preconditions: stations come from @homestead H3 (on main): crafting uses a built `workbench` (gunsmith, reload) or
-`campfire` (apothecary) on your OWN plot, so in-game testing needs @homestead H2 `/fh_build` (not on main yet), or
-`fh_dev 1` and the dev stations. Without fh_homestead started, crafting refuses `no_homestead`. Carried item moves and
-`/fh_restore` use the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff caps (idea-612) are on
-main. Until idea-716 (trade post `supplies`) and idea-717 (outlaw camp loot) land, `lumber`, `nails`, `lead`, `casings`,
-`resource_gunpowder`, the `herb_*` items (ginseng, oregano, red sage, wild mint) and `gun_parts` have no in-game source:
-get them with admin `/giveitem`; afterwards everything except gun parts is bought at trade posts and gun parts drop from
-the outlaw camp (herb gathering is a parked later spike). Fill every `RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+`campfire` (apothecary) on your OWN plot, so in-game testing needs @homestead H2 `/fh_build` (on main), or `fh_dev 1` and
+the dev stations. Without fh_homestead started, crafting refuses `no_homestead`. Carried item moves and `/fh_restore` use
+the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff caps (idea-612) are on main. Every input
+has an in-game source: `lumber`, `nails`, `lead`, `casings`, `resource_gunpowder` and the `herb_*` items (ginseng,
+oregano, red sage, wild mint) are bought at trade posts (idea-716/719, on main); `gun_parts` drops from the outlaw camp
+(idea-717, on main); the four herbs can also be gathered from wild patches (the "Herb gathering" card below). Fill every
+`RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle
@@ -807,6 +807,30 @@ the outlaw camp (herb gathering is a parked later spike). Fill every `RESULT:` w
     Expected: both `no_station` messages (`You need to be at a gunsmith station.` / `You need to be at the right
     station.`); the station types do not substitute for each other.
     RESULT:
+
+### Herb gathering (C9)
+
+All unverified in-game. Patch coordinates are approximate placeholders (`TODO-verify-in-game` in
+`fh_crafting/config.lua` `herbPatches`): if no `[E] Pick` prompt shows where a patch should be, stand there, read your
+coordinates, and adjust the config. Patches are invisible except for the prompt (a plant prop/blip is a queued
+`spk_herb` spike); two patches per herb across the Heartlands and Scarlett Meadows.
+
+1. Walk to a patch (e.g. `wild_mint_heartlands`, about -150, 840, 117) and press E at the `[E] Pick <Herb>` prompt.
+   Expected: a ~4 s progress bar runs, then chat `Picked N <Herb>.` with N = 1 or 2, and your backpack gains that many
+   of the herb.
+   RESULT:
+2. Press E again on the same patch right away.
+   Expected: the server refuses with `That patch is still regrowing.` and you gain nothing (the patch is on a shared
+   900 s cooldown).
+   RESULT:
+3. Wait out the cooldown (or restart `fh_crafting` / the server, which clears the in-memory cooldown) and pick again.
+   Expected: another 1-2 herbs.
+   RESULT:
+4. Brew a tonic from the gathered herbs. Stand at the apothecary (dev `-286.0, 805.0, 119.0` with `fh_dev 1`, or a
+   built campfire) and run `/fh_craft tonic_vigor` (or `tonic_steady`).
+   Expected: `Done: Brew Vigor Tonic.` (2 American Ginseng + 1 Wild Mint) or `Done: Brew Steady Tonic.` (2 Oregano +
+   1 Red Sage), using the herbs you just gathered.
+   RESULT:
 
 ## Survival (fh_survival, plan survival-01, S1-S5 combined)
 
