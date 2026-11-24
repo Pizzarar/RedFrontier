@@ -112,15 +112,16 @@ local function sched()
 end
 
 -- rows: kind -> { last_tick, unpaid, status }
-local function world(rows)
+local function world(rows, wcfg)
+    wcfg = wcfg or tcfg
     local W = { db = {}, charges = {}, events = {}, logs = {}, online = true, charging = false, script = {},
-        hook = {}, tasks = 0, taskResult = { true, 1 }, failDb = {}, locks = {}, clock = 0 }
+        hook = {}, tasks = 0, taskRuns = {}, taskResult = { true, 1 }, failDb = {}, locks = {}, clock = 0 }
     for k, r in pairs(rows) do W.db[k] = { last_tick = r.last_tick, unpaid = r.unpaid or 0, status = r.status or 'working' } end
     local function fire(name) local f = W.hook[name]; if f then f() end end
     function W.load()
         local list = {}
         for k, r in pairs(W.db) do list[#list + 1] = { hand_kind = k, last_tick = r.last_tick, unpaid = r.unpaid, status = r.status } end
-        return (logic.entryFromRows('CID1', 7, list, tcfg))
+        return (logic.entryFromRows('CID1', 7, list, wcfg))
     end
     function W.io(e)
         return {
@@ -161,7 +162,12 @@ local function world(rows)
                 fire('after:charge')
                 return true
             end,
-            runTask = function() y(); W.tasks = W.tasks + 1; return table.unpack(W.taskResult) end,
+            runTask = function(task, kind)
+                y(); W.tasks = W.tasks + 1
+                W.taskRuns[#W.taskRuns + 1] = { task = task, kind = kind }
+                if W.taskFn then return W.taskFn(task, kind) end
+                return table.unpack(W.taskResult)
+            end,
             emit = function(name, p) W.events[#W.events + 1] = { name = name, p = p } end,
             log = function(m) W.logs[#W.logs + 1] = m end,
         }
@@ -519,6 +525,190 @@ case('admin: forcedNow makes exactly the oldest hand' .. "'" .. 's next tick due
     T.eq(1, (logic.ticksDue(900, now, cfg.tickSeconds, cfg.maxCatchupTicks)))
     T.eq(0, (logic.ticksDue(950, now, cfg.tickSeconds, cfg.maxCatchupTicks)))
     T.eq(5000, logic.forcedNow({ a = { last_tick = 0 } }, cfg, 5000)) -- never earlier than the real now
+end)
+
+-- ---------------------------------------------------------------- G3: woodcutter (lumber_topup) and the second hand
+-- A fake plot chest wired through logic.chestTopup, the same body main.lua registers for feed_topup / lumber_topup.
+local function chest(start)
+    local C = { items = {}, adds = {} }
+    for name, n in pairs(start or {}) do C.items[#C.items + 1] = { name = name, amount = n } end
+    C.io = {
+        snapshot = function() y(); return C.items end,
+        addItem = function(_, item, amount)
+            y(); C.adds[#C.adds + 1] = { item = item, amount = amount }
+            C.items[#C.items + 1] = { name = item, amount = amount }
+            return true
+        end,
+    }
+    function C.count(name) return logic.countItem(C.items, name) end
+    return C
+end
+local REF = { type = 'chest', id = 'fh:chest:plot1:1' }
+-- runTask as main.lua wires it: task kind -> chestTopup with that task's config block
+local function taskFn(C)
+    return function(task)
+        local spec = ({ feed_topup = cfg.feed, lumber_topup = cfg.lumber })[task]
+        if not spec then return false, 'no_task' end
+        return logic.chestTopup(REF, spec, C.io)
+    end
+end
+
+case('G3 config: woodcutter is a paid hand running lumber_topup on fh_homestead lumber; ranch hand unchanged', function()
+    local wc = cfg.hands.woodcutter
+    assert(wc and wc.wage > 0 and wc.task == 'lumber_topup')
+    T.eq('feed_topup', cfg.hands.ranch_hand.task); T.eq(5, cfg.hands.ranch_hand.wage)
+    T.eq('lumber', cfg.lumber.item); assert(cfg.lumber.cap > 0 and cfg.lumber.perTick >= 1)
+    T.eq('hire_hand', cfg.unlockId); T.eq('hire_hand_2', cfg.extraHandUnlocks[2])
+    local function with(k, v) local c = {}; for a, b in pairs(cfg) do c[a] = b end; c[k] = v; return c end
+    T.eq('bad_lumber', select(2, logic.validateConfig(with('lumber', nil))))
+    T.eq('bad_lumber', select(2, logic.validateConfig(with('lumber', { item = 'lumber', cap = -1, perTick = 5 }))))
+    T.eq('bad_extraHandUnlocks', select(2, logic.validateConfig(with('extraHandUnlocks', { [2] = '' }))))
+    T.eq('bad_extraHandUnlocks', select(2, logic.validateConfig(with('extraHandUnlocks', { [1] = 'x' }))))
+    T.eq('bad_extraHandUnlocks', select(2, logic.validateConfig(with('extraHandUnlocks', { [2] = 'a', [4] = 'b' }))))
+    assert(logic.validateConfig(with('extraHandUnlocks', nil)) == true)
+end)
+
+case('G3 lumber_topup: perTick per paid tick, the cap is respected, feed untouched', function()
+    local C = chest({ lumber = 3, feed = 1 })
+    for _ = 1, 20 do
+        local ok, n = logic.chestTopup(REF, cfg.lumber, C.io)
+        assert(ok == true and type(n) == 'number' and n <= cfg.lumber.perTick)
+        assert(C.count('lumber') <= cfg.lumber.cap, 'over cap: ' .. C.count('lumber'))
+    end
+    T.eq(cfg.lumber.cap, C.count('lumber')); T.eq(1, C.count('feed'))
+    for _, a in ipairs(C.adds) do T.eq('lumber', a.item) end
+    -- a chest already over the cap (player stored more) is never topped up, never reduced
+    local full = chest({ lumber = cfg.lumber.cap + 7 })
+    T.same({ true, 0 }, { logic.chestTopup(REF, cfg.lumber, full.io) }); T.eq(0, #full.adds)
+    -- no plot / no chest / add refused surface as task failures
+    T.same({ false, 'no_homestead' }, { logic.chestTopup(nil, cfg.lumber, C.io) })
+    T.same({ false, 'no_chest' }, { logic.chestTopup(REF, cfg.lumber, { snapshot = function() return nil end }) })
+    T.same({ false, 'fh_full' }, { logic.chestTopup(REF, cfg.lumber,
+        { snapshot = function() return {} end, addItem = function() return false, 'fh_full' end }) })
+end)
+
+case('G3 woodcutter over runOwner: paid ticks add lumber up to the cap, never past it', function()
+    local W = world({ woodcutter = { last_tick = 0 } }, cfg)
+    local C = chest({})
+    W.taskFn = taskFn(C)
+    local e = W.load()
+    logic.runOwner(e, cfg, 6 * IV, W.io(e))
+    T.eq(6, #W.charges); T.eq('wage:woodcutter', W.charges[1].reason); T.eq(cfg.hands.woodcutter.wage, W.charges[1].amount)
+    T.eq(math.min(cfg.lumber.cap, 6 * cfg.lumber.perTick), C.count('lumber'))
+    logic.runOwner(e, cfg, 12 * IV, W.io(e)); logic.runOwner(e, cfg, 18 * IV, W.io(e))
+    T.eq(cfg.lumber.cap, C.count('lumber'))
+end)
+
+case('G3 an unpaid woodcutter tick does no work (no task, no lumber), and the strike is persisted', function()
+    for _, why in ipairs({ 'fh_insufficient_funds', 'removemoney_refused' }) do
+        local W = world({ woodcutter = { last_tick = 0 }, ranch_hand = { last_tick = 0 } }, cfg)
+        local C = chest({})
+        W.taskFn = taskFn(C)
+        W.script = { { false, why }, { false, why } } -- ranch_hand sorts first, then woodcutter
+        local e = W.load()
+        logic.runOwner(e, cfg, IV, W.io(e))
+        T.eq(0, #W.charges); T.eq(0, W.tasks); T.eq(0, #C.adds); T.eq(0, C.count('lumber')); T.eq(0, C.count('feed'))
+        T.eq(1, W.db.woodcutter.unpaid); T.eq('idle', W.db.woodcutter.status); T.eq(2, W.count('fh:hands:unpaid'))
+    end
+    -- skip / retry outcomes do no work either
+    for _, why in ipairs({ 'charge_unavailable', 'fh_charge_busy', 'ledger_failed' }) do
+        local W = world({ woodcutter = { last_tick = 0 } }, cfg)
+        local C = chest({})
+        W.taskFn = taskFn(C)
+        W.script = { { false, why } }
+        local e = W.load()
+        logic.runOwner(e, cfg, IV, W.io(e))
+        T.eq(0, W.tasks); T.eq(0, C.count('lumber')); T.eq(0, W.db.woodcutter.unpaid)
+    end
+end)
+
+case('G3 two hands bill two wages per tick, each claimed and charged once, even with poll + login + poll racing', function()
+    local W = world({ ranch_hand = { last_tick = 0 }, woodcutter = { last_tick = 0 } }, cfg)
+    local C = chest({})
+    W.taskFn = taskFn(C)
+    local now, S = 3 * IV, sched()
+    local function poll()
+        logic.withLock(W.locks, 'CID1', W.lockOpts(nil), function()
+            local e = W.cache or W.load(); W.cache = e
+            logic.runOwner(e, cfg, now, W.io(e))
+        end)
+    end
+    local function login()
+        assert(logic.withLock(W.locks, 'CID1', W.lockOpts(1000), function()
+            W.cache = W.load()
+            logic.runOwner(W.cache, cfg, now, W.io(W.cache))
+        end))
+    end
+    S.spawn(poll); S.spawn(login); S.spawn(poll)
+    S.run()
+    local by = {}
+    for _, c in ipairs(W.charges) do by[c.reason] = (by[c.reason] or 0) + c.amount end
+    T.eq(6, #W.charges)
+    T.eq(3 * cfg.hands.ranch_hand.wage, by['wage:ranch_hand']); T.eq(3 * cfg.hands.woodcutter.wage, by['wage:woodcutter'])
+    T.eq(now, W.db.ranch_hand.last_tick); T.eq(now, W.db.woodcutter.last_tick)
+    T.eq(6, W.tasks); T.eq(3 * cfg.lumber.perTick, C.count('lumber')); T.eq(3 * cfg.feed.perTick, C.count('feed'))
+    -- a later poll at the same time bills nothing more
+    local e = W.load(); logic.runOwner(e, cfg, now, W.io(e)); T.eq(6, #W.charges)
+end)
+
+case('G3 two hands, two stale runners without the lock: still never more than one charge per hand per tick', function()
+    local W = world({ ranch_hand = { last_tick = 0 }, woodcutter = { last_tick = 0 } }, cfg)
+    local now, S = 2 * IV, sched()
+    local a, b = W.load(), W.load()
+    S.spawn(logic.runOwner, a, cfg, now, W.io(a))
+    S.spawn(logic.runOwner, b, cfg, now, W.io(b))
+    S.run()
+    local e = W.load(); logic.runOwner(e, cfg, now, W.io(e))
+    local n = {}
+    for _, c in ipairs(W.charges) do n[c.reason] = (n[c.reason] or 0) + 1 end
+    T.eq(2, n['wage:ranch_hand']); T.eq(2, n['wage:woodcutter']); T.eq(4, #W.charges)
+end)
+
+case('G3 hire gate: first hand needs hire_hand; second needs hire_hand_2 too (fail closed); third is max_hands', function()
+    local asked
+    local function unlocks(set)
+        return function(id)
+            asked[#asked + 1] = id
+            if set[id] then return true end
+            return false, set.__why or 'unknown_unlock'
+        end
+    end
+    -- first hand: hire_hand only
+    asked = {}
+    T.same({ true }, { logic.hireGate({}, cfg, unlocks({ hire_hand = true })) }); T.same({ 'hire_hand' }, asked)
+    T.same({ false, 'locked' }, { logic.hireGate({}, cfg, unlocks({ __why = 'tier_too_low' })) })
+    local one = { ranch_hand = { last_tick = 0, unpaid = 0, status = 'working' } }
+    -- second hand before G1 lands: canUnlock('hire_hand_2') = false, 'unknown_unlock' -> refused
+    asked = {}
+    T.same({ false, 'locked' }, { logic.hireGate(one, cfg, unlocks({ hire_hand = true })) })
+    T.same({ 'hire_hand', 'hire_hand_2' }, asked)
+    T.same({ false, 'locked' }, { logic.hireGate(one, cfg, unlocks({ hire_hand = true, __why = 'tier_too_low' })) })
+    T.same({ false, 'locked' }, { logic.hireGate(one, cfg, unlocks({ hire_hand_2 = true })) }) -- needs both
+    -- non-true truthy answers and a throwing export also fail closed
+    T.same({ false, 'locked' }, { logic.hireGate(one, cfg, function() return 1 end) })
+    T.same({ false, 'locked' }, { logic.hireGate(one, cfg, function() error('fh_progression down') end) })
+    -- with hire_hand_2 (G1: heartlands t3) the second hire is allowed
+    T.same({ true }, { logic.hireGate(one, cfg, unlocks({ hire_hand = true, hire_hand_2 = true })) })
+    -- a third hand is past the configured slots: refused before any unlock is asked
+    local two = { ranch_hand = one.ranch_hand, woodcutter = { last_tick = 0, unpaid = 0, status = 'working' } }
+    asked = {}
+    T.same({ false, 'max_hands' }, { logic.hireGate(two, cfg, unlocks({ hire_hand = true, hire_hand_2 = true })) })
+    T.eq(0, #asked)
+    -- firing back down to one hand means the next hire is a second hand again (hire_hand_2 still required)
+    T.same({ false, 'locked' }, { logic.hireGate({ woodcutter = two.woodcutter }, cfg, unlocks({ hire_hand = true })) })
+end)
+
+case('G3 main.lua: hire goes through hireGate under withOwner; both top-up tasks are registered via chestTopup', function()
+    local fh = assert(io.open(here .. '../server/resources/[fh]/fh_hands/server/main.lua', 'rb'))
+    local src = fh:read('a'); fh:close()
+    local hireBody = src:match('local function hire%(src, kind%)(.-)\nend\n')
+    assert(hireBody, 'hire body')
+    assert(hireBody:find('return withOwner(src, function(e, cid)', 1, true), 'hire under the owner lock')
+    assert(hireBody:find('logic.hireGate(e.list, cfg,', 1, true), 'hire uses hireGate')
+    assert(not hireBody:find('cfg.unlockId', 1, true), 'no second, ungated path')
+    assert(src:find("registerTask('lumber_topup', function(ctx)\n    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.lumber, chestIo)", 1, true))
+    assert(src:find("registerTask('feed_topup', function(ctx)\n    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.feed, chestIo)", 1, true))
+    assert(not src:find("[cfg.lumber.item]", 1, true), 'fh_hands never registers lumber (fh_homestead owns it)')
 end)
 
 T.finish()

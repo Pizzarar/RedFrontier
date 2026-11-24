@@ -77,7 +77,7 @@ local function runTask(kind, ctx)
     return ok, info
 end
 
--- ---------------------------------------------------------------- first task: feed_topup
+-- ---------------------------------------------------------------- tasks: feed_topup, lumber_topup
 -- Workaround: chest feed until a lane owns troughs; follow-up trough task.
 -- The chest ref is rebuilt from fh_homestead's getPlot export; the stash id format must match
 -- fh_homestead chestStashId ('fh:chest:<plot>:1').
@@ -87,16 +87,19 @@ local function homesteadChest(citizenid)
     return { type = 'chest', id = ('fh:chest:%s:1'):format(plotId) }
 end
 
+local chestIo = {
+    snapshot = function(ref) return exports.fh_core:snapshot(ref) end,
+    addItem = function(ref, item, amount) return exports.fh_core:addItem(ref, item, amount) end,
+}
+
+-- Both tasks run only on a paid tick (runOwner); cap/perTick come from cfg.feed / cfg.lumber.
 registerTask('feed_topup', function(ctx)
-    local ref = homesteadChest(ctx.citizenid)
-    if not ref then return false, 'no_homestead' end
-    local items, why = exports.fh_core:snapshot(ref)
-    if not items then return false, why or 'no_chest' end
-    local amount = logic.topupAmount(logic.countItem(items, cfg.feed.item), cfg.feed.cap, cfg.feed.perTick)
-    if amount == 0 then return true, 0 end
-    local added, err = exports.fh_core:addItem(ref, cfg.feed.item, amount)
-    if not added then return false, err end
-    return true, amount
+    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.feed, chestIo)
+end)
+
+-- G3 woodcutter: tops up fh_homestead's 'lumber' (registered there; fh_hands only adds it to the plot chest).
+registerTask('lumber_topup', function(ctx)
+    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.lumber, chestIo)
 end)
 
 -- ---------------------------------------------------------------- ticking
@@ -228,15 +231,17 @@ local function withOwner(src, fn)
     return table.unpack(res, 2, res.n)
 end
 
----Hire a hand of `kind`. Gated by fh_progression canUnlock('hire_hand'). Starts the wage clock now.
----@return boolean ok, string|nil err  unknown_hand | no_player | locked | already_hired | db_failed | busy | not_ready
+---Hire a hand of `kind`. Gated by fh_progression canUnlock('hire_hand'); a second hand also needs
+---cfg.extraHandUnlocks[2] ('hire_hand_2'), fail closed (FhHandsLogic.hireGate). The count is read under the owner's
+---lock, so two concurrent hires cannot both pass as "first". Starts the wage clock now.
+---@return boolean ok, string|nil err  unknown_hand | no_player | locked | max_hands | already_hired | db_failed | busy | not_ready
 local function hire(src, kind)
     local def = type(kind) == 'string' and cfg.hands[kind]
     if not def then return false, 'unknown_hand' end
     return withOwner(src, function(e, cid)
         if e.list[kind] then return false, 'already_hired' end
-        local okU, allowed = pcall(function() return exports.fh_progression:canUnlock(src, cfg.unlockId) end)
-        if not okU or allowed ~= true then return false, 'locked' end
+        local okG, gateErr = logic.hireGate(e.list, cfg, function(id) return exports.fh_progression:canUnlock(src, id) end)
+        if not okG then return false, gateErr end
         if citizenOf(src) ~= cid then return false, 'no_player' end -- canUnlock can yield (rep read)
         local now = os.time()
         -- a 'quit' row whose delete failed would block the insert on the primary key

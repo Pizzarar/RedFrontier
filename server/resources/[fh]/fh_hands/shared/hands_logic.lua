@@ -224,6 +224,47 @@ function M.countItem(items, name)
     return total
 end
 
+---One chest top-up step (the feed_topup / lumber_topup tasks). spec = { item, cap, perTick } (cfg.feed / cfg.lumber).
+---io = { snapshot(ref) -> items|nil, why ; addItem(ref, item, amount) -> ok, err } (fh_core exports; may yield).
+---@return boolean ok, number|string amountAddedOrErr
+function M.chestTopup(ref, spec, io)
+    if not ref then return false, 'no_homestead' end
+    local items, why = io.snapshot(ref)
+    if not items then return false, why or 'no_chest' end
+    local amount = M.topupAmount(M.countItem(items, spec.item), spec.cap, spec.perTick)
+    if amount == 0 then return true, 0 end
+    local added, err = io.addItem(ref, spec.item, amount)
+    if not added then return false, err end
+    return true, amount
+end
+
+---Unlock ids a new hire needs, given the hands already employed (list = entry.list, known kinds only): always
+---cfg.unlockId; with N hands already, also cfg.extraHandUnlocks[N + 1]. Past the last configured slot: nil, 'max_hands'.
+---@return string[]|nil ids, string? err
+function M.hireUnlocks(list, cfg)
+    local n = 0
+    for _ in pairs(list or {}) do n = n + 1 end
+    local ids = { cfg.unlockId }
+    if n == 0 then return ids end
+    local extra = type(cfg.extraHandUnlocks) == 'table' and cfg.extraHandUnlocks[n + 1] or nil
+    if not isStr(extra) then return nil, 'max_hands' end
+    ids[2] = extra
+    return ids
+end
+
+---Hire gate. canUnlock(unlock_id) -> allowed (fh_progression canUnlock; may yield or throw). Fail closed: every
+---required unlock must answer exactly true; a throw, unknown_unlock or any other refusal is 'locked'.
+---@return boolean ok, string? err  max_hands | locked
+function M.hireGate(list, cfg, canUnlock)
+    local ids, err = M.hireUnlocks(list, cfg)
+    if not ids then return false, err end
+    for _, id in ipairs(ids) do
+        local called, allowed = pcall(canUnlock, id)
+        if not called or allowed ~= true then return false, 'locked' end
+    end
+    return true
+end
+
 ---`fh_hand_tick <serverId>` arg parsing. @return table|nil { target }, string? err
 function M.parseTickArgs(args)
     local t = type(args) == 'table' and tonumber(args[1]) or nil
@@ -255,9 +296,22 @@ function M.validateConfig(cfg)
         if type(kind) ~= 'string' or type(h) ~= 'table' or not isNum(h.wage) or h.wage <= 0
             or not isStr(h.task) then return false, 'bad_hand_' .. tostring(kind) end
     end
-    local f = cfg.feed
-    if type(f) ~= 'table' or not isStr(f.item) or not (isInt(f.cap) and f.cap >= 0)
-        or not (isInt(f.perTick) and f.perTick >= 1) then return false, 'bad_feed' end
+    if cfg.extraHandUnlocks ~= nil then
+        if type(cfg.extraHandUnlocks) ~= 'table' then return false, 'bad_extraHandUnlocks' end
+        local top = 1
+        for slot, id in pairs(cfg.extraHandUnlocks) do
+            if not (isInt(slot) and slot >= 2) or not isStr(id) then return false, 'bad_extraHandUnlocks' end
+            if slot > top then top = slot end
+        end
+        for slot = 2, top do -- contiguous from 2: a hole would silently cap hires early
+            if not isStr(cfg.extraHandUnlocks[slot]) then return false, 'bad_extraHandUnlocks' end
+        end
+    end
+    for _, key in ipairs({ 'feed', 'lumber' }) do
+        local f = cfg[key]
+        if type(f) ~= 'table' or not isStr(f.item) or not (isInt(f.cap) and f.cap >= 0)
+            or not (isInt(f.perTick) and f.perTick >= 1) then return false, 'bad_' .. key end
+    end
     return true
 end
 
