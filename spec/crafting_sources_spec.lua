@@ -5,9 +5,9 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local it = T.it
 local fh = here .. '../server/resources/[fh]/'
 local Recipes = dofile(fh .. 'fh_crafting/shared/recipes.lua')
+dofile(here .. 'support/world_config.lua') -- FhRegions + FhPlaceResolver + vector3 (world-02 block F)
 dofile(fh .. 'fh_homestead/config.lua')   -- outside CfxLua there is no vector3: config falls back to {x,y,z}
 dofile(fh .. 'fh_trade/config.lua')
-vector3 = vector3 or function(x, y, z) return { x = x, y = y, z = z } end -- fh_zones config needs it
 dofile(fh .. 'fh_zones/config.lua')
 
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).

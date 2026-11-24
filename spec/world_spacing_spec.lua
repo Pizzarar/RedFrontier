@@ -7,14 +7,12 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local case = T.it
 local fh = here .. '../server/resources/[fh]/'
 
--- fh_zones config uses vector3 (a Cfx global); a table stand-in is enough for the pure checks.
-vector3 = function(x, y, z) return { x = x, y = y, z = z } end
-vector4 = function(x, y, z, w) return { x = x, y = y, z = z, w = w } end
+-- Load FhRegions/FhPlaceResolver + vector3 stand-in (world-02 block F), then the configs (fh_zones resolves camps).
+local regions = dofile(here .. 'support/world_config.lua')
 dofile(fh .. 'fh_zones/config.lua')
 dofile(fh .. 'fh_homestead/config.lua')
 local zones = assert(_G.FhZonesConfig, 'FhZonesConfig missing')
 local homestead = assert(_G.FhHomesteadConfig, 'FhHomesteadConfig missing')
-local regions = require('regions')
 
 local function dist2d(a, b)
     local dx, dy = a.x - b.x, a.y - b.y

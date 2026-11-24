@@ -3,6 +3,7 @@ local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
 local case = T.it
 local regions = require('regions')
+dofile(here .. 'support/world_config.lua') -- _G.FhRegions/_G.FhPlaceResolver for the shipped-config load below (block F)
 local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
 P.isKnownRegion = regions.isKnownRegion
 

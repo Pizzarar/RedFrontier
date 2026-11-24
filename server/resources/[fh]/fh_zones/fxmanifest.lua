@@ -8,6 +8,8 @@ description 'RedFrontier zones: one T1 outlaw camp (spec L3 seed, M1)'
 
 shared_scripts {
     '@ox_lib/init.lua',
+    '@fh_core/shared/regions.lua',        -- FhRegions global (single source for camp center/region)
+    '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (resolves camps from FhRegions at config load)
     'config.lua',
     'shared/camp_rules.lua',
 }

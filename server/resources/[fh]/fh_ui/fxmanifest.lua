@@ -18,7 +18,8 @@ files {
 shared_scripts {
     '@ox_lib/init.lua',
     'config.lua',
-    '@fh_core/shared/regions.lua', -- FhRegions global (enabled gate for blips/where)
+    '@fh_core/shared/regions.lua',        -- FhRegions global (enabled gate for blips/where)
+    '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (the lane configs below resolve camps/posts at load)
     -- Lane configs/shares, read-only: the single source of truth for place coordinates (mapblips). `@resource/file`
     -- reads the file content into fh_ui's own state, so these load even though the lanes start later in server.cfg.
     '@fh_homestead/config.lua',

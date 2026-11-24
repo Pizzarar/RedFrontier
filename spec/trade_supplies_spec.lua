@@ -5,6 +5,7 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local it, eq = T.it, T.eq
 local fh = here .. '../server/resources/[fh]/'
 local S = dofile(fh .. 'fh_trade/shared/supplies.lua')
+dofile(here .. 'support/world_config.lua') -- FhRegions + FhPlaceResolver (world-02 block F)
 dofile(fh .. 'fh_trade/config.lua')
 
 local CFG = { maxBuyPerTx = 100, supplies = { lumber = 3, nails = 2 } }

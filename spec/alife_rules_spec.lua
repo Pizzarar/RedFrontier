@@ -4,11 +4,9 @@ local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
 local case, eq, same = T.it, T.eq, T.same
 local R = dofile(here .. '../server/resources/[fh]/fh_alife/shared/alife_rules.lua')
-local Regions = require('regions')
 
--- fh_zones / fh_alife configs use vector3 (a Cfx global): a table stand-in is enough for the pure checks.
-vector3 = function(x, y, z) return { x = x, y = y, z = z } end
-vector4 = function(x, y, z, w) return { x = x, y = y, z = z, w = w } end
+-- Load FhRegions/FhPlaceResolver + vector3 stand-in (world-02 block F), then the configs (fh_zones resolves camps).
+local Regions = dofile(here .. 'support/world_config.lua')
 dofile(here .. '../server/resources/[fh]/fh_zones/config.lua')
 dofile(here .. '../server/resources/[fh]/fh_alife/config.lua')
 local cfg = FhAlifeConfig

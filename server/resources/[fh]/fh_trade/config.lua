@@ -34,15 +34,14 @@ FhTradeConfig = {
         scarlett_meadows = { trade_salt = 1.1, trade_cloth = 0.9, trade_whiskey = 1.2 },
     },
 
-    -- Trade posts (server checks the player is within `radius` of the post). `region` must be a known region id.
-    -- Coordinates APPROXIMATE / unverified in game. world-01 (block C): 1-2 posts per enabled region, town-adjacent.
-    -- WORKAROUND world-01: dup of regions.lua territories, collapse later -- post positions are local (FhRegions has no
-    -- `posts` table yet); keep them in sync with the town centers in fh_core/shared/regions.lua.
+    -- Trade posts (server checks the player is within `radius` of the post). Position + region resolve from
+    -- FhRegions.posts at load (world-02 block F); this table keeps only gameplay fields. 1-2 posts per enabled
+    -- region, town-adjacent, APPROXIMATE / unverified in game.
     posts = {
-        { id = 'valentine_post', label = 'Valentine Trade Post', verified = false, region = 'heartlands', x = -176.0, y = 630.0, z = 114.0, radius = 6.0 },
-        { id = 'rhodes_post', label = 'Rhodes Trade Post', verified = false, region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0, radius = 6.0 },
-        { id = 'saint_denis_post', label = 'Saint Denis Trade Post', verified = false, region = 'bayou_nwa', x = 2700.0, y = -1430.0, z = 45.0, radius = 6.0 },
-        { id = 'blackwater_post', label = 'Blackwater Trade Post', verified = false, region = 'great_plains', x = -865.0, y = -1350.0, z = 44.0, radius = 6.0 },
+        { id = 'valentine_post', label = 'Valentine Trade Post', verified = false, radius = 6.0 },
+        { id = 'rhodes_post', label = 'Rhodes Trade Post', verified = false, radius = 6.0 },
+        { id = 'saint_denis_post', label = 'Saint Denis Trade Post', verified = false, radius = 6.0 },
+        { id = 'blackwater_post', label = 'Blackwater Trade Post', verified = false, radius = 6.0 },
     },
 
     -- Freight contracts (R4): a fh_quests job type generated from shortages. Destinations are where your OWN wagon
@@ -74,3 +73,7 @@ FhTradeConfig = {
         { region = 'heartlands',       item = 'trade_salt',    level = 0.5 }, -- Rhodes board     -> haul salt to Valentine
     },
 }
+
+-- Single source for post coordinates (world-02 block F, idea-809): fill region/x/y/z from FhRegions at load.
+-- FhRegions + FhPlaceResolver are loaded before this file in every fxmanifest and spec that reads it.
+if FhPlaceResolver and FhRegions then FhPlaceResolver.resolvePosts(FhTradeConfig.posts, FhRegions) end

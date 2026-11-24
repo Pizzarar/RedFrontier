@@ -219,7 +219,7 @@ regions.regions = {
 }
 
 -- world-01 (block C): one territory per outlaw camp. `faction` is the default camp owner (A-Life contract a-life-01);
--- `center` matches the camp's center in fh_zones/config.lua (see WORKAROUND note there). Coords APPROXIMATE / unverified.
+-- `center` is the single source for the camp's center in fh_zones (world-02 block F). Coords APPROXIMATE / unverified.
 regions.territories = {
     -- Heartlands (outlaws = Mountain Gang)
     heartlands_t1_camp = {
@@ -353,7 +353,19 @@ regions.territories = {
     },
 }
 
+-- world-02 (block F): one trade post per enabled region, town-adjacent. `region` + position here are the single
+-- source for fh_trade posts (FhTradeConfig.posts keeps only gameplay fields and resolves these at load).
+-- Coords APPROXIMATE / unverified in game.
+regions.posts = {
+    valentine_post = { id = 'valentine_post', region = 'heartlands', x = -176.0, y = 630.0, z = 114.0 },
+    rhodes_post = { id = 'rhodes_post', region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0 },
+    saint_denis_post = { id = 'saint_denis_post', region = 'bayou_nwa', x = 2700.0, y = -1430.0, z = 45.0 },
+    blackwater_post = { id = 'blackwater_post', region = 'great_plains', x = -865.0, y = -1350.0, z = 44.0 },
+}
+
 function regions.getRegion(id) return regions.regions[id] end
+
+function regions.getPost(id) return regions.posts[id] end
 
 ---Resolve an alias id to its canonical faction (e.g. rhodes_law -> lawmen).
 function regions.getFaction(id)

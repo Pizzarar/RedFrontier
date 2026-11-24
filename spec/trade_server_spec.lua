@@ -36,8 +36,8 @@ local function boot(rows)
         TriggerEvent = function() end, TriggerClientEvent = function() end, print = function() end,
     }, { __index = _G })
     env._G = env
-    for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_trade/config.lua', R .. 'fh_trade/shared/trade_prices.lua',
-        R .. 'fh_trade/shared/supplies.lua', R .. 'fh_trade/server/main.lua' }) do
+    for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_core/shared/place_resolver.lua', R .. 'fh_trade/config.lua',
+        R .. 'fh_trade/shared/trade_prices.lua', R .. 'fh_trade/shared/supplies.lua', R .. 'fh_trade/server/main.lua' }) do
         local fh = assert(io.open(p, 'rb')); local src = fh:read('a'); fh:close()
         assert(load(src, '@' .. p, 't', env))()
     end

@@ -8,7 +8,8 @@ description 'RedFrontier regional trade prices, shortages and trade-post selling
 
 shared_scripts {
     '@ox_lib/init.lua',
-    '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
+    '@fh_core/shared/regions.lua',        -- FhRegions global (fh_core must be started first)
+    '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (resolves posts from FhRegions at config load)
     'config.lua',
     'shared/trade_prices.lua',
     'shared/freight.lua',

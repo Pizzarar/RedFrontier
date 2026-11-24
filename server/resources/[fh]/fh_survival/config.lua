@@ -32,6 +32,9 @@ FhSurvivalConfig = {
     -- SEEDED, owner-verifiable (approximate): one fire at the homestead plot, one at the outlaw camp centre.
     Campfires = {
         { x = -300.0, y = 790.0, radius = 8.0 }, -- heartlands homestead
+        -- NOTE (world-02 block F): -145,845 is a heat source, not a coordinate definition; it matches the
+        -- heartlands_t1_camp territory center in fh_core/shared/regions.lua (the single source). Kept as a
+        -- gameplay field here rather than resolved from FhRegions (heat sources are not camps/posts).
         { x = -145.0, y = 845.0, radius = 8.0 }, -- heartlands outlaw camp
     },
     HeatRadius = 4.0,

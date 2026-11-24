@@ -7,9 +7,8 @@ local Containers = require('containers')
 local Items = require('items')
 local Regions = require('regions')
 
--- fh_zones config uses vector3 (a Cfx global): a table stand-in is enough for the pure checks
-vector3 = function(x, y, z) return { x = x, y = y, z = z } end
-vector4 = function(x, y, z, w) return { x = x, y = y, z = z, w = w } end
+-- Load FhRegions/FhPlaceResolver + vector3 stand-in (world-02 block F), then the fh_zones config (resolves camps).
+dofile(here .. 'support/world_config.lua')
 dofile(here .. '../server/resources/[fh]/fh_zones/config.lua')
 local cfg = FhZonesConfig
 local camp = cfg.camps.heartlands_t1_01

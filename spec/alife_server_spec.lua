@@ -133,8 +133,8 @@ local function boot(preKvp)
         print = function(...) B.printed[#B.printed + 1] = table.concat({ ... }, ' ') end,
     }, { __index = _G })
     env._G = env
-    for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_zones/config.lua', R .. 'fh_alife/config.lua',
-        R .. 'fh_alife/shared/alife_rules.lua', R .. 'fh_alife/server/main.lua' }) do
+    for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_core/shared/place_resolver.lua', R .. 'fh_zones/config.lua',
+        R .. 'fh_alife/config.lua', R .. 'fh_alife/shared/alife_rules.lua', R .. 'fh_alife/server/main.lua' }) do
         local fh = assert(io.open(p, 'rb')); local src = fh:read('a'); fh:close()
         assert(load(src, '@' .. p, 't', env))()
     end

@@ -1,8 +1,7 @@
--- fh_zones camps (spec L89 L3, M1 L107). ALL coordinates, models and weapons are guesses: TODO-verify-in-game.
+-- fh_zones camps (spec L89 L3, M1 L107). Ped models, weapons and loot coords are guesses: TODO-verify-in-game.
 -- world-01 (block C): 14 outlaw camps, 3-4 per enabled region, each owned by its region's gang faction via
--- `territory` (fh_core shared/regions.lua territories[].faction). Positions are APPROXIMATE / unverified.
--- WORKAROUND world-01: dup of regions.lua territories, collapse later -- `center` is repeated in
--- regions.lua territories[<territory>].center (A-Life's node-graph source of truth); keep both in sync.
+-- `territory` (fh_core shared/regions.lua territories[].faction). Camp center/region are NOT defined here:
+-- they resolve from FhRegions.territories at load (world-02 block F, FhPlaceResolver) — single source of truth.
 -- world-01 (block D): each camp carries `enabled` (a mirror of regions.lua `enabled` for its `region`); the camp
 -- state machine refuses to activate a camp with enabled=false. world_spacing_spec asserts it matches isEnabled.
 FhZonesConfig = {
@@ -11,12 +10,10 @@ FhZonesConfig = {
     camps = {
         heartlands_t1_01 = {
             id = 'heartlands_t1_01',
-            region = 'heartlands',
             territory = 'heartlands_t1_camp',
             name = 'Heartland Bluffs camp',
             verified = false,
             enabled = true,
-            center = vector3(-145.0, 845.0, 117.0),      -- TODO-verify-in-game
             activationRadius = 45.0,                     -- a player this close wakes the camp
             respawnMinutes = 10,                         -- cleared -> idle after this long (loot stays open meanwhile)
             -- outlaw peds: model/coords/heading/weapon are TODO-verify-in-game
@@ -40,12 +37,10 @@ FhZonesConfig = {
         },
         scarlett_meadows_t1_01 = {
             id = 'scarlett_meadows_t1_01',
-            region = 'scarlett_meadows',
             territory = 'scarlett_meadows_t1_camp',
             name = 'Hill Haven camp',
             verified = false,
             enabled = true,
-            center = vector3(850.0, -1050.0, 75.0),     -- moved off Rhodes (<200 m floor), TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             -- Swamp Gang (models/coords/heading/weapon TODO-verify-in-game; models reused from the heartlands camp)
@@ -68,12 +63,10 @@ FhZonesConfig = {
         -- Heartlands (outlaws = Mountain Gang)
         heartlands_t1_02 = {
             id = 'heartlands_t1_02',
-            region = 'heartlands',
             territory = 'heartlands_t1_camp_2',
             name = 'Heartland Overflow camp',
             verified = false,
             enabled = true,
-            center = vector3(850.0, 850.0, 100.0),     -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -94,12 +87,10 @@ FhZonesConfig = {
         },
         heartlands_t1_03 = {
             id = 'heartlands_t1_03',
-            region = 'heartlands',
             territory = 'heartlands_t1_camp_3',
             name = 'Dakota West camp',
             verified = false,
             enabled = true,
-            center = vector3(-900.0, 500.0, 105.0),    -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -120,12 +111,10 @@ FhZonesConfig = {
         },
         heartlands_t2_01 = {
             id = 'heartlands_t2_01',
-            region = 'heartlands',
             territory = 'heartlands_t2_camp',
             name = 'Dakota South camp',
             verified = false,
             enabled = true,
-            center = vector3(600.0, 200.0, 90.0),      -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -147,12 +136,10 @@ FhZonesConfig = {
         -- Scarlett Meadows (raiders = Swamp Gang)
         scarlett_meadows_t1_02 = {
             id = 'scarlett_meadows_t1_02',
-            region = 'scarlett_meadows',
             territory = 'scarlett_meadows_t1_camp_2',
             name = 'Cedar Bottoms camp',
             verified = false,
             enabled = true,
-            center = vector3(1500.0, -1650.0, 70.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -173,12 +160,10 @@ FhZonesConfig = {
         },
         scarlett_meadows_t2_01 = {
             id = 'scarlett_meadows_t2_01',
-            region = 'scarlett_meadows',
             territory = 'scarlett_meadows_t2_camp',
             name = 'Catfish Bottom camp',
             verified = false,
             enabled = true,
-            center = vector3(1700.0, -1750.0, 65.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -200,12 +185,10 @@ FhZonesConfig = {
         -- Bayou Nwa (raiders = Swamp Gang)
         bayou_nwa_t1_01 = {
             id = 'bayou_nwa_t1_01',
-            region = 'bayou_nwa',
             territory = 'bayou_nwa_t1_camp',
             name = 'Moss Bog camp',
             verified = false,
             enabled = true,
-            center = vector3(2050.0, -1500.0, 25.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -226,12 +209,10 @@ FhZonesConfig = {
         },
         bayou_nwa_t1_02 = {
             id = 'bayou_nwa_t1_02',
-            region = 'bayou_nwa',
             territory = 'bayou_nwa_t1_camp_2',
             name = 'Bayou Railroad camp',
             verified = false,
             enabled = true,
-            center = vector3(2400.0, -950.0, 25.0),    -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -252,12 +233,10 @@ FhZonesConfig = {
         },
         bayou_nwa_t1_03 = {
             id = 'bayou_nwa_t1_03',
-            region = 'bayou_nwa',
             territory = 'bayou_nwa_t1_camp_3',
             name = 'Lagras Swamp camp',
             verified = false,
             enabled = true,
-            center = vector3(2200.0, -1650.0, 25.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -278,12 +257,10 @@ FhZonesConfig = {
         },
         bayou_nwa_t2_01 = {
             id = 'bayou_nwa_t2_01',
-            region = 'bayou_nwa',
             territory = 'bayou_nwa_t2_camp',
             name = 'Cypress Hollow camp',
             verified = false,
             enabled = true,
-            center = vector3(2550.0, -1750.0, 20.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -305,12 +282,10 @@ FhZonesConfig = {
         -- Great Plains (outlaws = Mountain Gang)
         great_plains_t1_01 = {
             id = 'great_plains_t1_01',
-            region = 'great_plains',
             territory = 'great_plains_t1_camp',
             name = 'Bison Bluff camp',
             verified = false,
             enabled = true,
-            center = vector3(-1600.0, -1350.0, 40.0),  -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -331,12 +306,10 @@ FhZonesConfig = {
         },
         great_plains_t1_02 = {
             id = 'great_plains_t1_02',
-            region = 'great_plains',
             territory = 'great_plains_t1_camp_2',
             name = 'Great Plains North camp',
             verified = false,
             enabled = true,
-            center = vector3(-1050.0, -900.0, 45.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -357,12 +330,10 @@ FhZonesConfig = {
         },
         great_plains_t2_01 = {
             id = 'great_plains_t2_01',
-            region = 'great_plains',
             territory = 'great_plains_t2_camp',
             name = 'Great Plains East camp',
             verified = false,
             enabled = true,
-            center = vector3(-700.0, -1600.0, 40.0),   -- TODO-verify-in-game (unverified)
             activationRadius = 45.0,
             respawnMinutes = 10,
             peds = {
@@ -404,3 +375,7 @@ FhZonesConfig = {
         },
     },
 }
+
+-- Single source for camp coordinates (world-02 block F, idea-809): fill center/region from FhRegions at load.
+-- FhRegions + FhPlaceResolver are loaded before this file in every fxmanifest and spec that reads it.
+if FhPlaceResolver and FhRegions then FhPlaceResolver.resolveCamps(FhZonesConfig.camps, FhRegions) end

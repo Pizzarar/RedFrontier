@@ -8,7 +8,8 @@ description 'RedFrontier A-Life: camp ownership sim + outlaw retake squads (plan
 
 shared_scripts {
     '@ox_lib/init.lua',
-    '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
+    '@fh_core/shared/regions.lua',        -- FhRegions global (fh_core must be started first)
+    '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (resolves @fh_zones/config.lua camps at load)
     '@fh_zones/config.lua',        -- FhZonesConfig camp list (fh_zones must be started first)
     'config.lua',
     'shared/alife_rules.lua',
