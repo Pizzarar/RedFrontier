@@ -157,10 +157,13 @@ end)
 local CONTEXT_KEY = 0xCEFD9220 -- INPUT_CONTEXT (E). UNVERIFIED
 local tp = cfg.Trapper
 
--- ---------------------------------------------------------------- H4 legendary bear chain
+-- ---------------------------------------------------------------- H4 legendary chains (plan hunting-02)
 
-local lb = cfg.LegendaryBear
-local chainStep = 0 -- 1 rumour -> 2 track -> 3 carcass -> 4 spawned -> 5 complete (server tells us)
+-- One chain per legendary (data/legendaries/<region_id>.lua). Points exist only for legendaries whose region is enabled
+-- (FhRegions.isEnabled at resource start): a disabled region shows nothing. The server gates every action again.
+local L = FhHuntingLegendaries
+local active = L and L:active() or {}
+local chainSteps = {} -- [legendary id] = 1 rumour -> 2 track -> 3 carcass -> 4 spawned -> 5 complete (server tells us)
 
 -- Shared TextUI: track the currently-shown string so a chain-step change can re-render (or hide) the active prompt
 -- immediately, instead of waiting for the player to leave and re-enter the point.
@@ -176,35 +179,83 @@ local function hideText()
 end
 
 FH.onNet('fh:hunting:chain_state', function(state)
-    if type(state) == 'table' and type(state.step) == 'number' then chainStep = state.step end
+    if type(state) ~= 'table' then return end
+    if type(state.chains) == 'table' then
+        for id, st in pairs(state.chains) do
+            if type(id) == 'string' and type(st) == 'table' and type(st.step) == 'number' then chainSteps[id] = st.step end
+        end
+    elseif type(state.step) == 'number' then
+        chainSteps[L and L.DEFAULT_ID or 'legendary_bear'] = state.step -- older server shape: the bear only
+    end
 end)
 
--- Ask the server for the current step once the character is loaded (the server needs a citizenid), and again on every
+-- Ask the server for the current steps once the character is loaded (the server needs a citizenid), and again on every
 -- load/reload. Every action pushes a fresh state back too.
 FH.thread(function() TriggerServerEvent('fh:hunting:chain_status') end)
 AddEventHandler('RSGCore:Client:OnPlayerLoaded', function() TriggerServerEvent('fh:hunting:chain_status') end)
 
--- Inspectable clue markers (steps 2 and 3). The server gates which step is allowed; the prompt only shows on the
--- marker that belongs to the current step.
-if lb then
-    for step, m in pairs(lb.markers) do
+local chainPoints = {}
+
+-- Inspectable clue markers (steps 2 and 3) of every active legendary. The server gates which step is allowed; the
+-- prompt only shows on the marker that belongs to that chain's current step.
+for _, e in ipairs(active) do
+    for step, m in pairs(e.markers) do
         FH.thread(function()
             local point = lib.points.new({
                 coords = vec3(m.coords.x, m.coords.y, m.coords.z), distance = m.radius,
             })
+            chainPoints[#chainPoints + 1] = point
             function point:onEnter() point:render() end
             function point:onExit() hideText() end
             function point:render()
-                if chainStep == step then showText('[E] Inspect ' .. m.label) else hideText() end
+                if chainSteps[e.id] == step then showText('[E] Inspect ' .. m.label) else hideText() end
             end
             function point:nearby()
-                point:render() -- keep the prompt in sync with chainStep
-                if chainStep == step and IsControlJustReleased(0, CONTEXT_KEY) then
-                    TriggerServerEvent('fh:hunting:chain_inspect', { marker = m.id })
+                point:render() -- keep the prompt in sync with the chain step
+                if chainSteps[e.id] == step and IsControlJustReleased(0, CONTEXT_KEY) then
+                    TriggerServerEvent('fh:hunting:chain_inspect', { marker = m.id, legendary = e.id })
                 end
             end
         end)
     end
+end
+
+-- Rumour points (clue 1). A rumour within the trapper's prompt distance is hosted by the trapper prompt below (the
+-- Legendary Bear); every other legendary gets its own point in its region.
+local function near(a, b, r)
+    local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
+    return dx * dx + dy * dy + dz * dz <= r * r
+end
+local trapperRumours = {}
+for _, e in ipairs(active) do
+    if near(e.rumour.coords, tp.coords, tp.PromptDistance) then
+        trapperRumours[#trapperRumours + 1] = e
+    else
+        FH.thread(function()
+            local c = e.rumour.coords
+            local point = lib.points.new({ coords = vec3(c.x, c.y, c.z), distance = tp.PromptDistance })
+            chainPoints[#chainPoints + 1] = point
+            function point:onEnter() point:render() end
+            function point:onExit() hideText() end
+            function point:render()
+                if chainSteps[e.id] == 1 then showText('[E] ' .. e.rumour.label) else hideText() end
+            end
+            function point:nearby()
+                point:render()
+                if chainSteps[e.id] == 1 and IsControlJustReleased(0, CONTEXT_KEY) then
+                    TriggerServerEvent('fh:hunting:chain_rumour', { legendary = e.id })
+                end
+            end
+        end)
+    end
+end
+
+---The trapper-hosted legendary whose rumour is for sale now (chain at step 1), or nil.
+local function trapperRumour()
+    for _, e in ipairs(trapperRumours) do
+        if chainSteps[e.id] == 1 then return e end
+    end
+    return nil
 end
 
 local function stars(n) return string.rep('*', n) end
@@ -235,13 +286,19 @@ FH.thread(function()
     function trapperPoint:onEnter() trapperPoint:render() end
     function trapperPoint:onExit() hideText() end
     function trapperPoint:render()
-        -- Step 1: the trapper has a rumour to sell. Afterwards (and for everyone past step 1) E sells pelts.
-        showText(chainStep == 1 and '[E] Ask about the legendary bear' or '[E] Sell pelts')
+        -- A hosted chain at step 1: the trapper has its rumour to sell. Otherwise E sells pelts.
+        local e = trapperRumour()
+        showText(e and ('[E] ' .. e.rumour.label) or '[E] Sell pelts')
     end
     function trapperPoint:nearby()
-        trapperPoint:render() -- keep the prompt in sync with chainStep
+        trapperPoint:render() -- keep the prompt in sync with the chain steps
         if IsControlJustReleased(0, CONTEXT_KEY) then
-            if chainStep == 1 then TriggerServerEvent('fh:hunting:chain_rumour') else TriggerServerEvent('fh:hunting:sell_open') end
+            local e = trapperRumour()
+            if e then
+                TriggerServerEvent('fh:hunting:chain_rumour', { legendary = e.id })
+            else
+                TriggerServerEvent('fh:hunting:sell_open')
+            end
         end
     end
 end)
@@ -250,4 +307,6 @@ FH.on('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     hideText()
     if trapperPoint then trapperPoint:remove(); trapperPoint = nil end
+    for _, p in ipairs(chainPoints) do p:remove() end
+    chainPoints = {}
 end)

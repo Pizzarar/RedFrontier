@@ -3,6 +3,7 @@
 -- Natives (fh_core/docs/natives.md, all UNVERIFIED in-game): GetPlayerPed, GetEntityCoords, NetworkGetEntityFromNetworkId,
 -- DoesEntityExist, GetEntityType, IsPedAPlayer, GetEntityModel, GetEntityHealth, DeleteEntity, GetGameTimer; state bags.
 local animals, price, cfg = FhHuntingAnimals, FhHuntingPrice, FhHuntingConfig
+local legendaries = FhHuntingLegendaries -- data/legendaries/<region_id>.lua (plan hunting-02)
 
 local function registerItems()
     local ok, err, bad = exports.fh_core:registerItems(animals.itemDefs())
@@ -56,8 +57,9 @@ local function findCargoWagon(src, coords)
     end, src, coords, cfg.WagonRange)
 end
 
----H4 records the citizenid that owns each spawned legendary bear (server-side memory, never a client-writable state
----bag). Ownership scopes skinning: only that character's chain may skin the bear, and it is cleared on finish.
+---H4 records, per spawned legendary entity, the owning citizenid and the legendary id (server-side memory, never a
+---client-writable state bag): [entity] = { cid, id }. Identity comes from the chain's adopted spawn, never from the
+---model. Ownership scopes skinning: only that character's chain may skin it, and it is cleared on finish.
 local legendaryEntities = {}
 FhHuntingLegendary = legendaryEntities
 
@@ -65,11 +67,11 @@ local function readCarcass(netId)
     local ent = NetworkGetEntityFromNetworkId(netId)
     if not ent or ent == 0 or not DoesEntityExist(ent) then return nil end
     local isPlayer = IsPedAPlayer(ent)
-    local owner = legendaryEntities[ent]
+    local rec = legendaryEntities[ent]
     return {
         entity = ent, isPed = GetEntityType(ent) == 1, isPlayer = isPlayer == true or isPlayer == 1,
         model = GetEntityModel(ent), coords = GetEntityCoords(ent), dead = GetEntityHealth(ent) <= 0,
-        legendary = owner ~= nil, legendaryOwner = owner,
+        legendary = rec and rec.id or false, legendaryOwner = rec and rec.cid or nil, -- legendary = the legendary id
     }
 end
 
@@ -237,7 +239,7 @@ RegisterNetEvent('fh:hunting:sell', function(payload)
     end
 end)
 
--- ---------------------------------------------------------------- H4 legendary bear chain
+-- ---------------------------------------------------------------- H4 legendary chains (one per region, hunting-02)
 
 local chain
 
@@ -245,9 +247,12 @@ local function chainNotify(src, kind, msg)
     TriggerClientEvent('ox_lib:notify', src, { title = 'Legendary Hunt', description = msg, type = kind })
 end
 
+-- Payload: the Legendary Bear's { step, spawned, completed } as before, plus chains = { [legendary id] = { step,
+-- spawned, completed } } for every legendary in an enabled region (additive).
 local function pushChainState(src, cid)
-    local s = chain.state(cid)
-    TriggerClientEvent('fh:hunting:chain_state', src, { step = s.step, spawned = s.spawned, completed = s.completed })
+    local s = chain.state(cid) or { step = 0, spawned = false, completed = false }
+    TriggerClientEvent('fh:hunting:chain_state', src, { step = s.step, spawned = s.spawned, completed = s.completed,
+        chains = chain.activeStates(cid) })
 end
 
 ---Server id of the online player with this citizenid, or nil.
@@ -266,26 +271,29 @@ local function chargeSrc(src, amount, reason, region_id)
     return false, type(err) == 'string' and err or 'fh_charge_error'
 end
 
----Adapter: fh_core requestSpawn for the legendary bear. onReady marks the adopted entity as the cid's legendary (so the
----skin flow sees legendary + owner) and advances the chain; onFailed resets the chain so the player can retry.
-local function requestLegendary(cid, chainCfg)
-    local c = chainCfg.spawn.coords
+---Adapter: fh_core requestSpawn for a legendary entry. onReady marks the adopted entity as the cid's legendary (so the
+---skin flow sees the legendary id + owner) and advances that chain; onFailed resets it so the player can retry.
+---Tag fh_hunting:<chain_id>:<cid> and owner kind <chain_id> (the bear's are unchanged). outfit/scale are not sent:
+---fh_core requestSpawn has no such fields (plan hunting-02 Open).
+local function requestLegendary(cid, entry)
+    local c = entry.spawn.coords
+    local lid = entry.id
     local ok, id = pcall(function()
         return exports.fh_core:requestSpawn({
-            kind = 'ped', model = chainCfg.model,
+            kind = 'ped', model = entry.species_model,
             coords = vector4(c.x, c.y, c.z, c.heading or 0.0),
-            owner = { kind = 'legendary_bear', id = cid },
-            tag = 'fh_hunting:legendary_bear:' .. cid,
+            owner = { kind = lid, id = cid },
+            tag = 'fh_hunting:' .. lid .. ':' .. cid,
         }, {
             near = { x = c.x, y = c.y, z = c.z },
             onReady = function(netId)
                 local ent = NetworkGetEntityFromNetworkId(netId)
-                if ent and ent ~= 0 and DoesEntityExist(ent) then legendaryEntities[ent] = cid end
-                chain.onAdopted(cid)
+                if ent and ent ~= 0 and DoesEntityExist(ent) then legendaryEntities[ent] = { cid = cid, id = lid } end
+                chain.onAdopted(cid, lid)
             end,
             onFailed = function(reason, requestId)
-                print(('^1[fh_hunting] legendary bear spawn for %s failed: %s^7'):format(cid, tostring(reason)))
-                if chain.onSpawnFailed(cid, requestId) then
+                print(('^1[fh_hunting] legendary %s spawn for %s failed: %s^7'):format(lid, cid, tostring(reason)))
+                if chain.onSpawnFailed(cid, requestId, lid) then
                     local src = playerByCid(cid)
                     if src then
                         pushChainState(src, cid) -- back to the carcass clue, so the player can retry without relogging
@@ -302,13 +310,13 @@ end
 chain = FhHuntingChain.new({
     cfg = cfg,
     deps = {
-        load = function(cid)
+        load = function(cid, chainId)
             local ok, rows = pcall(MySQL.query.await,
                 'SELECT step, spawn_request, spawned, completed FROM fh_hunting_chains WHERE citizenid = ? AND chain_id = ? LIMIT 1',
-                { cid, FhHuntingChain.CHAIN_ID })
+                { cid, chainId })
             if not ok or type(rows) ~= 'table' or #rows == 0 then return nil end
             local r = rows[1]
-            return { chain_id = FhHuntingChain.CHAIN_ID, step = tonumber(r.step),
+            return { chain_id = chainId, step = tonumber(r.step),
                 spawn_request = tonumber(r.spawn_request), spawned = r.spawned == 1 or r.spawned == true,
                 completed = r.completed == 1 or r.completed == true }
         end,
@@ -324,7 +332,7 @@ chain = FhHuntingChain.new({
         charge = function(src, cid, amount, reason, region)
             return chargeSrc(src, amount, reason, region)
         end,
-        spawn = function(cid, chainCfg) return requestLegendary(cid, chainCfg) end,
+        spawn = function(cid, entry) return requestLegendary(cid, entry) end,
         despawn = function(requestId) pcall(function() exports.fh_core:despawn(requestId) end) end,
         emit = function(name, payload) TriggerEvent(name, payload) end,
     },
@@ -337,13 +345,16 @@ RegisterNetEvent('fh:hunting:chain_status', function()
     pushChainState(src, cid)
 end)
 
-RegisterNetEvent('fh:hunting:chain_rumour', function()
+-- Client request: { legendary? } (nil = the Legendary Bear at the trapper). The server re-reads the position.
+RegisterNetEvent('fh:hunting:chain_rumour', function(payload)
     local src = source
     local cid = citizenidOf(src)
     if not cid then return end
-    local ok, res = chain.buyRumour(src, cid, playerCoords(src))
+    local lid = type(payload) == 'table' and payload.legendary or nil
+    local ok, res = chain.buyRumour(src, cid, playerCoords(src), lid)
     if ok then
-        chainNotify(src, 'success', 'The trapper pockets your money and points you toward fresh bear tracks to the east.')
+        local e = legendaries:get(lid == nil and FhHuntingChain.CHAIN_ID or lid)
+        chainNotify(src, 'success', e and e.rumour.text or 'You pay for the rumour. Follow the trail.')
         pushChainState(src, cid)
     else
         chainNotify(src, 'error', FhHuntingChain.message(res))
@@ -355,7 +366,8 @@ RegisterNetEvent('fh:hunting:chain_inspect', function(payload)
     local cid = citizenidOf(src)
     if not cid then return end
     local marker = type(payload) == 'table' and payload.marker or nil
-    local ok, res = chain.inspect(cid, marker, playerCoords(src))
+    local lid = type(payload) == 'table' and payload.legendary or nil -- nil = the Legendary Bear
+    local ok, res = chain.inspect(cid, marker, playerCoords(src), lid)
     if ok then
         if res.step == FhHuntingChain.STEP_SPAWNED then
             chainNotify(src, 'success', 'The trail ends at a clearing. Something huge is watching you.')
@@ -368,11 +380,13 @@ RegisterNetEvent('fh:hunting:chain_inspect', function(payload)
     end
 end)
 
--- A legendary skin was granted (pelt_skinned with animal == legendary_bear): mark the chain complete.
+-- A legendary skin was granted (pelt_skinned with animal = a legendary id; the skin flow takes that id from the
+-- chain's adopted spawn): mark that chain complete.
 AddEventHandler('fh:hunting:pelt_skinned', function(payload)
-    if type(payload) ~= 'table' or payload.animal ~= 'legendary_bear' then return end
-    if type(payload.citizenid) ~= 'string' then return end
-    local ok, why = chain.onSkinned(payload.citizenid)
+    if type(payload) ~= 'table' or type(payload.citizenid) ~= 'string' then return end
+    local e = legendaries:get(payload.animal)
+    if not e then return end
+    local ok, why = chain.onSkinned(payload.citizenid, e.id)
     if ok then
         -- Push step 5 (complete) to the client so the trapper prompt flips back to "Sell pelts" immediately.
         if type(payload.src) == 'number' and payload.src > 0 then pushChainState(payload.src, payload.citizenid) end

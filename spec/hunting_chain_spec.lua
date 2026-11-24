@@ -8,11 +8,13 @@ local base = here .. '../server/resources/[fh]/fh_hunting/'
 local cfg = dofile(base .. 'config.lua')
 FhHuntingWagon = dofile(base .. 'shared/wagon.lua') -- the shared xyz reader chain.lua uses
 local Chain = dofile(base .. 'shared/chain.lua')
+-- hunting-02 B1: the bear's data moved from cfg.LegendaryBear to data/legendaries/heartlands.lua (same values).
+local lb = dofile(base .. 'shared/legendaries.lua').byId.legendary_bear
 
 local SRC, CID = 7, 'CID123'
 local atTrapper = cfg.Trapper.coords
-local atTrack = cfg.LegendaryBear.markers[2].coords
-local atCarcass = cfg.LegendaryBear.markers[3].coords
+local atTrack = lb.markers[2].coords
+local atCarcass = lb.markers[3].coords
 local far = { x = 10000, y = 10000, z = 0 }
 
 -- A fake-dep harness. `store` is the simulated DB: [cid] = persisted state (shared across "restarts").
@@ -134,7 +136,7 @@ describe('hunting chain: one spawn per chain', function()
         assert(D.chain.inspect(CID, 'carcass', atCarcass))
         eq(1, D.spawnCalls)
         eq(CID, D.spawns[1].cid)
-        eq(cfg.LegendaryBear, D.spawns[1].chainCfg)
+        eq(lb, D.spawns[1].chainCfg)
         eq(100, D.chain.state(CID).spawn_request) -- the spawn dep's requestId, persisted
     end)
     it('onAdopted before any spawn is refused, and fires legendary_spawned exactly once', function()
@@ -145,7 +147,8 @@ describe('hunting chain: one spawn per chain', function()
         assert(ok)
         eq(true, D.chain.state(CID).spawned)
         same({ 'fh:hunting:legendary_spawned' }, { D.events[#D.events].name })
-        same({ citizenid = CID, chain_id = 'legendary_bear' }, D.events[#D.events].payload)
+        same({ citizenid = CID, chain_id = 'legendary_bear', region_id = 'heartlands', legendary = 'legendary_bear' },
+            D.events[#D.events].payload)
         -- re-adopt (fh_core re-request with a new netId): no second event
         assert(D.chain.onAdopted(CID))
         eq(4, #D.events)
@@ -193,7 +196,8 @@ describe('hunting chain: completion only after the skin', function()
         eq(Chain.STEP_COMPLETE, D.chain.state(CID).step)
         eq(true, D.chain.state(CID).completed)
         same({ 'fh:hunting:chain_complete' }, { D.events[#D.events].name })
-        same({ citizenid = CID, chain_id = 'legendary_bear' }, D.events[#D.events].payload)
+        same({ citizenid = CID, chain_id = 'legendary_bear', region_id = 'heartlands', legendary = 'legendary_bear' },
+            D.events[#D.events].payload)
         same({ 100 }, D.despawns)
         -- idempotent: a second completion does not re-emit
         assert(D.chain.onSkinned(CID))
@@ -252,8 +256,8 @@ describe('hunting chain: range and failure validation', function()
     it('the rumour is charged with reason hunting:rumour', function()
         local D = fake()
         assert(D.chain.buyRumour(SRC, CID, atTrapper))
-        same({ { src = SRC, cid = CID, amount = cfg.LegendaryBear.rumourPrice, reason = 'hunting:rumour',
-            region = cfg.LegendaryBear.region_id } }, D.charges)
+        same({ { src = SRC, cid = CID, amount = lb.rumour.price, reason = 'hunting:rumour',
+            region = lb.region_id } }, D.charges)
     end)
 end)
 

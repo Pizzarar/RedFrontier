@@ -39,6 +39,7 @@ local ALLOW = {
     'TaskCombatHatedTargetsAroundPed', 'TaskFollowToOffsetOfEntity', 'TaskPlayAnim', 'Wait',
     -- CfxLua / CFX runtime builtins
     'AddEventHandler', 'CreateThread', 'Entity', 'GetConvarInt', 'GetCurrentResourceName', 'GetGamePool',
+    'LoadResourceFile', -- fh_hunting shared/legendaries.lua reads data/legendaries/*.lua (manifest files {})
     'GetResourceState', 'IsNuiFocused', 'RegisterCommand', 'RegisterNUICallback', 'RegisterNetEvent',
     'SendNUIMessage', 'SetNuiFocus', 'SetNuiFocusKeepInput', 'TriggerEvent', 'TriggerServerEvent',
 }

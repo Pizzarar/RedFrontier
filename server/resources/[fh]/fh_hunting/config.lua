@@ -43,24 +43,9 @@ FhHuntingConfig = {
 
     SellCooldownMs = 500,     -- server: one sell_open and one sell request per player per this many ms (extra ones ignored)
 
-    -- H4 legendary bear chain (one per character). Clue 1 is the trapper above; clues 2 and 3 are inspectable
-    -- world markers, each revealing the next area; the final area spawns the bear through fh_core requestSpawn.
-    -- All coordinates UNVERIFIED in game (stand at each spot, read coords, adjust).
-    LegendaryBear = {
-        chain_id = 'legendary_bear',
-        model = 'a_c_bear_01',                  -- same model as the plain bear; identified as legendary by the chain
-        rumourPrice = 25,                       -- fh_economy amount, reason 'hunting:rumour'
-        region_id = 'heartlands',               -- fh_economy ledger region
-        RumourRange = 4.0,                      -- metres, player to the trapper (cfg.Trapper.coords)
-        -- markers[step] for clues 2 (track) and 3 (carcass). The radius is the server-side inspect range.
-        markers = {
-            [2] = { id = 'track',   label = 'Bear tracks',    coords = { x = -260.0, y = 800.0, z = 116.0 }, radius = 3.0 },
-            [3] = { id = 'carcass', label = 'Mauled carcass', coords = { x = -215.0, y = 812.0, z = 115.0 }, radius = 3.0 },
-        },
-        spawn = {
-            coords = { x = -170.0, y = 820.0, z = 114.0, heading = 0.0 }, -- the final area
-        },
-    },
+    -- H4 legendary chains (plan hunting-02): one per region, data in data/legendaries/<region_id>.lua (the Legendary
+    -- Bear is heartlands). Server-side rumour range in metres when an entry sets no rumour.range.
+    LegendaryRumourRange = 4.0,
 
     -- 'roll' source. A zone sets the star band; the roll only ever lowers it by one star, with this chance.
     -- Limb / gut / explosive / multi-hit stay 1 star.

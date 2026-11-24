@@ -8,8 +8,10 @@ description 'RedFrontier hunting (spec L8): pelt quality from shot placement, pe
 
 shared_scripts {
     '@ox_lib/init.lua',
+    '@fh_core/shared/regions.lua', -- FhRegions global (region ids + the isEnabled gate)
     'config.lua',
-    'shared/animals.lua',
+    'shared/legendaries.lua',      -- FhHuntingLegendaries: reads data/legendaries/<region_id>.lua (LoadResourceFile)
+    'shared/animals.lua',          -- derives the legendary pelt rows from it
     'shared/quality.lua',
     'shared/price.lua',
 }
@@ -23,6 +25,11 @@ server_scripts {
     'shared/trophies.lua',
     'shared/chain.lua',
     'server/main.lua',
+}
+
+-- Legendary data files (one per FhRegions id), read by shared/legendaries.lua on both sides; never run as scripts.
+files {
+    'data/legendaries/*.lua',
 }
 
 client_scripts {
