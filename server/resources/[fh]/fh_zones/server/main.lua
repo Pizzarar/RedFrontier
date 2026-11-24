@@ -141,8 +141,7 @@ local function rollIntoStash(camp)
     local owner = getOwner(camp.cfg.id)
     local f = FhRegions.getFaction(owner)                         -- legacy alias (e.g. rhodes_law) -> canonical id
     owner = f and f.id or owner
-    local tier = camp.cfg.tier or (FhRegions.getTerritory(camp.cfg.territory) or {}).tier
-    local table_ = rules.pickLootTable(cfg.lootByFaction, owner, camp.cfg.loot.table, tier)
+    local table_ = rules.pickLootTable(cfg.lootByFaction, owner, camp.cfg.loot.table, camp.cfg.tier)
     local items = rules.rollLoot(table_)
     local placed = {}
     for _, it in ipairs(items) do

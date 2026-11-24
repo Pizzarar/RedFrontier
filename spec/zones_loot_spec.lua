@@ -87,24 +87,27 @@ case('every loot item id exists in the item registry', function()
     assert(#bad == 0, 'unknown item ids: ' .. table.concat(bad, ', '))
 end)
 
-case('every camp resolves its tier through its territory to a tiered loot table', function()
+case('every one of the 14 camps has a T1/T2/T3 tier and resolves a tiered table', function()
+    local n = 0
     for id, camp in pairs(cfg.camps) do
+        n = n + 1
         local terr = regions.getTerritory(camp.territory)
         assert(terr, id .. ' missing territory')
-        -- tier comes from the territory (camp carries no tier field); never hardcoded
-        local tier = camp.tier or (terr or {}).tier
-        assert(type(tier) == 'string', id .. ' no territory tier')
+        -- config.lua resolves camp.tier from the territory at load (world-02 block E); it must be a real tier
+        assert(TIERS[camp.tier], id .. ' camp.tier ' .. tostring(camp.tier) .. ' not T1/T2/T3')
+        eq(terr.tier, camp.tier, id .. ' camp.tier != territory tier')
         local owner = regions.getFaction(terr.faction)
         assert(owner, id .. ' missing faction ' .. tostring(terr.faction))
-        local tbl = R.pickLootTable(cfg.lootByFaction, owner.id, camp.loot.table, tier)
-        eq(cfg.lootByFaction[owner.id][tier], tbl, id .. ' tiered table ' .. owner.id .. '/' .. tostring(tier))
+        local tbl = R.pickLootTable(cfg.lootByFaction, owner.id, camp.loot.table, camp.tier)
+        eq(cfg.lootByFaction[owner.id][camp.tier], tbl, id .. ' tiered table ' .. owner.id .. '/' .. tostring(camp.tier))
     end
+    eq(14, n, 'expected 14 camps')
 end)
 
 case('legacy rhodes_law owner canonicalises to lawmen before the loot lookup', function()
     local camp = cfg.camps.heartlands_t1_01
-    local tier = (regions.getTerritory(camp.territory) or {}).tier
-    assert(type(tier) == 'string', 'no territory tier')
+    local tier = camp.tier
+    assert(TIERS[tier], 'no camp tier')
     local owner = 'rhodes_law'
     local f = regions.getFaction(owner)
     owner = f and f.id or owner
