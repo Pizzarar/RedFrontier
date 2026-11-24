@@ -1,4 +1,4 @@
-# Spike test cards (S1 → S5), owner: Aub
+# Spike test cards (S1 → S6), owner: Aub
 
 Checkout: `<repo-root>` (the same one you start the server from with `tools/start-server.ps1`). The spikes live in `server/resources/[spikes]/`. They are **not** in server.cfg, so you start each one by hand.
 How: in the **server console window** type `ensure spk_<name>`. In game, press T and type the `/spk_...` command. Console output shows in the server window, and client output shows in F8.
@@ -33,3 +33,9 @@ Each card takes 5 minutes or less. When you're done, open `server/resources/[spi
 - Test: draw a gun and run `/spk_wear get`. Fire 50 rounds, then `/spk_wear get` again: did degradation/dirt/soot rise? Then `/spk_wear set 0.8`, holster and redraw, and `/spk_wear get` once more.
 - GO: per-weapon degradation can be both read and set.
 - RESULT: `spk_wear/README.md` last line.
+
+## S6 · spk_herb (herb patch cue)
+- Start: `ensure spk_herb`
+- Test: run `/spk_herb props` — 6 candidate herb models spawn in a line 2m apart ~4m in front of you; read the `[n] <model>` lines (a model RedM doesn't know prints `FAIL`). Run `/spk_herb blip` — a blip cycles 4 candidate plant sprites every 3s, printing which one is showing. Finish with `/spk_herb clear`.
+- GO: name the herb model (index) and the blip sprite that looked right.
+- RESULT: `spk_herb/README.md` last line.
