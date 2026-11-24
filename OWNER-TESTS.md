@@ -406,7 +406,7 @@ Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one
 
 1. Buy. Stand in the lot and run `/fh_buylot`.
    Expected: `fh_buylot: bought lot heartlands_lot_01`. Cash C - 300. heartlands rep +25. E at the lot chest opens it.
-   DB: `SELECT plot_id, class FROM fh_plots WHERE citizenid = '<cid>';` -> `heartlands_lot_01 town_lot` (plus your claim if you hold one). `SELECT kind, amount, reason FROM fh_ledger WHERE reason LIKE 'town_lot%';` -> one `charge` 300 `town_lot:heartlands_lot_01`.
+   DB: `SELECT plot_id, class FROM fh_plots WHERE citizenid = '<cid>';` -> `heartlands_lot_01 town_lot` (plus your claim if you hold one). `SELECT kind, amount, reason FROM fh_ledger WHERE reason LIKE 'town_lot%' ORDER BY id;` -> exactly two rows: `charge` 300 `town_lot:heartlands_lot_01`, then `rep` 25 `town_lot` (fh_economy writes rep changes to the ledger too). No `town_lot_refund` row.
    RESULT:
 2. Refusals (no money moves). `/fh_buylot` again in the same lot -> `fh_buylot: fh_plot_taken`; walk to the Emerald Ranch lot (1420, 345, 96) and run it -> `fh_buylot: fh_already_has_lot`; stand in a claim and run `/fh_buylot` -> `fh_buylot: fh_wrong_plot_class`. Cash still C - 300 after all three.
    RESULT:
