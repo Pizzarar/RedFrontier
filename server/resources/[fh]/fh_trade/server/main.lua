@@ -69,29 +69,28 @@ local function flush()
     end
 end
 
+---@return boolean ok false when the table could not be read (persisted state unknown)
 local function load()
     local ok, rows = pcall(MySQL.query.await, 'SELECT region_id, item, shortage, saturation, updated_at FROM fh_trade_prices')
     if not ok then
         log('could not load prices (%s): did migration 0013_fh_trade.sql run? Starting from baseline.', tostring(rows))
-        return
+        return false
     end
     local n = 0
     for _, r in ipairs(rows or {}) do if P.loadRow(cfg, state, r) then n = n + 1 end end
     log('loaded %d price rows', n)
+    return true
 end
 
--- Seed config.initialShortages (a fresh server has no shortages, so no freight offers). Applied only while the
--- region/item has no persisted shortage (quote detail.shortage == 0), so it never clobbers player/admin state.
-local function seedShortages()
-    local t = now()
-    for _, e in ipairs(cfg.initialShortages or {}) do
-        if cfg.goods[e.item] and FhRegions.isKnownRegion(e.region) then
-            local _, detail = P.quote(cfg, state, e.region, e.item, t)
-            if detail and detail.shortage == 0 then
-                if P.setShortage(cfg, state, e.region, e.item, e.level, t) then markDirty(e.region, e.item) end
-            end
-        end
-    end
+-- Seed config.initialShortages (a fresh server has no shortages, so no freight offers). Only a region/item with NO
+-- persisted row at all is seeded (P.seedShortages: no state entry right after load), so a shortage that players or
+-- an admin brought down to 0 is never re-seeded and player/admin state is never clobbered. A seed is marked dirty
+-- and saved, so later restarts find its row and skip it. Skipped entirely when the load failed (rows unknown).
+local function seedShortages(loaded)
+    if not loaded then return log('price rows not loaded: initial shortages NOT seeded') end
+    local seeded = P.seedShortages(cfg, state, now())
+    for _, s in ipairs(seeded) do markDirty(s.region, s.item) end
+    if #seeded > 0 then log('seeded %d initial shortages', #seeded) end
 end
 
 -- ---------------------------------------------------------------- posts
@@ -330,8 +329,7 @@ end)
 
 CreateThread(function()
     registerGoods()
-    load()
-    seedShortages()
+    seedShortages(load())
     ready = true
     while true do
         Wait(cfg.saveMs)

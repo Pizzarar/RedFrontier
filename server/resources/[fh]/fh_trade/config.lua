@@ -61,9 +61,10 @@ FhTradeConfig = {
         },
     },
 
-    -- Initial shortages (data): seeded at startup ONLY while the region/item has no persisted shortage, so a fresh
-    -- server already produces freight offers in both directions (heartlands -> scarlett and back). The seed is marked
-    -- dirty and persists/decays like any other shortage; `fh_trade_shortage` can re-set it anytime.
+    -- Initial shortages (data): seeded at startup ONLY for a region/item with no persisted fh_trade_prices row (never
+    -- touched), so a fresh server already produces freight offers in both directions (heartlands -> scarlett and back).
+    -- The seed is saved and persists/decays like any other shortage; a row cleared to 0 is never re-seeded.
+    -- `fh_trade_shortage` can re-set it anytime.
     initialShortages = {
         { region = 'scarlett_meadows', item = 'trade_whiskey', level = 0.6 }, -- heartlands board -> haul whiskey to Rhodes
         { region = 'heartlands',       item = 'trade_salt',    level = 0.5 }, -- Rhodes board     -> haul salt to Valentine

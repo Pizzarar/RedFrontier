@@ -139,6 +139,49 @@ case('shortages: lists items over the threshold worst-first, hides decayed ones'
     T.eq(0, #P.shortages(c, s, 'atlantis', T0))
 end)
 
+-- idea-762: initialShortages seed only regions/items with no persisted row (no state entry right after loadRow).
+local SEEDS = { { region = H, item = 'trade_salt', level = 0.5 }, { region = H, item = 'trade_cloth', level = 0.6 } }
+
+case('seedShortages: a fresh state seeds every entry and reports it', function()
+    local c, s = cfgNew({ initialShortages = SEEDS }), P.newState()
+    local seeded = P.seedShortages(c, s, T0)
+    assert(#seeded == 2, 'seeded ' .. #seeded)
+    T.same({ region = H, item = 'trade_salt' }, seeded[1])
+    assert(select(2, P.quote(c, s, H, 'trade_salt', T0)).shortage == 0.5, 'salt not seeded')
+    assert(select(2, P.quote(c, s, H, 'trade_cloth', T0)).shortage == 0.6, 'cloth not seeded')
+    assert(#P.seedShortages(c, s, T0 + 10) == 0, 'second call re-seeded (its entries now exist)')
+end)
+
+case('seedShortages: a persisted row with shortage 0 (cleared) is NOT re-seeded', function()
+    local c, s = cfgNew({ initialShortages = SEEDS }), P.newState()
+    assert(P.loadRow(c, s, { region_id = H, item = 'trade_salt', shortage = 0, saturation = 0, updated_at = T0 - 100 }))
+    local seeded = P.seedShortages(c, s, T0)
+    assert(#seeded == 1 and seeded[1].item == 'trade_cloth', 'expected only the row-less cloth to seed')
+    assert(select(2, P.quote(c, s, H, 'trade_salt', T0)).shortage == 0, 'cleared shortage was re-seeded')
+end)
+
+case('seedShortages: a persisted row with shortage > 0 is left alone (level and saturation)', function()
+    local c, s = cfgNew({ initialShortages = SEEDS }), P.newState()
+    for _, it in ipairs({ 'trade_salt', 'trade_cloth' }) do
+        assert(P.loadRow(c, s, { region_id = H, item = it, shortage = 0.2, saturation = 0.3, updated_at = T0 }))
+    end
+    assert(#P.seedShortages(c, s, T0) == 0, 'seeded over persisted rows')
+    local d = select(2, P.quote(c, s, H, 'trade_salt', T0))
+    assert(d.shortage == 0.2 and d.saturation == 0.3, 'persisted row changed')
+end)
+
+case('seedShortages: unknown goods/regions, bad levels and junk entries are skipped', function()
+    local c = cfgNew({ initialShortages = {
+        { region = 'atlantis', item = 'trade_salt', level = 0.5 }, { region = H, item = 'gone', level = 0.5 },
+        { region = H, item = 'trade_salt', level = 'x' }, 'junk', { region = H, item = 'trade_cloth', level = 0.4 },
+    } })
+    local s = P.newState()
+    local seeded = P.seedShortages(c, s, T0)
+    assert(#seeded == 1 and seeded[1].item == 'trade_cloth', 'expected only the valid cloth entry')
+    assert(s.entries[H .. '|trade_salt'] == nil, 'bad level created an entry')
+    assert(#P.seedShortages(cfgNew(), P.newState(), T0) == 0, 'no initialShortages must seed nothing')
+end)
+
 case('persistence: toRows / loadRow round-trips and rejects bad rows', function()
     local c, s = cfgNew({ wobble = NOWOB }), P.newState()
     P.setShortage(c, s, H, 'trade_salt', 0.5, T0)

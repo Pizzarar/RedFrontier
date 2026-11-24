@@ -40,7 +40,7 @@ Sequence (all-or-nothing, one trade per player at a time; the busy lock is share
 - Server console: `fh_trade_shortage <region> <item> <level 0..1>`; `tradequote` dumps the price rows as JSON.
 
 ## DB
-`server/migrations/0013_fh_trade.sql`: `fh_trade_prices (region_id, item, shortage, saturation, updated_at)`, PK (region_id, item). Dirty rows flush every `saveMs` and on resource stop; load decays to "now".
+`server/migrations/0013_fh_trade.sql`: `fh_trade_prices (region_id, item, shortage, saturation, updated_at)`, PK (region_id, item). Dirty rows flush every `saveMs` and on resource stop; load decays to "now". After the load, `initialShortages` (config) are seeded only for a region/item with no row at all (`P.seedShortages`), then saved; a row whose shortage was cleared to 0 is never re-seeded. If the load fails, nothing is seeded.
 
 ## Tests
 `~/.venvs/rf/bin/python tools/run-specs.py spec/trade_prices_spec.lua spec/trade_supplies_spec.lua spec/freight_spec.lua spec/freight_server_spec.lua` (SPECS NOT RUN yet for freight: python3-lupa / lua / luac missing on the build host)

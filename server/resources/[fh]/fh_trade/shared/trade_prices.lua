@@ -100,6 +100,23 @@ function M.setShortage(cfg, state, region, item, level, now)
     return true
 end
 
+---Seed cfg.initialShortages into regions/items that have NO entry in `state` (idea-762). Call it right after the
+---persisted rows were loaded with loadRow: an entry then means a persisted row exists, i.e. the region/item was
+---touched before (sold into, set by an admin/event, or seeded on an earlier start), even if its shortage is now 0.
+---Such entries are never changed, so a cleared shortage is not re-seeded on restart. Unknown goods/regions and bad
+---levels are skipped. @return table[] seeded list of { region, item } (the caller persists them)
+function M.seedShortages(cfg, state, now)
+    local seeded = {}
+    for _, e in ipairs(cfg.initialShortages or {}) do
+        if type(e) == 'table' and type(e.region) == 'string' and type(e.item) == 'string'
+            and state.entries[key(e.region, e.item)] == nil
+            and M.setShortage(cfg, state, e.region, e.item, e.level, now) then
+            seeded[#seeded + 1] = { region = e.region, item = e.item }
+        end
+    end
+    return seeded
+end
+
 ---Items currently in shortage at `region` (level >= cfg.shortage.threshold), worst first.
 ---@return table[] list of { item, level, multiplier, price }
 function M.shortages(cfg, state, region, now)
