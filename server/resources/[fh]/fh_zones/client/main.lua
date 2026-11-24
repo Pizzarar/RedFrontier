@@ -56,23 +56,37 @@ end)
 
 local function loadCamps()
     local list = lib.callback.await('fh:zones:camps', false) or {}
+    local out = {}
     for _, c in ipairs(list) do
-        local weapons = {}
-        for i, p in ipairs(c.peds) do weapons[i] = p.weapon or false end
-        camps[c.id] = { weapons = weapons, loot = c.loot }
+        local cfg = FhZonesConfig.camps[c.id]
+        if cfg and cfg.enabled ~= false then -- world-01 block D: skip camps whose region is disabled
+            local weapons = {}
+            for i, p in ipairs(c.peds) do weapons[i] = p.weapon or false end
+            camps[c.id] = { weapons = weapons, loot = c.loot }
+            out[#out + 1] = c
+        end
     end
-    return list
+    return out
 end
 FH.refreshCamps = function() loadCamps() return true end
+
+local stashPoints = {} -- camp id -> lib point (2.0 m) created at the snapped z once the area streams in
 
 FH.thread(function()
     for _, c in ipairs(loadCamps()) do
         lib.points.new({
-            coords = vector3(c.loot.x, c.loot.y, FhSnap.groundZAt(c.id, c.loot.x, c.loot.y, c.loot.z)), distance = 2.0,
-            onEnter = FH.wrap(function() lib.showTextUI('[E] Outlaw camp stash') end),
-            onExit = FH.wrap(function() lib.hideTextUI() end),
-            nearby = FH.wrap(function()
-                if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:zones:open_loot', { camp_id = c.id }) end
+            coords = c.loot, distance = 60.0, -- streaming-range point: only snap once the area is streamed
+            onEnter = FH.wrap(function()
+                if stashPoints[c.id] then return end -- snap once per camp
+                local z = FhSnap.groundZAt(c.id, c.loot.x, c.loot.y, c.loot.z)
+                stashPoints[c.id] = lib.points.new({
+                    coords = vector3(c.loot.x, c.loot.y, z), distance = 2.0,
+                    onEnter = FH.wrap(function() lib.showTextUI('[E] Outlaw camp stash') end),
+                    onExit = FH.wrap(function() lib.hideTextUI() end),
+                    nearby = FH.wrap(function()
+                        if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:zones:open_loot', { camp_id = c.id }) end
+                    end),
+                })
             end),
         })
     end

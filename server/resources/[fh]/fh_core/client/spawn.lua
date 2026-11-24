@@ -43,7 +43,8 @@ local function create(d, slot)
     local e
     local how = FhSpawnRules.CREATE[d.kind]
     if how == 'ped' then
-        e = CreatePed(hash, c.x, c.y, c.z, d.heading + 0.0, true, true, false, false)
+        local z = FhGroundSnap.snapZ(c.z, FhSnap.groundZAt(d.tag or d.token, c.x, c.y, c.z), FhGroundSnap.SNAP_TOLERANCE)
+        e = CreatePed(hash, c.x, c.y, z, d.heading + 0.0, true, true, false, false)
         if e and e ~= 0 then Citizen.InvokeNative(0x283978A15512B2FE, e, true) end -- else RDR3 peds can be invisible
     elseif how == 'object' then
         e = CreateObject(hash, c.x, c.y, c.z, true, true, false, false, false)

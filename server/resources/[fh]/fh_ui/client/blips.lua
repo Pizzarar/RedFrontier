@@ -33,8 +33,7 @@ local function sources()
 end
 
 local function addBlip(place)
-    local z = FhSnap.groundZAt(place.id, place.x, place.y, place.z)
-    local blip = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, BLIP_STYLE, place.x + 0.0, place.y + 0.0, z + 0.0)
+    local blip = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, BLIP_STYLE, place.x + 0.0, place.y + 0.0, place.z + 0.0)
     if blip and blip ~= 0 then
         SetBlipSprite(blip, joaat(P.sprite(place)), 1)
         SetBlipScale(blip, 0.8)

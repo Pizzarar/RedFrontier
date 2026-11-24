@@ -10,17 +10,33 @@ M.RETRY_MS = 50      -- ms between probe attempts
 M.TIMEOUT_MS = 2000  -- ms total probe budget before falling back
 M.MAX_RETRIES = 40   -- attempts before giving up (== TIMEOUT_MS / RETRY_MS)
 
+---True when n is a finite number (not NaN, not ±math.huge).
+local function finite(n)
+    return type(n) == 'number' and n == n and n > -math.huge and n < math.huge
+end
+
 ---True when a probe result is a usable ground height (truthy found + a finite number).
 ---@return boolean
 function M.usable(found, groundZ)
     if not found then return false end
-    return type(groundZ) == 'number' and groundZ == groundZ
+    return finite(groundZ)
 end
 
 ---The snapped z: groundZ when usable, else the hint z (the fallback).
 function M.resolve(found, groundZ, hintZ)
     if M.usable(found, groundZ) then return groundZ end
     return hintZ
+end
+
+M.SNAP_TOLERANCE = 10.0 -- metres: a probed ground z this far (or farther) from the request is rejected
+
+---Snap requestedZ to a probed groundZ only when both are finite and within ±tolerance (protects interiors/roofs and
+---other spawn-contract callers); otherwise keep requestedZ. NaN / ±math.huge / missing inputs keep the request.
+function M.snapZ(requestedZ, groundZ, tolerance)
+    if not finite(requestedZ) or not finite(groundZ) then return requestedZ end
+    local tol = (type(tolerance) == 'number' and tolerance) or M.SNAP_TOLERANCE
+    if math.abs(groundZ - requestedZ) <= tol then return groundZ end
+    return requestedZ
 end
 
 ---Keep probing after a failed attempt? attempt is the attempt just made (1-based). Gives up at maxRetries

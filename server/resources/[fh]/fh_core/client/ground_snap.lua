@@ -7,8 +7,9 @@ FhSnap = FhSnap or {}
 
 function FhSnap.groundZAt(id, x, y, z)
     if type(x) ~= 'number' or type(y) ~= 'number' or type(z) ~= 'number' then return z end
+    x, y, z = x + 0.0, y + 0.0, z + 0.0
     RequestCollisionAtCoord(x, y, z)
-    local above = z + FhGroundSnap.PROBE_ABOVE
+    local above = (z + FhGroundSnap.PROBE_ABOVE) + 0.0
     local deadline = GetGameTimer() + FhGroundSnap.TIMEOUT_MS
     local attempt = 0
     while FhGroundSnap.shouldRetry(attempt, FhGroundSnap.MAX_RETRIES, GetGameTimer(), deadline) do

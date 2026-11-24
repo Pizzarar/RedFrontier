@@ -5,7 +5,20 @@
 -- Natives: see fh_core/docs/natives.md (unverified in-game).
 -- TODO(waits on B4c): a networked/server-authoritative prop would go through the spawn-request contract.
 local props = {}                 -- plot id -> entity
+local chestPrompts = {}          -- plot id -> lib point (2.0 m [E] prompt) at the snapped z
 local INPUT_CONTEXT = 0xCEFD9220 -- E (unverified)
+
+local function ensureChestPrompt(p, z)
+    if chestPrompts[p.id] then return end
+    chestPrompts[p.id] = lib.points.new({
+        coords = vector3(p.coords.x, p.coords.y, z), distance = 2.0,
+        onEnter = FH.wrap(function() lib.showTextUI('[E] Homestead chest') end),
+        onExit = FH.wrap(function() lib.hideTextUI() end),
+        nearby = FH.wrap(function()
+            if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:open_chest', { plot_id = p.id }) end
+        end),
+    })
+end
 
 local function spawn(p)
     if props[p.id] then return end
@@ -15,7 +28,8 @@ local function spawn(p)
     local t = GetGameTimer()
     while not HasModelLoaded(model) and GetGameTimer() - t < 5000 do Wait(50) end
     if not HasModelLoaded(model) then return end
-    local obj = CreateObject(model, p.coords.x, p.coords.y, FhSnap.groundZAt(p.id, p.coords.x, p.coords.y, p.coords.z), false, false, false) -- isNetwork = false
+    local z = FhSnap.groundZAt(p.id, p.coords.x, p.coords.y, p.coords.z)
+    local obj = CreateObject(model, p.coords.x, p.coords.y, z, false, false, false) -- isNetwork = false
     if not obj or obj == 0 then
         SetModelAsNoLongerNeeded(model)
         return
@@ -25,6 +39,7 @@ local function spawn(p)
     FreezeEntityPosition(obj, true)
     SetModelAsNoLongerNeeded(model)
     props[p.id] = obj
+    ensureChestPrompt(p, z)
 end
 
 local function despawn(id)
@@ -42,14 +57,6 @@ FH.thread(function()
             onEnter = FH.wrap(function() spawn(p) end),
             onExit = FH.wrap(function() despawn(p.id) end),
         })
-        lib.points.new({
-            coords = p.coords, distance = 2.0,
-            onEnter = FH.wrap(function() lib.showTextUI('[E] Homestead chest') end),
-            onExit = FH.wrap(function() lib.hideTextUI() end),
-            nearby = FH.wrap(function()
-                if IsControlJustReleased(0, INPUT_CONTEXT) then TriggerServerEvent('fh:homestead:open_chest', { plot_id = p.id }) end
-            end),
-        })
     end
 end)
 
@@ -57,6 +64,20 @@ end)
 
 local slotSets = {} -- plot id -> { points = {lib points}, ents = { [slot_id] = entity } } (current set per plot)
 local pushed = {}   -- plot id -> true once a server push arrived (newer than the join snapshot)
+
+local function ensureSlotPrompt(set, p, z)
+    if set.promptPoints[p.slot_id] then return end
+    set.promptPoints[p.slot_id] = lib.points.new({
+        coords = vector3(p.coords.x, p.coords.y, z), distance = 2.0,
+        onEnter = FH.wrap(function() set.prompt = true; lib.showTextUI('[E] Homestead chest ' .. p.chest) end),
+        onExit = FH.wrap(function() set.prompt = nil; lib.hideTextUI() end),
+        nearby = FH.wrap(function()
+            if IsControlJustReleased(0, INPUT_CONTEXT) then
+                TriggerServerEvent('fh:homestead:open_chest', { plot_id = p.plot_id, chest = p.chest })
+            end
+        end),
+    })
+end
 
 local function spawnSlot(set, p)
     if set.ents[p.slot_id] then return end
@@ -71,13 +92,15 @@ local function spawnSlot(set, p)
         SetModelAsNoLongerNeeded(model)
         return
     end
-    local obj = CreateObject(model, p.coords.x, p.coords.y, FhSnap.groundZAt(p.plot_id .. ':' .. p.slot_id, p.coords.x, p.coords.y, p.coords.z), false, false, false) -- isNetwork = false
+    local z = FhSnap.groundZAt(p.plot_id .. ':' .. p.slot_id, p.coords.x, p.coords.y, p.coords.z)
+    local obj = CreateObject(model, p.coords.x, p.coords.y, z, false, false, false) -- isNetwork = false
     SetModelAsNoLongerNeeded(model)
     if not obj or obj == 0 then return end
     SetEntityHeading(obj, p.heading or 0.0)
     PlaceObjectOnGroundProperly(obj)
     FreezeEntityPosition(obj, true)
     set.ents[p.slot_id] = obj
+    if p.chest then ensureSlotPrompt(set, p, z) end
 end
 
 local function despawnSlot(set, slotId)
@@ -93,6 +116,7 @@ local function clearPlot(plotId)
     if not set then return end
     slotSets[plotId] = nil
     for _, pt in ipairs(set.points) do pt:remove() end
+    for slotId, pt in pairs(set.promptPoints or {}) do pt:remove() end
     for slotId in pairs(set.ents) do despawnSlot(set, slotId) end
     if set.prompt then lib.hideTextUI() end
 end
@@ -100,7 +124,7 @@ end
 local function drawPlot(plotId, list)
     clearPlot(plotId)
     if type(list) ~= 'table' or #list == 0 then return end
-    local set = { points = {}, ents = {} }
+    local set = { points = {}, ents = {}, promptPoints = {} }
     slotSets[plotId] = set
     for _, p in ipairs(list) do
         p.plot_id = plotId
@@ -110,18 +134,6 @@ local function drawPlot(plotId, list)
             onEnter = FH.wrap(function() spawnSlot(set, p) end),
             onExit = FH.wrap(function() despawnSlot(set, p.slot_id) end),
         })
-        if p.chest then
-            set.points[#set.points + 1] = lib.points.new({
-                coords = c, distance = 2.0,
-                onEnter = FH.wrap(function() set.prompt = true; lib.showTextUI('[E] Homestead chest ' .. p.chest) end),
-                onExit = FH.wrap(function() set.prompt = nil; lib.hideTextUI() end),
-                nearby = FH.wrap(function()
-                    if IsControlJustReleased(0, INPUT_CONTEXT) then
-                        TriggerServerEvent('fh:homestead:open_chest', { plot_id = plotId, chest = p.chest })
-                    end
-                end),
-            })
-        end
     end
 end
 
