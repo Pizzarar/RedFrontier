@@ -155,6 +155,25 @@ case('retake within configured ticks with seeded rng', function()
     end
 end)
 
+case('broadcast labels: Regions.factionLabel(faction, region) used when present, falls back on error/nil', function()
+    local function withLabel(fn)
+        local r = setmetatable({ factionLabel = fn }, { __index = Regions })
+        return R.context(cfg, r, camps)
+    end
+    local seen = {}
+    local c1 = withLabel(function(f, reg) seen[#seen + 1] = { f, reg } return 'STUB ' .. f .. '@' .. reg end)
+    local e = R.onCampCleared(c1, R.newState(), heartlandsCamp, {}, seq(5, 25))
+    eq('STUB lawmen@heartlands has taken the Heartlands Outlaw Camp', e[2].message)
+    same({ 'lawmen', 'heartlands' }, seen[1])
+    local st = R.newState()
+    R.onCampCleared(c1, st, heartlandsCamp, {}, seq(4, 22))
+    eq('STUB outlaws@heartlands have retaken the Heartlands Outlaw Camp', R.tick(c1, st, 99, seq())[2].message)
+    for _, bad in ipairs({ function() error('boom') end, function() return nil end }) do
+        local e2 = R.onCampCleared(withLabel(bad), R.newState(), heartlandsCamp, {}, seq(5, 25))
+        eq('Valentine Law has taken the Heartlands Outlaw Camp', e2[2].message)
+    end
+end)
+
 case('tick resolves the retake: flips back, broadcasts, raises the shortage', function()
     local st = R.newState()
     R.onCampCleared(ctx, st, heartlandsCamp, {}, seq(4, 22))

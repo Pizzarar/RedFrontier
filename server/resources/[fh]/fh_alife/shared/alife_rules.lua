@@ -96,7 +96,11 @@ local function defaultOwner(regions, camps, campId)
     return terr and terr.faction or nil
 end
 
-local function factionLabel(regions, id)
+local function factionLabel(regions, id, regionId)
+    if regions and type(regions.factionLabel) == 'function' then
+        local ok, label = pcall(regions.factionLabel, id, regionId)
+        if ok and type(label) == 'string' and label ~= '' then return label end
+    end
     local f = regions and regions.factions and regions.factions[id]
     return f and f.label or id
 end
@@ -174,7 +178,7 @@ function M.resolveSquad(ctx, state, squad, rng)
     M.flip(ctx, state, campId, squad.faction)
     local effects = {
         { type = 'flipped', camp_id = campId, region_id = camp.region, from = from, to = squad.faction },
-        { type = 'broadcast', message = ('%s have retaken the %s'):format(factionLabel(ctx.regions, squad.faction),
+        { type = 'broadcast', message = ('%s have retaken the %s'):format(factionLabel(ctx.regions, squad.faction, camp.region),
             campLabel(ctx.regions, ctx.camps, campId)) },
     }
     local sh = shortageEffect(ctx, camp.region, 'raised')
@@ -230,7 +234,7 @@ function M.onCampCleared(ctx, state, campId, participants, rng, log)
     if justFlipped then
         M.flip(ctx, state, campId, law)
         effects[#effects + 1] = { type = 'flipped', camp_id = campId, region_id = camp.region, from = oldOwner, to = law }
-        effects[#effects + 1] = { type = 'broadcast', message = ('%s has taken the %s'):format(factionLabel(ctx.regions, law),
+        effects[#effects + 1] = { type = 'broadcast', message = ('%s has taken the %s'):format(factionLabel(ctx.regions, law, camp.region),
             campLabel(ctx.regions, ctx.camps, campId)) }
     end
 
