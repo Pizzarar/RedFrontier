@@ -630,6 +630,11 @@ exports('OpenWardrobe', function()
     return true
 end)
 
+-- /wardrobe: open the saved-outfits menu anywhere (no-op in the clothing store / character select)
+RegisterCommand('wardrobe', function()
+    exports['rsg-character']:OpenWardrobe()
+end, false)
+
 local Cloakroom = GetRandomIntInRange(0, 0xffffff)
 
 function OpenCloakroom()

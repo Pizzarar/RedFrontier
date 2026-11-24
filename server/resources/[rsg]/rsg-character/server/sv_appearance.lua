@@ -177,6 +177,21 @@ local function GetSkinRow(citizenid)
     return MySQL.single.await('SELECT skin, clothes FROM playerskins WHERE citizenid = ? ORDER BY id DESC LIMIT 1', { citizenid })
 end
 
+-- Saved clothes for a character, or the configured default outfit when none are saved. A character that finished
+-- the creator without picking clothes (or a legacy row) has an empty playerskins.clothes and would otherwise spawn
+-- in underwear. gender is 0 = male, 1 = female.
+local function ClothesWithDefault(gender, clothes)
+    if next(clothes or {}) == nil then
+        local defaults = RSG.DefaultClothes or {}
+        clothes = (gender == 0 and defaults.male) or defaults.female or {}
+    end
+    return clothes
+end
+
+local function GenderOf(Player)
+    return tonumber(Player.PlayerData.charinfo and Player.PlayerData.charinfo.gender) or 0
+end
+
 -- Returns true when a skin was found and applied, false when the creator was opened instead.
 function RSG.LoadSkinForSource(src)
     local Player = RSGCore.Functions.GetPlayer(src)
@@ -184,8 +199,8 @@ function RSG.LoadSkinForSource(src)
     local row = GetSkinRow(Player.PlayerData.citizenid)
     local skin = row and SafeDecode(row.skin)
     if skin then
-        -- legacy rows (rsg-appearance) can have NULL/empty clothes: fall back to an empty table
-        TriggerClientEvent('rsg-character:client:ApplySkin', src, skin, SafeDecode(row.clothes, {}))
+        -- legacy rows (rsg-appearance) can have NULL/empty clothes: fall back to the default outfit
+        TriggerClientEvent('rsg-character:client:ApplySkin', src, skin, ClothesWithDefault(GenderOf(Player), SafeDecode(row.clothes, {})))
         return true
     end
     RSG.OpenCreatorFor(src, nil)
@@ -198,7 +213,7 @@ local function GetAppearance(src)
     local row = GetSkinRow(Player.PlayerData.citizenid)
     local skin = row and SafeDecode(row.skin)
     if not skin then return nil end
-    return { skin = skin, clothes = SafeDecode(row.clothes, {}) }
+    return { skin = skin, clothes = ClothesWithDefault(GenderOf(Player), SafeDecode(row.clothes, {})) }
 end
 
 RSGCore.Functions.CreateCallback('rsg-character:server:getAppearance', function(src, cb)
