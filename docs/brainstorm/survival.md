@@ -26,7 +26,7 @@
 - MERGED S3+S3b on main @ 883d46c (c239455 40a24fe eeea378 f92c87e 883d46c; Gemini PASS 0/0/0 on 4a513b6; range-diff 1 '!' natives.md keep-both doc, rest '='; venv 58/1172/0).
 - MERGED S4 on main @ c0dafc1 (01b935e fa481a0 c0dafc1; Gemini PASS 0/0/0 a60f748, range-diff all '='; venv 65/1290/0). Bedroll registers via S3b I.ITEMS path.
 - MERGED S5 on main @ e9a2efc (Gemini PASS 0/0/1 a72557b, low fixed in doc commit; range-diff '=' vs b37946c; venv 66/1299/0). ## Survival card in OWNER-TESTS.md. survival-01 S1-S5 COMPLETE, playtest-ready e9a2efc.
-- Remaining: S4b (drop homestead pcall adapter) once @homestead H3/H4 isNearStation/getComfort are on main.
+- MERGED S4b on main @ caebf25 (homestead pcall adapter dropped, direct exports + GetResourceState gate; Gemini PASS 0/0/1 6e74574; range-diff '='; venv 78/1456/0/0, syntax 180/0). survival-01 fully done incl. S3b/S4b.
 - FORGE FREEZE (Overlord, from the owner via Hub15): nothing new starts and there are no merges or pushes. The Overlord pushes all branches. Parked:
   - S1 is built on `survival-s1` @ 533fba9 (22 specs/355 tests green), NOT merged. Its review Sur2 rn-ba97d44e5597 was in progress.
   - Resume after the cutover: re-run the S1 review → merge → S2 review (rebase, fix server.cfg) → merge → S3||S4||S5.

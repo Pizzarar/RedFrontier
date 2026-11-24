@@ -1,6 +1,6 @@
 {
   "laneId": "survival",
-  "updatedAt": "2026-11-23T16:33:08.532Z",
+  "updatedAt": "2026-11-24T13:31:15.066Z",
   "units": [
     {
       "id": "S3-low",
@@ -11,6 +11,58 @@
       "doneCheck": "",
       "status": "done",
       "commit": "68ab3ef"
+    },
+    {
+      "id": "S1",
+      "goal": "survival-01 block S1",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "9730266"
+    },
+    {
+      "id": "S2",
+      "goal": "survival-01 block S2",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "1408a01"
+    },
+    {
+      "id": "S3",
+      "goal": "survival-01 block S3",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "883d46c"
+    },
+    {
+      "id": "S4",
+      "goal": "survival-01 block S4",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "c0dafc1"
+    },
+    {
+      "id": "S5",
+      "goal": "survival-01 block S5",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "e9a2efc"
+    },
+    {
+      "id": "S4b",
+      "goal": "Drop homestead pcall adapter: call exports.fh_homestead isNearStation/getComfort directly (H3/H4 on main)",
+      "files": [
+        "server/resources/[fh]/fh_survival/server/homestead_adapter.lua",
+        "server/resources/[fh]/fh_survival/server/rest.lua"
+      ],
+      "doneCheck": "",
+      "status": "running",
+      "branch": "survival-s4b",
+      "commit": "6e74574"
     }
   ]
 }
