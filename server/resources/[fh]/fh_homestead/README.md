@@ -47,7 +47,7 @@ claims and `fh_plot_slots` has finished.
 | `getStations(citizenid)` | `{ {plot_id, slot_id, station_type, coords}, ... }` | built stations on that character's own plots (claim first, then town lot); `{}` before the load or without a plot. Used by @crafting |
 | `stationAt(coords, maxDist)` | `{plot_id, slot_id, station_type}` or `nil` | nearest built station on ANY plot within `maxDist` (default 3.0 m). Used by @crafting |
 | `isNearStation(src, stationType, maxDist)` | boolean | OWNER-ONLY: only stations on the plots (claim or town lot) the asking character owns, measured from the server-side ped. Used by @crafting |
-| `getComfort(citizenid)` | number (0 with no claim) | slot comfort plus trophy comfort (see Config) of the **claim** only: a town lot adds no comfort and a lot-only character has 0. @survival reads this; homestead applies no buffs itself |
+| `getComfort(citizenid)` | number (0 with no home) | the character's **best home**: `max(claim comfort, town lot comfort)`. Claim = built slots plus trophy comfort (see Config); town lot = its own slots only (chest, workbench), no trophies (the trophy wall exists only on claims). A lot-only character gets the lot's comfort; a built-out claim always beats a lot. Recomputed on claim, unclaim, build, abandon and trophy changes. @survival reads this; homestead applies no buffs itself |
 | `placeTrophy(src, itemId)` | `true, trophy_id` or `false, reason` | owner-only; takes ONE `itemId` out of the plot chest. Trophy ids look like `trophy_deer#1` |
 | `unplaceTrophy(src, trophy_id)` | `true` or `false, reason` | owner-only; the row is deleted first, then the item goes back into the chest |
 | `addTrophy(citizenid, trophy_id, points)` | `true` or `false, reason` | internal/admin: writes the wall row, no item movement |
@@ -75,7 +75,7 @@ Slot interface (server-local table `FhHomesteadSlots`, for H2, not an export): `
 | `fh:homestead:spilled` | `{ src, citizenid, plot_id, reason, stashes = { { stash_id, items = { { item, count } } } } }` | H13: plot chest items were destroyed on unclaim; `reason` = `force unclaim` (admin force) or `ITEM LOST: added during unclaim` (final sweep). Lists only the stashes whose clear was read back empty; `citizenid` = the owner |
 | `fh:homestead:slot_changed` | `plot_id, slot_id, tier` (positional) | a slot tier was saved and changed |
 | `fh:homestead:station_built` | `citizenid, plot_id, slot_id, station_type` (positional) | a station slot went from tier 0 to 1 or more |
-| `fh:homestead:comfort_changed` | `citizenid, newComfort, oldComfort` (positional) | only when the value actually changes (also to 0 on unclaim) |
+| `fh:homestead:comfort_changed` | `citizenid, newComfort, oldComfort` (positional) | only when the best-home value actually changes: once per real change, never for a no-op (also to 0 when the last home goes; releasing one of two homes fires only if the best value moves) |
 | `fh:homestead:trophy_placed` | `{ citizenid, trophy_id, comfort }` | after `placeTrophy` succeeds (`comfort` = that trophy's points) |
 | `fh:homestead:trophy_removed` | `{ citizenid, trophy_id, comfort }` | after `unplaceTrophy` succeeds |
 
