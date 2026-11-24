@@ -34,8 +34,11 @@ function invApi:FhRemoveItem(ref, name, amount, reason) rec('FhRemoveItem', ref,
 function invApi:FhSetItemInfo(ref, slot, info, expectName)
     rec('FhSetItemInfo', ref, slot, info, expectName)
     local c = slots[key(ref)]
-    if not c then return false, 'fh_no_container' end
-    if type(slot) ~= 'number' or slot < 1 or slot > 10 then return false, 'fh_bad_slot' end
+    if not c then return false, 'fh_unknown_container' end
+    local v = invApi.FhView(self, ref) -- as the real InView: the slot must lie in ref's own section
+    local first, last = 1, v.slots
+    if v.slotRange then first, last = v.slotRange[1], v.slotRange[2] end
+    if type(slot) ~= 'number' or slot < first or slot > last then return false, 'fh_bad_slot' end
     local item = c[slot]
     if not item then return false, 'fh_empty_slot' end
     if expectName ~= nil and item.name ~= expectName:lower() then return false, 'fh_wrong_item' end
@@ -44,7 +47,7 @@ function invApi:FhSetItemInfo(ref, slot, info, expectName)
 end
 function invApi:FhView(ref)
     local c = slots[key(ref)]
-    if not c then return nil, 'fh_no_container' end
+    if not c then return nil, 'fh_unknown_container' end
     local eq, bp = FhRules.playerViews(c, 50000, 20)
     if ref.type == 'backpack' then return bp elseif ref.type == 'equipped' then return eq end
     return { type = ref.type, items = c, slots = 10, maxWeight = 50000 }
@@ -101,11 +104,16 @@ T.describe('carried refs with an offline / dropped src', function()
         T.same({ false, 'fh_player_offline' }, { removeItem({ type = 'equipped', id = 4 }, 'bread', 1) })
         T.eq(0, #calls)
     end)
-    T.it('src is not a number / not an integer id: fh_bad_ref (never reaches the player lookup)', function()
+    T.it('src is not a number (string / missing / table): fh_bad_ref (never reaches the player lookup)', function()
         reset()
         T.same({ false, 'fh_bad_ref' }, { addItem({ type = 'backpack', id = '3' }, 'bread', 1) })
         T.same({ false, 'fh_bad_ref' }, { addItem({ type = 'backpack' }, 'bread', 1) })
         T.same({ false, 'fh_bad_ref' }, { setItemInfo({ type = 'equipped', id = {} }, 1, {}) })
+        T.eq(0, #calls)
+    end)
+    T.it('fractional src (1.5) passes the type check but has no ped: fh_player_offline, fh_inventory not called', function()
+        reset()
+        T.same({ false, 'fh_player_offline' }, { addItem({ type = 'backpack', id = 1.5 }, 'bread', 1) })
         T.eq(0, #calls)
     end)
     T.it('online player: the same call reaches fh_inventory with the carried ref and a caller tag', function()
@@ -137,7 +145,7 @@ T.describe('bulky item -> backpack veto', function()
     T.it('canFit on a carried ref whose view is gone surfaces the reason, no throw', function()
         reset()
         local ok, why = canFit({ type = 'backpack', id = 77 }, 'bread', 1)
-        T.eq(false, ok); T.eq('fh_no_container', why)
+        T.eq(false, ok); T.eq('fh_unknown_container', why)
     end)
 end)
 

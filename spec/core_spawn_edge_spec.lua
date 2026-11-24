@@ -18,10 +18,9 @@ local function loadInto(env, rel)
 end
 
 -- ============================================================ server half
-local S = {}
 local function newServer()
-    local w = { now = 0, ents = {}, nextEnt = 1000, players = {}, ready = {}, sent = {}, threads = {}, exports = {},
-        handlers = {}, drops = {}, logs = {} }
+    local w = { now = 0, ents = {}, nextEnt = 1000, players = {}, sent = {}, threads = {}, exports = {},
+        handlers = {} }
     local env = setmetatable({
         FhSpawnRules = FhSpawnRules, FhConfig = FhConfig,
         GetCurrentResourceName = function() return 'fh_core' end, GetInvokingResource = function() return 'spec' end,
@@ -45,7 +44,7 @@ local function newServer()
         exports = setmetatable({}, { __call = function(_, n, fn) w.exports[n] = fn end }),
         CreateThread = function(fn) local co = coroutine.create(fn); w.threads[#w.threads + 1] = co; assert(coroutine.resume(co)) end,
         Wait = function() coroutine.yield() end,
-        print = function(...) w.logs[#w.logs + 1] = table.concat({ ... }, ' ') end,
+        print = function() end,
     }, { __index = _G })
     env._G = env
     loadInto(env, 'server/spawn.lua')
@@ -287,7 +286,7 @@ end)
 -- ============================================================ client half
 local function newClient()
     local c = { now = 0, handlers = {}, sent = {}, created = {}, deleted = {}, threads = {}, nextEnt = 2000, probes = {},
-        networked = true, modelOk = true, fail = nil, local_events = {} }
+        networked = true, modelOk = true, local_events = {} }
     local env = setmetatable({
         FhSpawnRules = FhSpawnRules, FhGroundSnap = FhGroundSnap,
         FhSnap = { groundZAt = function(tag, x, y, z, above) c.probes[#c.probes + 1] = { tag, z, above }; return z - 4.0 end },
