@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T22:58:24.927Z",
+  "updatedAt": "2026-11-24T23:01:29.766Z",
   "units": [
     {
       "id": "B5",
@@ -256,9 +256,9 @@
       "goal": "contract lint tools/check-contracts.py (core-07)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-l1",
-      "commit": "5145348"
+      "commit": "029ef5a"
     },
     {
       "id": "A1",

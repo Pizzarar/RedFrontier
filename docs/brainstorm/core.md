@@ -62,3 +62,4 @@
 - 11-24 R1 idea-804 merged 7bb75f6; core-06 I1 (743/744/750) by lead. core-07 handed to Cor2 rn-d9e827279687 (4 parallel blocks). Remaining owner-gated: B1-live, B6f flip.
 - 11-24 core-07 S1 PASS: fh_core edge specs (49 tests: carried refs offline src, bulky veto, setItemInfo races, netId after despawn, spawn timeouts, snap) d29dc30+4393738, Gemini PASS 0/0/3 folded; venv 93/1699/0.
 - 11-24 core-07 A1 PASS: fh_economy money audit, 3 fixes (logout-window guard, checked add/remove in integer cents, whole-cent amounts) + unload tracker cleanup; 2d43a30+3da975a, Gemini tierA FAIL 0/1/1 then PASS 0/0/0; venv 96/1732/0. Follow-ups M2/M3 queued, siblings idea-862..867.
+- 11-24 core-07 L1 PASS: tools/check-contracts.py (exports/events/items lint, allowlist, run-specs --contracts) 645cc93+fix; Gemini FAIL 0/2/3 then PASS 0/0/0; 0 findings, 5 allowlisted.
