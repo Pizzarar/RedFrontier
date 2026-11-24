@@ -113,6 +113,24 @@ case('pick: plot = nearest unclaimed; all claimed reports all_claimed', function
     T.eq(nil, p); T.eq('all_claimed', why)
 end)
 
+case('pick: plot skips town lots (claimable=false); all_claimed ignores lots', function()
+    local home = { plots = {
+        lot = { id = 'lot', name = 'Main Street lot', class = 'town_lot', claimable = false, center = { x = 0, y = 0, z = 0 } },
+        claim = { id = 'claim', name = 'Creek claim', class = 'claim', center = { x = 500, y = 0, z = 0 } },
+    } }
+    local places = P.gather({ homestead = home })
+    local byId = {}
+    for _, p in ipairs(places) do byId[p.id] = p end
+    T.eq('Main Street lot (coming soon)', byId.lot.label) -- the lot keeps its name in the label
+    -- only the (nearby) lot is unclaimed, but it is not claimable: /where plot routes to the farther claim
+    local player = { x = 0, y = 0, z = 0 }
+    T.eq('claim', P.pick(places, 'plot', player).id)
+    -- all claims taken, only the lot remains: /where plot reports all_claimed
+    local taken = P.gather({ homestead = home }, { claimed = { claim = true } })
+    local p, why = P.pick(taken, 'plot', player)
+    T.eq(nil, p); T.eq('all_claimed', why)
+end)
+
 case('pick: exact id/label match and unknown/missing kinds', function()
     local places = P.gather(sources())
     T.eq('npc_marrow', P.pick(places, 'npc_marrow', { x = 0, y = 0, z = 0 }).id)

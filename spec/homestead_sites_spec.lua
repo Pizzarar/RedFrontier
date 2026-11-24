@@ -58,16 +58,34 @@ case('every claim is >=150 m (2D) from every town center and every other claim',
 end)
 
 case('town lots are claimable=false and radius 12-15', function()
-    local n = 0
+    local lotsByRegion = {}
     for id, p in pairs(cfg.plots) do
         if p.class == 'town_lot' then
-            n = n + 1
+            lotsByRegion[p.region] = (lotsByRegion[p.region] or 0) + 1
             assert(p.claimable == false, id .. ' town lot must be claimable=false')
             assert(type(p.radius) == 'number' and p.radius >= 12.0 and p.radius <= 15.0,
                 id .. ' town lot radius out of 12-15: ' .. tostring(p.radius))
         end
     end
-    assert(n >= 4, 'expected at least one town lot per enabled region, got ' .. tostring(n))
+    for id, r in pairs(regions.regions) do
+        if r.enabled then
+            local n = lotsByRegion[id] or 0
+            assert(n >= 1, id .. ' has ' .. tostring(n) .. ' town lots (want >=1)')
+        end
+    end
+end)
+
+case('each enabled region has >=3 claims', function()
+    local counts = {}
+    for id, p in pairs(cfg.plots) do
+        if p.class == 'claim' then counts[p.region] = (counts[p.region] or 0) + 1 end
+    end
+    for id, r in pairs(regions.regions) do
+        if r.enabled then
+            local n = counts[id] or 0
+            assert(n >= 3, id .. ' has ' .. tostring(n) .. ' claims (want >=3)')
+        end
+    end
 end)
 
 case('claims are claimable (no claimable=false)', function()

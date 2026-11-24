@@ -77,8 +77,8 @@ function M.gather(sources, opts)
             if type(p) == 'table' then
                 local x, y, z = M.coords(p.center)
                 if x then
-                    local label = (p.class == 'town_lot') and 'Town lot (coming soon)' or (p.name or 'Homestead plot')
-                    local place = { id = id, kind = 'plot', label = label, x = x, y = y, z = z }
+                    local label = (p.class == 'town_lot') and ((p.name or 'Town lot') .. ' (coming soon)') or (p.name or 'Homestead plot')
+                    local place = { id = id, kind = 'plot', label = label, x = x, y = y, z = z, claimable = (p.claimable ~= false) }
                     if claimed[id] then place.claimed = true end
                     if type(mine) == 'string' and mine == id then place.mine = true end
                     places[#places + 1] = place
@@ -165,11 +165,12 @@ function M.gather(sources, opts)
     return places
 end
 
----Nearest place of a kind; for unclaimedOnly, skips claimed places. player = {x,y,z}.
+---Nearest place of a kind; for unclaimedOnly, skips claimed places, and always skips non-claimable plots
+---(claimable == false, e.g. town lots). player = {x,y,z}.
 function M.nearest(places, kind, player, unclaimedOnly)
     local best, bestD = nil, nil
     for _, p in ipairs(places or {}) do
-        if p.kind == kind and not (unclaimedOnly and p.claimed) then
+        if p.kind == kind and not (unclaimedOnly and p.claimed) and p.claimable ~= false then
             local d = M.distance(p, player)
             if d ~= nil and (bestD == nil or d < bestD) then
                 best, bestD = p, d
