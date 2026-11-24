@@ -284,6 +284,54 @@ T.describe('fh_homestead unclaim vs plot stashes (H13)', function()
         T.eq(3, #W.opens)
     end)
 
+    case('H13b hired hand: the owner unclaim is refused fh_hand_active (getHands by src), nothing read or deleted', function()
+        local W = world()
+        W.hands[1] = { ranch_hand = { unpaid = 0, status = 'working' } }
+        T.same({ false, 'fh_hand_active' }, { W.ex.unclaim(1) })
+        T.same({ 1 }, W.handCalls, 'getHands gets the player src, not a citizenid')
+        held(W, 'claim_a', 'A', 'claim')
+        T.eq(0, #W.snapshots, 'refused before the stash read'); T.eq(0, W.named('fh:homestead:unclaimed'))
+        W.commands.fh_unclaim(1, {}, 'fh_unclaim')
+        T.eq('fh_unclaim: fh_hand_active', W.client[#W.client].msg)
+        -- lock released: once the hand is fired the same unclaim goes through
+        W.hands[1] = nil
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(1) })
+        W.consistent()
+    end)
+
+    case('H13b no hand: released; fh_hands missing or erroring = allowed (pcall)', function()
+        local W = world()
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(1) })
+        T.same({ 1 }, W.handCalls)
+        W = world()
+        W.X.fh_hands = nil -- resource not started: no such export
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(1) })
+        assert(W.logged('getHands unavailable'))
+        W = world()
+        W.fail.hands = 'throw'
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(1) })
+        assert(W.logged('hired%-hand check skipped'))
+    end)
+
+    case('H13b skips: admin force (also by the owner), console release, and a town lot abandon', function()
+        local W = world()
+        W.hands[1] = { ranch_hand = {} }
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(0, 'claim_a', true) }, 'console force')
+        T.eq(0, #W.handCalls)
+        W = world()
+        W.hands[1], W.admins[1] = { ranch_hand = {} }, true
+        T.same({ false, 'fh_hand_active' }, { W.ex.unclaim(1) }, 'an admin owner without force is checked')
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(1, 'claim_a', true) }, 'an admin owner with force is not')
+        W = world()
+        W.hands[1] = { ranch_hand = {} }
+        T.same({ true, 'claim_a' }, { W.ex.unclaim(0, 'claim_a') }, 'console release of the owner\'s claim: not checked')
+        W = world(true)
+        W.hands[1] = { ranch_hand = {} }
+        T.same({ true, 'lot_a' }, { W.ex.unclaim(1, 'lot_a') }, 'hands work the claim chest, not the lot')
+        T.eq(0, #W.handCalls)
+        T.same({ false, 'fh_hand_active' }, { W.ex.unclaim(1) }, 'the claim is still guarded')
+    end)
+
     case('force is admin-only: a non-admin owner gets fh_not_admin, command and export alike', function()
         local W = world()
         put(W, sid('claim_a', 1), 1, 'wood', 1)

@@ -20,7 +20,7 @@ return function(T, cfg)
         local W = { db = { plots = {}, chests = {} }, events = {}, threads = {}, ex = {}, client = {}, commands = {},
             players = { [1] = 'A', [2] = 'B' }, offline = {}, admins = {}, peds = {}, hold = {}, fail = {}, logs = {},
             cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {},
-            stash = {}, registered = {}, snapshots = {}, clears = {}, net = {}, opens = {} }
+            stash = {}, registered = {}, snapshots = {}, clears = {}, net = {}, opens = {}, hands = {}, handCalls = {} }
         for _, r in ipairs(rows or {}) do W.db.plots[r.plot_id] = { citizenid = r.citizenid, class = r.class } end
         local function await(tag)
             local h = W.hold[tag]
@@ -168,7 +168,14 @@ return function(T, cfg)
                 end,
             },
             fh_economy = economy,
+            -- H13b: getHands(src) -> W.hands[src] or {}; W.fail.hands = 'throw'; W.X.fh_hands = nil = resource missing
+            fh_hands = { getHands = function(_, src)
+                W.handCalls[#W.handCalls + 1] = src
+                if W.fail.hands == 'throw' then error('fh_hands errored') end
+                return W.hands[src] or {}
+            end },
         }
+        W.X = X
         W.env = setmetatable({
             FhHomesteadConfig = cfg, FhPlotRules = PR, FhBuildRules = setmetatable({ safeRadius = function(p) return p.radius end,
                 safeRadiusFor = function(p) return p.radius end }, { __index = BR }),

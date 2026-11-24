@@ -443,6 +443,18 @@ local function sweepStashes(src, owner, plotId)
     end
 end
 
+---H13b (idea-859): has the character loaded on src hired a hand? fh_hands.getHands takes a player src (it re-checks the
+---loaded character itself) and returns {} when it cannot tell. fh_hands not started, export missing or erroring = no
+---hand (allow): the guard only exists while fh_hands does. Never throws.
+local function hasHands(src)
+    local called, hands = pcall(function() return exports.fh_hands:getHands(src) end)
+    if not called then
+        print(('^3[fh_homestead] fh_hands getHands unavailable (%s); hired-hand check skipped^7'):format(tostring(hands)))
+        return false
+    end
+    return type(hands) == 'table' and next(hands) ~= nil
+end
+
 ---Release a plot. Owner (by src) or admin (src 0 = console). With no plotId the caller's CLAIM is released; a town lot
 ---is only released by naming its id. The class comes from the plot's row.
 ---H13 stashes: refused 'fh_chests_not_empty' while any of the plot's chests (chest 1, chest_2, chest_3 as its class has
@@ -451,6 +463,9 @@ end
 ---is taken (no new chest open, build or trophy change can start) and before the rep-back and the DELETE; a final sweep
 ---after the DELETE catches anything a pane opened before the lock (or fh_hands) slipped in, so the next owner always
 ---opens empty chests.
+---H13b: the owner releasing their own CLAIM while fh_hands reports a hired hand is refused 'fh_hand_active' (fire the
+---hand first): fh_hands works the claim chest (getPlot(cid) = claim only), so a town lot is not blocked. Admin `force`
+---skips it; an admin release of someone else's plot is not checked (getHands needs the owner's src).
 ---Town lot (abandon, no money back): rep -townLot.rep in the lot's region for the owner, before the DELETE. The owner
 ---abandoning their own lot is refused if that rep change fails (so buy/abandon/rebuy never farms rep). An admin can
 ---always clear a lot: the rep-back is taken by citizenid (owner online or offline); if that call fails or throws the lot
@@ -473,6 +488,11 @@ local function unclaim(src, plotId, force)
     local class = claims.classByPlot[plotId] or rules.classOf(cfg.plots[plotId])
     local region = cfg.plots[plotId] and cfg.plots[plotId].region
     busy[plotId] = true
+    -- H13b: under the lock, before the stash read and any rep or DB change (a refusal here needs no undo)
+    if not force and class == DEFAULT_CLASS and citizenid ~= nil and citizenid == owner and hasHands(src) then
+        busy[plotId] = nil
+        return false, 'fh_hand_active'
+    end
     -- H13: stash check under the lock, before any rep or DB change (a refusal here needs no undo)
     local read, stashes, swhy = pcall(readStashes, plotId)
     if not read or not stashes then

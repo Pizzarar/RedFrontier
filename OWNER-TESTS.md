@@ -651,7 +651,9 @@ Needs `ensure fh_progression`, `ensure fh_fence`, `ensure fh_hands` (shipped in 
 13. Offline catch-up: wait 30 s after your last `fh_hand_tick` before starting this step. With the hand hired and $50+ cash, note cash and the chest feed. Disconnect. In the server DB run `UPDATE fh_hands SET last_tick = last_tick - 3600;` (simulates an hour offline, 6 ticks, the cap). Rejoin and open the chest.
     Expected: on login the missed ticks run once each, capped at 6: at most $30 wages taken and feed topped up to the cap of 40. Wait 30 s: no extra ticks beyond that (no double charge).
     RESULT:
-14. Fire: run `fh_hand_fire <id> ranch_hand`. Then `fh_hand_tick <id>`.
+14. Fire. First, with the hand still hired, run `/fh_unclaim` (H13b).
+    Expected: `fh_unclaim: fh_hand_active`; you still own the claim (`/fh_build` still lists your plot). Do not unclaim after the fire below.
+    Then run `fh_hand_fire <id> ranch_hand`. Then `fh_hand_tick <id>`.
     Expected: `fh_hand_fire: ok (ranch_hand)`; `fh_hand_tick: no_hands`; no more wages or feed. Re-hiring with `fh_hand_hire` works again (no `already_hired`). Also try `fh_hand_tick` with a bad id (`abc`, `0`, a disconnected id): `fh_bad_target` / `no_player`.
     RESULT:
 15. Permission check: as a non-admin player run `/fh_rep_region <id> heartlands 5`, `/fh_fence_next`, `/fh_hand_tick <id>` and `/fh_hand_hire <id> ranch_hand` from F8.

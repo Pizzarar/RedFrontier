@@ -37,7 +37,7 @@ claims and `fh_plot_slots` has finished.
 | Export | Returns | Notes |
 |---|---|---|
 | `claim(src, class?)` | `true, plot_id` or `false, reason` | `class` defaults to `'claim'`; the plot you stand in must be of that class (`/fh_claim` = class `claim` only; town lots are bought, H8). One plot per character per class. Reasons: `fh_not_ready`, `fh_no_character`, `fh_no_player`, `fh_not_in_plot`, `fh_wrong_plot_class`, plus the `plot_rules` refusals (`fh_plot_taken`, `fh_already_has_plot`, `fh_already_has_lot`, `fh_not_claimable`), `fh_claim_failed` |
-| `unclaim(src, plot_id?, force?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. The class comes from the plot's row. No `plot_id` = the caller's **claim** (a town lot is only released by naming its id). `force` (admin / console only) empties the plot's chests first (H13, see "Chests on unclaim"). `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_not_admin` (`force` from a non-admin), `fh_claim_busy` (that plot's claim is still writing; retry), `fh_chest_busy` (a build or trophy change on that plot is in flight; retry), `fh_chests_not_empty`, `fh_chest_check_failed`, `fh_chest_clear_failed`, `fh_rep_failed` (town lot), `fh_unclaim_failed` |
+| `unclaim(src, plot_id?, force?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. The class comes from the plot's row. No `plot_id` = the caller's **claim** (a town lot is only released by naming its id). `force` (admin / console only) empties the plot's chests first (H13, see "Chests on unclaim"). `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_not_admin` (`force` from a non-admin), `fh_hand_active` (H13b: the owner's own claim while fh_hands reports a hired hand), `fh_claim_busy` (that plot's claim is still writing; retry), `fh_chest_busy` (a build or trophy change on that plot is in flight; retry), `fh_chests_not_empty`, `fh_chest_check_failed`, `fh_chest_clear_failed`, `fh_rep_failed` (town lot), `fh_unclaim_failed` |
 | `getPlot(citizenid, class?)` | plot id or `nil` | `class` defaults to `'claim'`: `getPlot(cid)` is the homestead claim only, never a town lot (`nil` for a lot-only owner). `getPlot(cid, 'town_lot')` = the lot |
 | `buyLot(src)` | `true, plot_id` or `false, reason` | `/fh_buylot`: buy the town lot you stand in. See "Town lots" below for the flow and reasons |
 | `claimedPlots()` | `{ plot_id, ... }` | every claimed plot, all classes (fh_ui `/where plot`) |
@@ -231,6 +231,15 @@ No inherited stashes: the next owner of a plot always opens empty chests.
   one is refused `fh_chest_busy` and one during an unclaim is refused `fh_claim_busy`. After the DELETE, still under
   the lock, a final sweep logs anything that slipped in (a pane opened before the lock) as `ITEM LOST: added during
   unclaim` and clears it; if that clear fails the release stands and the console names the stash to wipe by hand.
+
+### Hired hand (H13b, idea-859)
+
+The owner releasing their own **claim** while `exports.fh_hands:getHands(src)` lists a hand is refused `fh_hand_active`
+(fire the hand first, `fh_hand_fire`). Checked under the per-plot lock, before the stash read; nothing changes on a
+refusal. fh_hands works the claim chest only (`getPlot(cid)`), so a town lot abandon is not blocked. `getHands` is called
+with the player src (it re-checks the loaded character; a citizenid would always read as no hand). fh_hands not started,
+export missing or erroring = allowed (`pcall`, console warns `hired-hand check skipped`). Admin `force` skips the check;
+an admin / console release of someone else's plot is not checked (the owner may be offline, `getHands` needs their src).
 
 ## Open
 
