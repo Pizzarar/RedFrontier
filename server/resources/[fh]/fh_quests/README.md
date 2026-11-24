@@ -231,9 +231,10 @@ fh_quests drops a job type when its owning resource stops.
 ## Built-in job types (Q3)
 
 Registered at start through the public `registerJobType` export, the same path @roads' `freight` uses
-(`server/jobtypes.lua`; the data and every verdict are pure, in `shared/jobtypes.lua`, specced in
-`quests_jobtypes`). Each decides its verdicts in `hooks.onEvent` from the accepted-offer snapshot
-(`progress.job`). Region templates are in `FhQuestsJobTypes.DATA`; only `heartlands` has any today. All coordinates,
+(`server/jobtypes.lua`; every verdict is pure, in `shared/jobtypes.lua`, specced in `quests_jobtypes`; each offer
+builder is in `shared/jobtypes/<type>.lua`). Each decides its verdicts in `hooks.onEvent` from the accepted-offer
+snapshot (`progress.job`). Region templates are in `data/regions/<region_id>.lua` (one per FhRegions id, read as
+`FhQuestsJobTypes.DATA`); only `heartlands` has any today. All coordinates,
 models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (one rotation).
 
 | Type | Offer `on` / `where` | Advances when | Offer-only fields |

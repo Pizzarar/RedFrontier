@@ -13,7 +13,9 @@ shared_scripts {
     'shared/engine.lua',
     'shared/board.lua',
     'shared/jobs.lua',
-    'shared/jobtypes.lua',
+    'shared/jobtypes.lua',   -- FhQuestsJobTypes (empty DATA/BUILDERS); the two globs below register into it
+    'shared/jobtypes/*.lua', -- offer builders, one per built-in job type
+    'data/regions/*.lua',    -- job templates, one per FhRegions id (all 15; empty = no offers)
     'shared/intake.lua',
     'shared/journal.lua',
     'shared/rewards.lua',

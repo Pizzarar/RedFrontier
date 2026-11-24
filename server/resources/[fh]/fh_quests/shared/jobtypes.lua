@@ -4,7 +4,7 @@
 --
 -- Every offer carries the fields registerJobType documents (key/title/text/on/where/count/rewards); the job types
 -- decide their own verdicts in M.verdict (used as hooks.onEvent), reading the accepted-offer snapshot that
--- the server stored in state.progress.job. ALL coordinates/models below are guesses: TODO-verify-in-game.
+-- the server stored in state.progress.job. ALL coordinates/models in data/regions are guesses: TODO-verify-in-game.
 local M = {}
 
 local function match() return FhQuestsMatch or require('match') end
@@ -13,76 +13,23 @@ M.TYPES = { 'hunt_request', 'camp_clear', 'bounty' }
 M.BOUNTY_EVENT = 'fh:quests:bounty_down' -- local server event fired by the bounty death watcher: { citizenid, offer_key, region_id }
 M.BOUNTY_TAG_PREFIX = 'fh_quests:bounty:'
 
-M.DATA = {
-    heartlands = {
-        hunt = { -- { animal, stars, money }: deliver an N-star pelt of that animal (sold at the fh_hunting buyer)
-            { 'deer', 1, 6 }, { 'deer', 2, 10 }, { 'wolf', 2, 16 }, { 'wolf', 3, 24 }, { 'bear', 2, 34 }, { 'bear', 3, 50 },
-        },
-        camps = { -- fh_zones camp ids (fh_zones/config.lua)
-            { id = 'heartlands_t1_01', label = 'Heartlands outlaw camp', money = 40, rep = 3 },
-        },
-        bounties = { -- wanted NPCs (model/coords TODO-verify-in-game)
-            { key = 'silas_crow', name = 'Silas Crow', model = 'g_m_m_unibanditos_01',
-                coords = { x = -128.0, y = 826.0, z = 117.0 }, heading = 140.0, money = 30, rep = 2 },
-            { key = 'mabel_teague', name = 'Mabel Teague', model = 'g_m_m_unibanditos_01',
-                coords = { x = -170.0, y = 860.0, z = 118.0 }, heading = 20.0, money = 36, rep = 2 },
-        },
-    },
-}
+-- Region templates: data/regions/<region_id>.lua (one per FhRegions id) fill M.DATA through M.registerRegion.
+-- Offer builders: shared/jobtypes/<job_type>.lua fill M.BUILDERS through M.registerBuilder. In FXServer the manifest
+-- loads both right after this file; outside it (specs) this file loads them itself (bottom).
+M.DATA = {}     -- region_id -> { hunt = {...}, camps = {...}, bounties = {...} }
+M.BUILDERS = {} -- job_type -> function(region_id, data) -> offer list
 
-local function rewards(region_id, money, rep)
+function M.registerRegion(region_id, data) M.DATA[region_id] = data end
+function M.registerBuilder(job_type, build) M.BUILDERS[job_type] = build end
+
+---Offer rewards shape shared by the builders.
+function M.rewards(region_id, money, rep)
     return { money = money, rep = { region_id = region_id, delta = rep } }
 end
 
-local function huntOffers(region_id, d)
-    local out = {}
-    for _, h in ipairs(d.hunt or {}) do
-        local animal, stars, money = h[1], h[2], h[3]
-        out[#out + 1] = {
-            key = ('%s_%dstar'):format(animal, stars),
-            title = ('Pelt wanted: %d-star %s'):format(stars, animal),
-            text = ('Sell a %d-star or better %s pelt.'):format(stars, animal),
-            on = 'fh:hunting:pelt_sold',
-            -- pelt_sold always carries `animal` (fh_hunting sell.lua, Q0b): both quality and animal must match.
-            where = { quality = { min = stars }, animal = { eq = animal } },
-            rewards = rewards(region_id, money, 1), region_id = region_id, animal = animal, stars = stars,
-        }
-    end
-    return out
-end
-
-local function campOffers(region_id, d)
-    local out = {}
-    for _, c in ipairs(d.camps or {}) do
-        out[#out + 1] = {
-            key = 'camp_' .. c.id, title = 'Clear out: ' .. c.label,
-            text = 'Wipe out the outlaws at the ' .. c.label .. '.',
-            on = 'fh:zones:camp_cleared', where = { camp_id = c.id },
-            rewards = rewards(region_id, c.money, c.rep), region_id = region_id, camp_id = c.id,
-        }
-    end
-    return out
-end
-
-local function bountyOffers(region_id, d)
-    local out = {}
-    for _, b in ipairs(d.bounties or {}) do
-        out[#out + 1] = {
-            key = 'bounty_' .. b.key, title = 'Wanted: ' .. b.name,
-            text = b.name .. ' is holed up near here. Bring them down.',
-            on = M.BOUNTY_EVENT, rewards = rewards(region_id, b.money, b.rep), region_id = region_id,
-            -- the rest rides along to accept only (spawn setup)
-            name = b.name, model = b.model, coords = b.coords, heading = b.heading,
-        }
-    end
-    return out
-end
-
-local BUILDERS = { hunt_request = huntOffers, camp_clear = campOffers, bounty = bountyOffers }
-
 ---Offer templates of one job type for a region (hooks.offers). Fresh tables every call; unknown region = {}.
 function M.offers(job_type, region_id)
-    local build, d = BUILDERS[job_type], M.DATA[region_id]
+    local build, d = M.BUILDERS[job_type], M.DATA[region_id]
     if not build or not d then return {} end
     return build(region_id, d)
 end
@@ -152,5 +99,16 @@ end
 if GetCurrentResourceName then
     FhQuestsJobTypes = M
 else
+    -- Specs: load what the manifest loads in-game. Each file takes this module as its chunk argument.
+    local dir = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+    for _, job_type in ipairs(M.TYPES) do assert(loadfile(dir .. 'jobtypes/' .. job_type .. '.lua'))(M) end
+    local ids = {}
+    for id in pairs((FhRegions or require('regions')).regions) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do
+        local path = dir .. '../data/regions/' .. id .. '.lua'
+        local f = io.open(path, 'r')
+        if f then f:close(); assert(loadfile(path))(M) end
+    end
     return M
 end
