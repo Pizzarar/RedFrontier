@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: ★ Cor2
-- Workers: 1
+- Lead: ★ Cor3
+- Workers: 2
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -64,3 +64,4 @@
 - 11-24 core-07 A1 PASS: fh_economy money audit, 3 fixes (logout-window guard, checked add/remove in integer cents, whole-cent amounts) + unload tracker cleanup; 2d43a30+3da975a, Gemini tierA FAIL 0/1/1 then PASS 0/0/0; venv 96/1732/0. Follow-ups M2/M3 queued, siblings idea-862..867.
 - 11-24 core-07 L1 PASS: tools/check-contracts.py (exports/events/items lint, allowlist, run-specs --contracts) 645cc93+fix; Gemini FAIL 0/2/3 then PASS 0/0/0; 0 findings, 5 allowlisted.
 - 11-24 X1 (live) PASS: fh_core access claim moved to resource-local access.txt (Save/LoadResourceFile), re-applied at boot; io errors logged; server.cfg add_ace resource.fh_core command.add_principal. Gemini tierA-security PASS 0/0/2; X1-nit queued.
+- 11-24 core-07 B6f PASS: saddlebag player pane toggle DARK behind fh_saddlebag_pane=false (c895347+e2474f7+c7d4c9c), Gemini tierA PASS 0/0/4 then delta PASS 0/0/2 e4e00ab; venv 98/1808/0. Lows + /saddlebag in|out removal -> B6f-cleanup (after owner RESULT + flip).

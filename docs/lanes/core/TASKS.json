@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T23:03:57.032Z",
+  "updatedAt": "2026-11-24T23:19:57.943Z",
   "units": [
     {
       "id": "B5",
@@ -86,7 +86,7 @@
       "goal": "pane toggle dark behind fh_saddlebag_pane=false (core-07, tierA)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-b6f",
       "commit": "c2d652b"
     },
@@ -283,14 +283,16 @@
       "goal": "money items always fit: rsg-core moneyitems.lua:77-88 AddMoney returns true when cash item can't be placed; next sync drops it (A1 high-plausible). tierA",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running",
+      "branch": "core-m2"
     },
     {
       "id": "M3",
       "goal": "fh_inventory/server/shops.lua:136-170 bypasses fh_economy ledger, fractional prices, unchecked sell AddMoney (A1 med)",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running",
+      "branch": "core-m3"
     },
     {
       "id": "X1",
@@ -306,14 +308,23 @@
       "goal": "drop stale allowlist lines fh:hands:hired/fired from tools/contracts-allowlist.txt (fixed by progression G1/G3)",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running",
+      "branch": "core-n1"
     },
     {
       "id": "X1-nit",
       "goal": "access_rules.lua:134 match admin lines case-insensitively so a malformed ADMIN line still fails closed (X1 review low)",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running",
+      "branch": "core-n1"
+    },
+    {
+      "id": "B6f-cleanup",
+      "goal": "after owner saddlebag RESULT + flag flip: remove /saddlebag in|out; fix B6f delta lows L1 SnapBack early-return leaves PaneRevoked set (main.lua:1109-1116 via 1227), L2 OpenFor doesn't clear PaneRevoked (main.lua:1168-1172)",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked"
     }
   ]
 }
