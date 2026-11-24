@@ -1,13 +1,15 @@
 -- fh_zones client: (1) hostile AI setup for adopted camp peds (runs on the client that created them, from fh_core's local
 -- post-adopt event fh:spawn:adopted), (2) death hints to the server, (3) stash open prompt. Server decides everything.
 -- Natives (fh_core/docs/natives.md, all UNVERIFIED in-game): AddRelationshipGroup, SetPedRelationshipGroupHash,
--- SetRelationshipBetweenGroups, GiveWeaponToPed_2, SetCurrentPedWeapon, SetPedCombatAttributes, TaskCombatHatedTargetsAroundPed,
--- SetBlockingOfNonTemporaryEvents, IsEntityDead, DoesEntityExist, IsControlJustReleased. Not runtime-tested.
+-- SetRelationshipBetweenGroups, GIVE_WEAPON_TO_PED (by hash; RDR3 has no GiveWeaponToPed_2), SetCurrentPedWeapon,
+-- SetPedCombatAttributes, TaskCombatHatedTargetsAroundPed, SetBlockingOfNonTemporaryEvents, IsEntityDead,
+-- DoesEntityExist, IsControlJustReleased. Not runtime-tested.
 local rules = FhCampRules
 local camps = {}                 -- [campId] = { weapons = { [idx] = name } }
 local tracked = {}               -- [netId] = { entity, tag, reported }
 local INPUT_CONTEXT = 0xCEFD9220 -- E (unverified)
 local GROUP = 'FH_OUTLAWS'
+local N_GIVE_WEAPON = 0x5E3BDDBCB83F3D84 -- GIVE_WEAPON_TO_PED(ped, weaponHash, ammo, bForceInHand, bForceInHolster, attachPoint, bAllowMultiple, p7, p8, addReason, bIgnoreUnlocks, permanentDegradation, p12)
 
 local function setupPed(ped, weapon)
     AddRelationshipGroup(GROUP)
@@ -19,7 +21,7 @@ local function setupPed(ped, weapon)
     SetPedCombatAttributes(ped, 46, true) -- always fight
     if weapon then
         local h = joaat(weapon)
-        GiveWeaponToPed_2(ped, h, 100, true, true, 0x2CD419DC, false, 0.5, 1.0, 0, false, 0, false)
+        Citizen.InvokeNative(N_GIVE_WEAPON, ped, h, 100, true, true, 0x2CD419DC, false, 0.5, 1.0, 0, false, 0, false)
         SetCurrentPedWeapon(ped, h, true)
     end
     TaskCombatHatedTargetsAroundPed(ped, 60.0, 0)

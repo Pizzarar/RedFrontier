@@ -4,7 +4,8 @@
 -- only the quality hint (plan hunting-01-l8, Decided "Quality source").
 -- Natives (fh_core/docs/natives.md, all UNVERIFIED in-game): GET_PED_LAST_DAMAGE_BONE, GET_PED_CAUSE_OF_DEATH,
 -- _GET_PED_QUALITY, _GET_PED_DAMAGE_CLEANLINESS (by hash, from spk_pelt), GetPedBoneIndex, GetEntityBoneIndexByName,
--- HasEntityBeenDamagedByWeapon, ClearEntityLastWeaponDamage, GetGamePool, PlayerPedId, GetEntityCoords, GetEntityModel,
+-- HasEntityBeenDamagedByWeapon, _CLEAR_PED_LAST_WEAPON_DAMAGE (by hash; RDR3 has no ClearEntityLastWeaponDamage),
+-- GetGamePool, PlayerPedId, GetEntityCoords, GetEntityModel,
 -- IsPedAPlayer, IsEntityDead, IsControlJustReleased (H3 trapper prompt, input 0xCEFD9220 = context key), DoesEntityExist, NetworkGetEntityIsNetworked, NetworkGetNetworkIdFromEntity, GetGameTimer.
 local cfg, animals = FhHuntingConfig, FhHuntingAnimals
 
@@ -12,6 +13,7 @@ local N_LAST_DMG_BONE   = 0xD75960F6BD9EA49C -- GET_PED_LAST_DAMAGE_BONE(ped, in
 local N_CAUSE_OF_DEATH  = 0x16FFE42AB2D2DC59 -- GET_PED_CAUSE_OF_DEATH(ped) -> weapon hash
 local N_GET_QUALITY     = 0x7BCC6087D130312A -- _GET_PED_QUALITY(ped) -> int
 local N_GET_CLEANLINESS = 0x88EFFED5FE8B0B4A -- _GET_PED_DAMAGE_CLEANLINESS(ped) -> int
+local N_CLEAR_WEAPON_DMG = 0x087D8F4BC65F68E4 -- _CLEAR_PED_LAST_WEAPON_DAMAGE(ped) -> void (RDR3 name; GTAV ClearEntityLastWeaponDamage is not exposed)
 
 local alive = {} -- [ped] = { raw = bone id, bone = name|id, hits }
 local dead = {}  -- [netId] = { bone, hits, explosive, at }
@@ -47,7 +49,7 @@ end
 local function readHit(ped, t)
     if bool(HasEntityBeenDamagedByWeapon(ped, 0, 2)) then
         t.hits = t.hits + 1
-        ClearEntityLastWeaponDamage(ped)
+        Citizen.InvokeNative(N_CLEAR_WEAPON_DMG, ped)
     end
 end
 
@@ -77,7 +79,7 @@ FH.thread(function()
                     if not t then
                         t = { hits = 0 }
                         alive[ped] = t
-                        ClearEntityLastWeaponDamage(ped) -- count only hits from now on
+                        Citizen.InvokeNative(N_CLEAR_WEAPON_DMG, ped) -- count only hits from now on
                     end
                     seen[ped] = true
                     readBone(ped, t)
