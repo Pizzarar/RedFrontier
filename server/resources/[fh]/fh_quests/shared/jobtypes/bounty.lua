@@ -1,6 +1,6 @@
 -- bounty offers (Q3): bring down a wanted NPC (spawned on accept by server/jobtypes.lua). Pure Lua.
 -- Data: data/regions/<region_id>.lua `bounties = { { key, name, model, coords, heading, money, rep }, ... }`.
-local JT = ... or FhQuestsJobTypes -- chunk argument outside FXServer (specs), the global in-game
+local JT = (type((...)) == 'table' and (...)) or FhQuestsJobTypes -- chunk arg in specs (table), the global in FXServer (where ... is a number)
 
 JT.registerBuilder('bounty', function(region_id, d)
     local out = {}

@@ -62,7 +62,7 @@ function Set-SecretsKey([string]$Path, [string]$Key) {
 function Initialize-AccessCfgs([string]$Dir = $Server) {
     $headers = @{
         'admins.cfg'    = "# Owner admin (gitignored). fh_core auto-admin appends the first joiner here:`n#   add_principal identifier.license:<hash> group.admin`n# Delete the line and restart to revoke.`n"
-        'allowlist.cfg' = "# Friend allowlist (gitignored). fh_allow <license> appends here; or add by hand:`n#   add_principal identifier.license:<hash> group.fh_allowlist`n# Delete a line and restart to revoke.`n"
+        'allowlist.cfg' = "# Friend allowlist (gitignored). fh_allow <license> appends here, or add by hand:`n#   add_principal identifier.license:<hash> group.fh_allowlist`n# Delete a line and restart to revoke.`n"
     }
     foreach ($n in 'admins.cfg', 'allowlist.cfg') {
         $p = Join-Path $Dir $n

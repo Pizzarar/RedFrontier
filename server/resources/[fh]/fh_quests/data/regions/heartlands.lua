@@ -1,5 +1,5 @@
 -- heartlands job templates (fh_quests built-in job types). Coords/models are guesses: TODO-verify-in-game.
-local JT = ... or FhQuestsJobTypes -- chunk argument outside FXServer (specs), the global in-game
+local JT = (type((...)) == 'table' and (...)) or FhQuestsJobTypes -- chunk arg in specs (table), the global in FXServer (where ... is a number)
 
 JT.registerRegion('heartlands', {
     hunt = { -- { animal, stars, money }: deliver an N-star pelt of that animal (sold at the fh_hunting buyer)

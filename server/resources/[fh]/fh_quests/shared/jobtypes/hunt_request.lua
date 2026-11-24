@@ -1,6 +1,6 @@
 -- hunt_request offers (Q3): deliver an N-star pelt of an animal (sold at the fh_hunting buyer). Pure Lua.
 -- Data: data/regions/<region_id>.lua `hunt = { { animal, stars, money }, ... }`. Verdicts: shared/jobtypes.lua.
-local JT = ... or FhQuestsJobTypes -- chunk argument outside FXServer (specs), the global in-game
+local JT = (type((...)) == 'table' and (...)) or FhQuestsJobTypes -- chunk arg in specs (table), the global in FXServer (where ... is a number)
 
 JT.registerBuilder('hunt_request', function(region_id, d)
     local out = {}
