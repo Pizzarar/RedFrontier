@@ -325,9 +325,9 @@ case('lock: a never-resuming trade is reclaimed after lockStaleSeconds; its late
     T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money)
 end)
 
--- ---------------------------------------------------------------- reclaim (re-review finding 1)
--- A hangs >= lockStaleSeconds, B reclaims the lock; A then resumes. A must do no stash / money side effect on B's
--- stash; B finishes normally.
+-- ---------------------------------------------------------------- reclaim (re-review finding 1, late-write residual)
+-- A hangs >= lockStaleSeconds. Before its first side effect B may reclaim the lock, and A then changes nothing. Once A
+-- has staged / moved / charged / paid (locks.write), the lock is pinned: B is fence_busy until A lands and finishes.
 
 case('reclaim: stale SELL resumes after B staged a buy -> A hands out nothing (no restore of B\'s stage)', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
@@ -342,79 +342,82 @@ case('reclaim: stale SELL resumes after B staged a buy -> A hands out nothing (n
     T.eq(5, count(W.C1.bag, GUN)); T.eq(1000 - 3 * PRICE, W.C1.money); T.eq(0, size(W.stash()))
 end)
 
-case('reclaim: stale BUY whose stage is refused after B staged -> A does not wipe B\'s stage', function()
+---A is parked inside the side-effecting dep it yielded in (effect not done yet) far past lockStaleSeconds. Its lock is
+---pinned: B's buy and sell and an admin settle (same citizen, src 2) are all fence_busy and make no dep call at all.
+local function othersRefused(W)
+    W.clock = W.clock + 10 * cfg.lockStaleSeconds
+    local before = copy(W.calls)
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.sell(2, GUN, 1)))
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.settle(2)))
+    T.same(before, W.calls)
+    local n = 0
+    for _, l in ipairs(W.logs) do if l:find('stale trade lock kept', 1, true) then n = n + 1 end end
+    T.eq(1, n) -- one WARNING per pinned token, not one per refused attempt
+    assert(not logged(W, 'reclaimed a stale trade lock'))
+end
+
+case('pinned: A\'s stage lands after lockStaleSeconds -> no reclaim, B busy; A completes, charged once', function()
     local W = world()
-    local a = start(function() return W.T.buy(1, GUN, 2) end, 'addItem') -- A passed begin, about to stage
-    W.clock = cfg.lockStaleSeconds
-    W.hooks.addItem = function(_, n) W.fail.addItem = (n == 2) and 'fh_refused' or nil end -- B stages (1), A refused (2)
-    local b = start(function() return W.T.buy(2, GUN, 1) end, 'charge')
-    T.same({ false, 'fence_busy', n = 2 }, drain(a))
-    T.eq(1, count(W.stash(), GUN)); T.eq(nil, W.calls.clear) -- B's stage survives
-    W.hooks.addItem, W.fail.addItem = nil, nil
-    T.same({ true, 1, 0, n = 3 }, drain(b)) -- old code: A's clear made B charge for nothing delivered
-    T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money); T.eq(0, size(W.stash()))
-    assert(logged(W, 'reclaimed mid-trade'))
+    local a = start(function() return W.T.buy(1, GUN, 2) end, 'addItem') -- A passed begin, stage in flight
+    othersRefused(W)
+    T.same({ true, 2, 0, n = 3 }, drain(a)) -- old code: B reclaimed, A's late stage landed in B's stash
+    T.eq(2, count(W.C1.bag, GUN)); T.eq(1000 - 2 * PRICE, W.C1.money); T.eq(0, size(W.stash()))
+    assert(not W.T.locks.held('C1'))
+    T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(2, GUN, 1))) -- the lock is free again
 end)
 
-case('reclaim: stale BUY charged after reclaim -> no delivery, no refund, no wipe; flagged, stash pinned', function()
+case('pinned: A\'s charge lands after lockStaleSeconds -> B busy; A delivers, nothing left for settle', function()
     local W = world()
     local a = start(function() return W.T.buy(1, GUN, 2) end, 'charge') -- A staged 2, charge in flight
-    W.clock = cfg.lockStaleSeconds
-    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- B reclaims, sees A's stage
-    T.same({ false, 'fence_busy', n = 2 }, drain(a)) -- charge lands, A no longer owns the stash
-    T.eq(1000 - 2 * PRICE, W.C1.money); T.eq(0, count(W.C1.bag, GUN)); T.eq(2, count(W.stash(), GUN))
-    T.eq(nil, W.calls.transferAll); T.eq(nil, W.calls.clear); T.eq(nil, W.calls.removeItem); T.eq(0, #W.refunds)
-    assert(logged(W, 'WARNING buy paid then reclaimed'))
-    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
+    othersRefused(W)
+    T.same({ true, 2, 0, n = 3 }, drain(a)) -- old code: paid, then left undelivered for an admin
+    T.eq(2, count(W.C1.bag, GUN)); T.eq(1000 - 2 * PRICE, W.C1.money); T.eq(0, size(W.stash())); T.eq(0, #W.refunds)
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
 end)
 
-case('reclaim: stale BUY whose charge is refused after reclaim -> leaves its unpaid stage, no clear', function()
+case('pinned: A\'s charge is refused after lockStaleSeconds -> A discards its own stage; settle has nothing to hand out', function()
     local W = world()
     local a = start(function() return W.T.buy(1, GUN, 2) end, 'charge')
-    W.clock = cfg.lockStaleSeconds
-    local b = start(function() return W.T.sell(2, GUN, 1) end, 'snapshot') -- B holds the lock, in begin
+    othersRefused(W)
     W.fail.charge = 'fh_charge_busy'
-    T.same({ false, 'fence_busy', n = 2 }, drain(a))
-    T.eq(nil, W.calls.clear); T.eq(2, count(W.stash(), GUN)); T.eq(1000, W.C1.money)
+    T.same({ false, 'fh_charge_busy', n = 2 }, drain(a))
     W.fail.charge = nil
-    T.same({ false, 'fence_pending', n = 2 }, drain(b)) -- B sees A's stage: refused, nothing mixed
+    -- old code: the unpaid stage stayed pinned and settle would have given it to the player for free
+    T.eq(0, size(W.stash())); T.eq(1000, W.C1.money); T.eq(0, count(W.C1.bag, GUN)); T.eq(1, W.calls.clear)
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
 end)
 
-case('reclaim: stale SELL paid after reclaim -> keeps the sale, does not clear; stash pinned', function()
+case('pinned: A\'s sell pay lands after lockStaleSeconds -> A removes the sold goods; settle cannot give them back', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
     local a = start(function() return W.T.sell(1, GUN, 2) end, 'pay') -- goods in stash, pay in flight
-    W.clock = cfg.lockStaleSeconds
-    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
+    othersRefused(W)
     T.same({ true, 2, 2 * SELL, n = 3 }, drain(a))
-    T.eq(nil, W.calls.clear); T.eq(nil, W.calls.removeItem); T.eq(2, count(W.stash(), GUN))
+    -- old code: sold goods left pinned, settle would have handed them back to a player who was paid (dupe)
+    T.eq(1, W.calls.removeItem); T.eq(0, size(W.stash())); T.eq(0, count(W.C1.bag, GUN))
     T.eq(1000 + 2 * SELL, W.C1.money)
-    assert(logged(W, 'WARNING sell paid then reclaimed'))
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
 end)
 
-case('reclaim: stale partial BUY reclaimed during delivery -> no removeItem, no refund; owed amount logged', function()
+case('pinned: A\'s partial delivery lands after lockStaleSeconds -> A removes and refunds only the undelivered', function()
     local W = world()
     W.hooks.charge = function() W.C1.room = 1 end
     local a = start(function() return W.T.buy(1, GUN, 3) end, 'transferAll') -- paid, delivery in flight
-    W.clock = cfg.lockStaleSeconds
-    W.C1.room = 10 -- let B reach the stash check
-    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- B reclaims, sees A's paid units
-    W.C1.room = 1
-    T.same({ false, 'delivery_incomplete', n = 2 }, drain(a))
-    T.eq(nil, W.calls.removeItem); T.eq(0, #W.refunds); T.eq(1000 - 3 * PRICE, W.C1.money)
-    T.eq(1, count(W.C1.bag, GUN)); T.eq(2, count(W.stash(), GUN)); assert(logged(W, 'refund owed'))
+    othersRefused(W)
+    T.same({ true, 1, 2 * PRICE, n = 3 }, drain(a))
+    T.eq(1, count(W.C1.bag, GUN)); T.eq(0, size(W.stash())); T.eq(1000 - PRICE, W.C1.money)
+    T.same({ 2 * PRICE }, W.refunds)
 end)
 
-case('reclaim: stale SELL whose pay fails after reclaim -> no restore into a stash it lost; goods kept', function()
+case('pinned: A\'s sell pay fails after lockStaleSeconds -> A gives its goods back; nothing pending', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
     local a = start(function() return W.T.sell(1, GUN, 2) end, 'pay')
-    W.clock = cfg.lockStaleSeconds
-    local b = start(function() return W.T.buy(2, GUN, 1) end, 'ensureStash') -- B holds the lock
+    othersRefused(W)
     W.fail.pay = { reason = 'fence_sell', err = 'ledger_failed' }
     T.same({ false, 'ledger_failed', n = 2 }, drain(a))
-    T.eq(nil, W.calls.transferAll); T.eq(2, count(W.stash(), GUN)); T.eq(0, count(W.C1.bag, GUN))
-    T.eq(1000, W.C1.money); assert(logged(W, 'WARNING sell: pay failed'))
     W.fail.pay = nil
-    T.same({ false, 'fence_pending', n = 2 }, drain(b))
+    T.eq(2, count(W.C1.bag, GUN)); T.eq(0, size(W.stash())); T.eq(1000, W.C1.money)
+    assert(logged(W, 'item given back'))
 end)
 
 -- ---------------------------------------------------------------- sweep flag (re-review finding 2)
@@ -609,18 +612,16 @@ case('sell: paid but removeItem fails -> sold goods swept by the next trade, pai
     T.eq(0, count(W.C1.bag, GUN)); T.eq(1000 + 3 * SELL, W.C1.money); T.eq(0, size(W.stash()))
 end)
 
-case('sell: removeItem fails after the lock was reclaimed -> no sweep flag, sold goods stay pinned', function()
+case('sell: removeItem lands after lockStaleSeconds and fails -> lock was pinned, sold goods swept, never handed back', function()
     local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
     local a = start(function() return W.T.sell(1, GUN, 2) end, 'removeItem') -- paid, removal in flight
-    W.clock = cfg.lockStaleSeconds
-    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- B reclaims, sees the sold goods
+    othersRefused(W)
     W.fail.removeItem = 'fh_inventory_down'
     T.same({ true, 2, 2 * SELL, n = 3 }, drain(a))
     W.fail.removeItem = nil
-    assert(logged(W, 'removal failed (fh_inventory_down) and reclaimed'))
-    -- not flagged: the next trade refuses instead of sweeping (old code: flag set, stash wiped by the next trade)
-    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1)))
-    T.eq(2, count(W.stash(), GUN)); T.eq(nil, W.calls.clear)
+    assert(logged(W, 'retried on the next trade')) -- A still owned the stash: the fence's goods are flagged
+    T.same({ true, 0, 'swept', n = 3 }, table.pack(W.T.settle(1)))
+    T.eq(0, size(W.stash())); T.eq(0, count(W.C1.bag, GUN)); T.eq(1000 + 2 * SELL, W.C1.money)
 end)
 
 case('sell: backpack slot reused by another item mid-sell -> aborted, everything given back, no pay', function()
@@ -680,18 +681,18 @@ case('settle: room vanishes during the transfer -> moved units put back, nothing
     T.eq(1, W.calls.move)
 end)
 
-case('settle: lock reclaimed after the first rollback move -> the second move never runs', function()
+case('settle: a reclaim attempt during the rollback is refused (pinned) -> every moved step is put back', function()
     local W = world({ stash = { [1] = { name = GUN, amount = 1 }, [2] = { name = 'bread', amount = 1 },
         [3] = { name = 'water', amount = 2 } } })
     W.hooks.transferAll = function() W.C1.room = 2 end -- 2 steps move (GUN, bread), water is left: rollback of 2 steps
     W.hooks.move = function(_, n)
-        if n == 1 then W.clock = cfg.lockStaleSeconds; assert(W.T.locks.acquire('C1', 9)) end -- reclaimed mid-rollback
+        if n == 1 then W.clock = cfg.lockStaleSeconds; T.eq(nil, W.T.locks.acquire('C1', 9)) end
     end
-    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.settle(1)))
-    T.eq(1, W.calls.move) -- the GUN step is not put back by a settle that lost the lock
-    T.eq(1, count(W.stash(), 'bread')); T.eq(2, count(W.stash(), 'water')); T.eq(1, count(W.C1.bag, GUN))
-    assert(logged(W, 'settle reclaimed mid-trade (rollback cut short'))
-    assert(W.T.locks.held('C1')) -- the newer holder keeps its lock
+    T.same({ false, 'no_room', n = 2 }, table.pack(W.T.settle(1)))
+    T.eq(2, W.calls.move) -- old code: reclaimed after the first move, goods left split between stash and backpack
+    T.eq(1, count(W.stash(), GUN)); T.eq(1, count(W.stash(), 'bread')); T.eq(2, count(W.stash(), 'water'))
+    T.eq(0, count(W.C1.bag, GUN)); T.eq(0, count(W.C1.bag, 'bread'))
+    assert(logged(W, 'stale trade lock kept')); assert(not W.T.locks.held('C1'))
 end)
 
 case('settle: busy lock -> fence_busy, nothing moves; works once the trade is done', function()
@@ -731,6 +732,102 @@ case('sell: no_player when the citizen is unknown; nothing locked', function()
     local W = world()
     T.same({ false, 'no_player', n = 2 }, table.pack(W.T.sell(99, GUN, 1)))
     T.same({ false, 'no_player', n = 2 }, table.pack(W.T.buy(99, GUN, 1)))
+end)
+
+-- ---------------------------------------------------------------- late write (trade.lua invariant 1, pinned lock)
+-- The residual this closes: a trade's lock reclaimed while one of its fh_core calls is still in flight, the newer
+-- trade uses the stash, then the old call lands in it. Now a lock is reclaimable only before its trade's first side
+-- effect, so the only call that can land late is a read, and the old trade then changes nothing.
+
+local function untouchedC2(W)
+    T.eq(1000, W.players.C2.money); T.eq(0, size(W.players.C2.bag))
+end
+
+case('late write: reclaimed during a read, newer trade stages + finishes, old read lands -> old trade changes nothing', function()
+    local W = world()
+    local a = start(function() return W.T.buy(1, GUN, 2) end, 'snapshot') -- A in begin: reads the (empty) stash
+    W.clock = cfg.lockStaleSeconds
+    local b = start(function() return W.T.buy(2, GUN, 1) end, 'charge') -- B reclaimed, staged 1, about to charge
+    assert(logged(W, 'reclaimed a stale trade lock'))
+    T.same({ false, 'fence_busy', n = 2 }, drain(a)) -- A's stale "empty" read lands: A stops, stages nothing
+    T.eq(1, W.calls.addItem); T.eq(1, count(W.stash(), GUN)); T.eq(nil, W.calls.clear) -- B's stage only, untouched
+    T.same({ true, 1, 0, n = 3 }, drain(b))
+    T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money); T.eq(0, size(W.stash())); T.eq(1, W.calls.charge)
+    untouchedC2(W)
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
+end)
+
+case('late write: every stash write kind lands after lockStaleSeconds -> pinned, others busy, A finishes its own rules', function()
+    local scenarios = {
+        { 'buy stage discard (clear) after a refused charge', 'clear', function(W)
+            W.hooks.charge = function() W.fail.charge = 'fh_charge_busy' end
+            return function() return W.T.buy(1, GUN, 2) end
+        end, { false, 'fh_charge_busy', n = 2 }, function(W)
+            T.eq(0, count(W.C1.bag, GUN)); T.eq(1000, W.C1.money)
+        end },
+        { 'begin sweep (clear) of fence-owned leftovers', 'clear', function(W)
+            W.fail.charge, W.fail.clear = 'fh_charge_busy', 'fh_inventory_down'
+            T.same({ false, 'fh_charge_busy', n = 2 }, table.pack(W.T.buy(1, GUN, 2))) -- unpaid stage, sweepable
+            W.fail.charge, W.fail.clear, W.calls = nil, nil, {}
+            return function() return W.T.buy(1, GUN, 1) end
+        end, { true, 1, 0, n = 3 }, function(W)
+            T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money)
+        end },
+        { 'sell goods -> stash (move)', 'move', function(W)
+            W.C1.bag = { [1] = { name = GUN, amount = 2 } }
+            return function() return W.T.sell(1, GUN, 2) end
+        end, { true, 2, 2 * SELL, n = 3 }, function(W)
+            T.eq(0, count(W.C1.bag, GUN)); T.eq(1000 + 2 * SELL, W.C1.money)
+        end },
+        { 'buy partial removal (removeItem)', 'removeItem', function(W)
+            W.hooks.charge = function() W.C1.room = 1 end
+            return function() return W.T.buy(1, GUN, 3) end
+        end, { true, 1, 2 * PRICE, n = 3 }, function(W)
+            T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 - PRICE, W.C1.money); T.same({ 2 * PRICE }, W.refunds)
+        end },
+        { 'settle hand-over (transferAll)', 'transferAll', function(W)
+            W.stashes[STASH] = { [1] = { name = GUN, amount = 2 } }
+            return function() return W.T.settle(1) end
+        end, { true, 2, 'delivered', n = 3 }, function(W)
+            T.eq(2, count(W.C1.bag, GUN)); T.eq(1000, W.C1.money)
+        end },
+    }
+    for _, s in ipairs(scenarios) do
+        local name, at, setup, want, check = s[1], s[2], s[3], s[4], s[5]
+        local W = world()
+        local a = start(setup(W), at)
+        othersRefused(W)
+        T.same(want, drain(a), name)
+        T.eq(0, size(W.stash()), name); check(W); untouchedC2(W)
+        assert(not W.T.locks.held('C1'), name)
+    end
+end)
+
+case('late write: a late removal that FAILS leaves paid goods fence_pending; settle gives them to the payer', function()
+    local W = world()
+    W.hooks.charge = function() W.C1.room = 1 end
+    local a = start(function() return W.T.buy(1, GUN, 3) end, 'removeItem') -- 1 delivered, removal of 2 in flight
+    othersRefused(W)
+    W.fail.removeItem = 'fh_inventory_down'
+    T.same({ false, 'delivery_incomplete', n = 2 }, drain(a))
+    W.hooks.charge, W.fail.removeItem, W.C1.room = nil, nil, 10
+    T.eq(0, #W.refunds); assert(logged(W, 'refund owed'))
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(2, GUN, 1))) -- reported, not mixed or swept
+    T.eq(2, count(W.stash(), GUN))
+    T.same({ true, 2, 'delivered', n = 3 }, table.pack(W.T.settle(2)))
+    T.eq(3, count(W.C1.bag, GUN)); T.eq(1000 - 3 * PRICE, W.C1.money); T.eq(0, size(W.stash())) -- paid 3, holds 3
+    untouchedC2(W)
+end)
+
+case('late write: a pinned trade that never returns keeps that citizen busy (documented cost); others trade', function()
+    local W = world()
+    local a = start(function() return W.T.buy(1, GUN, 2) end, 'transferAll') -- paid, delivery never returns
+    W.clock = 1000 * cfg.lockStaleSeconds
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.buy(2, GUN, 1)))
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.settle(2)))
+    assert(W.T.locks.held('C1')); T.eq(2, count(W.stash(), GUN)) -- A's paid goods stay with A's trade
+    T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(3, GUN, 1))) -- another citizen is not affected
+    T.eq(coroutine.status(a), 'suspended')
 end)
 
 T.finish()
