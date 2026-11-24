@@ -16,7 +16,7 @@ Two machines. **DevPC** hosts the repo, FXServer, MariaDB and the Cfx license ke
 
 ## 3. Start the server (DevPC)
 
-Double-click `tools/first-run.cmd`, accept the UAC prompt (opens the firewall on 30120), paste the Cfx key when asked (hidden; saved to `server/secrets.cfg`). It starts MariaDB + FXServer (`tools/start-server.ps1`) and prints the connect line. Safe to run again any time (it is also how you restart). Stop: close the server window, then `tools/stop-server.ps1`.
+Double-click `tools/first-run.cmd`, accept the UAC prompt (opens the firewall on 30120), paste the Cfx key when asked (hidden; saved to `server/secrets.cfg`). It starts MariaDB + FXServer (`tools/start-server.ps1`) and prints the connect line. Safe to run again any time (it is also how you restart). If you skipped step 2, `first-run` stops early and tells you to run `tools/setup-server.ps1` first. Stop: close the server window, then `tools/stop-server.ps1`.
 
 ## 4. Connect (Main PC)
 

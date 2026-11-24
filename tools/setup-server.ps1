@@ -57,9 +57,14 @@ if (-not (Test-Path (Join-Path $DbData 'mysql'))) {
 Start-Db
 
 function Invoke-Sql($sql, $db) {
-    $a = @('-uroot', '--protocol=tcp', '-h127.0.0.1', "-P$port", '-N', '-B')
+    $a = @('-uroot', '--protocol=tcp', '-h127.0.0.1', "-P$port", '--skip-ssl', '-N', '-B')
     if ($db) { $a += $db }
-    $sql | & (Join-Path $bin 'mariadb.exe') @a
+    # MariaDB 11.4 writes a benign stderr warning on a passwordless TCP root login; under
+    # $ErrorActionPreference='Stop' (PS 5.1) that becomes a terminating NativeCommandError.
+    # Scope EAP to 'Continue' around the native call and trust $LASTEXITCODE for real failures.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $sql | & (Join-Path $bin 'mariadb.exe') @a } finally { $ErrorActionPreference = $prevEap }
     if ($LASTEXITCODE -ne 0) { throw "SQL failed: $sql" }
 }
 
@@ -87,7 +92,13 @@ foreach ($f in Get-ChildItem (Join-Path $Server 'migrations') -Filter '*.sql' | 
     if ($applied -contains $f.Name) { Write-Host "migration: skip $($f.Name)"; continue }
     Write-Host "migration: applying $($f.Name)"
     $src = $f.FullName -replace '\\', '/'
-    & (Join-Path $bin 'mariadb.exe') -uroot --protocol=tcp '-h127.0.0.1' "-P$port" $DbName -e "source $src" 2>&1 | Out-Null
+    # Same MariaDB 11.4 stderr-warning issue as Invoke-Sql: scope EAP to 'Continue' and
+    # trust $LASTEXITCODE so the warning is not treated as a terminating NativeCommandError.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & (Join-Path $bin 'mariadb.exe') -uroot --protocol=tcp '-h127.0.0.1' "-P$port" --skip-ssl $DbName -e "source $src" 2>&1 | Out-Null
+    } finally { $ErrorActionPreference = $prevEap }
     if ($LASTEXITCODE -ne 0) { throw "migration failed: $($f.Name)" }
     Invoke-Sql "INSERT INTO schema_migrations (name) VALUES ('$($f.Name)');" $DbName
 }

@@ -17,15 +17,26 @@ if (-not $SecretsPath) { $SecretsPath = Join-Path $Server 'secrets.cfg' }
 $Port = 30120
 
 function Get-MissingFwRules {
-    foreach ($proto in 'TCP', 'UDP') {
+    # Check our two named rules first; if both exist we're done.
+    $missing = foreach ($proto in 'TCP', 'UDP') {
         $name = "RedFrontier FXServer $proto $Port"
-        if (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue) { continue }
-        $has = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | Where-Object {
-            $pf = $_ | Get-NetFirewallPortFilter
-            $pf.Protocol -eq $proto -and ($pf.LocalPort -contains "$Port")
+        if (-not (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)) {
+            [pscustomobject]@{ Proto = $proto; Name = $name }
         }
-        if (-not $has) { [pscustomobject]@{ Proto = $proto; Name = $name } }
     }
+    if (-not $missing) { return }
+
+    # A named rule is missing: bulk-fetch the port filters ONCE (calling Get-NetFirewallPortFilter
+    # per inbound rule hangs for minutes on PCs with many rules) and drop any proto already
+    # covered by an existing inbound allow rule on this port.
+    $filters = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue |
+        Get-NetFirewallPortFilter
+    $result = @()
+    foreach ($r in @($missing)) {
+        $covered = $filters | Where-Object { $_.Protocol -eq $r.Proto -and ($_.LocalPort -contains "$Port") }
+        if (-not $covered) { $result += $r }
+    }
+    $result
 }
 
 if ($FirewallOnly) {
@@ -37,6 +48,21 @@ if ($FirewallOnly) {
 }
 
 Write-Host '== RedFrontier first run ==' -ForegroundColor Cyan
+
+# ---- 0. Fresh-PC guard ----
+# Starting the server needs the FXServer artifact and MariaDB that setup-server.ps1 installs
+# (server/artifacts/FXServer.exe, server/db/mariadb). On a fresh PC stop here with a clear pointer
+# instead of asking for the key and failing at start. Skipped with -NoStart (tests / key-only runs).
+if (-not $NoStart) {
+    $haveFx = Test-Path $Fx
+    $haveDb = [bool](Get-ChildItem (Join-Path $DbDir 'mariadb') -Directory -ErrorAction SilentlyContinue)
+    if (-not $haveFx -or -not $haveDb) {
+        Write-Host ''
+        Write-Host 'FXServer and MariaDB are not installed yet (fresh PC).' -ForegroundColor Yellow
+        Write-Host 'Run tools/setup-server.ps1 first (downloads FXServer + MariaDB, creates the database and secrets.cfg), then run first-run.cmd again.' -ForegroundColor Yellow
+        exit 3
+    }
+}
 
 # ---- 1. Firewall ----
 if ($NoElevate) { Write-Host '[firewall] skipped (-NoElevate)' }
