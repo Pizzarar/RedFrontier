@@ -28,13 +28,17 @@ FhTradeConfig = {
     },
 
     -- Regional baseline factor on top of goods[item].base. Unlisted = 1.0. Region ids from fh_core shared/regions.lua.
+    -- Scarlett Meadows (Rhodes) prices differ from the Heartlands by design (spec L6 "regional price model").
     regionFactor = {
         heartlands = { trade_salt = 1.0, trade_cloth = 1.1, trade_whiskey = 0.9 },
+        scarlett_meadows = { trade_salt = 1.1, trade_cloth = 0.9, trade_whiskey = 1.2 },
     },
 
     -- Trade posts (server checks the player is within `radius` of the post). `region` must be a known region id.
+    -- Coordinates APPROXIMATE / unverified in game (Rhodes general store, Scarlett Meadows).
     posts = {
         { id = 'valentine_post', label = 'Valentine Trade Post', region = 'heartlands', x = -176.0, y = 630.0, z = 114.0, radius = 6.0 },
+        { id = 'rhodes_post', label = 'Rhodes Trade Post', region = 'scarlett_meadows', x = 1288.0, y = -1278.0, z = 77.0, radius = 6.0 },
     },
 
     -- Freight contracts (R4): a fh_quests job type generated from shortages. Destinations are where your OWN wagon
@@ -48,11 +52,20 @@ FhTradeConfig = {
         maxOffers = 3, rewardCapMultiple = 4,
         cooldownMin = 30,              -- fh_quests cooldown_min: minutes before the same route/cargo offer can be taken again (= deadline)
         maxActivePerPlayer = 2,
-        allowSameRegion = false,       -- only one region exists today: no offers until a 2nd region is added (or set true to test)
+        allowSameRegion = false,       -- two regions exist now: offers are generated between them (set true to test one-region)
         checkMs = 5000, graceChecks = 3, -- delivery/loss scan period; consecutive misses before wagon/cargo loss counts
         acceptReach = 8.0,             -- m: your wagon must be this close to you to take a contract
         destinations = {
             heartlands = { x = -176.0, y = 630.0, z = 114.0, radius = 40.0 },
+            scarlett_meadows = { x = 1288.0, y = -1278.0, z = 77.0, radius = 40.0 }, -- Rhodes trade post (unverified)
         },
+    },
+
+    -- Initial shortages (data): seeded at startup ONLY while the region/item has no persisted shortage, so a fresh
+    -- server already produces freight offers in both directions (heartlands -> scarlett and back). The seed is marked
+    -- dirty and persists/decays like any other shortage; `fh_trade_shortage` can re-set it anytime.
+    initialShortages = {
+        { region = 'scarlett_meadows', item = 'trade_whiskey', level = 0.6 }, -- heartlands board -> haul whiskey to Rhodes
+        { region = 'heartlands',       item = 'trade_salt',    level = 0.5 }, -- Rhodes board     -> haul salt to Valentine
     },
 }

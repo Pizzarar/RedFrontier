@@ -80,6 +80,20 @@ local function load()
     log('loaded %d price rows', n)
 end
 
+-- Seed config.initialShortages (a fresh server has no shortages, so no freight offers). Applied only while the
+-- region/item has no persisted shortage (quote detail.shortage == 0), so it never clobbers player/admin state.
+local function seedShortages()
+    local t = now()
+    for _, e in ipairs(cfg.initialShortages or {}) do
+        if cfg.goods[e.item] and FhRegions.isKnownRegion(e.region) then
+            local _, detail = P.quote(cfg, state, e.region, e.item, t)
+            if detail and detail.shortage == 0 then
+                if P.setShortage(cfg, state, e.region, e.item, e.level, t) then markDirty(e.region, e.item) end
+            end
+        end
+    end
+end
+
 -- ---------------------------------------------------------------- posts
 
 local function nearestPost(src)
@@ -317,6 +331,7 @@ end)
 CreateThread(function()
     registerGoods()
     load()
+    seedShortages()
     ready = true
     while true do
         Wait(cfg.saveMs)

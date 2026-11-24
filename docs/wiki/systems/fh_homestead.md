@@ -1,6 +1,6 @@
 # Homestead
 
-Homesteads are fixed plots you claim. Four plots exist in the Heartlands. See [Regions](../regions.md). Plot positions are placeholders and not checked in game (unverified).
+Homesteads are fixed plots you claim. Four plots exist in the Heartlands and four in Scarlett Meadows. See [Regions](../regions.md). Plot positions are placeholders and not checked in game (unverified).
 
 ## Claiming
 - Stand inside a plot and use `/fh_claim`. Plots are 25 m in radius.

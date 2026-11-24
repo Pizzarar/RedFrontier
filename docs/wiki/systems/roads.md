@@ -21,7 +21,7 @@ Three tiers. A full wagon is slowed by 40%.
 - `/fh_repair` needs a hammer and a wagon wheel. It takes 8 seconds. Don't move more than 3 m, or it cancels.
 
 ## Trade post
-Heartlands has one: the Valentine Trade Post. Use `/tradepost` to sell, or `/tradequote` for prices.
+Two posts: the Valentine Trade Post (Heartlands) and the Rhodes Trade Post (Scarlett Meadows). Use `/tradepost` to sell, or `/tradequote` for prices.
 
 | Good | Base price |
 |---|---|
@@ -29,8 +29,8 @@ Heartlands has one: the Valentine Trade Post. Use `/tradepost` to sell, or `/tra
 | Bolt of Cloth | $14 |
 | Whiskey Crate (cargo) | $40 |
 
-- Prices drift up to 8% over time, and there are regional differences.
-- Shortages raise a good's price. Selling into one eases it.
+- Prices drift up to 8% over time, and there are regional differences (the base factor differs per region).
+- Shortages raise a good's price. Selling into one eases it. A fresh server seeds one shortage in each region, so freight jobs appear right away.
 - Every unit you sell pushes the price down. It recovers over time. About 40 units in one region cut it by half.
 
 ## Freight jobs
@@ -38,7 +38,7 @@ Shortages in other regions become freight jobs on the `/jobs` board. See [Quests
 - Have your wagon within 8 m when you accept. The cargo is loaded for you.
 - Deliver within 30 minutes. Reward is the going price plus 25%, and +2 rep.
 - Two active contracts at most.
-- Only one region exists today, so no freight offers appear yet.
+- The two regions trade both ways: a shortage in one region is a haul job on the other region's board.
 
 ## Heat
 Each faction tracks your heat from 0 to 100, separately.

@@ -8,8 +8,10 @@ local regions = {}
 regions.TIERS = { 'T1', 'T2', 'T3' }
 
 regions.factions = {
-    outlaws = { id = 'outlaws', label = 'Heartland Outlaws' },
-    lawmen  = { id = 'lawmen',  label = 'Valentine Law' },
+    outlaws    = { id = 'outlaws',    label = 'Heartland Outlaws' },
+    lawmen     = { id = 'lawmen',     label = 'Valentine Law' },
+    raiders    = { id = 'raiders',    label = 'Lemoyne Raiders' },
+    rhodes_law = { id = 'rhodes_law', label = 'Rhodes Law' },
 }
 
 regions.regions = {
@@ -22,6 +24,15 @@ regions.regions = {
         factions = { 'lawmen', 'outlaws' },
         territories = { 'heartlands_t1_camp' },
     },
+    scarlett_meadows = {
+        id = 'scarlett_meadows',
+        label = 'Scarlett Meadows (Rhodes)',
+        kind = 'region',
+        -- Starter homestead plot, approximate (north of Rhodes). (unverified)
+        homestead = { x = 1250.0, y = -1210.0, z = 77.0 },
+        factions = { 'rhodes_law', 'raiders' },
+        territories = { 'scarlett_meadows_t1_camp' },
+    },
 }
 
 regions.territories = {
@@ -32,6 +43,15 @@ regions.territories = {
         faction = 'outlaws',
         tier = 'T1',
         center = { x = -145.0, y = 845.0, z = 117.0 }, -- approximate
+        radius = 60.0,
+    },
+    scarlett_meadows_t1_camp = {
+        id = 'scarlett_meadows_t1_camp',
+        label = 'Lemoyne Raiders Camp',
+        region = 'scarlett_meadows',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 1350.0, y = -1400.0, z = 76.0 }, -- approximate (unverified)
         radius = 60.0,
     },
 }

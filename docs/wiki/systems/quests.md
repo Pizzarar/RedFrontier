@@ -11,7 +11,7 @@ Quests are jobs from a board, three one-time family stories, and the intro. Ever
   - **Bounty:** a wanted NPC spawns for you. Kill them and you are paid, whoever lands the shot.
   - **Freight:** haul trade goods to another region. See [Roads](roads.md).
 - The same job can't be taken again for 60 minutes after you finish it (freight: 30).
-- Only the Heartlands has job offers today.
+- The Heartlands board has hunt, camp-clear and bounty offers plus freight; the Scarlett Meadows board has freight offers (haul goods to the Heartlands).
 
 ## Journal
 `/journal` lists your active quests and your history. You can abandon an active quest there (click twice to confirm).

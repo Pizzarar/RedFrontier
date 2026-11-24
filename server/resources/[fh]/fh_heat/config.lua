@@ -39,10 +39,15 @@ FhHeatConfig.roadblock = {
         { id = 'hl_valentine_road',  region = 'heartlands', coords = { x = -190.0, y = 800.0, z = 118.0 }, heading = 90.0,  unverified = true },
         { id = 'hl_north_bridge',    region = 'heartlands', coords = { x = -250.0, y = 880.0, z = 120.0 }, heading = 0.0,   unverified = true },
         { id = 'hl_south_crossing',  region = 'heartlands', coords = { x = -340.0, y = 700.0, z = 115.0 }, heading = 45.0,  unverified = true },
+        { id = 'rh_north_road',      region = 'scarlett_meadows', coords = { x = 1270.0, y = -1200.0, z = 77.0 }, heading = 0.0,   unverified = true },
+        { id = 'rh_south_road',      region = 'scarlett_meadows', coords = { x = 1300.0, y = -1450.0, z = 76.0 }, heading = 0.0,   unverified = true },
+        { id = 'rh_east_road',       region = 'scarlett_meadows', coords = { x = 1450.0, y = -1300.0, z = 76.0 }, heading = 90.0,  unverified = true },
     },
     factions = {
-        outlaws = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
-        lawmen  = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaws    = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
+        lawmen     = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        raiders    = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
+        rhodes_law = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
     },
 }
 
@@ -51,8 +56,10 @@ FhHeatConfig.ambush = {
     enabled = true, minLevel = 'hunted', nightFrom = 21, nightTo = 5, -- game hours, wraps midnight
     cooldownSeconds = 900, radius = 60.0, despawnMinutes = 5,
     factions = {
-        outlaws = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
-        lawmen  = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaws    = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
+        lawmen     = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        raiders    = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
+        rhodes_law = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
     },
 }
 
@@ -61,7 +68,9 @@ FhHeatConfig.chase = {
     enabled = true, minLevel = 'hunted', cooldownSeconds = 900, despawnMinutes = 5, behind = 80.0,
     horseModel = 'a_c_horse_morgan_bay',
     factions = {
-        outlaws = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
-        lawmen  = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaws    = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
+        lawmen     = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        raiders    = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
+        rhodes_law = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
     },
 }

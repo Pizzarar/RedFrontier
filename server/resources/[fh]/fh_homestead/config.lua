@@ -108,5 +108,38 @@ FhHomesteadConfig = {
             chest = { coords = V(-146.0, 940.0, 118.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
             slots = slotTemplate(),
         },
+        -- Scarlett Meadows (Rhodes) plots. TODO-verify: placeholder coords 150 apart (same pattern as heartlands 2-4).
+        scarlett_meadows_01 = {
+            id = 'scarlett_meadows_01',
+            region = 'scarlett_meadows',
+            center = V(1250.0, -1210.0, 77.0), -- TODO-verify (unverified)
+            radius = 25.0,
+            chest = { coords = V(1254.0, -1210.0, 77.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
+        scarlett_meadows_02 = {
+            id = 'scarlett_meadows_02',
+            region = 'scarlett_meadows',
+            center = V(1400.0, -1210.0, 77.0), -- TODO-verify (unverified)
+            radius = 25.0,
+            chest = { coords = V(1404.0, -1210.0, 77.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
+        scarlett_meadows_03 = {
+            id = 'scarlett_meadows_03',
+            region = 'scarlett_meadows',
+            center = V(1250.0, -1060.0, 77.0), -- TODO-verify (unverified)
+            radius = 25.0,
+            chest = { coords = V(1254.0, -1060.0, 77.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
+        scarlett_meadows_04 = {
+            id = 'scarlett_meadows_04',
+            region = 'scarlett_meadows',
+            center = V(1400.0, -1060.0, 77.0), -- TODO-verify (unverified)
+            radius = 25.0,
+            chest = { coords = V(1404.0, -1060.0, 77.0), heading = 90.0, model = 'p_chest01x', label = 'Homestead chest' },
+            slots = slotTemplate(),
+        },
     },
 }

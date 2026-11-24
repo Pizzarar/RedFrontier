@@ -1,6 +1,6 @@
 # Zones: outlaw camps
 
-The Heartlands has one outlaw camp, `heartlands_t1_01`, a Tier 1 camp. See [Regions](../regions.md).
+There are two Tier 1 outlaw camps: the Heartlands Outlaw Camp and the Lemoyne Raiders Camp (Scarlett Meadows). See [Regions](../regions.md).
 
 ## How a camp works
 

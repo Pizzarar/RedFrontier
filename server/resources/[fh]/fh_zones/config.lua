@@ -1,5 +1,6 @@
 -- fh_zones camps (spec L89 L3, M1 L107). ALL coordinates, models and weapons are guesses: TODO-verify-in-game.
--- The camp sits in territory heartlands_t1_camp (fh_core shared/regions.lua, region 'heartlands').
+-- The heartlands camp sits in territory heartlands_t1_camp; the Scarlett Meadows camp in scarlett_meadows_t1_camp
+-- (fh_core shared/regions.lua). The second camp reuses the same loot/items as the first; positions are (unverified).
 FhZonesConfig = {
     TickMs = 1000, -- ms between server camp ticks
     AbortCooldownMs = 60000, -- after every ped failed to spawn, the camp can't wake again for this long
@@ -27,6 +28,30 @@ FhZonesConfig = {
                     { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } }, -- item registered by fh_crafting
+                },
+            },
+        },
+        scarlett_meadows_t1_01 = {
+            id = 'scarlett_meadows_t1_01',
+            region = 'scarlett_meadows',
+            territory = 'scarlett_meadows_t1_camp',
+            center = vector3(1350.0, -1400.0, 76.0),    -- TODO-verify-in-game (unverified)
+            activationRadius = 45.0,
+            respawnMinutes = 10,
+            -- Lemoyne Raiders (models/coords/heading/weapon TODO-verify-in-game; models reused from the heartlands camp)
+            peds = {
+                { model = 'g_m_m_unibanditos_01', coords = vector3(1347.0, -1397.0, 76.0), heading = 90.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(1354.0, -1403.0, 76.0), heading = 200.0, weapon = 'WEAPON_REPEATER_CARBINE' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(1345.0, -1405.0, 76.0), heading = 45.0,  weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+                { model = 'g_m_m_unibanditos_01', coords = vector3(1356.0, -1396.0, 76.0), heading = 270.0, weapon = 'WEAPON_RIFLE_BOLTACTION' },
+            },
+            loot = {
+                coords = vector3(1350.0, -1400.0, 76.0),
+                label = 'Raider camp stash',
+                table = {
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'small_safe', chance = 1.0, amount = 1 },
+                    { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
             },
         },
