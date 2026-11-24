@@ -66,7 +66,7 @@ end
 ---so comfort_changed still compares against what Survival last heard.
 local function rebind(citizenid, plotId, trophies)
     local prev = cache[citizenid]
-    if prev and prev.plotId then byPlot[prev.plotId] = nil end
+    if prev and prev.plotId and byPlot[prev.plotId] == citizenid then byPlot[prev.plotId] = nil end
     local e = { plotId = plotId, lotId = prev and prev.lotId or nil, trophies = trophies or {}, value = prev and prev.value or nil }
     cache[citizenid] = e
     if plotId then byPlot[plotId] = citizenid end
@@ -97,45 +97,51 @@ end
 local function drop(citizenid)
     local e = cache[citizenid]
     if e then
-        if e.plotId then byPlot[e.plotId] = nil end
-        if e.lotId then byPlot[e.lotId] = nil end
+        if e.plotId and byPlot[e.plotId] == citizenid then byPlot[e.plotId] = nil end
+        if e.lotId and byPlot[e.lotId] == citizenid then byPlot[e.lotId] = nil end
     end
     cache[citizenid] = nil
 end
 
 -- Recompute, store, and fire comfort_changed when it differs from the last known value (first computation counts from 0).
+-- The only await is the claim's trophy load inside entryFor. Anything read before it can be stale after it, so the claim
+-- is re-checked afterwards (one bounded retry via `retried`) and the lot is read only AFTER it; nothing below suspends.
 local refresh
-function refresh(citizenid)
+function refresh(citizenid, retried)
+    local function lastKnown() local c = cache[citizenid] return c and c.value or 0 end
     if not isReady() then
         -- slots/claims still loading: plotOf/tiers are not trustworthy yet. Report the last known value, cache nothing,
         -- emit nothing; the first refresh after the load counts from there.
-        local c = cache[citizenid]
-        return c and c.value or 0
+        return lastKnown()
     end
-    local plotId, lotId = plotOf(citizenid), lotOf(citizenid)
-    if not plotId and not lotId then
-        local old = cache[citizenid] and cache[citizenid].value or 0
-        drop(citizenid)
-        if old ~= 0 then TriggerEvent('fh:homestead:comfort_changed', citizenid, 0, old) end
-        return 0
-    end
+    local plotId = plotOf(citizenid)
     local e
     if plotId then
         local why
         e, why = entryFor(citizenid, plotId)
-        -- released while its trophies loaded: the lot (if any) still counts, so recompute once from the new state
-        if not e and why == 'fh_no_plot' and plotOf(citizenid) ~= plotId then return refresh(citizenid) end
-        if not e then
-            -- could not load (DB error / unclaimed meanwhile): report the last known value, emit nothing
-            local c = cache[citizenid]
-            return c and c.value or 0
+        -- the claim moved while we were suspended (released, or swapped for another): recompute once from the new state
+        if plotOf(citizenid) ~= plotId or not isReady() then
+            if retried or not isReady() then return lastKnown() end
+            return refresh(citizenid, true)
         end
-    else
+        if not e then
+            -- could not load (DB error): report the last known value, emit nothing
+            return lastKnown()
+        end
+    end
+    local lotId = lotOf(citizenid) -- read after the await
+    if not plotId then
+        if not lotId then
+            local old = lastKnown()
+            drop(citizenid)
+            if old ~= 0 then TriggerEvent('fh:homestead:comfort_changed', citizenid, 0, old) end
+            return 0
+        end
         e = cache[citizenid]
         if not e or e.plotId then e = rebind(citizenid, nil, nil) end -- lot-only (or the claim is gone)
     end
     if e.lotId ~= lotId then
-        if e.lotId then byPlot[e.lotId] = nil end
+        if e.lotId and byPlot[e.lotId] == citizenid then byPlot[e.lotId] = nil end
         e.lotId = lotId
         if lotId then byPlot[lotId] = citizenid end
     end
