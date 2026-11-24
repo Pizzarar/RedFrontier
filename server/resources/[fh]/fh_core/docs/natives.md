@@ -288,7 +288,7 @@ Dev client-error return (`client/safe.lua`, `server/dev_errors.lua`): Cfx infra 
 fh_zones camp (`fh_zones/server/main.lua`, `fh_zones/client/main.lua`), all **unverified in-game**: server `GetEntityHealth`
 (dead = health <= 0), plus the B4c server natives already listed. Client: `AddRelationshipGroup`, `SetPedRelationshipGroupHash`,
 `SetRelationshipBetweenGroups` (5 = hate, both directions vs `PLAYER`), `SetBlockingOfNonTemporaryEvents`, `SetPedCombatAttributes`
-(46 = always fight), `GIVE_WEAPON_TO_PED` `0x5E3BDDBCB83F3D84` by hash (attach point `0x2CD419DC`; RDR3 has no `GiveWeaponToPed_2`), `SetCurrentPedWeapon`, `TaskCombatHatedTargetsAroundPed`,
+(46 = always fight), `GIVE_WEAPON_TO_PED` `0x5E3BDDBCB83F3D84` by hash (attachPoint `0` = WEAPON_ATTACH_POINT_HAND_PRIMARY, addReason `0x2CD419DC` = ADD_REASON_DEFAULT; RDR3 has no `GiveWeaponToPed_2`), `SetCurrentPedWeapon`, `TaskCombatHatedTargetsAroundPed`,
 `IsEntityDead`, `IsControlJustReleased` (E = `0xCEFD9220`), `joaat`. Model `g_m_m_unibanditos_01` and the weapon names are guesses.
 fh_core saddlebag (`server/saddlebag.lua`, `client/saddlebag.lua`, B6e), all **unverified in-game**: server `NetworkGetEntityFromNetworkId`, `DoesEntityExist`, `GetEntityType` (1 = ped), `IsPedAPlayer`, `GetEntityModel` (normalized to u32, compared with `FhConfig.Saddlebag.HorseModels`), `GetEntityCoords`, `GetGameTimer`. `IsThisModelAHorse` is CLIENT-ONLY (nil on FXServer): never call it server-side. Client: `IsPedOnMount`, `GetMount`, `GetGamePool('CPed')`, `IsThisModelAHorse` (a hint only; the server decides), `NetworkGetEntityIsNetworked`, `NetworkGetNetworkIdFromEntity`.
 

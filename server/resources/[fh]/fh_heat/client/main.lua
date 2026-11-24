@@ -7,6 +7,7 @@
 local GROUP = 'FH_HEAT_HOSTILE'
 local cfg = FhHeatConfig
 local N_GIVE_WEAPON = 0x5E3BDDBCB83F3D84 -- GIVE_WEAPON_TO_PED(ped, weaponHash, ammo, bForceInHand, bForceInHolster, attachPoint, bAllowMultiple, p7, p8, addReason, bIgnoreUnlocks, permanentDegradation, p12)
+-- attachPoint 0 = WEAPON_ATTACH_POINT_HAND_PRIMARY; addReason 0x2CD419DC = ADD_REASON_DEFAULT (see natives.json)
 
 local function setupPed(ped, weapon, standGround)
     AddRelationshipGroup(GROUP)
@@ -18,7 +19,7 @@ local function setupPed(ped, weapon, standGround)
     SetPedCombatAttributes(ped, 46, true) -- always fight
     if weapon then
         local h = joaat(weapon)
-        Citizen.InvokeNative(N_GIVE_WEAPON, ped, h, 100, true, true, 0x2CD419DC, false, 0.5, 1.0, 0, false, 0, false)
+        Citizen.InvokeNative(N_GIVE_WEAPON, ped, h, 100, true, true, 0, false, 0.5, 1.0, 0x2CD419DC, false, 0.0, false)
         SetCurrentPedWeapon(ped, h, true)
     end
     TaskCombatHatedTargetsAroundPed(ped, standGround and 40.0 or 120.0, 0)
