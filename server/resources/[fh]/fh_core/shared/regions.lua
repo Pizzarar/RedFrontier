@@ -45,8 +45,6 @@ regions.regions = {
             { id = 'valentine',     label = 'Valentine',     x = -169.47, y = 629.38,  z = 113.03 },
             { id = 'emerald_ranch', label = 'Emerald Ranch', x = 1411.0,  y = 355.0,   z = 96.0 },
         },
-        -- Starter homestead plot, approximate.
-        homestead = { x = -300.0, y = 790.0, z = 118.0 },
         factions = { 'lawmen', 'outlaws', 'traders', 'settlers' },
         territories = { 'heartlands_t1_camp', 'heartlands_t1_camp_2', 'heartlands_t1_camp_3', 'heartlands_t2_camp' },
     },
@@ -59,8 +57,6 @@ regions.regions = {
         towns = {
             { id = 'rhodes', label = 'Rhodes', x = 1263.6, y = -1305.7, z = 77.9 },
         },
-        -- Starter homestead plot, approximate (north of Rhodes). (unverified)
-        homestead = { x = 1250.0, y = -1210.0, z = 77.0 },
         factions = { 'lawmen', 'raiders', 'traders' },
         territories = { 'scarlett_meadows_t1_camp', 'scarlett_meadows_t1_camp_2', 'scarlett_meadows_t2_camp' },
     },

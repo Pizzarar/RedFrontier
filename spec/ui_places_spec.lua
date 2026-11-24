@@ -209,4 +209,18 @@ case('list rows carry verified for the /where tag', function()
     T.eq(false, rows[1].verified)
 end)
 
+case('gather labels a camp with its name, else "Outlaw camp"; unverified tag survives', function()
+    local src = { zones = { camps = {
+        named = { center = { x = 0, y = 0, z = 0 }, name = 'Hill Haven camp', region = 'scarlett_meadows', verified = false },
+        unnamed = { center = { x = 10, y = 0, z = 0 }, region = 'heartlands', verified = false },
+    } } }
+    local places = P.gather(src)
+    local byId = {}
+    for _, p in ipairs(places) do byId[p.id] = p end
+    T.eq('Hill Haven camp', byId.named.label)
+    T.eq('Outlaw camp', byId.unnamed.label)
+    T.eq(' (unverified)', P.tag(byId.named))
+    T.eq(' (unverified)', P.tag(byId.unnamed))
+end)
+
 T.finish()

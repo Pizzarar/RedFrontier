@@ -123,7 +123,7 @@ function M.gather(sources, opts)
         for id, camp in pairs(zn.camps) do
             if type(camp) == 'table' then
                 local x, y, z = M.coords(camp.center)
-                if x then push(places, id, 'camp', 'Outlaw camp', x, y, z, camp.region, camp.verified) end
+                if x then push(places, id, 'camp', camp.name or 'Outlaw camp', x, y, z, camp.region, camp.verified) end
             end
         end
     end
