@@ -118,6 +118,7 @@ function M.validateSpec(spec)
     return {
         kind = spec.kind, model = model, modelHash = hash, coords = coords, heading = (heading % 360) + 0.0,
         owner = owner and { kind = owner.kind, id = owner.id } or { kind = 'system', id = 0 }, tag = spec.tag,
+        snap = spec.snap ~= false, -- world-01 block D: per-request ground-snap opt-out (default true)
     }
 end
 

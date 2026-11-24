@@ -5,10 +5,11 @@
 -- exactly once per id.
 local M = {}
 
-M.PROBE_ABOVE = 20.0 -- metres above the z-hint to start the probe (an unstreamed area reads low)
-M.RETRY_MS = 50      -- ms between probe attempts
-M.TIMEOUT_MS = 2000  -- ms total probe budget before falling back
-M.MAX_RETRIES = 40   -- attempts before giving up (== TIMEOUT_MS / RETRY_MS)
+M.PROBE_ABOVE = 20.0      -- metres above the z-hint to start the probe (places: chests/camps)
+M.SPAWN_PROBE_ABOVE = 1.5 -- metres above the requested z for entity spawns: probe down only (never a roof/upper floor)
+M.RETRY_MS = 50           -- ms between probe attempts
+M.TIMEOUT_MS = 2000       -- ms total probe budget before falling back
+M.MAX_RETRIES = 40        -- attempts before giving up (== TIMEOUT_MS / RETRY_MS)
 
 ---True when n is a finite number (not NaN, not ±math.huge).
 local function finite(n)
@@ -37,6 +38,12 @@ function M.snapZ(requestedZ, groundZ, tolerance)
     local tol = (type(tolerance) == 'number' and tolerance) or M.SNAP_TOLERANCE
     if math.abs(groundZ - requestedZ) <= tol then return groundZ end
     return requestedZ
+end
+
+---True unless the request opts out (snap == false). Absent or any non-false value snaps (default true).
+---@return boolean
+function M.wantsSnap(snap)
+    return snap ~= false
 end
 
 ---Keep probing after a failed attempt? attempt is the attempt just made (1-based). Gives up at maxRetries

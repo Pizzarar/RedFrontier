@@ -71,6 +71,7 @@ local function spawnProp(bag)
         kind = 'object', model = cfg.propModel,
         coords = vector4(bag.coords.x, bag.coords.y, bag.coords.z, 0.0),
         owner = { kind = 'drop_bag', id = bag.id }, tag = 'fh_death:' .. bag.id,
+        snap = false, -- exact death position (possibly upstairs): never ground-snap the drop bag
     }, {
         near = bag.coords,
         onFailed = function(reason)

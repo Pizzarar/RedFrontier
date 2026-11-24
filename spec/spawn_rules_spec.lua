@@ -62,6 +62,12 @@ case('validateSpec: vec4-like coords give the heading; no owner -> system', func
     T.same({ kind = 'system', id = 0 }, s.owner)
 end)
 
+case('validateSpec: snap defaults true; snap == false is preserved as the opt-out', function()
+    T.eq(true, assert(R.validateSpec(spec())).snap)
+    T.eq(true, assert(R.validateSpec(spec({ snap = true }))).snap)
+    T.eq(false, assert(R.validateSpec(spec({ snap = false }))).snap)
+end)
+
 case('validateOpts: defaults from config then DEFAULTS; bad values refused', function()
     local o = assert(R.validateOpts(nil, { Retries = 5 }))
     T.eq(5, o.retries); T.eq(R.DEFAULTS.TimeoutMs, o.timeoutMs)

@@ -41,6 +41,17 @@ case('snapZ: defaults to SNAP_TOLERANCE', function()
     T.eq(105.0, G.snapZ(105.0, 116.0)) -- outside default
 end)
 
+case('wantsSnap: snap == false opts out, everything else snaps (default true)', function()
+    T.eq(true, G.wantsSnap(true))
+    T.eq(true, G.wantsSnap(nil))  -- absent = default
+    T.eq(true, G.wantsSnap(1))
+    T.eq(false, G.wantsSnap(false))
+end)
+
+case('SPAWN_PROBE_ABOVE: spawns probe down from 1.5 m above (never a roof/upper floor)', function()
+    T.eq(1.5, G.SPAWN_PROBE_ABOVE)
+end)
+
 case('resolve: groundZ on success, hint on failure', function()
     T.eq(105.0, G.resolve(true, 105.0, 118.0))
     T.eq(118.0, G.resolve(false, nil, 118.0))

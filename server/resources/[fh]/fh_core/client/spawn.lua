@@ -40,14 +40,19 @@ end
 local function create(d, slot)
     local c, hash = d.coords, d.modelHash
     if not loadModel(hash) then made[d.token] = nil; return fail(d, 'model_timeout') end
-    local e
     local how = FhSpawnRules.CREATE[d.kind]
+    -- Ground-snap (world-01 block D): ped/horse/object snap down to the floor under them (probe from 1.5 m above),
+    -- unless the request opts out (snap == false); the +/-10 m guard keeps an off-floor point as-is. Wagons never snap.
+    local z = c.z
+    if how ~= 'vehicle' and FhGroundSnap.wantsSnap(d.snap) then
+        z = FhGroundSnap.snapZ(c.z, FhSnap.groundZAt(d.tag or d.token, c.x, c.y, c.z, FhGroundSnap.SPAWN_PROBE_ABOVE), FhGroundSnap.SNAP_TOLERANCE)
+    end
+    local e
     if how == 'ped' then
-        local z = FhGroundSnap.snapZ(c.z, FhSnap.groundZAt(d.tag or d.token, c.x, c.y, c.z), FhGroundSnap.SNAP_TOLERANCE)
         e = CreatePed(hash, c.x, c.y, z, d.heading + 0.0, true, true, false, false)
         if e and e ~= 0 then Citizen.InvokeNative(0x283978A15512B2FE, e, true) end -- else RDR3 peds can be invisible
     elseif how == 'object' then
-        e = CreateObject(hash, c.x, c.y, c.z, true, true, false, false, false)
+        e = CreateObject(hash, c.x, c.y, z, true, true, false, false, false)
         if e and e ~= 0 then SetEntityHeading(e, d.heading + 0.0) end
     elseif how == 'vehicle' then
         -- CreateVehicle(model, x, y, z, heading, isNetwork, bScriptHostVeh, bDontAutoCreateDraftAnimals, p8):

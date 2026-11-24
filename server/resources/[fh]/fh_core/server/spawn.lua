@@ -94,7 +94,7 @@ local function tryDispatch(req, cands)
     TriggerClientEvent('fh:spawn:create', id, {
         requestId = req.id, kind = s.kind, model = s.model, modelHash = s.modelHash,
         coords = s.coords, heading = s.heading, token = token,
-        tag = s.tag, owner = s.owner, -- the client re-announces them locally on adoption (fh:spawn:adopted)
+        tag = s.tag, owner = s.owner, snap = s.snap, -- snap: world-01 block D ground-snap opt-out
     })
 end
 
