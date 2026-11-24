@@ -9,6 +9,7 @@ dofile(here .. 'support/world_config.lua') -- FhRegions + FhPlaceResolver + vect
 dofile(fh .. 'fh_homestead/config.lua')   -- outside CfxLua there is no vector3: config falls back to {x,y,z}
 dofile(fh .. 'fh_trade/config.lua')
 dofile(fh .. 'fh_zones/config.lua')
+dofile(fh .. 'fh_crafting/config.lua')  -- herbPatches (idea-720 herb gathering, plan crafting-02 C9)
 
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
 -- idea-716/719 landed: lumber, nails, lead, casings, resource_gunpowder and the 4 herbs are FhTradeConfig.supplies;
@@ -60,6 +61,11 @@ scan(FhTradeConfig, 0, {})
 for _, camp in pairs(FhZonesConfig.camps or {}) do
     for _, e in ipairs(((camp.loot or {}).table) or {}) do sources[e.name or e.item] = 'zone loot' end
 end
+-- Herb gathering (idea-720): each patch names a herb the player can pick in the world. A second source for the
+-- herbs (buying at trade posts stays); gathering is free but slow.
+for _, patch in ipairs(FhCraftingConfig.herbPatches or {}) do
+    if type(patch) == 'table' and type(patch.herb) == 'string' then sources[patch.herb] = 'herb gathering' end
+end
 for item in pairs(EXTERNAL) do sources[item] = sources[item] or 'external' end
 
 it('addSupplies handles item->{price=} and region->{item=price} shapes (fake config)', function()
@@ -78,6 +84,14 @@ it('source configs loaded (so the PENDING checks cannot go silent)', function()
     assert(type(FhTradeConfig) == 'table', 'FhTradeConfig missing: renamed?')
     assert(type(FhZonesConfig) == 'table' and type(FhZonesConfig.camps) == 'table' and next(FhZonesConfig.camps) ~= nil,
         'FhZonesConfig.camps missing or empty: renamed?')
+    assert(type(FhCraftingConfig) == 'table' and type(FhCraftingConfig.herbPatches) == 'table'
+        and #FhCraftingConfig.herbPatches > 0, 'FhCraftingConfig.herbPatches missing or empty: renamed?')
+end)
+
+it('herb gathering (idea-720) sources the four herbs', function()
+    for _, herb in ipairs({ 'herb_american_ginseng', 'herb_oregano', 'herb_red_sage', 'herb_wild_mint' }) do
+        assert(sources[herb] == 'herb gathering', herb .. ' not sourced by gathering (got ' .. tostring(sources[herb]) .. ')')
+    end
 end)
 
 it('every required input has a source or is PENDING', function()
