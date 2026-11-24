@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-23T23:15:42.039Z",
+  "updatedAt": "2026-11-24T13:39:36.438Z",
   "units": [
     {
       "id": "B5",
@@ -221,6 +221,24 @@
       "status": "done",
       "branch": "core-k1",
       "commit": "a488aba"
+    },
+    {
+      "id": "I1",
+      "goal": "core-06 infra: 743 ACE grants, 744 Meshnet host, 750 idempotent 0001 rocks_zones",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-i1",
+      "commit": "47b4fd5"
+    },
+    {
+      "id": "I1-nit",
+      "goal": "tools/lib.ps1 Get-MeshnetIp: guard null Addresses (StrictMode-safe), I1 review low; fold into next tools unit",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "core-i1nit",
+      "commit": "0b72271"
     }
   ]
 }
