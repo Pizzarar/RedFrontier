@@ -29,3 +29,4 @@
 - 2026-11-23 Lows PASS: roads-lows (idea-669 fh_heat saveAwait + spec lock reuse, idea-676 freight busy-flag order) ff-merged to local main 10086d2 (from 69133cd). Gemini PASS 0/0/0; range-diff 2/2 '='; venv 68/1340/0.
 - 2026-11-23 Supplies PASS: roads-supplies (idea-716/719 trade-post supplies buy side) ff-merged to local main e9bc8ee (from 7680103). Gemini PASS 0/0/1 7c0894e (low -> idea-725); range-diff '!' only crafting_sources PENDING={} + msg; venv 72/1400/0.
 - 2026-11-23 idea-725 PASS: roads-725 (fh_trade reason() trade-neutral wording, +2/-2) ff-merged to local main 2182e31 (from 3c9359d). Lead review accepted by Overlord; no doc/spec text hits; venv 73/1407/0.
+- 2026-11-24 idea-762 PASS: roads-762 (fh_trade seed only unpersisted region/items; no seed on load failure) ff-merged to local main e6b9ab7 (from 87f115e). Gemini PASS 0/0/1 0f0c9ec (low -> idea-792); range-diff '='; venv 78/1460/0, syntax 180/0.
