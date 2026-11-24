@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Homestead
-- Lead: ★ Hom2
-- Workers: 0
+- Lead: ★ Hom3
+- Workers: 1
 
 ## Done when
 - H1-H5 of plans/homestead-01 merged to local main (review PASS, run-specs green) and `decision homestead playtest-ready <hash>` logged; Overlord gates the combined playtest.
@@ -21,9 +21,11 @@
 - homestead-02 defaults (built as config, owner can change any time): $300/lot, +25 region rep (taken back on abandon), lot slots chest_2 + workbench, no refund on abandon, old rows = claim. lawSafeAt(coords, citizenid) owner-only.
 
 ## Open
-- (none in lane) Parked/elsewhere: /where lot finder idea-815 (homestead inbox); nails.png idea-724; citizenid rep path for offline admin abandon idea-804 @core; owner in-game checks = OWNER-TESTS homestead cards (plots, props, lots); stale homestead worktrees (pre-rebase hashes) need manual sweep, owner OK first.
+- (none in lane) Parked/elsewhere: nails.png idea-724; owner in-game checks = OWNER-TESTS homestead cards (plots, props, lots); stale homestead worktrees (pre-rebase hashes) need manual sweep, owner OK first.
 
 ## In flight
-- DONE: homestead-01 (H1-H5 + H2b/c/d) and homestead-02 town lots (H6-H10 + H9b) on main, pushed, tip deb80ca, specs 86/1588/0. Logged `homestead town-lots playtest-ready deb80ca` 2026-11-24T17:13Z.
-- Lead Hom2 rn-4b289c2c0700. Overlord = `vs who lead --lane redfrontier`. Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (homestead highest 0018).
+- homestead-03 home hygiene (plans/homestead-03-home-hygiene.md): all reviewed PASS. Merge order H16 (e0b0e4d, slot asked from Red4, rebase again at slot) → H13+H13b (5f3c2a9, rebasing onto H16) → H15 (f6b7db6 + unreviewed fix 51e0fb0, rebase over H13, comfort.lua). H14a @core idea-856 pending; H14b after.
+- Owner Qs (non-blocking, defaults stand): lot trophies/extra slots = no; admin force-unclaim = clear items (logged).
+- DONE: homestead-01 (H1-H5 + H2b/c/d) and homestead-02 town lots (H6-H12 incl. H9b, repByCitizenid rep-back, /where lot 3307497) on main, pushed, tip deb80ca, specs 86/1588/0. Logged `homestead town-lots playtest-ready deb80ca` 2026-11-24T17:13Z.
+- Lead Hom3 rn-8ca5c7592ea0 (took over from Hom2 2026-11-24). Overlord = `vs who lead --lane redfrontier` (Red4 now). Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (homestead highest 0018).
 - Contacts: Hunting Buddy rn-323e75f78948, Crafting Buddy (stations), @a-life Ali1 (lawSafeAt consumer), @world Wor1 (plot/lot config, /where).
