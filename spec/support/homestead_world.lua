@@ -2,7 +2,8 @@
 -- stubbed FXServer world with an in-memory fh_plots table that enforces PRIMARY KEY(plot_id) + UNIQUE(citizenid, class)
 -- like migration 0018, plus a fake fh_economy (charge / credit / rep with per-character charge lock, cash and rep).
 -- An await can be HELD (W.hold[tag] = true, or a count n = the next n calls): the call yields there so a spec can run
--- another call meanwhile. Tags: insert_plot, insert_chest, delete_plot, charge, rep.
+-- another call meanwhile. Tags: insert_plot, insert_chest, delete_plot, charge, rep. W.fail.getPlayerThrows makes
+-- rsg-core GetPlayer throw; W.fail.eventThrows = <event name> makes TriggerEvent of that name throw.
 -- Usage: local newWorld = dofile(here .. 'support/homestead_world.lua')(T, cfg); local W = newWorld(rows, opts)
 return function(T, cfg)
     local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
@@ -68,6 +69,7 @@ return function(T, cfg)
         end
         local core = { Functions = {
             GetPlayer = function(src)
+                if W.fail.getPlayerThrows then error('rsg-core GetPlayer failed') end
                 local cid = online(src)
                 return cid and { PlayerData = { citizenid = cid, source = src } } or nil
             end,
@@ -127,7 +129,10 @@ return function(T, cfg)
             MySQL = { query = { await = db }, update = { await = db }, insert = { await = db } },
             CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
             AddEventHandler = function() end, RegisterNetEvent = function() end,
-            TriggerEvent = function(name, data) W.events[#W.events + 1] = { name = name, data = data } end,
+            TriggerEvent = function(name, data)
+                if W.fail.eventThrows == name then error('handler of ' .. name .. ' errored') end
+                W.events[#W.events + 1] = { name = name, data = data }
+            end,
             TriggerClientEvent = function(_, target, payload) W.client[#W.client + 1] = { target = target, msg = payload.args[2] } end,
             exports = setmetatable({}, { __call = function(_, name, fn) W.ex[name] = fn end,
                 __index = function(_, res) return X[res] or {} end }),

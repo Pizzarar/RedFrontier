@@ -20,6 +20,8 @@ local cfg = { baseSafeRadius = 25.0, townLot = { price = 300, rep = 25 }, plots 
     lot_b = plot('lot_b', 3000, 'town_lot', { claimable = true, price = 450, region = 'scarlett_meadows' }),
     lot_closed = plot('lot_closed', 4000, 'town_lot', { claimable = false }),
     lot_c = plot('lot_c', 5000, 'town_lot'), -- no claimable key: claimable (only false refuses)
+    lot_zero = plot('lot_zero', 6000, 'town_lot', { price = 0 }),
+    lot_frac = plot('lot_frac', 7000, 'town_lot', { price = 12.5 }),
 } }
 local newWorld = dofile(here .. 'support/homestead_world.lua')(T, cfg)
 
@@ -263,6 +265,76 @@ T.describe('fh_homestead town lots (H8)', function()
         T.eq(0, #W.credits); T.eq(700, W.cash.A); T.eq(0, W.repOf('A', 'heartlands'))
         assert(W.logged('rep %+25 in heartlands failed'))
         W.consistent()
+    end)
+
+    case('fh_lot_unpriced: price 0 / non-integer / no price anywhere -> refused before any charge, nothing reserved', function()
+        local W = newWorld()
+        T.same({ false, 'fh_lot_unpriced' }, { W.buyAt(1, 'lot_zero') })
+        T.same({ false, 'fh_lot_unpriced' }, { W.buyAt(1, 'lot_frac') })
+        local saved = cfg.townLot
+        cfg.townLot = nil -- no default price and the plot has none
+        local ok, a, b = pcall(function() return W.buyAt(1, 'lot_a') end)
+        cfg.townLot = saved
+        assert(ok, tostring(a))
+        T.same({ false, 'fh_lot_unpriced' }, { a, b })
+        T.eq(0, #W.charges); T.eq(0, #W.reps); T.eq(1000, W.cash.A)
+        T.eq(nil, W.C.ownerOf('lot_zero')); T.eq(nil, W.C.ownerOf('lot_a')); T.eq(nil, W.ex.getPlot('A', 'town_lot'))
+        T.same({ true, 'lot_a' }, { W.buyAt(1, 'lot_a') }, 'nothing left reserved or busy')
+        W.consistent()
+    end)
+
+    case('lock held through rep + events: unclaim while buyLot awaits rep = fh_claim_busy; claimed/lot_bought before unclaimed', function()
+        local W = newWorld()
+        W.hold.rep = true
+        W.at(1, 'lot_a')
+        local h = W.start(function() return W.ex.buyLot(1) end)
+        T.eq(false, h.done, 'held in rep')
+        T.same({ citizenid = 'A', class = 'town_lot' }, W.db.plots.lot_a) -- written already
+        T.same({ false, 'fh_claim_busy' }, { W.ex.unclaim(0, 'lot_a') })  -- admin
+        T.same({ false, 'fh_claim_busy' }, { W.ex.unclaim(1, 'lot_a') })  -- owner
+        T.same({ false, 'fh_plot_taken' }, { W.buyAt(2, 'lot_a') })
+        T.eq(0, W.named('fh:homestead:unclaimed')); T.eq(0, W.named('fh:homestead:claimed'))
+        T.same({ true, 'lot_a' }, { W.finish(h) })
+        T.same({ true, 'lot_a' }, { W.ex.unclaim(1, 'lot_a') }, 'lock released after the events')
+        local order = {}
+        for _, e in ipairs(W.events) do order[#order + 1] = e.name end
+        T.same({ 'fh:homestead:claimed', 'fh:homestead:lot_bought', 'fh:homestead:unclaimed' }, order)
+        T.eq(0, W.repOf('A', 'heartlands')); T.eq(1, #W.charges); T.eq(0, #W.credits)
+        W.consistent()
+    end)
+
+    case('a throw after the lot is written (event handler) keeps the buy, logs, and releases the lock', function()
+        local W = newWorld()
+        W.fail.eventThrows = 'fh:homestead:lot_bought'
+        T.same({ true, 'lot_a' }, { W.buyAt(1, 'lot_a') })
+        W.fail.eventThrows = nil
+        assert(W.logged('rep/events after the purchase errored'))
+        T.eq(0, #W.credits); T.eq(25, W.repOf('A', 'heartlands'))
+        T.same({ true, 'lot_a' }, { W.ex.unclaim(1, 'lot_a') }, 'not stuck busy')
+        W.consistent()
+    end)
+
+    case('rsg-core throws during the abandon rep-back: owner treated offline, admin release goes through, lock released', function()
+        local W = newWorld()
+        W.buyAt(1, 'lot_a')
+        W.fail.getPlayerThrows = true
+        T.same({ true, 'lot_a' }, { W.ex.unclaim(0, 'lot_a') })
+        W.fail.getPlayerThrows = nil
+        assert(W.logged('lot_a released by admin without rep%-back.*owner_offline'))
+        T.eq(25, W.repOf('A', 'heartlands'))
+        T.eq(nil, W.db.plots.lot_a)
+        T.same({ true, 'lot_a' }, { W.buyAt(2, 'lot_a') }, 'lock released')
+        -- a throw while buying (rep guard): rep skipped and logged, buy stands, lock released
+        local W2 = newWorld()
+        W2.hold.insert_chest = true
+        W2.at(1, 'lot_a')
+        local h = W2.start(function() return W2.ex.buyLot(1) end)
+        W2.fail.getPlayerThrows = true
+        T.same({ true, 'lot_a' }, { W2.finish(h) })
+        W2.fail.getPlayerThrows = nil
+        T.eq(0, W2.repOf('A', 'heartlands'))
+        assert(W2.logged('rep %+25 in heartlands failed %(character_changed%)'))
+        T.same({ true, 'lot_a' }, { W2.ex.unclaim(0, 'lot_a') }, 'lock released')
     end)
 end)
 

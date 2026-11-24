@@ -66,6 +66,12 @@ local function citizenidOf(src)
     return p and p.PlayerData.citizenid or nil
 end
 
+---citizenidOf that never throws (nil on an rsg-core error): for use while a per-plot lock is held.
+local function safeCitizenidOf(src)
+    local called, cid = pcall(citizenidOf, src)
+    return called and cid or nil
+end
+
 local function reply(src, msg)
     if src == 0 then print('[fh_homestead] ' .. msg) else TriggerClientEvent('chat:addMessage', src, { args = { 'fh', msg } }) end
 end
@@ -171,7 +177,8 @@ local function release(plot, citizenid, class)
     clearClaim(plot.id, citizenid, class)
 end
 
----Write a reserved claim: fh_plots row, chest row, chest registration. Releases the lock on every exit.
+---Write a reserved claim: fh_plots row, chest row, chest registration. On failure the lock is released here; on
+---SUCCESS it is still held and the caller releases it once its own follow-up (rep, events) is done.
 ---@return boolean ok, boolean|nil kept  kept = the write failed but its fh_plots row could not be rolled back, so the
 ---plot stays held in memory and DB (unclaim it to retry).
 local function writeClaim(plot, citizenid, class)
@@ -203,7 +210,6 @@ local function writeClaim(plot, citizenid, class)
             :format(plot.id, citizenid, tostring(affected)))
         return false, true
     end
-    busy[plot.id] = nil
     return true
 end
 
@@ -216,6 +222,7 @@ local function claim(src, class)
     if not plot then return false, citizenid end
     reserve(plot, citizenid, class)
     if not writeClaim(plot, citizenid, class) then return false, 'fh_claim_failed' end
+    busy[plot.id] = nil
     TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region,
         class = class })
     return true, plot.id
@@ -235,6 +242,27 @@ local function refundLot(citizenid, price, plot, kept)
         print(('^1[fh_homestead] town lot %s purchase by %s failed and was refunded, but its fh_plots row is still held; admin: fh_unclaim %s^7')
             :format(plot.id, citizenid, plot.id))
     end
+end
+
+---After a lot is written (lock held by buyLot): rep +townLot.rep in the lot region, then claimed + lot_bought.
+local function lotBought(src, citizenid, plot, price)
+    local repDelta = lotRep()
+    if repDelta ~= 0 then
+        -- rep() credits whoever is loaded on src: skip it if the player switched character during the write
+        local repOk, repErr = false, 'character_changed'
+        if safeCitizenidOf(src) == citizenid then
+            local rc, rok, rerr = pcall(function() return exports.fh_economy:rep(src, plot.region, repDelta, 'town_lot') end)
+            repOk, repErr = rc and rok == true, rc and rerr or rok
+        end
+        if not repOk then
+            print(('^3[fh_homestead] town lot %s bought by %s but rep +%d in %s failed (%s)^7')
+                :format(plot.id, citizenid, repDelta, tostring(plot.region), tostring(repErr)))
+        end
+    end
+    TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region,
+        class = TOWN_LOT })
+    TriggerEvent('fh:homestead:lot_bought', { src = src, citizenid = citizenid, plot_id = plot.id,
+        region_id = plot.region, price = price })
 end
 
 ---Buy the town lot the player stands in (class 'town_lot', claimable). Order: checks (a second lot is refused here,
@@ -264,30 +292,21 @@ local function buyLot(src)
         refundLot(citizenid, price, plot, kept)
         return false, 'fh_claim_failed'
     end
-    local repDelta = lotRep()
-    if repDelta ~= 0 then
-        -- rep() credits whoever is loaded on src: skip it if the player switched character during the write
-        local repOk, repErr = false, 'character_changed'
-        if citizenidOf(src) == citizenid then
-            local rc, rok, rerr = pcall(function() return exports.fh_economy:rep(src, plot.region, repDelta, 'town_lot') end)
-            repOk, repErr = rc and rok == true, rc and rerr or rok
-        end
-        if not repOk then
-            print(('^3[fh_homestead] town lot %s bought by %s but rep +%d in %s failed (%s)^7')
-                :format(plot.id, citizenid, repDelta, tostring(plot.region), tostring(repErr)))
-        end
+    -- the lot is written; rep + events run with the per-plot lock still held, so no unclaim can slip in between
+    -- (an unclaimed event before claimed/lot_bought). pcall: whatever throws, the lock is released.
+    local fin, ferr = pcall(lotBought, src, citizenid, plot, price)
+    busy[plot.id] = nil
+    if not fin then
+        print(('^1[fh_homestead] town lot %s bought by %s; rep/events after the purchase errored: %s^7')
+            :format(plot.id, citizenid, tostring(ferr)))
     end
-    TriggerEvent('fh:homestead:claimed', { src = src, citizenid = citizenid, plot_id = plot.id, region_id = plot.region,
-        class = TOWN_LOT })
-    TriggerEvent('fh:homestead:lot_bought', { src = src, citizenid = citizenid, plot_id = plot.id,
-        region_id = plot.region, price = price })
     return true, plot.id
 end
 
 ---Abandoning a town lot takes the purchase rep back from the owner (fh_economy.rep needs an online src; there is no
----citizenid rep path). Returns the rep call's ok, the owner src used (nil = offline), and the reason when not ok.
+---citizenid rep path). Runs under the per-plot lock, so nothing here may throw. Returns ok, reason when not ok.
 local function takeLotRep(ownerSrc, owner, region, delta, reason)
-    if not ownerSrc or citizenidOf(ownerSrc) ~= owner then return false, 'owner_offline' end
+    if not ownerSrc or safeCitizenidOf(ownerSrc) ~= owner then return false, 'owner_offline' end
     local rc, rok, rerr = pcall(function() return exports.fh_economy:rep(ownerSrc, region, delta, reason) end)
     if rc and rok == true then return true end
     return false, tostring(rc and rerr or rok)
