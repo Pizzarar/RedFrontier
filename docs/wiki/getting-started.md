@@ -13,6 +13,8 @@ RedFrontier is set across two regions: the Heartlands (Valentine) and Scarlett M
 9. **Eat, drink, rest.** Food, water, rest and cleanliness are timed buffs. If they run out you get sluggish, never hurt. See [Survival](systems/survival.md).
 10. **If you die**, your hotbar stays with you and your backpack drops in a bag where you fell. Go back for it within 30 minutes. See [Death](systems/fh_death.md).
 
+New to the frontier? The [tutorial](systems/tutorial.md) walks you through these first steps and sets a route to each destination. Skip it any time with `/tutorial skip`.
+
 More: [Tips](tips.md) · [Regions](regions.md) · [Wiki index](README.md)
 
 Sources:

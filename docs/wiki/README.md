@@ -24,6 +24,7 @@ Player guide for RedFrontier, a frontier homestead server. Every page is written
 - [Roads: wagons, trade, heat](systems/roads.md)
 - [Progression](systems/progression.md)
 - [Quests and the jobs board](systems/quests.md)
+- [Tutorial](systems/tutorial.md)
 
 ## For developers
 - [Public events](dev/events.md)
