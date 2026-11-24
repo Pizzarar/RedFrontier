@@ -41,7 +41,7 @@ regions.regions = {
         -- Starter homestead plot, approximate.
         homestead = { x = -300.0, y = 790.0, z = 118.0 },
         factions = { 'lawmen', 'outlaws', 'traders', 'settlers' },
-        territories = { 'heartlands_t1_camp' },
+        territories = { 'heartlands_t1_camp', 'heartlands_t1_camp_2', 'heartlands_t1_camp_3', 'heartlands_t2_camp' },
     },
     scarlett_meadows = {
         id = 'scarlett_meadows',
@@ -55,7 +55,7 @@ regions.regions = {
         -- Starter homestead plot, approximate (north of Rhodes). (unverified)
         homestead = { x = 1250.0, y = -1210.0, z = 77.0 },
         factions = { 'lawmen', 'raiders', 'traders' },
-        territories = { 'scarlett_meadows_t1_camp' },
+        territories = { 'scarlett_meadows_t1_camp', 'scarlett_meadows_t1_camp_2', 'scarlett_meadows_t2_camp' },
     },
     bayou_nwa = {
         id = 'bayou_nwa',
@@ -68,7 +68,7 @@ regions.regions = {
             { id = 'lagras',      label = 'Lagras',      x = 2174.0,  y = -1120.0,  z = 25.0 },
         },
         factions = { 'lawmen', 'raiders', 'traders', 'bounty_hunters' },
-        territories = {},
+        territories = { 'bayou_nwa_t1_camp', 'bayou_nwa_t1_camp_2', 'bayou_nwa_t1_camp_3', 'bayou_nwa_t2_camp' },
     },
     bluewater_marsh = {
         id = 'bluewater_marsh',
@@ -151,8 +151,8 @@ regions.regions = {
         towns = {
             { id = 'blackwater', label = 'Blackwater', x = -858.67, y = -1337.61, z = 44.49 },
         },
-        factions = { 'lawmen', 'traders', 'bounty_hunters', 'settlers' },
-        territories = {},
+        factions = { 'lawmen', 'traders', 'bounty_hunters', 'settlers', 'outlaws' },
+        territories = { 'great_plains_t1_camp', 'great_plains_t1_camp_2', 'great_plains_t2_camp' },
     },
     tall_trees = {
         id = 'tall_trees',
@@ -215,23 +215,137 @@ regions.regions = {
     },
 }
 
+-- world-01 (block C): one territory per outlaw camp. `faction` is the default camp owner (A-Life contract a-life-01);
+-- `center` matches the camp's center in fh_zones/config.lua (see WORKAROUND note there). Coords APPROXIMATE / unverified.
 regions.territories = {
+    -- Heartlands (outlaws = Mountain Gang)
     heartlands_t1_camp = {
         id = 'heartlands_t1_camp',
-        label = 'Heartlands Outlaw Camp',
+        label = 'Heartland Bluffs Camp',
         region = 'heartlands',
         faction = 'outlaws',
         tier = 'T1',
         center = { x = -145.0, y = 845.0, z = 117.0 }, -- approximate
         radius = 60.0,
     },
+    heartlands_t1_camp_2 = {
+        id = 'heartlands_t1_camp_2',
+        label = 'Heartland Overflow Camp',
+        region = 'heartlands',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = 850.0, y = 850.0, z = 100.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    heartlands_t1_camp_3 = {
+        id = 'heartlands_t1_camp_3',
+        label = 'Dakota West Camp',
+        region = 'heartlands',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -900.0, y = 500.0, z = 105.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    heartlands_t2_camp = {
+        id = 'heartlands_t2_camp',
+        label = 'Dakota South Camp',
+        region = 'heartlands',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = 600.0, y = 200.0, z = 90.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Scarlett Meadows (raiders = Swamp Gang)
     scarlett_meadows_t1_camp = {
         id = 'scarlett_meadows_t1_camp',
-        label = 'Lemoyne Raiders Camp',
+        label = 'Hill Haven Camp',
         region = 'scarlett_meadows',
         faction = 'raiders',
         tier = 'T1',
-        center = { x = 1350.0, y = -1400.0, z = 76.0 }, -- approximate (unverified)
+        center = { x = 850.0, y = -1050.0, z = 75.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    scarlett_meadows_t1_camp_2 = {
+        id = 'scarlett_meadows_t1_camp_2',
+        label = 'Cedar Bottoms Camp',
+        region = 'scarlett_meadows',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 1500.0, y = -1650.0, z = 70.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    scarlett_meadows_t2_camp = {
+        id = 'scarlett_meadows_t2_camp',
+        label = 'Catfish Bottom Camp',
+        region = 'scarlett_meadows',
+        faction = 'raiders',
+        tier = 'T2',
+        center = { x = 1700.0, y = -1750.0, z = 65.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Bayou Nwa (raiders = Swamp Gang)
+    bayou_nwa_t1_camp = {
+        id = 'bayou_nwa_t1_camp',
+        label = 'Lakay Bog Camp',
+        region = 'bayou_nwa',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 2050.0, y = -1500.0, z = 25.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    bayou_nwa_t1_camp_2 = {
+        id = 'bayou_nwa_t1_camp_2',
+        label = 'Bayou Railroad Camp',
+        region = 'bayou_nwa',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 2400.0, y = -950.0, z = 25.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    bayou_nwa_t1_camp_3 = {
+        id = 'bayou_nwa_t1_camp_3',
+        label = 'Lagras Swamp Camp',
+        region = 'bayou_nwa',
+        faction = 'raiders',
+        tier = 'T1',
+        center = { x = 2200.0, y = -1650.0, z = 25.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    bayou_nwa_t2_camp = {
+        id = 'bayou_nwa_t2_camp',
+        label = 'Cypress Hollow Camp',
+        region = 'bayou_nwa',
+        faction = 'raiders',
+        tier = 'T2',
+        center = { x = 2550.0, y = -1750.0, z = 20.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    -- Great Plains (outlaws = Mountain Gang)
+    great_plains_t1_camp = {
+        id = 'great_plains_t1_camp',
+        label = "Beecher's Bluff Camp",
+        region = 'great_plains',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1600.0, y = -1350.0, z = 40.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    great_plains_t1_camp_2 = {
+        id = 'great_plains_t1_camp_2',
+        label = 'Great Plains North Camp',
+        region = 'great_plains',
+        faction = 'outlaws',
+        tier = 'T1',
+        center = { x = -1050.0, y = -900.0, z = 45.0 }, -- approximate (unverified)
+        radius = 60.0,
+    },
+    great_plains_t2_camp = {
+        id = 'great_plains_t2_camp',
+        label = 'Great Plains East Camp',
+        region = 'great_plains',
+        faction = 'outlaws',
+        tier = 'T2',
+        center = { x = -700.0, y = -1600.0, z = 40.0 }, -- approximate (unverified)
         radius = 60.0,
     },
 }

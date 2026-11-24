@@ -56,7 +56,7 @@ end)
 
 case('regionLawFaction: first law faction in the region list', function()
     eq('lawmen', R.regionLawFaction(Regions, 'heartlands'))
-    eq('rhodes_law', R.regionLawFaction(Regions, 'scarlett_meadows'))
+    eq('lawmen', R.regionLawFaction(Regions, 'scarlett_meadows'))
     eq(nil, R.regionLawFaction(Regions, 'bogus'))
     local kindRegions = {
         factions = {
@@ -90,7 +90,7 @@ case('onCampCleared: flips to law, shortage relief, broadcast, schedules retake,
     local effects = R.onCampCleared(ctx, st, heartlandsCamp, { 'CID1', 'CID2' }, seq(5, 25))
     same({
         { type = 'flipped', camp_id = heartlandsCamp, region_id = 'heartlands', from = 'outlaws', to = 'lawmen' },
-        { type = 'broadcast', message = 'Valentine Law has taken the Heartlands Outlaw Camp' },
+        { type = 'broadcast', message = 'Lawmen has taken the Heartland Bluffs Camp' },
         { type = 'shortage', region = 'heartlands', item = 'trade_salt', level = 0 },
     }, effects)
     for _, e in ipairs(effects) do
@@ -182,7 +182,7 @@ case('tick resolves the retake: flips back, broadcasts, raises the shortage', fu
     local effects = R.tick(ctx, st, 1, seq())
     same({
         { type = 'flipped', camp_id = heartlandsCamp, region_id = 'heartlands', from = 'lawmen', to = 'outlaws' },
-        { type = 'broadcast', message = 'Heartland Outlaws have retaken the Heartlands Outlaw Camp' },
+        { type = 'broadcast', message = 'Mountain Gang have retaken the Heartland Bluffs Camp' },
         { type = 'shortage', region = 'heartlands', item = 'trade_salt', level = 0.5 },
     }, effects)
     eq('outlaws', R.getOwner(ctx, st, heartlandsCamp))

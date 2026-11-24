@@ -163,7 +163,7 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         T.same({ camp_id = 'heartlands_t1_01', region_id = 'heartlands', from = 'outlaws', to = 'lawmen' }, B.flipped[1])
         local found = false
         for _, b in ipairs(B.broadcasts) do
-            if b[1] == -1 and b[2].args[2]:find('Valentine Law has taken', 1, true) then found = true end
+            if b[1] == -1 and b[2].args[2]:find('Lawmen has taken', 1, true) then found = true end
         end
         assert(found, 'law-taken broadcast sent to all')
         assert(type(B.kvp.fh_alife_state) == 'string' and #B.kvp.fh_alife_state > 0, 'KVP state saved')
