@@ -2,7 +2,7 @@
 """Static cross-resource contract lint for server/resources (core-07 L1). Python 3 stdlib only.
 
 Usage: python3 tools/check-contracts.py [--root server/resources] [--cfg server/server.cfg]
-                                        [--allowlist tools/contracts-allowlist.txt] [--quiet]
+                                        [--allowlist tools/contracts-allowlist.txt]
 Exit 0 = no non-allowlisted findings, 1 = findings, 2 = bad usage.
 
 Rules
@@ -10,7 +10,7 @@ Rules
            <res> must exist under <root>/*/ and be ensured/started in server.cfg (directly, or through a bracketed
            category `ensure [fh]`). For [fh] resources and any resource with a manifest, <fn> must be exported
            (`exports('fn', ...)`/`exports["fn"]` in a manifest-listed script, or fxmanifest server_exports/
-           client_exports/exports) on the caller's side: a server script needs a server export, a client script a
+           client_exports/exports; manifest `exports` is client-side) on the caller's side: a server script needs a server export, a client script a
            client export, a shared script either. Third-party resources (non-[fh]) only get the exists + ensured
            check (their exports are not enumerated). Skipped: dynamic names (`exports[GetCurrentResourceName()]`,
            `exports[var]`), calls inside comments.  Side of a file comes from fxmanifest server_scripts /
@@ -30,8 +30,8 @@ Rules
            batches). Item names built dynamically are not seen. Weapons are expected in rsg items too.
   Documented events: a sender with no listener is fine when the event name appears in a *.md in the emitting resource
   (published bus events); `fh:<res>:ui_<action>` handlers count as sent by the fh_ui relay (fh:ui:action).
-  Dynamic export loops `for k, fn in pairs(T) do exports(k, fn) end` export every `function T.X`/`T.X =` found in the
-  resource. `provide 'x'` aliases (fh_inventory -> rsg-inventory) resolve to the providing resource. Dynamic-key item
+  Dynamic export loops `for k, fn in pairs(T) do exports([prefix ..] k, fn) end` export (with the prefix) every `function T.X`/`T.X =` found in files of
+  the same side. `provide 'x'` aliases (fh_inventory -> rsg-inventory) resolve to the providing resource. Dynamic-key item
   definitions `[cfg.feed.item] = { label = ...` define the value of `item` in any `feed = { ... }` table.
 Allowlist: one entry per line `<rule>|<key>  # reason / idea id`. Keys: `exports|res:fn`, `events|fh:name`,
   `items|name`. Unused entries are reported as warnings.
@@ -100,7 +100,7 @@ class Resource:
                         self.files.setdefault(os.path.relpath(h, path), set()).update(sides)
         for k, sides in (('server_exports', ('server',)), ('server_export', ('server',)),
                          ('client_exports', ('client',)), ('client_export', ('client',)),
-                         ('exports', SIDES), ('export', SIDES)):
+                         ('exports', ('client',)), ('export', ('client',))):
             for fn in self.manifest.get(k, []):
                 for s in sides:
                     self.exports[s].add(fn)
@@ -155,7 +155,7 @@ def run(root, cfg_path):
                     r.exports[s].add(m.group(1))
 
     # `for name, fn in pairs(T) do exports(name, fn) end`: every `function T.X` / `T.X =` in the resource is an export
-    DYN = re.compile(r'pairs\(\s*(\w+)\s*\)\s*do\s*exports\(\s*\w+\s*,')
+    DYN = re.compile(r'pairs\(\s*(\w+)\s*\)\s*do\s*exports\(\s*(?:[\'"](\w*)[\'"]\s*\.\.\s*)?\w+\s*,')
     for r in resources.values():
         for (rn, rel), t in texts.items():
             if rn != r.name:
@@ -164,8 +164,8 @@ def run(root, cfg_path):
                 for (rn2, rel2), t2 in texts.items():
                     if rn2 == r.name:
                         for d in re.finditer(r'(?:function\s+%s\.(\w+)|\b%s\.(\w+)\s*=)' % (m.group(1), m.group(1)), t2):
-                            for sd in r.files[rel]:
-                                r.exports[sd].add(d.group(1) or d.group(2))
+                            for sd in r.files[rel] & r.files[rel2]:
+                                r.exports[sd].add((m.group(2) or '') + (d.group(1) or d.group(2)))
     fh_names = {n for n, c in category_of.items() if c == '[fh]'}
     alias = {}   # `provide 'x'` in a manifest -> real resource (exports['x']:fn is checked against it)
     for r in resources.values():
@@ -199,7 +199,7 @@ def run(root, cfg_path):
                                  '%s does not export %r for %s callers (%s)' % (target, fn, '/'.join(sorted(sides)), why)))
 
     # ---- rule 2: events
-    SEND = re.compile(r'\b(TriggerEvent|TriggerServerEvent|TriggerClientEvent|TriggerLatentClientEvent)\s*\(\s*([\'"])(fh:[^\'"]*)\2\s*([,)])?')
+    SEND = re.compile(r'\b(TriggerEvent|TriggerServerEvent|TriggerClientEvent|TriggerLatentClientEvent)\s*\(\s*([\'"])(fh:[^\'"]*)\2\s*[,)]')
     LISTEN = re.compile(r'\b(RegisterNetEvent|RegisterServerEvent|AddEventHandler|onNet)\s*\(\s*([\'"])(fh:[^\'"]*)\2')
     LIT = re.compile(r'([\'"])(fh:[A-Za-z0-9_:.\-]+)\1')
     HOOK = re.compile(r'\b(?:on|events?)\s*=\s*[\'"](fh:[^\'"]*)[\'"]')
@@ -211,8 +211,6 @@ def run(root, cfg_path):
         sides = resources[rn].files[rel]
         for m in SEND.finditer(t):
             name = m.group(3)
-            if m.group(4) not in (',', ')', None) :
-                continue
             kind = m.group(1)
             need = {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(kind, {'client'})
             senders.append((name, kind, need, '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))

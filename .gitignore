@@ -17,3 +17,5 @@ tools/.tmp/
 
 # boot-check temp cfg
 server/.boot-check.cfg
+__pycache__/
+*.pyc

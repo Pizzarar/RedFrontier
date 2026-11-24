@@ -95,5 +95,21 @@ class T(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cc.main(['--root', t[0], '--cfg', t[1], '--allowlist', os.path.join(self.root, 'none')]), 1)
 
+    def test_manifest_exports_is_client_side(self):
+        t = tree(self.root, "exports.fh_a:viaManifest()\n", mfa='server_scripts { "s.lua" }\nclient_scripts { "c.lua" }\nexports { "viaManifest" }')
+        self.assertEqual([f[1] for f in findings(t, 'exports')], ['fh_a:viaManifest'])  # server caller, client-only export
+
+    def test_dynamic_event_name_skipped(self):
+        t = tree(self.root, "TriggerEvent('fh:x_' .. v)\nTriggerEvent('fh:y:' .. v, 1)\n")
+        self.assertEqual(findings(t, 'events'), [])
+
+    def test_prefixed_export_loop_per_side(self):
+        t = tree(self.root, "exports.fh_a:FhThing()\nexports.fh_a:FhCli()\n",
+                 mfa='server_scripts { "s.lua" }\nclient_scripts { "c.lua" }')
+        write(self.root, 'resources/[fh]/fh_a/s.lua', "local T = {}\nfunction T.Thing() end\nfor k, f in pairs(T) do exports('Fh' .. k, f) end\n")
+        write(self.root, 'resources/[fh]/fh_a/c.lua', "function T.Cli() end\n")   # client file, no loop: not exported
+        self.assertEqual([f[1] for f in findings(t, 'exports')], ['fh_a:FhCli'])
+
+
 if __name__ == '__main__':
     unittest.main()
