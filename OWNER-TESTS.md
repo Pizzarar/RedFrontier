@@ -977,6 +977,31 @@ whose loot is in the stash, and shifts the region's trade prices; the sim later 
    Expected: ownership is persisted (still shows the last owner, e.g. `outlaws` after the retake); no error lines.
    RESULT:
 
+### Town lot is law-safe (fh_heat + fh_homestead lawSafeAt, idea-803)
+
+Needs `fh_homestead`, `fh_heat`, `fh_economy` started and $300+ cash. Roadblocks fire when heat CROSSES `wanted` (50);
+night ambush and mounted chase need `hunted` (75) plus `set fh_spike_gated false` (ambush only 21:00-05:00 game time).
+Each check is: heat to 0, then up. Only spawns are suppressed; heat still accrues inside the lot.
+
+1. Run `/where lot`, ride to the lot it routes to (Valentine: `heartlands_lot_01`, (-180, 620, 113), radius 14 m), stand in it
+   and run `/fh_buylot`.
+   Expected: `fh_buylot: bought lot heartlands_lot_01`.
+   RESULT:
+2. Stand in the middle of your lot. Run `exports.fh_heat:set(<yourId>, "outlaws", 0)`, then `exports.fh_heat:set(<yourId>, "outlaws", 55)`.
+   Expected: no roadblock spawns; the console shows exactly once `[fh_heat] <id>/<cid> law-safe in own lot heartlands_lot_01: skipping spawn`.
+   Your heat still reads 55 (heat accrues inside the lot).
+   RESULT:
+3. Set heat to 0, then 80 (with `fh_spike_gated false`, at night, on a horse or wagon).
+   Expected: no ambush ring and no mounted chase while you stay in the lot; the skip line does not repeat for the same lot.
+   RESULT:
+4. Walk out of the lot (more than 14 m from its center), set heat 0 then 55 (then 0 and 80).
+   Expected: the roadblock spawns (and ambush/chase when gated off); the skipped ones started no cooldown.
+   Set heat back to 0.
+   RESULT:
+5. (Optional, 2 players) Player B stands in player A's lot and runs the heat 0 -> 55 sequence on their own character.
+   Expected: the roadblock still spawns for B (a stranger's lot is not safe); no skip line for B.
+   RESULT:
+
 ## World-01: walk the claims (fh_core regions, fh_homestead, fh_zones, fh_trade, fh_ui)
 
 Ground-snap + enabled-gate check (plan world-01 block D). `/where` is the fix-up tool: run `/where plot` to get a
