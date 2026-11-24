@@ -18,7 +18,8 @@
 --   tier is already in the slot cache: setTier saved it and then threw in an event handler, so the build stands).
 -- Ownership: gen[plotId] moves on every unclaim; after each await the flow checks the same character still owns the
 --   same plot (no unclaim in between, also not unclaim + re-claim). If not: no build, full refund (items go back to the
---   chest they came from; it stays registered after an unclaim, see README Open: spill-on-unclaim gap).
+--   chest they came from). H13: a build also holds FhHomesteadClaims.beginChestWrite for the plot, so an unclaim of it
+--   is refused 'fh_chest_busy' until the build is done; the unclaim paths stay checked as a backstop.
 -- Also here: build materials registered with fh_core (from this resource only), extra chests (chest_2/chest_3 slots)
 -- registered as fh_core `chest` containers when built and on load, and the client prop feed (client-local props).
 local cfg = FhHomesteadConfig
@@ -229,6 +230,10 @@ function B.build(src, slotId)
     local plotId, plot = ownedPlotAt(cid, GetEntityCoords(ped))
     if not plotId then return false, plot end
     if busyPlot[plotId] or busyCid[cid] then return false, 'fh_build_busy' end
+    -- H13: hold the plot's chests (a refund may land in chest 1 later), so no unclaim runs mid-build; refused
+    -- 'fh_claim_busy' while an unclaim of this plot is in flight
+    local held, hwhy = claims().beginChestWrite(plotId)
+    if not held then return false, hwhy end
     busyPlot[plotId], busyCid[cid] = true, true
     local st = { src = src, cid = cid, plotId = plotId, slotId = slotId, region = plot.region, taken = {}, charged = 0, done = false }
     local r = table.pack(pcall(buildLocked, st, plot, slotId))
@@ -261,6 +266,7 @@ function B.build(src, slotId)
         end
     end
     busyPlot[plotId], busyCid[cid] = nil, nil
+    claims().endChestWrite(plotId)
     return table.unpack(out, 1, out.n)
 end
 

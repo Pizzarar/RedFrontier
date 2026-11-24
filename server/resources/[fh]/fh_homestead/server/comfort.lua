@@ -187,6 +187,23 @@ local function deleteTrophy(e, citizenid, plotId, trophyId)
     return true
 end
 
+---H13: withPlotLock plus a chest hold from server/main.lua (FhHomesteadClaims.beginChestWrite) for the trophy changes
+---that move an item into the plot chest (place refund, unplace), so no unclaim of the plot runs meanwhile
+---('fh_chest_busy' there; 'fh_claim_busy' here while an unclaim is in flight).
+local function withChestHold(plotId, fn)
+    local C = FhHomesteadClaims
+    if not (C and C.beginChestWrite) then return false, 'fh_not_ready' end
+    local held, hwhy = C.beginChestWrite(plotId)
+    if not held then return false, hwhy end
+    local r = table.pack(pcall(withPlotLock, plotId, fn))
+    C.endChestWrite(plotId)
+    if not r[1] then
+        log('error', ('trophy change on %s errored: %s'):format(tostring(plotId), tostring(r[2])))
+        return false, 'fh_trophy_failed'
+    end
+    return table.unpack(r, 2, r.n)
+end
+
 local function addTrophy(citizenid, trophyId, points)
     local valid, res = calc.checkTrophy(trophyId, points)
     if not valid then return false, res end
@@ -304,7 +321,7 @@ local function placeTrophy(src, itemId)
     local cid = citizenidOf(src)
     local plotId = plotOf(cid)
     if not plotId then return false, 'fh_no_plot' end
-    return withPlotLock(plotId, function()
+    return withChestHold(plotId, function()
         local g = genOf(plotId)
         local e, ewhy = entryFor(cid, plotId)
         if not e then return false, ewhy end
@@ -343,7 +360,7 @@ local function unplaceTrophy(src, trophyId)
     local cid = citizenidOf(src)
     local plotId = plotOf(cid)
     if not plotId then return false, 'fh_no_plot' end
-    return withPlotLock(plotId, function()
+    return withChestHold(plotId, function()
         local g = genOf(plotId)
         local e, ewhy = entryFor(cid, plotId)
         if not e then return false, ewhy end

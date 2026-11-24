@@ -157,7 +157,7 @@ local PLOT = 'heartlands_01'
 local function server()
     local S = { plots = { [PLOT] = 'A' }, rows = { [PLOT] = {} }, owners = { A = PLOT }, tiers = { [PLOT] = { trophy_wall = 1 } },
         chest = { trophy_deer = 3 }, points = { trophy_deer = 4 }, hold = {}, events = {}, handlers = {}, X = {}, logs = {},
-        ready = true, lots = {},
+        ready = true, lots = {}, claimBusy = {}, holds = {},
         order = {}, calls = { addItem = 0, removeItem = 0 } }
     local function await(tag) S.order[#S.order + 1] = tag if S.hold[tag] then S.hold[tag] = nil coroutine.yield(tag) end end
     local players = { [1] = { PlayerData = { citizenid = 'A' } }, [2] = { PlayerData = { citizenid = 'B' } } }
@@ -228,6 +228,18 @@ local function server()
     }, { __call = function(_, name, fn) S.X[name] = fn end })
     local env = setmetatable({
         FhHomesteadConfig = cfg, FhComfort = C, FhPlotRules = dofile(dir .. 'shared/plot_rules.lua'),
+        -- H13 chest hold, as server/main.lua: refused while an unclaim holds the plot (S.claimBusy[plot]); S.holds counts
+        FhHomesteadClaims = {
+            beginChestWrite = function(plotId)
+                if S.claimBusy[plotId] then return false, 'fh_claim_busy' end
+                S.holds[plotId] = (S.holds[plotId] or 0) + 1
+                return true
+            end,
+            endChestWrite = function(plotId)
+                local n = (S.holds[plotId] or 0) - 1
+                S.holds[plotId] = n > 0 and n or nil
+            end,
+        },
         FhHomesteadSlots = {
             isReady = function() return S.ready end,
             -- like FhHomesteadClaims.plotOf: class defaults to 'claim'; S.lots = town lots (H9)
@@ -355,6 +367,27 @@ case('server: unplace deletes the row before the refund', function()
     assert(d and a and d < a, 'delete must precede addItem')
     assert(S.chest.trophy_deer == 3 and nrows(S.rows[PLOT]) == 0 and S.X.getComfort('A') == 5)
     assert(S.last('fh:homestead:trophy_removed')[1].comfort == 4)
+end)
+-- H13: place/unplace hold the plot's chests (main.lua beginChestWrite) for their whole run, so no unclaim can slip in
+-- and let a refund land in the next owner's chest; while an unclaim holds the plot they are refused, nothing moves.
+case('server: place/unplace hold the chests while in flight and are refused while an unclaim holds the plot', function()
+    local S = server()
+    S.hold.insert = true
+    local finish = S.start(function() return S.X.placeTrophy(1, 'trophy_deer') end)
+    assert(S.holds[PLOT] == 1, 'hold taken while the place is in flight')
+    assert(finish() == true)
+    assert(S.holds[PLOT] == nil, 'hold released after the place')
+    S.claimBusy[PLOT] = true
+    local calls = S.calls.removeItem + S.calls.addItem
+    local ok, why = S.X.placeTrophy(1, 'trophy_deer')
+    assert(ok == false and why == 'fh_claim_busy', tostring(why))
+    ok, why = S.X.unplaceTrophy(1, 'trophy_deer#1')
+    assert(ok == false and why == 'fh_claim_busy', tostring(why))
+    assert(S.calls.removeItem + S.calls.addItem == calls and S.chest.trophy_deer == 2, 'no item moved')
+    assert(S.holds[PLOT] == nil)
+    S.claimBusy[PLOT] = nil
+    assert(S.X.unplaceTrophy(1, 'trophy_deer#1'))
+    assert(S.holds[PLOT] == nil and S.chest.trophy_deer == 3)
 end)
 case('server: double unplace refunds exactly once', function()
     local S = server()

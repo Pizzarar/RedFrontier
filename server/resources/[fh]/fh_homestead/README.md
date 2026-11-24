@@ -6,15 +6,17 @@ law-safe **town lot** (`class = 'town_lot'`, `/fh_buylot`). One of each per char
 
 - `config.lua`: plots (id, region, center, radius, chest coords/heading). Coordinates are approximate: verify in game.
 - `shared/plot_rules.lua`: pure rules (in-radius, free, one-per-player, owner-only chest); specced in `spec/plot_rules_spec.lua`.
-- `server/main.lua`: `/fh_claim`, `/fh_buylot`, `/fh_unclaim [plot_id]` (owner, or admin with a plot id), exports
+- `server/main.lua`: `/fh_claim`, `/fh_buylot`, `/fh_unclaim [plot_id] [force]` (owner, or admin with a plot id; `force` = admin only), exports
   `claim`, `unclaim`, `buyLot`, `getPlot`, `isInSafeZone`, `plotInfo`, `lawSafeAt`. DB: `server/migrations/0003_homestead.sql`,
   plot class `0018_homestead_plot_class.sql`.
 - Chest = fh_core `chest` container (`fh:chest:<plot>:1`) with coords; open goes through `exports.fh_core:open`
   (server-side reach check) after the owner check.
 - Client draws the chest as a local, non-networked prop. TODO(waits on B4c): anything networked.
-- Events: `fh:homestead:claimed`, `fh:homestead:unclaimed` (see fh_core/docs/events.md).
-- Known gaps: unclaiming leaves chest contents in the stash (TODO: spill to a drop bag); nothing stops another
-  resource from opening the stash id directly (owner-only is enforced on this resource's open path).
+- Events: `fh:homestead:claimed`, `fh:homestead:unclaimed`, `fh:homestead:spilled` (see fh_core/docs/events.md).
+- No inherited stashes (H13): an unclaim is refused while any of the plot's chests holds an item; an admin `force`
+  logs and empties them (see "Chests on unclaim" below).
+- Known gap: nothing stops another resource from opening the stash id directly (owner-only is enforced on this
+  resource's open path).
 - Not runtime-tested (no Cfx key yet).
 
 ## M1 loop (B6d)
@@ -35,7 +37,7 @@ claims and `fh_plot_slots` has finished.
 | Export | Returns | Notes |
 |---|---|---|
 | `claim(src, class?)` | `true, plot_id` or `false, reason` | `class` defaults to `'claim'`; the plot you stand in must be of that class (`/fh_claim` = class `claim` only; town lots are bought, H8). One plot per character per class. Reasons: `fh_not_ready`, `fh_no_character`, `fh_no_player`, `fh_not_in_plot`, `fh_wrong_plot_class`, plus the `plot_rules` refusals (`fh_plot_taken`, `fh_already_has_plot`, `fh_already_has_lot`, `fh_not_claimable`), `fh_claim_failed` |
-| `unclaim(src, plot_id?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. The class comes from the plot's row. No `plot_id` = the caller's **claim** (a town lot is only released by naming its id). `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_claim_busy` (that plot's claim is still writing; retry), `fh_unclaim_failed` |
+| `unclaim(src, plot_id?, force?)` | `true, plot_id` or `false, reason` | owner, or admin / console (`src` 0) with a plot id. The class comes from the plot's row. No `plot_id` = the caller's **claim** (a town lot is only released by naming its id). `force` (admin / console only) empties the plot's chests first (H13, see "Chests on unclaim"). `fh_not_ready`, `fh_no_plot`, rule refusals, `fh_not_admin` (`force` from a non-admin), `fh_claim_busy` (that plot's claim is still writing; retry), `fh_chest_busy` (a build or trophy change on that plot is in flight; retry), `fh_chests_not_empty`, `fh_chest_check_failed`, `fh_chest_clear_failed`, `fh_rep_failed` (town lot), `fh_unclaim_failed` |
 | `getPlot(citizenid, class?)` | plot id or `nil` | `class` defaults to `'claim'`: `getPlot(cid)` is the homestead claim only, never a town lot (`nil` for a lot-only owner). `getPlot(cid, 'town_lot')` = the lot |
 | `buyLot(src)` | `true, plot_id` or `false, reason` | `/fh_buylot`: buy the town lot you stand in. See "Town lots" below for the flow and reasons |
 | `claimedPlots()` | `{ plot_id, ... }` | every claimed plot, all classes (fh_ui `/where plot`) |
@@ -70,6 +72,7 @@ Slot interface (server-local table `FhHomesteadSlots`, for H2, not an export): `
 | `fh:homestead:claimed` | `{ src, citizenid, plot_id, region_id, class }` | after a successful claim or lot purchase |
 | `fh:homestead:lot_bought` | `{ src, citizenid, plot_id, region_id, price }` | after a town lot purchase (right after `claimed`) |
 | `fh:homestead:unclaimed` | `{ src, citizenid, plot_id }` | after a successful unclaim (slots and trophies go with the plot) |
+| `fh:homestead:spilled` | `{ src, citizenid, plot_id, reason, stashes = { { stash_id, items = { { item, count } } } } }` | H13: plot chest items were destroyed on unclaim; `reason` = `force unclaim` (admin force) or `ITEM LOST: added during unclaim` (final sweep). Lists only the stashes whose clear went through; `citizenid` = the owner |
 | `fh:homestead:slot_changed` | `plot_id, slot_id, tier` (positional) | a slot tier was saved and changed |
 | `fh:homestead:station_built` | `citizenid, plot_id, slot_id, station_type` (positional) | a station slot went from tier 0 to 1 or more |
 | `fh:homestead:comfort_changed` | `citizenid, newComfort, oldComfort` (positional) | only when the value actually changes (also to 0 on unclaim) |
@@ -208,13 +211,33 @@ Admin-only (`group.admin`): `/fh_plotcheck [plotId|all]` (default `all`) checks 
 
 How it works: the server asks the admin's client to probe; the client reuses world-01 D's `FhSnap.groundZAt` (fh_core `client/ground_snap.lua`, read-only: it now also returns a second value, `true` when ground was really found, `false` on the hint fallback) and reports back with a one-shot token. A missing ped is refused, and no answer within `8 s + 3 s per plot` prints a timeout. A newer run on the same client stops the older probe loop. One plot prints in full in chat; several plots (`all`) print the full blocks to the **server console only** and send chat a capped summary (counts of ok/warn/fail, up to 8 problem plot ids, fail first). `fail` = bad z, water, overlap or no report; `warn` = snap-corrected z or ground not found. The chat ETA assumes the worst case, 2 s per plot. Pure math and formatting: `shared/plotcheck.lua` (`spec/plotcheck_spec.lua`); session: `server/plotcheck.lua`. Nothing is written to the DB.
 
+## Chests on unclaim (H13)
+
+No inherited stashes: the next owner of a plot always opens empty chests.
+
+- Owner (or admin without `force`): `/fh_unclaim` is refused with `fh_chests_not_empty` while chest 1 or a built
+  `chest_2` / `chest_3` (town lot: `chest_2`) holds anything. Nothing is deleted, no rep moves. Empty the chests, retry.
+- Admin / console: `/fh_unclaim <plot_id> force` (export `unclaim(src, plot_id, true)`) prints one console line per item
+  (`force unclaim: plot=.. owner=.. stash=.. slot=.. item=.. count=.. cleared`), empties every non-empty stash through
+  `fh_core.clearContainer`, reads it back, fires `fh:homestead:spilled`, then releases as usual. A stash that will not
+  empty: `fh_chest_clear_failed`, the plot stays claimed. `force` from a non-admin: `fh_not_admin`.
+- Reads fail closed through `fh_core.snapshot`: chest 1 unknown to fh_core is registered again and re-read; an unbuilt
+  extra chest is skipped; any other read failure is `fh_chest_check_failed` (`fh_not_ready` before the slot load).
+- Lock / TOCTOU: the check runs after the per-plot lock is taken and before the rep take-back and the DELETE. While the
+  lock is held chest opens (`chest: fh_claim_busy`), builds and trophy place/unplace are refused. Builds and trophy
+  changes hold a chest-writer interlock (`FhHomesteadClaims.beginChestWrite` / `endChestWrite`), so an unclaim during
+  one is refused `fh_chest_busy` and one during an unclaim is refused `fh_claim_busy`. After the DELETE, still under
+  the lock, a final sweep logs anything that slipped in (a pane opened before the lock) as `ITEM LOST: added during
+  unclaim` and clears it; if that clear fails the release stands and the console names the stash to wipe by hand.
+
 ## Open
 
 - Nothing enforces "safe" beyond fh_heat's own-lot skip: `isInSafeZone` / `plotInfo` are queries only (law AI and raids:
   idea-803 @a-life, fh_zones).
 
-- Spill-on-unclaim gap: chest contents stay in the stash and pass to the next owner of the plot (see Known gaps above).
-  The same holds for the extra chests (`fh:chest:<plot>:2` / `:3`): their stashes stay after an unclaim too.
+- Spill-on-unclaim: H13 refuses / force-clears instead of dropping a bag (no drop-bag spill). Residual: fh_core has no
+  "close pane" call, so a chest pane opened before the unclaim and still open after the final sweep can still take an
+  item into the released plot's stash. Follow-up: clear (and log) the stashes again on the next claim.
 - Build materials must be in the plot chest: fh_core `removeItem` works on registered world containers only, not on
   the player's own inventory, so `/fh_build` cannot take lumber/nails from the pockets.
 - `lumber` ($3) and `nails` ($2) are bought at any trade post (fh_trade supplies, idea-716/719); admins can still `/giveitem` them.

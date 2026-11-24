@@ -10,6 +10,7 @@ return function(T, cfg)
     local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
     local dir = here .. '../../server/resources/[fh]/fh_homestead/'
     local PR = dofile(dir .. 'shared/plot_rules.lua')
+    local BR = dofile(dir .. 'shared/build_rules.lua')
     local fh = assert(io.open(dir .. 'server/main.lua', 'rb'))
     local MAIN_SRC = fh:read('a')
     fh:close()
@@ -18,7 +19,8 @@ return function(T, cfg)
         opts = opts or {}
         local W = { db = { plots = {}, chests = {} }, events = {}, threads = {}, ex = {}, client = {}, commands = {},
             players = { [1] = 'A', [2] = 'B' }, offline = {}, admins = {}, peds = {}, hold = {}, fail = {}, logs = {},
-            cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {} }
+            cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {},
+            stash = {}, registered = {}, snapshots = {}, clears = {} }
         for _, r in ipairs(rows or {}) do W.db.plots[r.plot_id] = { citizenid = r.citizenid, class = r.class } end
         local function await(tag)
             local h = W.hold[tag]
@@ -130,16 +132,44 @@ return function(T, cfg)
         }
         local X = {
             ['rsg-core'] = { GetCoreObject = function() return core end },
-            fh_core = { registerContainer = function()
-                if W.fail.registerThrows then error('fh_core gone') end
-                if W.fail.register then return false, 'nope' end
-                return true
-            end },
+            -- H13 stashes: W.stash[id] = { [slot] = { name, amount } }; W.registered[id] = registered with fh_core.
+            -- snapshot of an id fh_inventory never saw = fh_unknown_container. W.fail.snapshot = <reason> (or 'throw'),
+            -- W.fail.clear = <reason> (or 'throw', or 'noop': reports ok but leaves the items), W.onSnapshot(id) runs
+            -- before each read (a spec can add items there, as a pane open before the lock would).
+            fh_core = {
+                registerContainer = function(_, ref)
+                    if W.fail.registerThrows then error('fh_core gone') end
+                    if W.fail.register then return false, 'nope' end
+                    W.registered[ref.id] = true
+                    return true
+                end,
+                snapshot = function(_, ref)
+                    W.snapshots[#W.snapshots + 1] = ref.id
+                    if W.onSnapshot then W.onSnapshot(ref.id) end
+                    if W.fail.snapshot == 'throw' then error('fh_inventory gone') end
+                    if W.fail.snapshot then return nil, W.fail.snapshot end
+                    if not W.registered[ref.id] then return nil, 'fh_unknown_container' end
+                    local out = {}
+                    for slot, it in pairs(W.stash[ref.id] or {}) do out[slot] = { name = it.name, amount = it.amount } end
+                    return out
+                end,
+                clearContainer = function(_, ref)
+                    W.clears[#W.clears + 1] = ref.id
+                    if W.fail.clear == 'throw' then error('fh_inventory gone') end
+                    if W.fail.clear == 'noop' then return true end
+                    if W.fail.clear then return false, W.fail.clear end
+                    if not W.registered[ref.id] then return false, 'fh_unknown_container' end
+                    W.stash[ref.id] = {}
+                    return true
+                end,
+            },
             fh_economy = economy,
         }
         W.env = setmetatable({
-            FhHomesteadConfig = cfg, FhPlotRules = PR, FhBuildRules = { safeRadius = function(p) return p.radius end, safeRadiusFor = function(p) return p.radius end },
+            FhHomesteadConfig = cfg, FhPlotRules = PR, FhBuildRules = setmetatable({ safeRadius = function(p) return p.radius end,
+                safeRadiusFor = function(p) return p.radius end }, { __index = BR }),
             FhRegions = opts.isEnabled and { isEnabled = opts.isEnabled } or nil,
+            FhHomesteadSlots = opts.slots, -- H13: { isReady, getTiers } stub (extra chests' built tiers)
             MySQL = { query = { await = db }, update = { await = db }, insert = { await = db } },
             CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
             AddEventHandler = function() end, RegisterNetEvent = function() end,

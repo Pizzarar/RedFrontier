@@ -12,6 +12,10 @@ local ready = false
 -- exit. A second claim/unclaim of that plot meanwhile gets the retryable 'fh_claim_busy', so no two DB writes for one
 -- plot ever interleave (and a stale unclaim can never clear a newer claim's memory).
 local busy = {}
+-- H13: plot_id -> number of in-flight flows that may put items into the plot's chests later (a build refund, a trophy
+-- place/unplace). An unclaim waits for them ('fh_chest_busy') and they wait for an unclaim ('fh_claim_busy'), so no item
+-- lands in a chest after the unclaim's last stash read. Taken/released through FhHomesteadClaims.begin/endChestWrite.
+local writers = {}
 
 local DEFAULT_CLASS = 'claim'
 ---Normalise a class arg / DB value: missing or empty = 'claim'.
@@ -56,6 +60,17 @@ FhHomesteadClaims = setmetatable({}, {
         plotOf = function(citizenid, class) return plotOfClass(citizenid, class) end,
         ---classOf(plotId) -> class the claimed plot is held as (DB row), or nil when unclaimed.
         classOf = function(plotId) return claims.classByPlot[plotId] end,
+        ---H13: hold plotId's chests for a flow that may add items to them later (build refund, trophy). Refused
+        ---'fh_claim_busy' while a claim/unclaim of the plot is in flight. Every true MUST be paired with endChestWrite.
+        beginChestWrite = function(plotId)
+            if busy[plotId] then return false, 'fh_claim_busy' end
+            writers[plotId] = (writers[plotId] or 0) + 1
+            return true
+        end,
+        endChestWrite = function(plotId)
+            local n = (writers[plotId] or 0) - 1
+            writers[plotId] = n > 0 and n or nil
+        end,
     },
     __newindex = function() error('FhHomesteadClaims is read-only', 2) end,
     __metatable = false,
@@ -305,17 +320,144 @@ local function takeLotRep(owner, region, delta, reason)
     return false, tostring(rc and rerr or rok)
 end
 
----Release a plot. Owner (by src) or admin (src 0 = console). Chest contents stay in the stash. With no plotId the
----caller's CLAIM is released; a town lot is only released by naming its id. The class comes from the plot's row.
+-- ---------------------------------------------------------------- H13: plot stashes on unclaim
+
+---Chests of a plot, sorted by number: { n = 1 } (the claim chest) plus { n, slotId } for every chest-kind slot of its
+---class template (claim: chest_2, chest_3; town lot: chest_2).
+local function chestsOf(plot)
+    local out = { { n = 1 } }
+    for slotId, slot in pairs(type(plot) == 'table' and plot.slots or {}) do
+        local n = FhBuildRules.chestNumber(slotId, slot)
+        if n then out[#out + 1] = { n = n, slotId = slotId } end
+    end
+    table.sort(out, function(a, b) return a.n < b.n end)
+    return out
+end
+
+---fh_core snapshot (slot -> item) -> sorted { { slot, item, count } } of the non-empty slots.
+local function stashLines(items)
+    local out = {}
+    for slot, it in pairs(items) do
+        if type(it) == 'table' and type(it.name) == 'string' then
+            local count = tonumber(it.amount) or 1
+            if count > 0 then out[#out + 1] = { slot = tonumber(slot) or 0, item = it.name, count = count } end
+        end
+    end
+    table.sort(out, function(a, b) return a.slot < b.slot end)
+    return out
+end
+
+local function snapshotOf(ref)
+    local called, items, why = pcall(function() return exports.fh_core:snapshot(ref) end)
+    if called and type(items) == 'table' then return items end
+    return nil, called and tostring(why) or ('error: ' .. tostring(items))
+end
+
+---Read every stash of the plot through fh_core.snapshot: { { id, ref, items = stashLines } } or nil, reason.
+---fh_unknown_container (fh_inventory has no such stash this boot): chest 1 is registered again and re-read (a claim
+---whose chest write failed never registered it, but its DB stash may hold items from an earlier boot); an extra chest
+---whose slot is not built is skipped (never registered this boot, so nobody could have put anything in it), a built one
+---fails closed. Every other read failure fails closed too: 'fh_chest_check_failed' ('fh_not_ready' before the slot
+---cache is loaded).
+local function readStashes(plotId)
+    local plot = cfg.plots[plotId]
+    local out = {}
+    for _, c in ipairs(chestsOf(plot)) do
+        local ref = { type = 'chest', id = rules.chestStashId(plotId, c.n) }
+        local items, why = snapshotOf(ref)
+        if not items and why == 'fh_unknown_container' then
+            if c.n == 1 then
+                if plot then pcall(registerChest, plot) end
+                items, why = snapshotOf(ref)
+            else
+                local S = FhHomesteadSlots
+                if not (S and S.isReady and S.isReady()) then return nil, 'fh_not_ready' end
+                local tiers = S.getTiers(plotId) or {}
+                if (tiers[c.slotId] or 0) < 1 then why = 'skip' end
+            end
+        end
+        if items then
+            out[#out + 1] = { id = ref.id, ref = ref, items = stashLines(items) }
+        elseif why ~= 'skip' then
+            print(('^1[fh_homestead] cannot read stash %s of %s (%s)^7'):format(ref.id, plotId, tostring(why)))
+            return nil, 'fh_chest_check_failed'
+        end
+    end
+    return out
+end
+
+local function hasItems(stashes)
+    for _, s in ipairs(stashes) do if #s.items > 0 then return true end end
+    return false
+end
+
+---Log the full contents (one server print per item), then empty every non-empty stash through fh_core.clearContainer
+---and read it back. One fh:homestead:spilled event at the end lists the stashes whose clear went through (what was
+---actually destroyed), also when a later stash failed, so a retry never reports the same items twice.
+---@return boolean ok, string|nil reason  fh_chest_clear_failed when a stash could not be emptied (later ones untouched)
+local function spillStashes(src, owner, plotId, stashes, reason)
+    local payload, ok, why = {}, true, nil
+    for _, s in ipairs(stashes) do
+        if #s.items > 0 then
+            local items = {}
+            for _, l in ipairs(s.items) do
+                items[#items + 1] = { item = l.item, count = l.count }
+                print(('^3[fh_homestead] %s: plot=%s owner=%s stash=%s slot=%s item=%s count=%s cleared^7')
+                    :format(reason, plotId, tostring(owner), s.id, l.slot, l.item, l.count))
+            end
+            local called, cleared, cwhy = pcall(function() return exports.fh_core:clearContainer(s.ref) end)
+            local after = nil
+            if called and cleared == true then
+                payload[#payload + 1] = { stash_id = s.id, items = items }
+                local now = snapshotOf(s.ref)
+                after = now and stashLines(now) or nil
+            end
+            if not after or #after > 0 then
+                print(('^1[fh_homestead] %s: plot=%s stash=%s could not be emptied (%s)^7')
+                    :format(reason, plotId, s.id, tostring(called and (cwhy or (after and 'items left') or 'read-back failed') or cleared)))
+                ok, why = false, 'fh_chest_clear_failed'
+                break
+            end
+        end
+    end
+    if #payload > 0 then
+        pcall(TriggerEvent, 'fh:homestead:spilled', { src = src, citizenid = owner, plot_id = plotId, reason = reason,
+            stashes = payload })
+    end
+    return ok, why
+end
+
+---After the fh_plots row is gone (lock still held): anything in the stashes now was put in after the stash check
+---(a chest pane already open before the lock, fh_hands feed). Log it as lost and empty it, so the next owner opens empty
+---chests. A failure here cannot undo the unclaim: it is logged loudly for a by-hand wipe.
+local function sweepStashes(src, owner, plotId)
+    local stashes, why = readStashes(plotId)
+    if stashes and not hasItems(stashes) then return end
+    local ok = false
+    if stashes then ok, why = spillStashes(src, owner, plotId, stashes, 'ITEM LOST: added during unclaim') end
+    if not ok then
+        print(('^1[fh_homestead] plot %s was released but its chests may still hold items (%s); before the next claim run fh_inventory ClearStash on fh:chest:%s:<n> by hand^7')
+            :format(plotId, tostring(why), plotId))
+    end
+end
+
+---Release a plot. Owner (by src) or admin (src 0 = console). With no plotId the caller's CLAIM is released; a town lot
+---is only released by naming its id. The class comes from the plot's row.
+---H13 stashes: refused 'fh_chests_not_empty' while any of the plot's chests (chest 1, chest_2, chest_3 as its class has
+---them) holds an item; nothing is deleted. `force` (admins only, else 'fh_not_admin') instead logs every item per stash
+---(print + fh:homestead:spilled) and empties them all before the release. The stash check runs AFTER the per-plot lock
+---is taken (no new chest open, build or trophy change can start) and before the rep-back and the DELETE; a final sweep
+---after the DELETE catches anything a pane opened before the lock (or fh_hands) slipped in, so the next owner always
+---opens empty chests.
 ---Town lot (abandon, no money back): rep -townLot.rep in the lot's region for the owner, before the DELETE. The owner
 ---abandoning their own lot is refused if that rep change fails (so buy/abandon/rebuy never farms rep). An admin can
 ---always clear a lot: the rep-back is taken by citizenid (owner online or offline); if that call fails or throws the lot
 ---is released anyway and the skipped rep-back is logged.
----TODO: spill leftover chest items to a drop bag on unclaim; until then a later owner of the plot inherits them.
 ---@return boolean ok, string|nil reason
-local function unclaim(src, plotId)
+local function unclaim(src, plotId, force)
     if not ready then return false, 'fh_not_ready' end
     local isAdmin = src == 0 or IsPlayerAceAllowed(src, 'command.fh_unclaim')
+    if force and not isAdmin then return false, 'fh_not_admin' end
     local citizenid = src ~= 0 and citizenidOf(src) or nil
     if not plotId then plotId = plotOfClass(citizenid, DEFAULT_CLASS) end
     if not plotId then return false, 'fh_no_plot' end
@@ -323,10 +465,31 @@ local function unclaim(src, plotId)
     if not ok then return false, why end
     -- a claim or another unclaim of this plot is mid-write: retry once it has landed or rolled back
     if busy[plotId] then return false, 'fh_claim_busy' end
+    -- a build / trophy change may still refund into the chests: retry once it is done
+    if writers[plotId] then return false, 'fh_chest_busy' end
     local owner = claims.byPlot[plotId]
     local class = claims.classByPlot[plotId] or rules.classOf(cfg.plots[plotId])
     local region = cfg.plots[plotId] and cfg.plots[plotId].region
     busy[plotId] = true
+    -- H13: stash check under the lock, before any rep or DB change (a refusal here needs no undo)
+    local read, stashes, swhy = pcall(readStashes, plotId)
+    if not read or not stashes then
+        if not read then print(('^1[fh_homestead] stash check of %s errored: %s^7'):format(plotId, tostring(stashes))) end
+        busy[plotId] = nil
+        return false, read and swhy or 'fh_chest_check_failed'
+    end
+    if hasItems(stashes) then
+        if not force then
+            busy[plotId] = nil
+            return false, 'fh_chests_not_empty'
+        end
+        local called, spilled, spwhy = pcall(spillStashes, src, owner, plotId, stashes, 'force unclaim')
+        if not called or not spilled then
+            if not called then print(('^1[fh_homestead] force clear of %s errored: %s^7'):format(plotId, tostring(spilled))) end
+            busy[plotId] = nil
+            return false, called and spwhy or 'fh_chest_clear_failed'
+        end
+    end
     local repBack = class == TOWN_LOT and lotRep() or 0
     local repTaken, repWhy = false, nil
     if repBack ~= 0 then
@@ -354,8 +517,13 @@ local function unclaim(src, plotId)
         busy[plotId] = nil
         return false, 'fh_unclaim_failed'
     end
-    busy[plotId] = nil
     clearClaim(plotId, owner, class)
+    local swept, sweepErr = pcall(sweepStashes, src, owner, plotId)
+    if not swept then
+        print(('^1[fh_homestead] plot %s released; the stash sweep errored (%s): check fh:chest:%s:<n> by hand^7')
+            :format(plotId, tostring(sweepErr), plotId))
+    end
+    busy[plotId] = nil
     if repBack ~= 0 and not repTaken then
         print(('^3[fh_homestead] town lot %s released by admin without rep-back: citizenid=%s region=%s amount=-%d (%s): fix by hand^7')
             :format(plotId, owner, tostring(region), repBack, tostring(repWhy)))
@@ -449,6 +617,8 @@ RegisterNetEvent('fh:homestead:open_chest', function(payload)
     if not n or n < 1 then return end
     local ok, why = rules.canOpenChest(plot.id, citizenidOf(src), claims)
     if not ok then return reply(src, 'chest: ' .. why) end
+    -- H13: no chest opens while the plot is being claimed / released (its stashes are being checked or emptied)
+    if busy[plot.id] then return reply(src, 'chest: fh_claim_busy') end
     if not chestBuilt(plot, n) then return reply(src, 'chest: fh_chest_not_built') end
     ok, why = exports.fh_core:open(src, { type = 'chest', id = rules.chestStashId(plot.id, n) })
     if not ok then reply(src, 'chest: ' .. tostring(why)) end
@@ -473,9 +643,9 @@ lib.addCommand('fh_buylot', { help = 'Buy the town lot you are standing in' }, f
     reply(src, ok and ('fh_buylot: bought lot ' .. res) or ('fh_buylot: ' .. tostring(res)))
 end)
 
-lib.addCommand('fh_unclaim', { help = 'Release your claim (a town lot: fh_unclaim <lot_id>; admins: any plot id)' }, function(src, args, raw)
-    local plotId = tostring(raw or ''):match('^%S+%s+(%S+)')
-    local ok, res = unclaim(src, plotId)
+lib.addCommand('fh_unclaim', { help = 'Release your claim (a town lot: fh_unclaim <lot_id>; admins: any plot id, add force to empty its chests)' }, function(src, args, raw)
+    local plotId, flag = tostring(raw or ''):match('^%S+%s+(%S+)%s*(%S*)')
+    local ok, res = unclaim(src, plotId, flag == 'force')
     reply(src, ok and ('fh_unclaim: released plot ' .. res) or ('fh_unclaim: ' .. tostring(res)))
 end)
 

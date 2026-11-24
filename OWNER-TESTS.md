@@ -428,14 +428,18 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
 7. Unplace that trophy (only after step 6 placed it; SKIP until then). Run `/fh_trophy remove trophy_legendary_bear#1`.
    Expected: `fh_trophy: remove ok`, the trophy is back in the chest exactly once (count 1, never 2), and `/fh_comfort` -> `fh_comfort: 31`. Run it a second time: `fh_trophy: fh_no_trophy`, and the count stays 1.
    RESULT:
-8. Unclaim clears the plot. Run `/fh_unclaim`.
-   Expected: `fh_unclaim: released plot heartlands_01`. All slot props disappear. `/fh_comfort` -> `fh_comfort: 0`. `/fh_build` -> `fh_build: fh_no_plot`.
-   DB: `SELECT * FROM fh_plot_slots WHERE plot_id = 'heartlands_01';` -> 0 rows.
-   Run `/fh_claim` there again: `fh_claim: claimed plot heartlands_01`; `/fh_build` lists every slot at 0 again (`cabin 0/2 next: $150, 20 lumber; ...`); `/fh_comfort` -> `fh_comfort: 0`.
-   Known gap: the main chest keeps its items (the bread, 40 lumber and 5 nails), and the chest 2 stash keeps its contents too.
+8. Unclaim clears the plot, and no chest contents pass to the next owner (H13). The main chest still holds the bread, 40 lumber and 5 nails from step 3; put 1 more bread into chest 2.
+   a. Run `/fh_unclaim`.
+      Expected: `fh_unclaim: fh_chests_not_empty`. Nothing changes: the props stay, `/fh_build` still lists your tiers, both chests keep their items.
+   b. (Needs the friend, a non-admin.) The friend runs `/fh_unclaim heartlands_01 force`.
+      Expected: `fh_unclaim: fh_not_admin`, nothing changes.
+   c. Admin force: on the server console run `fh_unclaim heartlands_01 force`.
+      Expected: `[fh_homestead] fh_unclaim: released plot heartlands_01`, and before it one yellow line per item: `force unclaim: plot=heartlands_01 owner=<cid> stash=fh:chest:heartlands_01:1 slot=<n> item=bread count=1 cleared` (then the lumber and nails lines), plus one for the bread in `fh:chest:heartlands_01:2`. No red lines. All slot props disappear. `/fh_comfort` -> `fh_comfort: 0`. `/fh_build` -> `fh_build: fh_no_plot`.
+      DB: `SELECT * FROM fh_plot_slots WHERE plot_id = 'heartlands_01';` -> 0 rows.
+   d. Run `/fh_claim` there again: `fh_claim: claimed plot heartlands_01`; `/fh_build` lists every slot at 0 again (`cabin 0/2 next: $150, 20 lumber; ...`); `/fh_comfort` -> `fh_comfort: 0`. E at the main chest opens an EMPTY chest (no bread, lumber or nails).
    RESULT:
-9. Claim and unclaim a plot with no builds.
-   Expected: `/fh_unclaim` replies `fh_unclaim: released plot heartlands_01`, no red errors in the server console. (Known gap: bread left in the chest stays there and the next owner of the plot gets it.)
+9. Unclaim a plot with no builds (you hold heartlands_01 from step 8d). Put 1 bread in the plot chest and run `/fh_unclaim`.
+   Expected: `fh_unclaim: fh_chests_not_empty`. Take the bread back out of the chest and run `/fh_unclaim` again: `fh_unclaim: released plot heartlands_01`, no red errors in the server console.
    RESULT:
 10. Server restart. Claim heartlands_01 again with `/fh_claim` (step 9 left you without a plot). Make sure the plot chest holds at least 30 lumber and you have at least $210 cash. Run `/fh_build cabin`, then `/fh_build station_1`, put 1 bread in the chest, then stop the server, start it and rejoin.
     Expected:
@@ -471,7 +475,8 @@ Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one
 5. Cannot afford. With a second character (no lot) holding less than $300, stand in a free lot and `/fh_buylot`.
    Expected: `fh_buylot: fh_insufficient_funds`, cash unchanged, no `fh_plots` row for that lot.
    RESULT:
-6. Abandon (no refund, rep taken back). In or out of the lot, run `/fh_unclaim heartlands_lot_01`.
+6. Abandon (no refund, rep taken back). With the 2 lumber from step 4 still in the lot chest, run `/fh_unclaim heartlands_lot_01`.
+   Expected: `fh_unclaim: fh_chests_not_empty`, heartlands rep unchanged (H13: a lot with items in chest 1 or chest 2 is not released). Take the lumber out (and anything in chest 2), then, in or out of the lot, run `/fh_unclaim heartlands_lot_01` again.
    Expected: `fh_unclaim: released plot heartlands_lot_01`. Cash unchanged (no refund). heartlands rep -25 (back to what it was before step 1). The lot props disappear; your claim is untouched (`/fh_build` at the claim still works). A bare `/fh_unclaim` would release the claim, not the lot.
    Buy it again (`/fh_buylot` in the lot): cash -300, rep +25 again, so buy-abandon-buy nets one +25 bump.
    Admin abandon with the owner OFFLINE: quit the game, then on the server console run `fh_unclaim heartlands_lot_01`.
