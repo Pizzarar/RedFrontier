@@ -24,13 +24,22 @@ You have one saddlebag per character. Use `/saddlebag` on or next to a horse (th
 
 Known limits: any horse opens your saddlebag for now (the bag is not tied to one horse), and the list of accepted horse models is a guess that is not yet checked in game.
 
+## Item condition and stars
+
+The item registry carries two per-item fields: **condition** (0-100, how worn a weapon is) and **stars** (1-3, the quality of a pelt). Weapons and pelts keep these; a gunsmith caps a restore by stars (see [Gunsmith](fh_gunsmith.md)). See [Items](../items.md).
+
+## Private server
+
+RedFrontier runs as a private server for the owner and up to five friends. You join by invitation — the owner adds your ID to the allowlist — not from a public server list.
+
 ## Spawning
 
 Camp outlaws and bag props are created by a nearby player's game and then confirmed by the server. You don't need to do anything.
 
-See also: [Inventory](fh_inventory.md) · [Death](fh_death.md) · [Wiki index](../README.md)
+See also: [Inventory](fh_inventory.md) · [Death](fh_death.md) · [Fence](fh_fence.md) · [Gunsmith](fh_gunsmith.md) · [Wiki index](../README.md)
 
 Sources:
 - `server/resources/[fh]/fh_core/README.md`
 - `server/resources/[fh]/fh_core/config.lua`
+- `server/resources/[fh]/fh_core/shared/items.lua`
 - `server/resources/[fh]/fh_core/client/saddlebag.lua`

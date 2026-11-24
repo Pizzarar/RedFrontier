@@ -11,6 +11,8 @@
 | `fh:inventory:transferred` | `server/resources/[fh]/fh_core/server/inventory.lua:169` | `{ src, citizenid, from, to, moved, leftovers }` |
 | `fh:economy:paid` | `server/resources/[fh]/fh_economy/server/main.lua:37` | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
 | `fh:economy:rep_changed` | `server/resources/[fh]/fh_economy/server/main.lua:63` | `{ src, citizenid, region_id, delta, value, reason }` |
+| `fh:economy:charged` | `server/resources/[fh]/fh_economy/server/main.lua:109` | `{ src, citizenid, amount, reason, region_id, ledger_id }` (a debit) |
+| `fh:economy:credited` | `server/resources/[fh]/fh_economy/server/main.lua:299` | `{ src, citizenid, amount, reason, region_id, ledger_id, queued }` (E2 offline-safe credit) |
 | `fh:buffs:applied` | `server/resources/[fh]/fh_buffs/server/main.lua:19` | `{ src, buff_id, magnitude, expires_at, refreshed }` |
 | `fh:homestead:claimed` | `server/resources/[fh]/fh_homestead/server/main.lua:84` | `{ src, citizenid, plot_id, region_id }` |
 | `fh:homestead:unclaimed` | `server/resources/[fh]/fh_homestead/server/main.lua:107` | `{ src, citizenid, plot_id }` |
@@ -20,6 +22,10 @@
 | `fh:zones:camp_activated` | `server/resources/[fh]/fh_zones/server/main.lua:115` | `{ camp_id, region_id }` |
 | `fh:zones:camp_cleared` | `server/resources/[fh]/fh_zones/server/main.lua:137` | `{ camp_id, region_id, loot }` |
 | `fh:zones:camp_respawned` | `server/resources/[fh]/fh_zones/server/main.lua:148` | `{ camp_id, region_id }` |
+| `fh:alife:camp_flipped` | `server/resources/[fh]/fh_alife/server/main.lua:60` | `{ camp_id, region_id, from, to }` |
+| `fh:hands:hired` | `server/resources/[fh]/fh_hands/server/main.lua:248` | `{ src, citizenid, hand_kind }` |
+| `fh:hands:fired` | `server/resources/[fh]/fh_hands/server/main.lua:262` | `{ src, citizenid, hand_kind }` |
+| `fh:hands:unpaid` / `quit` / `task_failed` | `server/resources/[fh]/fh_hands/shared/hands_logic.lua` (via `server/main.lua` emit) | `{ src, citizenid, hand_kind, ... }` |
 | `fh:ui:ui_<action>` (see below) | `server/resources/[fh]/fh_ui/server/main.lua:17` | `{ src, screen, action, payload }` |
 
 `fh:ui:ui_<action>` is the relay: fh_ui re-emits a validated NUI action as `fh:<owning_lane>:ui_<action>` (for example `fh:ui:ui_ping`, `fh:<lane>:ui_close`). The whitelist of screens and owners is in `server/resources/[fh]/fh_ui/shared/relay.lua`.
@@ -109,6 +115,9 @@ Sources:
 - `server/resources/[fh]/fh_homestead/server/main.lua`
 - `server/resources/[fh]/fh_death/server/main.lua`
 - `server/resources/[fh]/fh_zones/server/main.lua`
+- `server/resources/[fh]/fh_alife/server/main.lua`
+- `server/resources/[fh]/fh_hands/server/main.lua`
+- `server/resources/[fh]/fh_hands/shared/hands_logic.lua`
 - `server/resources/[fh]/fh_ui/server/main.lua`
 - `server/resources/[fh]/fh_ui/client/main.lua`
 - `server/resources/[fh]/fh_ui/shared/relay.lua`

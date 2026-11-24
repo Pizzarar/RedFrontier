@@ -1,27 +1,27 @@
 # Buffs
 
-Buffs are timed bonuses. Right now the buff system keeps track of them but has **no visible effects yet**; other systems will apply and use them.
+Buffs are timed bonuses. Different buffs stack; applying the same one again refreshes its timer and keeps the stronger value. Each buff has a maximum strength.
 
-## Rules
-- Different buffs stack.
-- Applying the same buff again while it is active refreshes the timer and keeps the stronger of the two strengths.
-- Each buff has a maximum strength.
-- Buffs are lost when you relog or the server restarts.
+## Buffs today
 
-## Known buffs and maximum strength
+| Buff | Max | Applied by |
+|---|---|---|
+| `well_fed` | 1.25 | Eating food ([Survival](survival.md)) |
+| `hydrated` | 1.0 | Drinking from a canteen |
+| `rested` | 1.20 | Resting (bedroll or homestead bed) |
+| `clean` | 1.0 | Washing |
+| `warm` | 1.0 | Standing near a fire |
+| `tonic_vigor` | 1.15 | Vigor Tonic ([Crafting](crafting.md)) |
+| `tonic_steady` | 1.10 | Steady Tonic |
+| `trophy_luck` | 1.15 | Defined; nothing applies it yet |
+| `homestead_comfort` | 1.10 | Defined; nothing applies it yet |
 
-| Buff | Max |
-|---|---|
-| `well_fed` | 1.25 |
-| `rested` | 1.20 |
-| `warm` | 1.0 |
-| `trophy_luck` | 1.15 |
-| `homestead_comfort` | 1.10 |
+Survival turns missing food, water, rest and cleanliness into sluggishness; tonics boost you for a few minutes. Buffs are lost when you relog or the server restarts.
 
-What each buff does is defined by the system that uses it, and none of those are built yet.
-
-See also: [Wiki index](../README.md)
+See also: [Survival](survival.md) · [Crafting](crafting.md) · [Wiki index](../README.md)
 
 Sources:
 - `server/resources/[fh]/fh_buffs/README.md`
 - `server/resources/[fh]/fh_buffs/config.lua`
+- `server/resources/[fh]/fh_survival/shared/needs.lua`
+- `server/resources/[fh]/fh_crafting/shared/craft_rules.lua`

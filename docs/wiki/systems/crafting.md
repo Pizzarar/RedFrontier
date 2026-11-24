@@ -22,10 +22,10 @@ Use a tonic from your inventory. It is only used up if the buff applies.
 - **Steady Tonic:** 1.10 for 5 minutes.
 
 ## Gun restore
-Worn guns can be restored with Gun Parts, each worth 20 condition. How far you can restore depends on stars: 1 star up to 60, 2 stars up to 80, 3 stars up to 100. A gun already at its cap refuses. The `/fh_restore` command belongs to the gunsmith, not to this page.
+Worn guns can be restored with Gun Parts, each worth 20 condition. How far you can restore depends on stars: 1 star up to 60, 2 stars up to 80, 3 stars up to 100. A gun already at its cap refuses. The `/fh_restore` command belongs to the gunsmith — see [Gunsmith](fh_gunsmith.md).
 
 ## Known limits
-- The shop doesn't sell the inputs yet (lumber, nails, lead, casings, gunpowder and herbs), and Gun Parts are not in the camp loot yet. Until then they need an admin to give them.
+- Gun Parts drop from outlaw camps (see [Zones](fh_zones.md)), but the other inputs (lumber, nails, lead, casings, gunpowder and herbs) still need an admin to give them.
 - Herb gathering is not built.
 - Not yet tested in game.
 
