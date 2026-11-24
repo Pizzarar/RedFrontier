@@ -2014,10 +2014,19 @@ CREATE TABLE IF NOT EXISTS `rsg_rocks_zones` (
   `enabled` TINYINT(1) NOT NULL DEFAULT 1,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_xyz` (`x`,`y`,`z`),
   KEY `idx_enabled` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `rsg_rocks_zones` (`x`, `y`, `z`, `radius`, `ore_type`, `label`) VALUES
+-- Seed below is idempotent: INSERT IGNORE against uniq_xyz. Tables created before the key existed get
+-- it here (IF NOT EXISTS, so reruns are safe); duplicate rows left by a pre-fix rerun are collapsed
+-- first, keeping the lowest id.
+DELETE d FROM `rsg_rocks_zones` d
+  JOIN `rsg_rocks_zones` k
+    ON d.`x` = k.`x` AND d.`y` = k.`y` AND d.`z` = k.`z` AND d.`id` > k.`id`;
+ALTER TABLE `rsg_rocks_zones` ADD UNIQUE INDEX IF NOT EXISTS `uniq_xyz` (`x`, `y`, `z`);
+
+INSERT IGNORE INTO `rsg_rocks_zones` (`x`, `y`, `z`, `radius`, `ore_type`, `label`) VALUES
 (2791.4697265625, 1345.1380615234375, 71.91378021240234, 2.0, 'rock', NULL),
 (2793.626708984375, 1336.0570068359375, 71.92117309570312, 2.0, 'rock', NULL),
 (2780.24169921875, 1335.8101806640625, 71.5442886352539, 2.0, 'rock', NULL),
