@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T23:01:29.766Z",
+  "updatedAt": "2026-11-24T23:03:57.032Z",
   "units": [
     {
       "id": "B5",
@@ -258,7 +258,7 @@
       "doneCheck": "",
       "status": "done",
       "branch": "core-l1",
-      "commit": "029ef5a"
+      "commit": "fcffa0e"
     },
     {
       "id": "A1",
@@ -297,9 +297,23 @@
       "goal": "live: fh_core access io.open fails in FXServer; move claim to resource-local storage + log io errors (tierA-security)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-x1",
       "commit": "0d4c637"
+    },
+    {
+      "id": "L1-nit",
+      "goal": "drop stale allowlist lines fh:hands:hired/fired from tools/contracts-allowlist.txt (fixed by progression G1/G3)",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "X1-nit",
+      "goal": "access_rules.lua:134 match admin lines case-insensitively so a malformed ADMIN line still fails closed (X1 review low)",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
