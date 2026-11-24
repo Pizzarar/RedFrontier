@@ -149,6 +149,36 @@ case('pick: a claimable town lot (H10) is labelled "(town lot)" and never routes
     T.eq(nil, p); T.eq('all_claimed', why)
 end)
 
+case('pick: /where lot = nearest unowned claimable town lot; skips owned, claimable=false, disabled region, claims', function()
+    local home = { plots = {
+        lot_near_owned = { id = 'lot_near_owned', name = 'Owned lot', class = 'town_lot', claimable = true, region = 'heartlands', center = { x = 1, y = 0, z = 0 } },
+        lot_soon       = { id = 'lot_soon', name = 'Soon lot', class = 'town_lot', claimable = false, region = 'heartlands', center = { x = 2, y = 0, z = 0 } },
+        lot_off        = { id = 'lot_off', name = 'Off lot', class = 'town_lot', claimable = true, region = 'offregion', center = { x = 3, y = 0, z = 0 } },
+        claim_near     = { id = 'claim_near', name = 'Creek claim', class = 'claim', claimable = true, region = 'heartlands', center = { x = 4, y = 0, z = 0 } },
+        lot_far        = { id = 'lot_far', name = 'Far lot', class = 'town_lot', claimable = true, region = 'heartlands', center = { x = 50, y = 0, z = 0 } },
+        lot_farther    = { id = 'lot_farther', name = 'Farther lot', class = 'town_lot', claimable = true, region = 'heartlands', center = { x = 90, y = 0, z = 0 } },
+    } }
+    local player = { x = 0, y = 0, z = 0 }
+    local places = P.gather({ homestead = home }, { claimed = { lot_near_owned = true },
+        isEnabled = function(r) return r ~= 'offregion' end })
+    for _, alias in ipairs({ 'lot', 'lots', 'townlot', 'town_lot', ' LOT ' }) do
+        local p = P.pick(places, alias, player)
+        T.eq('lot_far', p.id)
+        T.eq('Far lot (town lot)', p.label)
+    end
+    -- /where plot is unchanged: nearest unclaimed claim-class plot, never a lot
+    T.eq('claim_near', P.pick(places, 'plot', player).id)
+    -- take the last two lots: only claims remain => no_lot; /where plot still works
+    local taken = P.gather({ homestead = home }, { claimed = { lot_near_owned = true, lot_far = true, lot_farther = true },
+        isEnabled = function(r) return r ~= 'offregion' end })
+    local p, why = P.pick(taken, 'lot', player)
+    T.eq(nil, p); T.eq('no_lot', why)
+    T.eq('claim_near', P.pick(taken, 'plot', player).id)
+    -- a claims-only world has no lot to offer
+    local p2, why2 = P.pick(P.gather({ homestead = homesrc() }), 'lot', player)
+    T.eq(nil, p2); T.eq('no_lot', why2)
+end)
+
 case('pick: exact id/label match and unknown/missing kinds', function()
     local places = P.gather(sources())
     T.eq('npc_marrow', P.pick(places, 'npc_marrow', { x = 0, y = 0, z = 0 }).id)

@@ -172,8 +172,8 @@ lot + per-plot lock -> `fh_economy.charge(src, price, 'town_lot:<id>', region)` 
 `town_lot`) + chest row + chest registration -> `fh_economy.rep(src, region, townLot.rep, 'town_lot')` -> events
 `fh:homestead:claimed` then `fh:homestead:lot_bought`. Reply: `fh_buylot: bought lot <id>`.
 
-Finding a lot: use `/where` (lots are listed as `<name> (town lot)`; `(coming soon)` while a lot is not claimable). Not
-`/where plot`: that one finds wilderness claims only (world block D). A `/where lot` command is a separate follow-up.
+Finding a lot: use `/where lot` (routes to the nearest free lot, labelled `<name> (town lot)`; lots show `(coming soon)` in the `/where` list while not claimable). Not
+`/where plot`: that one finds wilderness claims only (world block D).
 
 - Refused before any money moves: `fh_not_ready`, `fh_no_character`, `fh_no_player`, `fh_not_in_plot`,
   `fh_wrong_plot_class` (a claim: use `/fh_claim`), `fh_not_claimable`, `fh_plot_taken`, `fh_already_has_lot` (one lot per

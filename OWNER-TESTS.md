@@ -402,7 +402,7 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
 
 ### Town lots (H8-H10): buy, build, abandon, law-safe
 
-Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one claim per character. Lots are found with `/where` (listed as `<name> (town lot)`), not `/where plot` (claims only). The Valentine lot `heartlands_lot_01` is at (-180, 620, 113), radius 14 m; its chest is at the center. Start with no lot, at least $500 cash (note it as C) and 0 rep in heartlands (`SELECT value FROM fh_rep WHERE region_id = 'heartlands' AND citizenid = '<cid>';`).
+Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one claim per character. Lots are found with `/where lot` (routes to the nearest free lot, labelled `<name> (town lot)`; an owned or not-yet-claimable lot is skipped), not `/where plot` (claims only). The Valentine lot `heartlands_lot_01` is at (-180, 620, 113), radius 14 m; its chest is at the center. Start with no lot, at least $500 cash (note it as C) and 0 rep in heartlands (`SELECT value FROM fh_rep WHERE region_id = 'heartlands' AND citizenid = '<cid>';`).
 
 1. Buy. Stand in the lot and run `/fh_buylot`.
    Expected: `fh_buylot: bought lot heartlands_lot_01`. Cash C - 300. heartlands rep +25. E at the lot chest opens it.

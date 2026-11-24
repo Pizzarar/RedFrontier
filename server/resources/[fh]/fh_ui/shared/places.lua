@@ -26,6 +26,7 @@ M.ALIASES = {
     camp = 'camp', outlaw = 'camp',
     giver = 'giver', givers = 'giver', quest = 'giver', quests = 'giver',
     fence = 'fence',
+    lot = 'lot', lots = 'lot', townlot = 'lot', town_lot = 'lot', -- pseudo-kind: plot places with class 'town_lot'
     station = 'station', stations = 'station', crafting = 'station', gunsmith = 'station', reload = 'station', apothecary = 'station',
 }
 
@@ -209,13 +210,27 @@ function M.nearest(places, kind, player, unclaimedOnly)
     return best
 end
 
+---Nearest unowned, claimable town lot (class == 'town_lot'); never returns claim-class plots. For /where lot.
+function M.nearestLot(places, player)
+    local best, bestD = nil, nil
+    for _, p in ipairs(places or {}) do
+        if p.kind == 'plot' and p.class == 'town_lot' and not p.claimed and p.claimable ~= false then
+            local d = M.distance(p, player)
+            if d ~= nil and (bestD == nil or d < bestD) then
+                best, bestD = p, d
+            end
+        end
+    end
+    return best
+end
+
 local function normalize(query)
     if type(query) ~= 'string' then return '' end
     return query:lower():gsub('^%s+', ''):gsub('%s+$', '')
 end
 
 ---Resolve a /where query to a place. Returns place | nil, reason.
---- reason = 'list' (no/empty query), 'all_claimed', 'none' (kind has no places), 'unknown' (no match).
+--- reason = 'list' (no/empty query), 'all_claimed', 'no_lot' (/where lot: no free claimable town lot), 'none' (kind has no places), 'unknown' (no match).
 --- `plot` resolves to the nearest unclaimed homestead plot; other aliases resolve to the nearest place of that kind.
 function M.pick(places, query, player)
     local q = normalize(query)
@@ -225,6 +240,11 @@ function M.pick(places, query, player)
         local place = M.nearest(places, 'plot', player, true)
         if place then return place end
         return nil, 'all_claimed'
+    end
+    if kind == 'lot' then
+        local place = M.nearestLot(places, player)
+        if place then return place end
+        return nil, 'no_lot'
     end
     if kind then
         local place = M.nearest(places, kind, player, false)

@@ -83,6 +83,7 @@ local function run(query)
     local place, why = P.pick(places, query, player)
     if not place then
         if why == 'all_claimed' then return chat('/where plot: every plot is claimed') end
+        if why == 'no_lot' then return chat('/where lot: every town lot is taken') end
         if why == 'none' then return chat('/where: no place of that kind') end
         return chat('/where: unknown place "' .. query .. '"')
     end
