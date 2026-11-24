@@ -1,6 +1,6 @@
 -- Q4: load the family questline data files and register them through the public registerQuest export, at start.
 -- registerQuest replaces by id, so a restart re-registers cleanly.
-local FILES = { 'hale', 'marrow', 'whitlock' }
+local FILES = { 'hale', 'marrow', 'whitlock', 'cormier', 'ashby' } -- cormier (Lemoyne), ashby (West Elizabeth): C6
 
 CreateThread(function()
     Wait(0) -- api.lua's exports are registered by now

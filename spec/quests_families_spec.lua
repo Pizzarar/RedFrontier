@@ -12,20 +12,42 @@ T.ok = function(c, msg) if not c then error(msg or 'assertion failed', 2) end en
 
 local T0 = 1795651200
 local CID, OTHER = 'ABC123', 'XYZ999'
-local NAMES = { 'hale', 'marrow', 'whitlock' }
+local NAMES = { 'hale', 'marrow', 'whitlock', 'cormier', 'ashby' }
+-- Home region per family (C6 adds Lemoyne + West Elizabeth lines; the first three are heartlands).
+local HOME = { hale = 'heartlands', marrow = 'heartlands', whitlock = 'heartlands',
+    cormier = 'bayou_nwa', ashby = 'great_plains' }
 
 local defs = {}
 for _, n in ipairs(NAMES) do defs[n] = dofile(base .. 'data/families/' .. n .. '.lua') end
 
--- Synthetic payload that satisfies each step's event (keyed by family, then step index).
+-- Realistic payload for each step's event, shaped like the real emitter (keyed by the def's home region):
+-- fh_hunting sell.lua (pelt_sold), skin.lua (pelt_skinned), fh_zones server/main.lua (camp_cleared).
+local function pick(pred, default)
+    if type(pred) ~= 'table' then return pred or default end
+    if pred.eq ~= nil then return pred.eq end
+    if pred.any then return pred.any[1] end
+    if pred.min then return pred.min end
+    return default
+end
+
 local function payloadFor(def, step, cid)
     if step.talk then return E.TALK_EVENT, { citizenid = cid, npc_id = step.talk.npc } end
+    local w = step.where or {}
     local p = { citizenid = cid }
-    if step.on == 'fh:homestead:claimed' then p.plot_id = 'p1'; p.region_id = 'heartlands'
+    if step.on == 'fh:homestead:claimed' then p.plot_id = 'p1'; p.region_id = def.region_id
     elseif step.on == 'fh:economy:paid' then p.amount = 20; p.reason = 'sale'
-    elseif step.on == 'fh:hunting:pelt_sold' then p.quality = 3; p.price = 12; p.region_id = 'heartlands'
+    elseif step.on == 'fh:hunting:pelt_sold' then
+        -- the only trapper is in heartlands, so a sale always carries region_id = 'heartlands'
+        local animal = pick(w.animal, 'deer')
+        p.item_id = 'pelt_' .. animal; p.animal = animal; p.size_class = 'bulky'
+        p.quality = math.max(3, pick(w.quality, 3)); p.price = 12; p.region_id = 'heartlands'
+    elseif step.on == 'fh:hunting:pelt_skinned' then
+        local animal = pick(w.animal, 'deer')
+        p.src = 7; p.item_id = 'pelt_' .. animal; p.animal = animal; p.quality = pick(w.quality, 2); p.size_class = 'bulky'
     elseif step.on == 'fh:hunting:chain_complete' then p.chain_id = 'legendary_bear'
-    elseif step.on == 'fh:zones:camp_cleared' then p.camp_id = 'c1'; p.region_id = 'heartlands'; p.participants = { cid }; p.citizenid = nil
+    elseif step.on == 'fh:zones:camp_cleared' then
+        p.camp_id = def.region_id .. '_t1_01'; p.region_id = def.region_id; p.loot = {}
+        p.participants = { cid }; p.citizenid = nil
     end
     return step.on, p
 end
@@ -37,7 +59,9 @@ describe('family definitions', function()
             local ok, err = E.validate(def, { regions = regions.regions })
             eq(true, ok, tostring(err))
             eq('line', def.kind)
-            eq('heartlands', def.region_id)
+            eq(HOME[n], def.region_id)
+            eq(HOME[n], def.rewards.rep.region_id)
+            T.ok(regions.regions[HOME[n]].enabled == true or HOME[n] == 'heartlands', 'home region enabled')
         end)
         it(n .. ' has 3-5 contiguous steps', function()
             T.ok(#def.steps >= 3 and #def.steps <= 5, 'step count ' .. #def.steps)
@@ -141,6 +165,68 @@ describe('family walk-through', function()
         eq(2, a.step)
         a = E.onEvent(def, st, 'fh:hunting:chain_complete', { citizenid = CID, chain_id = 'legendary_bear' }, T0)
         eq(3, a.step)
+    end)
+end)
+
+describe('C6 families (Lemoyne + West Elizabeth)', function()
+    it('one line per new state, each in an enabled region', function()
+        eq('lemoyne', regions.regions[defs.cormier.region_id].state)
+        eq('west_elizabeth', regions.regions[defs.ashby.region_id].state)
+        for _, n in ipairs({ 'cormier', 'ashby' }) do
+            eq(true, regions.regions[defs[n].region_id].enabled)
+        end
+    end)
+    it('givers resolve, are in ORDER, and stand inside their home region (near a known town)', function()
+        local function inOrder(id) for _, o in ipairs(G.ORDER) do if o == id then return true end end return false end
+        for _, n in ipairs({ 'cormier', 'ashby' }) do
+            local def = defs[n]
+            local g = G.get(def.giver)
+            T.ok(g ~= nil and inOrder(def.giver), 'giver ' .. def.giver)
+            eq(g, G.byQuest(def.id))
+            T.ok(type(g.label) == 'string' and #g.label > 0 and type(g.model) == 'string', 'label/model')
+            T.ok(#g.intro >= 2, 'intro lines')
+            local near = false
+            for _, town in ipairs(regions.regions[def.region_id].towns) do
+                local dx, dy = g.coords.x - town.x, g.coords.y - town.y
+                if dx * dx + dy * dy <= 150 * 150 then near = true end
+            end
+            T.ok(near, n .. ' giver within 150 m of a ' .. def.region_id .. ' town')
+            -- the last step reports back to the same giver
+            eq(def.giver, def.steps[#def.steps].talk.npc)
+        end
+    end)
+    it('camp steps only count a camp in the home region', function()
+        for _, n in ipairs({ 'cormier', 'ashby' }) do
+            local def = defs[n]
+            for i, s in ipairs(def.steps) do
+                if s.on == 'fh:zones:camp_cleared' then
+                    local st = E.start(def, {}, CID, T0)
+                    st.step = i
+                    local p = { camp_id = 'heartlands_t1_01', region_id = 'heartlands', loot = {}, participants = { CID } }
+                    eq(i, (E.onEvent(def, st, s.on, p, T0)).step)
+                    p.region_id = def.region_id
+                    eq(i + 1, (E.onEvent(def, st, s.on, p, T0)).step)
+                    -- a camp cleared without this player does not count
+                    p.participants = { OTHER }
+                    eq(i, (E.onEvent(def, st, s.on, p, T0)).step)
+                end
+            end
+        end
+    end)
+    it('skin steps need the named animal', function()
+        for _, n in ipairs({ 'cormier', 'ashby' }) do
+            local def = defs[n]
+            for i, s in ipairs(def.steps) do
+                if s.on == 'fh:hunting:pelt_skinned' then
+                    local st = E.start(def, {}, CID, T0)
+                    st.step = i
+                    local p = { src = 7, citizenid = CID, item_id = 'pelt_rabbit', animal = 'rabbit', quality = 3, size_class = 'bulky' }
+                    eq(i, (E.onEvent(def, st, s.on, p, T0)).step)
+                    local _, good = payloadFor(def, s, CID)
+                    eq(i + 1, (E.onEvent(def, st, s.on, good, T0)).step)
+                end
+            end
+        end
     end)
 end)
 

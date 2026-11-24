@@ -1,5 +1,6 @@
 -- Family quest giver NPCs (Q4): id, quest line and fixed spawn point. Coordinates, headings and models are guesses
--- near the Heartlands homestead area: TODO-verify-in-game. Pure data, shared by the server spawner and the client.
+-- (Hale/Marrow/Whitlock near the Heartlands homestead area; Cormier near the Lagras town point, Ashby near the
+-- Blackwater town point, both from FhRegions towns): TODO-verify-in-game. Pure data, shared by the server spawner and the client.
 local M = {
     npc_hale = { npc = 'npc_hale', intro = {
             'Name is Ruth Hale. Three daughters, one mule, no roof.',
@@ -16,8 +17,20 @@ local M = {
             'Big as a wagon, white at the muzzle. Everybody laughs until they find the tracks.', },
         quest = 'family_whitlock', label = 'Eli Whitlock', model = 'cs_mp_oldtimer',
         coords = { x = -315.0, y = 780.0, z = 118.0, w = 270.0 } },
+    -- C6: Lemoyne (bayou_nwa). Offset from the FhRegions lagras town point. Model TODO-verify-in-game.
+    npc_cormier = { npc = 'npc_cormier', intro = {
+            'Odile Cormier. My family has run this ferry landing for three generations.',
+            'Now a gator takes the goats and the Swamp Gang takes the fares. Help me keep the landing open.', },
+        quest = 'family_cormier', label = 'Odile Cormier', model = 'a_f_m_lagtownfolk_01',
+        coords = { x = 2180.0, y = -1112.0, z = 25.0, w = 135.0 } },
+    -- C6: West Elizabeth (great_plains). Offset from the FhRegions blackwater town point. Model TODO-verify-in-game.
+    npc_ashby = { npc = 'npc_ashby', intro = {
+            'June Ashby. Four hundred head on the plains and half a crew since my husband passed.',
+            'Wolves at the calves, rustlers in the long grass. I need somebody who can ride and shoot.', },
+        quest = 'family_ashby', label = 'June Ashby', model = 'a_f_m_blwtownfolk_01',
+        coords = { x = -850.0, y = -1330.0, z = 44.5, w = 200.0 } },
 }
-M.ORDER = { 'npc_hale', 'npc_marrow', 'npc_whitlock' }
+M.ORDER = { 'npc_hale', 'npc_marrow', 'npc_whitlock', 'npc_cormier', 'npc_ashby' }
 
 M.REACH = 5.0 -- metres: how close a player must be to a giver to talk to it / start its line (server-checked)
 
