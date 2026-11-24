@@ -77,7 +77,8 @@ function M.gather(sources, opts)
             if type(p) == 'table' then
                 local x, y, z = M.coords(p.center)
                 if x then
-                    local place = { id = id, kind = 'plot', label = 'Homestead plot', x = x, y = y, z = z }
+                    local label = (p.class == 'town_lot') and 'Town lot (coming soon)' or (p.name or 'Homestead plot')
+                    local place = { id = id, kind = 'plot', label = label, x = x, y = y, z = z }
                     if claimed[id] then place.claimed = true end
                     if type(mine) == 'string' and mine == id then place.mine = true end
                     places[#places + 1] = place

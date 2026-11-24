@@ -28,7 +28,7 @@ M.SURVIVAL_BUFFS = { well_fed = true, hydrated = true }
 -- here); re-sync if a lane moves one. All are approximate / unverified in game, like their sources.
 M.WAYPOINTS = {
     trader     = { x = -176.0, y = 630.0, z = 114.0, label = 'Valentine Trade Post' }, -- fh_trade/config.lua:37
-    homestead  = { x = -300.0, y = 790.0, z = 118.0, label = 'Homestead plot' },        -- fh_homestead/config.lua heartlands_01.center
+    homestead  = { x = -500.0, y = 750.0, z = 105.0, label = 'Homestead plot' },        -- fh_homestead/config.lua heartlands_01.center (nearest Heartlands claim)
     trapper    = { x = -299.0, y = 792.0, z = 118.2, label = 'Trapper' },                -- fh_hunting/config.lua:39
     giver_hale = { x = -296.0, y = 788.0, z = 118.2, label = 'Ruth Hale' },               -- fh_quests/shared/givers.lua:8
 }

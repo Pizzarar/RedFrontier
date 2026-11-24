@@ -59,7 +59,7 @@ case('propFor: fallback unless verifiedProps and a verified prop exists', functi
     assert(R.propFor(s, false).model == 'a' and R.propFor(s, true).model == 'b')
     assert(R.propFor({ prop = { model = 'a' } }, true).model == 'a')
 end)
-case('8 plots, unique ids/centers, all slot configs valid', function()
+case('20 plots, unique ids/centers, all slot configs valid', function()
     local n, seen = 0, {}
     for id, p in pairs(cfg.plots) do
         n = n + 1
@@ -73,7 +73,7 @@ case('8 plots, unique ids/centers, all slot configs valid', function()
             assert(p.slots[sid], id .. ' missing ' .. sid)
         end
     end
-    assert(n == 8)
+    assert(n == 20)
     assert(#R.validatePlot({ slots = { x = { maxTier = 1, tiers = {} } } }) > 0)
 end)
 case('no two plots overlap at max fenced radius', function()
