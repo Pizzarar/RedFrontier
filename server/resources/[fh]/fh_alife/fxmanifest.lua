@@ -17,6 +17,7 @@ shared_scripts {
 
 server_scripts {
     'server/main.lua',
+    'server/squads.lua',
 }
 
 dependencies { 'fh_core', 'fh_zones', 'fh_trade', 'ox_lib' }
