@@ -88,9 +88,14 @@ function M.gather(sources, opts)
             if type(p) == 'table' then
                 local x, y, z = M.coords(p.center)
                 if x then
-                    local label = (p.class == 'town_lot') and ((p.name or 'Town lot') .. ' (coming soon)') or (p.name or 'Homestead plot')
+                    local label
+                    if p.class == 'town_lot' then
+                        label = (p.name or 'Town lot') .. (p.claimable == false and ' (coming soon)' or ' (town lot)')
+                    else
+                        label = p.name or 'Homestead plot'
+                    end
                     local place = { id = id, kind = 'plot', label = label, x = x, y = y, z = z, claimable = (p.claimable ~= false),
-                        region = p.region, verified = p.verified }
+                        class = p.class, region = p.region, verified = p.verified }
                     if claimed[id] then place.claimed = true end
                     if type(mine) == 'string' and mine == id then place.mine = true end
                     places[#places + 1] = place
@@ -188,11 +193,13 @@ function M.gather(sources, opts)
 end
 
 ---Nearest place of a kind; for unclaimedOnly, skips claimed places, and always skips non-claimable plots
----(claimable == false, e.g. town lots). player = {x,y,z}.
+---(claimable == false). For kind 'plot' it also skips town lots (class == 'town_lot'): /where plot only ever
+---routes to a claim-class plot (missing class = claim), even after H10 flips town lots claimable. player = {x,y,z}.
 function M.nearest(places, kind, player, unclaimedOnly)
     local best, bestD = nil, nil
     for _, p in ipairs(places or {}) do
-        if p.kind == kind and not (unclaimedOnly and p.claimed) and p.claimable ~= false then
+        if p.kind == kind and not (unclaimedOnly and p.claimed) and p.claimable ~= false
+            and not (kind == 'plot' and p.class == 'town_lot') then
             local d = M.distance(p, player)
             if d ~= nil and (bestD == nil or d < bestD) then
                 best, bestD = p, d
