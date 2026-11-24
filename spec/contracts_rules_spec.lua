@@ -55,7 +55,7 @@ local function stateWithSquad(nodeId, phase)
     local st = R.newState()
     if nodeId then
         st.squads.sq1 = { id = 'sq1', goal = 'ambush', faction = 'outlaws', strength = 3, from = 'heartlands_t1_01',
-            to = nodeId, node = nodeId, region = REGION, phase = phase, travel = 2, etaTick = 10 }
+            to = nodeId, node = nodeId, region_id = REGION, phase = phase, travel = 2, etaTick = 10 }
     end
     return st
 end
@@ -105,7 +105,7 @@ case('offers: a held node posts a "break the ambush" job; travel/return squads d
     local o = findOffer(held, 'ambush_heartlands_amb_bend')
     eq('Break the ambush: Dakota bend', o.title)
     eq(C.SQUAD_EVENT, o.on)
-    same({ nodeId = 'heartlands_amb_bend' }, o.where)
+    same({ node_id = 'heartlands_amb_bend' }, o.where)
     same({ money = 30, rep = { region_id = REGION, delta = 2 } }, o.rewards)
 
     eq(4, #C.offers(heartCtx, stateWithSquad('heartlands_amb_bend', 'travel'), REGION), 'travel squad not offered')
@@ -162,20 +162,19 @@ case('verdict: an ambush job completes when its node\'s squad is wiped and the h
     local offer = findOffer(C.offers(heartCtx, stateWithSquad('heartlands_amb_bend', 'hold'), REGION),
         'ambush_heartlands_amb_bend')
     local def, st = accepted(offer, ME)
-    local after = feed(def, st, C.SQUAD_EVENT, { squadId = 'sq1', nodeId = 'heartlands_amb_bend', region = REGION,
+    local after = feed(def, st, C.SQUAD_EVENT, { squad_id = 'sq1', node_id = 'heartlands_amb_bend', region_id = REGION,
         faction = 'outlaws', participants = { ME } })
     eq('done', after.status)
 end)
 
-case('verdict: ambush job needs a credited payload — the assumed minimal shape credits nobody (B2 must add participants)', function()
+case('verdict: ambush job needs a credited payload — no participants / someone else credits nobody', function()
     local offer = findOffer(C.offers(heartCtx, stateWithSquad('heartlands_amb_bend', 'hold'), REGION),
         'ambush_heartlands_amb_bend')
     local def, st = accepted(offer, ME)
-    -- The assumed payload { squadId, nodeId, region, faction } has no citizenid / participants: engine.eligible
-    -- gates it out, so nobody is paid. B2's emitter must add `participants` (like fh:zones:camp_cleared).
-    eq('active', feed(def, st, C.SQUAD_EVENT, { squadId = 'sq1', nodeId = 'heartlands_amb_bend', region = REGION,
+    -- Without participants (or with only other players) engine.eligible gates the event out: nobody is paid.
+    eq('active', feed(def, st, C.SQUAD_EVENT, { squad_id = 'sq1', node_id = 'heartlands_amb_bend', region_id = REGION,
         faction = 'outlaws' }).status)
-    eq('active', feed(def, st, C.SQUAD_EVENT, { squadId = 'sq1', nodeId = 'heartlands_amb_bend', region = REGION,
+    eq('active', feed(def, st, C.SQUAD_EVENT, { squad_id = 'sq1', node_id = 'heartlands_amb_bend', region_id = REGION,
         faction = 'outlaws', participants = { OTHER } }).status)
 end)
 
@@ -183,7 +182,7 @@ case('verdict: wrong node / wrong event never advances an ambush job', function(
     local offer = findOffer(C.offers(heartCtx, stateWithSquad('heartlands_amb_bend', 'hold'), REGION),
         'ambush_heartlands_amb_bend')
     local def, st = accepted(offer, ME)
-    eq('active', feed(def, st, C.SQUAD_EVENT, { squadId = 'sq1', nodeId = 'heartlands:ambush:2', region = REGION,
+    eq('active', feed(def, st, C.SQUAD_EVENT, { squad_id = 'sq1', node_id = 'heartlands:ambush:2', region_id = REGION,
         faction = 'outlaws', participants = { ME } }).status)
     eq('active', feed(def, st, C.CAMP_EVENT, { camp_id = 'heartlands_t1_01', participants = { ME } }).status)
 end)
@@ -192,12 +191,12 @@ case('verdict: pure function matches the offer event + where and nothing else', 
     local offer = findOffer(C.offers(heartCtx, stateWithSquad('heartlands_amb_bend', 'hold'), REGION),
         'ambush_heartlands_amb_bend')
     local _, st = accepted(offer, ME)
-    eq('progress', C.verdict(C.JOB_TYPE, C.SQUAD_EVENT, { squadId = 'sq1', nodeId = 'heartlands_amb_bend',
-        region = REGION, faction = 'outlaws' }, st))
-    eq(nil, C.verdict(C.JOB_TYPE, C.SQUAD_EVENT, { nodeId = 'heartlands:ambush:2' }, st))
-    eq(nil, C.verdict(C.JOB_TYPE, C.CAMP_EVENT, { nodeId = 'heartlands_amb_bend' }, st))
-    eq(nil, C.verdict(C.JOB_TYPE, C.SQUAD_EVENT, { nodeId = 'heartlands_amb_bend' }, { citizenid = ME }))
-    eq(nil, C.verdict('camp_clear', C.SQUAD_EVENT, { nodeId = 'heartlands_amb_bend' }, st))
+    eq('progress', C.verdict(C.JOB_TYPE, C.SQUAD_EVENT, { squad_id = 'sq1', node_id = 'heartlands_amb_bend',
+        region_id = REGION, faction = 'outlaws' }, st))
+    eq(nil, C.verdict(C.JOB_TYPE, C.SQUAD_EVENT, { node_id = 'heartlands:ambush:2' }, st))
+    eq(nil, C.verdict(C.JOB_TYPE, C.CAMP_EVENT, { node_id = 'heartlands_amb_bend' }, st))
+    eq(nil, C.verdict(C.JOB_TYPE, C.SQUAD_EVENT, { node_id = 'heartlands_amb_bend' }, { citizenid = ME }))
+    eq(nil, C.verdict('camp_clear', C.SQUAD_EVENT, { node_id = 'heartlands_amb_bend' }, st))
 end)
 
 T.finish()

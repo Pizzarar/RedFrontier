@@ -4,14 +4,15 @@
 -- materialises only when it holds an ambush node AND a player is within ambushRadius. Despawning keeps its surviving
 -- strength (only the death watch decrements strength). No visible riding.
 -- Natives: GetPlayers, GetPlayerPed, GetEntityCoords, GetEntityHealth, NetworkGetEntityFromNetworkId,
--- DoesEntityExist; all UNVERIFIED in game (no Cfx key yet). Spawn contract: fh_core README "Spawn contract".
+-- DoesEntityExist, GetPedSourceOfDeath; all UNVERIFIED in game (no Cfx key yet). Spawn contract: fh_core README
+-- "Spawn contract". Credit (squad_wiped participants) resolves citizenids via rsg-core exactly like fh_zones camp_cleared.
 local rules = FhAlifeRules
 local server = FhAlifeServer
 local ctx = server.ctx
 
 local function log(fmt, ...) print(('[fh_alife] ' .. fmt):format(...)) end
 
--- Materialisation knobs (TODO-verify-in-game). Overridable via FhAlifeConfig.squads = { ambushRadius, pedModel }.
+-- Materialisation knobs: FhAlifeConfig.squads = { ambushRadius, pedModel } (config.lua); literals are only the fallback.
 local function setting(k, d)
     local t = FhAlifeConfig and FhAlifeConfig.squads
     return (t and t[k] ~= nil) and t[k] or d
@@ -95,11 +96,65 @@ local function despawnSquad(squadId, reason)
     log('squad %s despawned (%s)', squadId, reason)
 end
 
+-- Returns dead?, entity. The entity lets the caller ask who killed it.
 local function isDead(entry)
     if not entry.netId then return false end
     local e = NetworkGetEntityFromNetworkId(entry.netId)
     if e == 0 or not DoesEntityExist(e) then return false end -- gone = fh_core re-requests it; not a confirmed kill
-    return GetEntityHealth(e) <= 0
+    return GetEntityHealth(e) <= 0, e
+end
+
+---Killer entity of a dead ped (GetPedSourceOfDeath), or nil. Guarded: the native may be missing or throw.
+local function killerOf(e)
+    if type(GetPedSourceOfDeath) ~= 'function' then return nil end
+    local ok, k = pcall(GetPedSourceOfDeath, e)
+    if ok and k and k ~= 0 then return k end
+    return nil
+end
+
+local function citizenidOf(src)
+    local ok, cid = pcall(function()
+        local c = exports['rsg-core']:GetCoreObject()
+        local p = c and c.Functions.GetPlayer(src)
+        return p and p.PlayerData.citizenid or nil
+    end)
+    return ok and cid or nil
+end
+
+---Citizenids credited for a wipe: every player whose ped is within ambushRadius of the node now (presence, via
+---FhCampRules.safeParticipants — the same filter fh_zones uses for camp_cleared), plus any player whose ped killed a
+---squad member (GetPedSourceOfDeath) even from outside the radius. Deduped; {} on any lookup failure, never nil.
+local function wipeParticipants(squadId, rec, node)
+    local killers = {}
+    for _, p in ipairs(rec.peds) do if p.killer then killers[p.killer] = true end end
+    local extra = {}
+    local gather = function()
+        local entries = {}
+        for _, s in ipairs(GetPlayers()) do
+            local src = tonumber(s)
+            local ped = src and GetPlayerPed(src)
+            if ped and ped ~= 0 then
+                local cid = citizenidOf(src)
+                entries[#entries + 1] = { citizenid = cid, pos = GetEntityCoords(ped) }
+                if cid and killers[ped] then extra[#extra + 1] = cid end
+            end
+        end
+        return entries
+    end
+    local list, err
+    if FhCampRules and FhCampRules.safeParticipants then
+        list, err = FhCampRules.safeParticipants(vector3(node.x, node.y, node.z), AMBUSH_RADIUS, gather)
+    else
+        list, err = {}, 'FhCampRules missing'
+    end
+    if err then log('squad %s: participants lookup failed: %s', squadId, tostring(err)) end
+    local out, seen = {}, {}
+    for _, src in ipairs({ list or {}, extra }) do
+        for _, cid in ipairs(src) do
+            if not seen[cid] then seen[cid] = true out[#out + 1] = cid end
+        end
+    end
+    return out
 end
 
 -- One pass of the death watch: each dead ped takes 1 off the squad's strength (FhAlifeRules.onSquadKill); when the
@@ -107,16 +162,22 @@ end
 local function checkDeaths(squadId, rec)
     local state = server.getState()
     for _, entry in ipairs(rec.peds) do
-        if not entry.dead and not entry.failed and isDead(entry) then
+        local dead, e = false, nil
+        if not entry.dead and not entry.failed then dead, e = isDead(entry) end
+        if dead then
             entry.dead = true
+            entry.killer = killerOf(e)
             local effects, err = rules.onSquadKill(ctx, state, squadId)
             if err then return end -- squad already gone (e.g. pruned): stop
             server.save()
             for _, e in ipairs(effects) do
                 if e.type == 'squad_wiped' then
-                    TriggerEvent('fh:alife:squad_wiped', { squad_id = e.squad_id, goal = e.goal,
-                        faction = e.faction, node = e.node, camp_id = e.camp_id, region_id = e.region_id,
-                        label = e.label })
+                    -- Canonical payload (fh_core/docs/events.md): snake_case like fh:zones:camp_cleared.
+                    local node = ctx.graph.nodes[e.node]
+                    TriggerEvent('fh:alife:squad_wiped', { squad_id = e.squad_id, node_id = e.node,
+                        region_id = e.region_id, faction = e.faction, goal = e.goal, camp_id = e.camp_id,
+                        label = e.label,
+                        participants = node and wipeParticipants(squadId, rec, node) or {} })
                     despawnSquad(squadId, 'wiped')
                     return
                 end

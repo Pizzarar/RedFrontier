@@ -11,6 +11,7 @@ shared_scripts {
     '@fh_core/shared/regions.lua',        -- FhRegions global (fh_core must be started first)
     '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (resolves @fh_zones/config.lua camps at load)
     '@fh_zones/config.lua',        -- FhZonesConfig camp list (fh_zones must be started first)
+    '@fh_zones/shared/camp_rules.lua', -- FhCampRules.safeParticipants (squad_wiped participants, as camp_cleared)
     'config.lua',
     'shared/alife_rules.lua',
     'shared/contracts_rules.lua',

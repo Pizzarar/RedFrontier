@@ -8,8 +8,8 @@
 --   * "clear <camp>" for every outlaw-held camp in the region, paying on fh:zones:camp_cleared (credit via
 --     payload.participants, exactly like the built-in camp_clear job type).
 --   * "break the ambush at <node label or id>" for every ambush node a squad is currently holding (phase 'hold'),
---     paying on fh:alife:squad_wiped (payload { squadId, nodeId, region, faction }; for a player to be credited the
---     emitter must also carry participants, as camp_cleared does — see B2's emitter).
+--     paying on fh:alife:squad_wiped where node_id matches (payload { squad_id, node_id, region_id, faction,
+--     participants, goal?, camp_id?, label? } — fh_core/docs/events.md; participants = citizenids, as camp_cleared).
 -- A region with no ambush nodes offers only camp jobs, with no errors. A disabled region offers nothing.
 local M = {}
 
@@ -124,7 +124,7 @@ local function ambushOffer(ctx, regionId, nodeId)
         title = 'Break the ambush: ' .. label,
         text = 'A gang is waiting in ambush at ' .. label .. '. Break it up.',
         on = M.SQUAD_EVENT,
-        where = { nodeId = nodeId },
+        where = { node_id = nodeId },
         rewards = rewards(regionId, M.REWARDS.ambush),
     }
 end
@@ -155,7 +155,7 @@ end
 ---hooks.onEvent decision for alife_contract. Only the offer's own event plus its flat `where` predicates match;
 ---credit (payload.participants / citizenid) is the engine's `eligible` gate, which runs before this hook is called.
 ---A "clear <camp>" job advances on fh:zones:camp_cleared where camp_id matches; a "break the ambush" job advances
----on fh:alife:squad_wiped where nodeId matches. @return 'progress' | nil
+---on fh:alife:squad_wiped where node_id matches. @return 'progress' | nil
 function M.verdict(job_type, eventName, payload, state)
     local snap = snapOf(job_type, state)
     if not snap or type(payload) ~= 'table' then return nil end

@@ -105,7 +105,7 @@ local function boot(preKvp, ambush)
         exported = {}, handlers = {}, commands = {}, broadcasts = {}, flipped = {}, heatCalls = {},
         shortageCalls = {}, printed = {}, kvp = preKvp or {},
         spawns = {}, despawns = {}, wiped = {}, healths = {}, nextReq = 1,
-        players = {}, playerPeds = {}, pedCoords = {},
+        players = {}, playerPeds = {}, pedCoords = {}, cids = {}, killers = {},
     }
     local exportsT = setmetatable({
         -- fh_heat is stubbed as a spy: fh_alife must NOT call addSource (camp_clear heat is fh_heat's own job).
@@ -126,6 +126,9 @@ local function boot(preKvp, ambush)
             end,
             despawn = function(_, id) B.despawns[#B.despawns + 1] = id B.spawns[id] = nil end,
         },
+        -- rsg-core: src -> citizenid via B.cids (the lookup fh_zones also uses for camp_cleared participants).
+        ['rsg-core'] = { GetCoreObject = function() return { Functions = { GetPlayer = function(src)
+            return B.cids[src] and { PlayerData = { citizenid = B.cids[src] } } or nil end } } end },
     }, { __call = function(_, name, fn) B.exported[name] = fn end })
     local env = setmetatable({
         exports = exportsT,
@@ -137,6 +140,7 @@ local function boot(preKvp, ambush)
         GetEntityHealth = function(e) return B.healths[e] or 100 end,
         NetworkGetEntityFromNetworkId = function(netId) return netId end,
         DoesEntityExist = function(e) return e ~= 0 end,
+        GetPedSourceOfDeath = function(e) return B.killers[e] or 0 end,
         GetGameTimer = function() return 0 end,
         SetResourceKvp = function(k, v) B.kvp[k] = v end,
         GetResourceKvpString = function(k) return B.kvp[k] end,
@@ -167,6 +171,7 @@ local function boot(preKvp, ambush)
     end
     run(R .. 'fh_core/shared/place_resolver.lua')
     run(R .. 'fh_zones/config.lua')
+    run(R .. 'fh_zones/shared/camp_rules.lua')
     run(R .. 'fh_alife/config.lua')
     run(R .. 'fh_alife/shared/alife_rules.lua')
     run(R .. 'fh_alife/server/main.lua')
@@ -175,6 +180,7 @@ local function boot(preKvp, ambush)
     B.rules = env.FhAlifeRules
     B.server = env.FhAlifeServer
     B.squads = env.FhAlifeSquads
+    B.regions = env.FhRegions
     return B
 end
 
@@ -263,6 +269,7 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         B.players = { 1 }
         B.playerPeds[1] = 101
         B.pedCoords[101] = { x = 100, y = 500, z = 110 }
+        B.cids[1] = 'CID1'
         return B, st
     end
 
@@ -310,9 +317,61 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         for _, s in pairs(B.spawns) do B.healths[s.netId] = 0 end -- every member dies
         B.squads.sweep()
         T.eq(1, #B.wiped, 'one wipe event')
-        T.same({ squad_id = 'sq1', goal = 'ambush', faction = 'outlaws', node = 'heartlands_amb_bend',
-            camp_id = 'heartlands_t1_01', region_id = 'heartlands', label = 'Dakota bend' }, B.wiped[1])
+        T.same({ squad_id = 'sq1', node_id = 'heartlands_amb_bend', region_id = 'heartlands', faction = 'outlaws',
+            participants = { 'CID1' }, goal = 'ambush', camp_id = 'heartlands_t1_01', label = 'Dakota bend' },
+            B.wiped[1])
         T.eq(nil, st.squads.sq1, 'squad removed from state')
+    end)
+
+    T.it('B2 squad_wiped participants: in-radius players + an out-of-radius killer, deduped; far bystander excluded', function()
+        local B = heldSquad()
+        B.players = { 1, 2, 3 }
+        B.playerPeds[2] = 102; B.pedCoords[102] = { x = 300, y = 500, z = 110 }; B.cids[2] = 'CID2' -- sniper, 200 m
+        B.playerPeds[3] = 103; B.pedCoords[103] = { x = 900, y = 900, z = 110 }; B.cids[3] = 'CID3' -- bystander
+        B.squads.sweep()
+        local first = true
+        for _, s in pairs(B.spawns) do
+            B.healths[s.netId] = 0
+            B.killers[s.netId] = first and 102 or 101 -- one kill by the sniper, the rest by the in-radius player
+            first = false
+        end
+        B.squads.sweep()
+        T.eq(1, #B.wiped)
+        T.same({ 'CID1', 'CID2' }, B.wiped[1].participants)
+    end)
+
+    T.it('B2 -> B3: the real squad_wiped payload pays an accepted alife_contract ambush job', function()
+        local qshared = here .. '../server/resources/[fh]/fh_quests/shared/'
+        package.path = qshared .. '?.lua;' .. package.path
+        local Jobs, E, I = require('jobs'), require('engine'), require('intake')
+        local C = dofile(R .. 'fh_alife/shared/contracts_rules.lua')
+        local B, st = heldSquad()
+        -- accept the "break the ambush" offer while sq1 holds the node (as fh_quests api.lua does)
+        local offer
+        for _, o in ipairs(C.offers(B.server.ctx, st, 'heartlands')) do
+            if o.key == 'ambush_heartlands_amb_bend' then offer = o end
+        end
+        assert(offer, 'ambush offer posted for the held node')
+        local evset = { [C.SQUAD_EVENT] = true }
+        for _, n in ipairs(E.INTAKE) do evset[n] = true end
+        local snap = assert(Jobs.snapshot(C.JOB_TYPE, offer, 'heartlands', true))
+        local def = assert(Jobs.def(snap, { regions = B.regions.regions, events = evset }))
+        local job = assert(E.start(def, {}, 'CID1', 1795651200))
+        job.progress.job = snap
+        -- wipe the squad through squads.lua; feed the captured payload through intake + the B3 verdict
+        B.squads.sweep()
+        for _, s in pairs(B.spawns) do B.healths[s.netId] = 0 end
+        B.squads.sweep()
+        T.eq(1, #B.wiped)
+        local hook = function(n, p, s) return C.verdict(C.JOB_TYPE, n, p, s) end
+        local changes = I.feed({ [def.id] = def }, { [def.id] = job }, C.SQUAD_EVENT, B.wiped[1], 1795651200,
+            function() return hook end)
+        T.eq('done', changes[1] and changes[1].after.status, 'credited player CID1 paid')
+        -- a player who was not present is not credited by the same payload
+        local other = assert(E.start(def, {}, 'NOTHERE', 1795651200)); other.progress.job = snap
+        local ch2 = I.feed({ [def.id] = def }, { [def.id] = other }, C.SQUAD_EVENT, B.wiped[1], 1795651200,
+            function() return hook end)
+        T.eq('active', ch2[1] and ch2[1].after.status or other.status, 'absent player not paid')
     end)
 
     T.it('/alife lists squads by goal, node and strength; prints "no ambush nodes" for empty regions', function()

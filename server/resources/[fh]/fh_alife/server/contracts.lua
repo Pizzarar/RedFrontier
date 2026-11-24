@@ -1,6 +1,7 @@
 -- fh_alife contracts (a-life-02 B3): register the alife_contract job type through fh_quests' public
 -- registerJobType export only (no fh_quests edits). Offers and verdicts are pure in shared/contracts_rules.lua
--- (FhAlifeContracts); this file is I/O only — it rebuilds ctx and reads the live sim state to feed the offers hook.
+-- (FhAlifeContracts); this file is I/O only — it reads the live sim state (FhAlifeServer from server/main.lua, loaded
+-- first) to feed the offers hook, falling back to the KVP main.lua writes if that surface is missing.
 --
 -- Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game World.
 local rules = FhAlifeContracts
@@ -8,15 +9,16 @@ local alife = FhAlifeRules
 local cfg = FhAlifeConfig
 local regions = FhRegions
 
-local ctx = alife.context(cfg, regions, FhZonesConfig.camps)
+local live = FhAlifeServer
+local ctx = (live and live.ctx) or alife.context(cfg, regions, FhZonesConfig.camps)
 local KVP_KEY = 'fh_alife_state'
 
 local function log(fmt, ...) print(('[fh_alife] ' .. fmt):format(...)) end
 
----Live sim state as a plain table, read from the KVP main.lua writes each tick / camp_clear / squad kill. A board
----collect must never error: any read/decode/deserialize failure falls back to a fresh state (all camps outlaw-held,
----no squads), which is exactly the boot-time state.
-local function currentState()
+---Sim state from the KVP main.lua writes each tick / camp_clear / squad kill (fallback path only). A board collect must
+---never error: any read/decode/deserialize failure falls back to a fresh state (all camps outlaw-held, no squads),
+---which is exactly the boot-time state.
+local function kvpState()
     local ok, st = pcall(function()
         local raw = GetResourceKvpString(KVP_KEY)
         if not raw or raw == '' then return alife.newState() end
@@ -25,6 +27,16 @@ local function currentState()
         return alife.deserialize(t, ctx) or alife.newState()
     end)
     return ok and st or alife.newState()
+end
+
+---Live in-resource state via FhAlifeServer.getState (same table squads.lua mutates), else the KVP copy. Read-only:
+---offers never mutate it.
+local function currentState()
+    if live and type(live.getState) == 'function' then
+        local ok, st = pcall(live.getState)
+        if ok and type(st) == 'table' then return st end
+    end
+    return kvpState()
 end
 
 ---Register (or re-register) the job type once fh_quests is up. Soft dependency: fh_alife does not list fh_quests

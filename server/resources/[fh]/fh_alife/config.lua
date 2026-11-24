@@ -28,6 +28,14 @@ FhAlifeConfig = {
         pressureMax = 6,
     },
 
+    -- a-life-02 B2 squad materialisation (server/squads.lua). A held ambush squad spawns on foot only when a player is
+    -- within ambushRadius (metres, 3D) of its node; the same radius decides who is credited (participants) when the
+    -- squad is wiped. pedModel = the ped model of every squad member. Both TODO-verify-in-game.
+    squads = {
+        ambushRadius = 45.0,
+        pedModel = 'g_m_m_unibanditos_01',
+    },
+
     -- Law patrols (data only, never spawn peds): a law-held camp gets one reinforce squad of `strength` that arrives
     -- after travelTicks and holds while law keeps the camp (re-checked every holdTicks). A retake lands only when its
     -- strength less regionPressure beats the holders. strength 2 < retake.strengthMin 3: an unpressured retake still
