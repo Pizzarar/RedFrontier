@@ -20,6 +20,8 @@ local function sayAndLog(src, msg)
     if src ~= 0 then print('[fh_homestead] plotcheck: ' .. msg) end
 end
 
+local SUMMARY_MAX = 8 -- problem plot ids named in the in-game chat summary of a multi-plot run
+
 local function regionsTable() return FhRegions and FhRegions.regions or nil end
 
 local function begin(src, arg)
@@ -57,7 +59,7 @@ lib.addCommand('fh_plotcheck', {
     local arg = tostring(raw or ''):match('^%S+%s+(%S+)') or 'all'
     local ok, res = begin(src, arg)
     if ok then
-        say(src, ('fh_plotcheck: probing %d plot(s), about %d s; the report follows (the probe only sees ground near you)'):format(res, math.ceil(res * 0.5)))
+        say(src, ('fh_plotcheck: probing %d plot(s), up to %d s (an unstreamed plot waits the full 2 s probe); the report follows (the probe only sees ground near you)'):format(res, pc.etaSeconds(res)))
     else
         say(src, 'fh_plotcheck: ' .. tostring(res))
     end
@@ -70,14 +72,26 @@ RegisterNetEvent('fh:homestead:plotcheck:result', function(token, raw)
     pending[src] = nil
     local results = pc.cleanResults(cfg.plots, raw)
     local opts = { baseSafeRadius = cfg.baseSafeRadius, regions = regionsTable() }
-    local flagged, total = 0, #session.ids
-    for _, id in ipairs(session.ids) do
-        local r = pc.report(cfg.plots, id, results[id], opts)
-        if r.flags > 0 then flagged = flagged + 1 end
-        sayAndLog(src, r.head .. (r.flags > 0 and (' - ' .. r.flags .. ' issue(s)') or ' - OK'))
-        for _, line in ipairs(r.lines) do sayAndLog(src, '   ' .. line) end
+    local reports = {}
+    for _, id in ipairs(session.ids) do reports[#reports + 1] = pc.report(cfg.plots, id, results[id], opts) end
+    local multi = #reports > 1
+    -- A single plot prints in full in chat (and the console). A multi-plot run prints the full blocks to the console
+    -- only (one chat:addMessage per line would flood the admin's chat: ~5 lines x 65 plots) and sends a capped summary
+    -- to chat, as fh_dump does (fh_core/server/admin.lua).
+    for _, r in ipairs(reports) do
+        local head = r.head .. (r.flags > 0 and (' - ' .. r.flags .. ' issue(s)') or ' - OK')
+        if multi then
+            print('[fh_homestead] plotcheck: ' .. head)
+            for _, line in ipairs(r.lines) do print('[fh_homestead] plotcheck:    ' .. line) end
+        else
+            sayAndLog(src, head)
+            for _, line in ipairs(r.lines) do sayAndLog(src, '   ' .. line) end
+        end
     end
-    sayAndLog(src, ('fh_plotcheck: %d plot(s) checked, %d with issues'):format(total, flagged))
+    if multi then
+        for _, line in ipairs(pc.summary(reports, SUMMARY_MAX)) do say(src, line) end
+        say(src, 'fh_plotcheck: full per-plot report in the server console (lines starting "[fh_homestead] plotcheck:")')
+    end
 end)
 
 AddEventHandler('playerDropped', function() pending[source] = nil end)

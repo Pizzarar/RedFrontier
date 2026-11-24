@@ -191,15 +191,20 @@ local function waterAt(x, y, z)
     return true, nil
 end
 
+local plotcheckToken -- newest probe run wins: a re-run after a server timeout stops the older loop instead of stacking a second one
 FH.onNet('fh:homestead:plotcheck:probe', function(token, list)
     if type(list) ~= 'table' then return end
+    plotcheckToken = token
     local results = {}
     for _, p in ipairs(list) do
+        if plotcheckToken ~= token then return end -- superseded (the server already dropped this token)
         if type(p) == 'table' and type(p.id) == 'string' and type(p.x) == 'number' and type(p.y) == 'number' and type(p.z) == 'number' then
             local gz, found = FhSnap.groundZAt('plotcheck:' .. p.id, p.x, p.y, p.z, FhGroundSnap.probeAboveFor(p))
             local known, wz = waterAt(p.x, p.y, found and gz or p.z)
             results[#results + 1] = { id = p.id, groundZ = gz, found = found == true, waterKnown = known, waterZ = wz }
         end
     end
+    if plotcheckToken ~= token then return end
+    plotcheckToken = nil
     TriggerServerEvent('fh:homestead:plotcheck:result', token, results)
 end)

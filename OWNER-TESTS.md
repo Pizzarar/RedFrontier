@@ -1064,5 +1064,5 @@ great_plains. Only those four should show anything — the other 11 regions are 
    (after a fix) show no tag.
    RESULT:
 9. Plot check (H16). As an admin, stand near the claims you want checked (the ground probe only sees streamed-in ground) and run `/fh_plotcheck all` once.
-   Expected: one block per claim and town lot with ground z vs config z, water at center, overlap at max radius and nearest town, then `N plot(s) checked, M with issues`. A plot far from you reads `ground: NOT FOUND`: run `/fh_plotcheck <plotId>` next to it. Fix every `BAD` / `YES` / overlap line in `config.lua`. A non-admin gets the command refused.
+   Expected: chat shows a summary (`N plot(s): X ok, Y warn, Z fail` plus up to 8 problem ids and a pointer to the console); the server console has one block per claim and town lot with ground z vs config z, water at center, overlap at max radius and nearest town. `/fh_plotcheck <plotId>` prints that block in chat. A plot far from you reads `ground: NOT FOUND`: run `/fh_plotcheck <plotId>` next to it. Fix every `BAD` / `YES` / overlap line in `config.lua`. A non-admin gets the command refused.
    RESULT:

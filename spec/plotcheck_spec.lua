@@ -106,4 +106,47 @@ case('report: flags ground/water/overlap, omits town line without regions, no re
     local ng = C.report({ c = plot('c', 0, 0, 'claim') }, 'c', { found = false, waterKnown = false }, {})
     assert(ng.lines[1]:find('NOT FOUND', 1, true)); assert(ng.lines[2]:find('unknown', 1, true))
 end)
+case('report severity: fail / warn / ok', function()
+    local plots = { a = plot('a', 0, 0, 'claim') }
+    T.eq('ok', C.report(plots, 'a', { found = true, groundZ = 100.5, waterKnown = true }, { baseSafeRadius = 25.0 }).severity)
+    T.eq('warn', C.report(plots, 'a', { found = true, groundZ = 105.0, waterKnown = true }, {}).severity)
+    T.eq('warn', C.report(plots, 'a', { found = false, waterKnown = true }, {}).severity)
+    T.eq('fail', C.report(plots, 'a', { found = true, groundZ = 120.0, waterKnown = true }, {}).severity)
+    T.eq('fail', C.report(plots, 'a', nil, {}).severity)
+    T.eq('fail', C.report({ a = plots.a, b = plot('b', 10, 0, 'claim') }, 'a', { found = true, groundZ = 100.0, waterKnown = true }, { baseSafeRadius = 25.0 }).severity)
+end)
+
+case('summary: counts, fail-first capped problem list, +N more, no list when all ok', function()
+    local reps = {}
+    for i = 1, 5 do reps[#reps + 1] = { id = 'ok' .. i, severity = 'ok' } end
+    local s = C.summary(reps, 3)
+    T.eq(1, #s)
+    T.eq('fh_plotcheck: 5 plot(s): 5 ok, 0 warn, 0 fail', s[1])
+    reps[#reps + 1] = { id = 'w2', severity = 'warn' }
+    reps[#reps + 1] = { id = 'w1', severity = 'warn' }
+    reps[#reps + 1] = { id = 'f2', severity = 'fail' }
+    reps[#reps + 1] = { id = 'f1', severity = 'fail' }
+    s = C.summary(reps, 3)
+    T.eq('fh_plotcheck: 9 plot(s): 5 ok, 2 warn, 2 fail', s[1])
+    T.eq('problems (fail first): f1, f2, w1 +1 more', s[2])
+    T.eq('problems (fail first): f1, f2, w1, w2', C.summary(reps, 8)[2])
+    T.eq(1, #C.summary(reps, 0) - 1) -- cap 0: counts + a list line that only says "+4 more"
+    T.eq(1, #C.summary({}, 8)) -- empty run: counts line only
+    T.eq(1, #C.summary(nil, 8))
+end)
+
+case('summary stays small for a 65-plot run (the chat-flood regression)', function()
+    local reps = {}
+    for i = 1, 65 do reps[#reps + 1] = { id = ('p%02d'):format(i), severity = (i % 2 == 0) and 'fail' or 'warn' } end
+    local s = C.summary(reps, 8)
+    assert(#s <= 2, 'at most 2 chat lines')
+    assert(s[2]:find('+57 more', 1, true), s[2])
+end)
+
+case('etaSeconds assumes the full 2 s probe per plot', function()
+    T.eq(130, C.etaSeconds(65))
+    T.eq(2, C.etaSeconds(1))
+    T.eq(0, C.etaSeconds(nil))
+end)
+
 T.finish()

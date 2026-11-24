@@ -129,16 +129,17 @@ function M.cleanResults(plots, raw)
     return out
 end
 
----One report per plot: { id, line = {strings}, flags = n }. res = cleaned client result (may be nil = no report).
+---One report per plot (severity: 'fail' = bad z / water / overlap / no report, 'warn' = z snap corrects it or ground not found, 'ok'): { id, line = {strings}, flags = n }. res = cleaned client result (may be nil = no report).
 function M.report(plots, id, res, opts)
     opts = opts or {}
     local p = plots[id]
     local cz = p.center and p.center.z
     local head = ('%s [%s%s]'):format(id, p.class or 'claim', p.verified == false and ', unverified' or '')
-    local lines, flags = {}, 0
+    local lines, flags, fail = {}, 0, false
     if not res then
         lines[#lines + 1] = 'ground: no report from the client'
         flags = flags + 1
+        fail = true
     else
         local kind, delta = M.classifyZ(cz, res.groundZ, res.found)
         if kind == 'no_ground' then
@@ -148,12 +149,14 @@ function M.report(plots, id, res, opts)
             local tag = kind == 'ok' and 'OK' or (kind == 'warn' and 'WARN snap corrects' or 'BAD snap rejected, props sit at config z')
             lines[#lines + 1] = ('ground z %.1f vs config z %.1f (%+.1f) %s'):format(res.groundZ, cz, delta, tag)
             if kind ~= 'ok' then flags = flags + 1 end
+            if kind == 'bad' then fail = true end
         end
         if not res.waterKnown then
             lines[#lines + 1] = 'water: unknown (native unavailable)'
         elseif M.isWater(res.waterZ, res.groundZ, cz) then
             lines[#lines + 1] = ('water at center: YES (surface %.1f) BAD'):format(res.waterZ)
             flags = flags + 1
+            fail = true
         else
             lines[#lines + 1] = 'water at center: no'
         end
@@ -166,12 +169,43 @@ function M.report(plots, id, res, opts)
         for _, o in ipairs(ov) do parts[#parts + 1] = ('%s (%.0f m apart, limit %.0f)'):format(o.id, o.dist, o.limit) end
         lines[#lines + 1] = ('overlap at max radius (%.0f m): %s BAD'):format(M.maxRadius(p, opts.baseSafeRadius), table.concat(parts, ', '))
         flags = flags + 1
+        fail = true
     end
     if opts.regions then
         local t = M.nearestTown(p.center, opts.regions)
         if t then lines[#lines + 1] = ('nearest town: %s %.0f m (no road data in repo)'):format(t.label, t.dist) end
     end
-    return { id = id, head = head, lines = lines, flags = flags }
+    return { id = id, head = head, lines = lines, flags = flags, severity = fail and 'fail' or (flags > 0 and 'warn' or 'ok') }
+end
+
+---Worst-case wait for a run: every plot can burn the whole 2 s ground probe (an unstreamed plot always does).
+function M.etaSeconds(n)
+    return math.ceil((finite(n) and n or 0) * 2.0)
+end
+
+---Capped in-game summary of many reports (the full blocks go to the server console only): { counts line, problem line? }.
+---Problem plots list fail before warn, sorted by id within each, at most maxList ids, then "+N more".
+function M.summary(reports, maxList)
+    local cap = (finite(maxList) and maxList >= 0) and maxList or 8
+    local n = { ok = 0, warn = 0, fail = 0 }
+    local fails, warns = {}, {}
+    for _, r in ipairs(reports or {}) do
+        local sev = r.severity == 'fail' and 'fail' or (r.severity == 'warn' and 'warn' or 'ok')
+        n[sev] = n[sev] + 1
+        if sev == 'fail' then fails[#fails + 1] = r.id elseif sev == 'warn' then warns[#warns + 1] = r.id end
+    end
+    table.sort(fails); table.sort(warns)
+    local lines = { ('fh_plotcheck: %d plot(s): %d ok, %d warn, %d fail'):format(n.ok + n.warn + n.fail, n.ok, n.warn, n.fail) }
+    local all = {}
+    for _, id in ipairs(fails) do all[#all + 1] = id end
+    for _, id in ipairs(warns) do all[#all + 1] = id end
+    if #all > 0 then
+        local shown = {}
+        for i = 1, math.min(cap, #all) do shown[i] = all[i] end
+        local more = #all > cap and (' +%d more'):format(#all - cap) or ''
+        lines[#lines + 1] = ('problems (fail first): %s%s'):format(table.concat(shown, ', '), more)
+    end
+    return lines
 end
 
 if _G.GetCurrentResourceName then _G.FhPlotCheck = M end
