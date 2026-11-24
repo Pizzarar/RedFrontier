@@ -469,7 +469,7 @@ The ordered quests checklist is `OWNER-TESTS.md`, section `## Q5: quests (fh_que
 
 ## Family questlines (Q4)
 
-Three one-time `kind = 'line'` quests in `data/families/<family>.lua` (region `heartlands`, text dialogue only, no
+Five one-time `kind = 'line'` quests in `data/families/<family>.lua` (Hale/Marrow/Whitlock: region `heartlands`; Cormier and Ashby, added in C6: see the table; text dialogue only, no
 cutscenes or voice). `server/families.lua` loads them with `LoadResourceFile` and calls `registerQuest` at start.
 Families are independent (no `prereq`); the steps inside a line run in order. Rewards are money + rep only (item
 rewards stay owed until core idea-643 lands). The giver NPC id is the def's `giver`; the giver's intro lines
@@ -480,6 +480,8 @@ rewards stay owed until core idea-643 lands). The giver NPC id is the def's `giv
 | Hale & Daughters: A Roof Over Your Head | `family_hale` / `npc_hale` | claim a plot (`fh:homestead:claimed`), earn $15+ in one payment (`fh:economy:paid`, `amount.min 15`), report back (talk) | $40, +5 rep |
 | Marrow's Debt: Smoke on the Ridge | `family_marrow` / `npc_marrow` | clear an outlaw camp (`fh:zones:camp_cleared`), sell 2 pelts (`fh:hunting:pelt_sold`), report back (talk) | $60, +8 rep |
 | Whitlock's Ghost: The Bear of Bear Hollow | `family_whitlock` / `npc_whitlock` | sell a quality 2+ pelt (`fh:hunting:pelt_sold`), finish the Legendary Bear hunt (`fh:hunting:chain_complete`, `chain_id = 'legendary_bear'`), report back (talk) | $120, +12 rep |
+| Cormier Landing: High Water (C6) | `family_cormier` / `npc_cormier` (Odile Cormier, near Lagras; region `bayou_nwa`, Lemoyne) | skin an alligator (`fh:hunting:pelt_skinned`, `animal = 'alligator'`), clear a Swamp Gang camp (`fh:zones:camp_cleared`, `region_id = 'bayou_nwa'`), sell 2 pelts (`fh:hunting:pelt_sold`, `count = 2`), report back (talk) | $70, +8 rep (`bayou_nwa`) |
+| Ashby Range: The Long Grass (C6) | `family_ashby` / `npc_ashby` (June Ashby, near Blackwater; region `great_plains`, West Elizabeth) | skin a wolf or coyote (`fh:hunting:pelt_skinned`, `animal` any of wolf/coyote), clear a camp (`fh:zones:camp_cleared`, `region_id = 'great_plains'`), sell a quality 2+ pelt (`fh:hunting:pelt_sold`, `quality.min 2`), report back (talk) | $75, +8 rep (`great_plains`) |
 
 **Depends on other lanes (the lines park on that step until then):**
 - `family_whitlock` step 2 depends on **@hunting** (H4, plan hunting-01-l8): `fh:hunting:chain_complete` with

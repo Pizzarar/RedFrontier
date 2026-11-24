@@ -560,6 +560,23 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
     has landed, finish the Legendary Bear hunt and report back: $120, +12 rep, reason `quest:family_whitlock` once. Otherwise
     `RESULT: SKIP expected-blocked on @hunting H4` after confirming step 1 advances and the line parks on step 2.
     RESULT:
+12b. Givers, Cormier (C6, Lemoyne). Odile Cormier (`a_f_m_lagtownfolk_01`) at about 2180, -1112, 25 (offset from the Lagras town
+    point). Walk up within 5 m, press E: fh_ui dialogue opens with two intro lines, then "Will you take the job?" -> "I will" ->
+    `Quest started.` Steps in order: (1) skin an alligator (`fh:hunting:pelt_skinned`, animal alligator); (2) clear a Swamp Gang
+    camp in `bayou_nwa` (be inside it); (3) sell 2 pelts; (4) talk to Odile again for the two closing lines.
+    Expected: each step advances in order; one-time payout $70, +8 rep (`bayou_nwa`), ledger reason `quest:family_cormier` once;
+    talking again pays nothing. Giver coords and ped model are TODO-verify-in-game (report values, not failures).
+    ALLIGATOR CHECK: the alligator is cargo-size (size_class `cargo`, weight 20000). Confirm in game that it can be skinned and that
+    `fh:hunting:pelt_skinned` fires for it (step 1 advances). If it cannot be skinned or the event never fires, FAIL and note it
+    (the step then cannot be completed).
+    RESULT:
+12c. Givers, Ashby (C6, West Elizabeth). June Ashby (`a_f_m_blwtownfolk_01`) at about -850, -1330, 44.5 (offset from the Blackwater
+    town point). Same talk flow (within 5 m, accept). Steps in order: (1) skin a wolf or coyote; (2) clear a camp in `great_plains`;
+    (3) sell a quality 2+ pelt; (4) talk to June again for the two closing lines.
+    Expected: $75, +8 rep (`great_plains`), reason `quest:family_ashby` once; talking again pays nothing. Giver coords and ped model
+    are TODO-verify-in-game (report values, not failures). If no trapper sell point exists yet, mark the pelt step
+    `SKIP expected-blocked on @hunting H3` after confirming steps 1 and 2.
+    RESULT:
 13. Re-fire, relog, restart. With an active line mid-step (Marrow's pelt step, or Whitlock step 1) note its count; after a
     completed family line note your cash and rep. Quit and rejoin, then restart the server and rejoin.
     Expected: the `fh_quest_state` row (your citizenid + quest id) still has the same `step` and `progress.count`, and the line
