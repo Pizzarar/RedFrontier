@@ -17,4 +17,11 @@ JT.registerRegion('heartlands', {
     supply = { -- { post, item, amount, money, rep }: sell `amount` (or more) of `item` at that fh_trade post
         { post = 'valentine_post', item = 'trade_cloth', amount = 2, money = 10, rep = 1 },
     },
+    surveys = { -- ride-out surveys: reach every point (in order unless ordered = false). Coords TODO-verify-in-game
+        { key = 'ridge_markers', name = 'Ridge markers', money = 24, rep = 2, ordered = true, points = {
+            { x = -260.0, y = 760.0, z = 116.0 }, -- TODO-verify-in-game
+            { x = -330.0, y = 700.0, z = 118.0 }, -- TODO-verify-in-game
+            { x = -410.0, y = 650.0, z = 121.0 }, -- TODO-verify-in-game
+        } },
+    },
 })

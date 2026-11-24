@@ -149,6 +149,7 @@ CreateThread(function()
         camp_clear = hooks('camp_clear'),
         supply_run = hooks('supply_run'),
         bounty = hooks('bounty', { accept = accept, abandon = abandon, events = { JT.BOUNTY_EVENT } }),
+        survey = hooks('survey', FhQuestsWatch.jobHooks('survey')), -- reach-watcher (server/watch.lua)
     }
     for _, name in ipairs(JT.TYPES) do
         local ok, err = exports.fh_quests:registerJobType(name, defs[name])
@@ -158,4 +159,5 @@ CreateThread(function()
         local src = tonumber(id)
         CreateThread(function() Wait(3000); pcall(rearm, src) end)
     end
+    FhQuestsWatch.rearmAll() -- ... and their watched (survey) jobs
 end)
