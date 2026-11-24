@@ -7,7 +7,8 @@
 --     trade stops at its next alive check (before each mutation) and its exit releases the lock. A lock whose trade
 --     never resumes is reclaimed after cfg.lockStaleSeconds; an old token's late release never frees a newer lock.
 --     After EVERY yielding call a trade re-checks that it still owns the lock before touching the stash or money:
---     a reclaimed trade does no further stash/money side effect (it only logs what it leaves behind).
+--     a reclaimed trade does no further stash/money side effect (it only logs what it leaves behind), and changes
+--     no in-memory stash state either: the sweep flag has one owner-only writer (flag / pin).
 --     Pinned lock (no late write): every stash mutation (addItem, move, transferAll, removeItem, clear) and the
 --     charge / sell pay go through locks.write, which runs it only as the owner and PINS the token first. A pinned
 --     lock is never reclaimed (others get 'fence_busy', one WARNING logged) until its trade exits. So only a trade
@@ -156,8 +157,14 @@ function M.new(cfg, logic, deps)
         return table.unpack(res, 2, res.n)
     end
 
-    ---Player goods or paid-for goods stay in the stash: never sweep them.
-    local function pin(stash) sweep[stash.id] = nil end
+    ---The ONLY writer of the sweep flag, and owner-only: a trade that lost its lock must not touch any in-memory stash
+    ---state either (a newer trade may have flagged its own unpaid stage / sold goods; clearing that flag would let
+    ---settle hand them out). v = true: the stash holds only the fence's goods; nil: never sweep it.
+    local function flag(tok, stash, v)
+        if owned(tok) then sweep[stash.id] = v end
+    end
+    ---Player goods or paid-for goods stay in the stash: never sweep them (owner only, see flag).
+    local function pin(tok, stash) flag(tok, stash, nil) end
 
     ---A reclaimed trade stops here: no stash / money side effect, just say what it leaves behind. Once a trade is pinned
     ---(invariant 1) its lock cannot be reclaimed, so the post-side-effect callers of this are defence in depth.
@@ -170,10 +177,10 @@ function M.new(cfg, logic, deps)
     local function discard(tok, stash, sweepable, why)
         local ok, err = clear(tok, stash)
         if ok then
-            sweep[stash.id] = nil
+            pin(tok, stash)
             return true
         end
-        sweep[stash.id] = sweepable and true or nil
+        flag(tok, stash, sweepable and true or nil)
         log('WARNING %s: clear %s failed (%s)%s', why, stash.id, tostring(err),
             sweepable and ', retried on the next trade' or ', left for an admin')
         return false
@@ -194,7 +201,7 @@ function M.new(cfg, logic, deps)
         if not owned(tok) then return false, 'fence_busy' end
         if not items then return false, 'fh_unavailable' end
         if next(items) == nil then
-            pin(stash) -- emptied elsewhere: an old sweep flag must not outlive what it was about
+            pin(tok, stash) -- emptied elsewhere: an old sweep flag must not outlive what it was about
             return true
         end
         if sweep[stash.id] and discard(tok, stash, true, 'sweep') then
@@ -246,8 +253,7 @@ function M.new(cfg, logic, deps)
             return false, owned(tok) and (err or 'charge_refused') or 'fence_busy'
         end
         if not owned(tok) then
-            -- paid, but the stash may be someone else's now: deliver nothing, refund nothing, flag it
-            pin(stash)
+            -- paid, but the stash may be someone else's now: deliver nothing, refund nothing, touch no flag
             log('WARNING buy paid then reclaimed, owed delivery or refund: citizenid=%s item=%s qty=%d paid=%d',
                 tostring(cid), item, qty, quote.total)
             return false, 'fence_busy'
@@ -263,7 +269,7 @@ function M.new(cfg, logic, deps)
         elseif tok2 and type(moved) == 'table' then
             undelivered = qty - countOf(moved, item)
         else
-            pin(stash)
+            pin(tok, stash)
             log('WARNING buy delivery unknown, no refund: citizenid=%s item=%s qty=%d paid=%d (items stay in %s)',
                 tostring(cid), item, qty, quote.total, stash.id)
             return false, 'delivery_unknown'
@@ -275,7 +281,7 @@ function M.new(cfg, logic, deps)
         local refund = undelivered * quote.entry.price
         local rmOk, rmErr = false, 'reclaimed'
         if owned(tok) then rmOk, rmErr = removeItem(tok, stash, item, undelivered) end
-        pin(stash) -- removed: the stash held only these units; not removed: they were paid for, never swept
+        pin(tok, stash) -- removed: the stash held only these units; not removed: they were paid for, never swept
         if not rmOk then
             log('WARNING buy refund owed: citizenid=%s item=%s undelivered=%d refund=%d (remove: %s)', tostring(cid),
                 item, undelivered, refund, tostring(rmErr))
@@ -307,6 +313,7 @@ function M.new(cfg, logic, deps)
         local items = deps.snapshot(backpack)
         local v = deps.view(stash)
         if not items or not v then return false, 'fh_unavailable' end
+        if not alive(tok) then return false, 'fence_busy' end -- reclaimed / revoked during the reads: nothing moved yet
         local free = {}
         for slot = 1, v.slots do if not v.items[slot] then free[#free + 1] = slot end end
         local slots = {}
@@ -326,18 +333,17 @@ function M.new(cfg, logic, deps)
 
         ---Give the goods back. Owner only: a reclaimed trade must not empty a stash a newer trade may be using.
         local function restore()
-            if not owned(tok) then pin(stash); return false, 'reclaimed' end
+            if not owned(tok) then return false, 'reclaimed' end
             transferAll(tok, stash, backpack, src)
             local left = deps.snapshot(stash)
             if left and next(left) == nil then return true end
-            pin(stash) -- the player's goods: never swept
+            pin(tok, stash) -- the player's goods: never swept
             return false, left and 'restore_incomplete' or 'restore_unknown'
         end
 
         -- 2. the stash is the truth: the backpack may have changed while we moved (slot reused by another item)
         local staged = deps.snapshot(stash)
-        if not owned(tok) then
-            pin(stash)
+        if not owned(tok) then -- no flag change: the stash (and its flag) may be a newer trade's now
             return reclaimed(tok, 'sell', ('before pay, goods of %s may be in %s'):format(item, stash.id))
         end
         local sold = staged and countOf(staged, item) or 0
@@ -363,9 +369,9 @@ function M.new(cfg, logic, deps)
         if owned(tok) then
             local rok, rerr = removeItem(tok, stash, item, sold)
             if rok then
-                pin(stash)
+                pin(tok, stash)
             elseif owned(tok) then -- removeItem yields: only a trade that still owns the stash may flag it
-                sweep[stash.id] = true
+                flag(tok, stash, true)
                 log('WARNING sell: removing %dx %s from %s failed (%s), retried on the next trade', sold, item,
                     stash.id, tostring(rerr))
             else
@@ -408,7 +414,7 @@ function M.new(cfg, logic, deps)
         if not owned(tok) then return false, 'fence_busy' end
         if not items then return false, 'fh_unavailable' end
         if next(items) == nil then
-            pin(stash)
+            pin(tok, stash)
             return false, 'nothing_pending'
         end
         local want, names = totalsOf(items)
@@ -433,14 +439,14 @@ function M.new(cfg, logic, deps)
         local tok2, moved = transferAll(tok, stash, backpack, src)
         local left = deps.snapshot(stash)
         if left and next(left) == nil then
-            pin(stash)
+            pin(tok, stash)
             log('settle: citizenid=%s src=%s got [%s] from %s', tostring(cid), tostring(src), describe(want, names),
                 stash.id)
             return true, units, 'delivered'
         end
 
         -- 3. short (backpack changed since the pre-check, or the transfer failed): put the moved steps back
-        pin(stash) -- whatever is left is still the player's: never swept
+        pin(tok, stash) -- whatever is left is still the player's: never swept (no-op if the lock was lost)
         if not owned(tok) then
             return reclaimed(tok, 'settle', ('short transfer, goods split between %s and the backpack'):format(stash.id))
         end

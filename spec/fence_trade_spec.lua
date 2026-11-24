@@ -830,4 +830,36 @@ case('late write: a pinned trade that never returns keeps that citizen busy (doc
     T.eq(coroutine.status(a), 'suspended')
 end)
 
+case('reclaim: unpinned SELL resumes after B flagged its own leftovers for sweep -> A leaves the flag; settle sweeps', function()
+    -- (Gemini Prg23 HIGH) A's not-owned path used to clear B's sweep flag, so settle handed B's fence-owned goods out.
+    local variants = {
+        { 'B buy: charge refused, clear fails (unpaid stage)', function(W)
+            W.fail.charge, W.fail.clear = 'fh_charge_busy', 'fh_inventory_down'
+            T.same({ false, 'fh_charge_busy', n = 2 }, table.pack(W.T.buy(2, GUN, 3)))
+            W.fail.charge, W.fail.clear = nil, nil
+            return 1000 -- nothing charged
+        end },
+        { 'B sell: paid, removeItem fails (sold goods)', function(W)
+            W.hooks.pay = function() W.fail.removeItem = 'fh_inventory_down' end
+            T.same({ true, 3, 3 * SELL, n = 3 }, table.pack(W.T.sell(2, GUN, 3)))
+            W.hooks.pay, W.fail.removeItem = nil, nil
+            return 1000 + 3 * SELL -- paid once for the 3 the fence now owns
+        end },
+    }
+    for _, v in ipairs(variants) do
+        local name, runB = v[1], v[2]
+        local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 5 } } } } })
+        local a = start(function() return W.T.sell(1, GUN, 2) end, 'view') -- A read the backpack, nothing moved
+        W.clock = cfg.lockStaleSeconds
+        local money = runB(W) -- B reclaims; its fence-owned leftovers stay flagged for sweep
+        local bag, moves = count(W.C1.bag, GUN), W.calls.move
+        T.eq(3, count(W.stash(), GUN), name)
+        T.same({ false, 'fence_busy', n = 2 }, drain(a), name)
+        T.eq(moves, W.calls.move, name) -- A moved nothing
+        T.same({ true, 0, 'swept', n = 3 }, table.pack(W.T.settle(1)), name) -- old code: 'delivered' (dupe)
+        T.eq(bag, count(W.C1.bag, GUN), name); T.eq(money, W.C1.money, name); T.eq(0, size(W.stash()), name)
+        T.eq(0, size(W.players.C2.bag), name); T.eq(1000, W.players.C2.money, name)
+    end
+end)
+
 T.finish()
