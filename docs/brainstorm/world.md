@@ -20,16 +20,14 @@
 - A-Life contract (a-life-01): factions get `kind` law|outlaw|neutral; keep regions[].factions, territories[].faction, fh_zones camp fields; optional regions[].ambush nodes in world-01 C.
 - Factions get optional home region (A2) so heat stops using the alphabetically-first region; lawmen listed in every region.
 - Plot ids heartlands_01..04 / scarlett_meadows_01..04 kept (DB keys), coords moved off the Valentine grid.
+- /where plot = free-claim finder only; town lots show in plain /where as (coming soon) → (town lot) after @homestead H10; @homestead owns a future /where lot (agreed with Hom2).
 
 ## Open
 - Town lot purchase flow (buy + rep bump) still @homestead; class schema + per-class uniqueness landed H6 281d88a/c90e069.
 - Content ladder (hub lean): per region 1-3 lots, 3-5 claims, 3-4 camps (~50 camps); 8 contract types; +2 family questlines (one per state); 15 legendaries; 8 faction loot tables x 3 tiers → @quests/@hunting/@crafting. A-Life supplies the rest.
-- Fill camp `lootByFaction` 8 factions x 3 tiers (A-Life adds the field; @world owns the data).
-- Enable the other 11 regions after the owner walks the first 4.
-- idea-809: collapse duplicated camp/post coords into FhRegions (world-01 C workaround). idea-813 (@core): camp ped spawn ground-snap.
+- Ambush points per region (deferred, no consumer yet) → idea-837.
+- Enable the other 11 regions after the owner walks the first 4 (data for all 11 ships in world-02; flipping a region is a one-line change).
 
 ## In flight
-- world-01 → Wor1 Lead rn-cb1d438f267f. Stack on main 53770c3: 1caa3f4 A (15 regions, 8 factions+kind), b33c68d B (14 named claims, 6 town lots claimable=false), 010470e A2 (faction.home for heat), 7efb410 C (14 camps, 4 posts), 064c54f renames, 920fc70 /where plot skips lots, bc4f404 per-state lawmen + factionLabel, f342821 A-Life spec strings. Gemini PASS 0/0/3, 84/1531/0. Merge slot asked from Red3 (2026-11-24).
-- D 02d3194 (wt world-d): ground-snap, isEnabled gate, (unverified) tag, OWNER-TESTS walk-the-claims. Worker PASS 85/1543/0; nit fixes then review, then merge.
-- Gaps queued: camp peds spawn at config z (@core idea-813); camp/post coord duplication (Workaround → idea-809).
-- Next after world-01 merges: owner walks claims via /where; then plan world-02 (lootByFaction 8x3, idea-809, enable more regions).
+- world-01 DONE on main d966dcf (A–D PASS).
+- world-02 all PASS on world-g2 (rebased on 3307497, 90/1620/0, syntax 188/0); merge slot asked from Red3 (2026-11-24). F 8dc260c single-source coords (idea-809 closed). G1 3839c84+9ba59ec: 33 claims + 12 lots in 11 disabled regions, region gate in canClaim and /fh_buylot. E 8b2aa64+fb2a5ba+f4763d8 lootByFaction 8x3. G2 987499b+c1ad231: 33 camps + 14 posts, fh_trade gate for disabled posts. All 11 regions stay enabled=false.
