@@ -25,11 +25,10 @@ case('the legacy DB-key plot ids all still exist', function()
     end
 end)
 
-case('every plot is in a known, enabled region and has a name + class', function()
+case('every plot is in a known region (enabled or disabled) and has a name + class', function()
     for id, p in pairs(cfg.plots) do
         assert(p.id == id, id .. ' id field mismatch')
         assert(regions.isKnownRegion(p.region), id .. ' unknown region ' .. tostring(p.region))
-        assert(regions.regions[p.region].enabled == true, id .. ' region not enabled')
         assert(type(p.name) == 'string' and p.name ~= '', id .. ' missing name')
         assert(p.class == 'claim' or p.class == 'town_lot', id .. ' bad class ' .. tostring(p.class))
     end
@@ -68,23 +67,19 @@ case('town lots are claimable (buyable, homestead H10) and radius 12-15', functi
         end
     end
     for id, r in pairs(regions.regions) do
-        if r.enabled then
-            local n = lotsByRegion[id] or 0
-            assert(n >= 1, id .. ' has ' .. tostring(n) .. ' town lots (want >=1)')
-        end
+        local n = lotsByRegion[id] or 0
+        assert(n >= 1, id .. ' has ' .. tostring(n) .. ' town lots (want >=1)')
     end
 end)
 
-case('each enabled region has >=3 claims', function()
+case('each region has >=3 claims', function()
     local counts = {}
     for id, p in pairs(cfg.plots) do
         if p.class == 'claim' then counts[p.region] = (counts[p.region] or 0) + 1 end
     end
     for id, r in pairs(regions.regions) do
-        if r.enabled then
-            local n = counts[id] or 0
-            assert(n >= 3, id .. ' has ' .. tostring(n) .. ' claims (want >=3)')
-        end
+        local n = counts[id] or 0
+        assert(n >= 3, id .. ' has ' .. tostring(n) .. ' claims (want >=3)')
     end
 end)
 
