@@ -76,6 +76,8 @@ case('relay: re-emit name fh:<lane>:ui_<action>, payload passed through', functi
     assert(ev.payload == p)
     T.eq('fh:quests:ui_accept', select(2, R.relay(lim, 7, msg('jobs', 'accept', {}), 0)))
     T.eq('fh:fence:ui_sell', select(2, R.relay(lim, 7, msg('fence', 'sell', {}), 0)))
+    T.eq('fh:trade:ui_sell', select(2, R.relay(lim, 7, msg('tradepost', 'sell', {}), 0)))
+    T.eq('fh:trade:ui_buy', select(2, R.relay(lim, 7, msg('tradepost', 'buy', {}), 0)))
     T.eq('fh:death:ui_close', R.eventName('death', 'close'))
 end)
 case('relay: invalid is dropped with a reason; rate limit counts bad traffic', function()

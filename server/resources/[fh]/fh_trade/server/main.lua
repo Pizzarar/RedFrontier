@@ -187,14 +187,16 @@ local function reason(code)
         charge_error = 'The trade post could not take payment; nothing was bought.', no_player = 'Your character is not loaded.',
         grant_failed_refunded = 'It could not go into your backpack (full or too heavy?); your money was refunded.',
         refund_failed = 'It could not go into your backpack and the refund failed; an admin has been told (logged).',
+        not_at_post = 'You are not at a trade post.',
     }
     return m[code] or ('Trade refused (' .. tostring(code) .. ').')
 end
 
+---@return boolean|nil ok, integer|string|nil totalOrErr, any|nil extra (nil when throttled)
 local function doSell(src, item, amount)
     if throttled(src) then return end
     local post = nearestPost(src)
-    if not post then return reply(src, 'You are not at a trade post.') end
+    if not post then reply(src, reason('not_at_post')) return false, 'not_at_post' end
     amount = tonumber(amount)
     local ok, res = sell(src, post, tostring(item), amount)
     if ok then
@@ -203,12 +205,14 @@ local function doSell(src, item, amount)
     else
         reply(src, reason(res))
     end
+    return ok, res
 end
 
+---@return boolean|nil ok, integer|string|nil totalOrErr, any|nil extra (nil when throttled)
 local function doBuy(src, item, amount)
     if throttled(src) then return end
     local post = nearestPost(src)
-    if not post then return reply(src, 'You are not at a trade post.') end
+    if not post then reply(src, reason('not_at_post')) return false, 'not_at_post' end
     amount = tonumber(amount)
     local ok, res, extra = S.buy(cfg, buyDeps, busy, src, post, tostring(item), amount)
     if ok then
@@ -216,10 +220,9 @@ local function doBuy(src, item, amount)
         TriggerClientEvent('fh:trade:bought', src, { item = item, amount = amount, total = res })
         TriggerEvent('fh:trade:bought', { src = src, region = post.region, post = post.id, item = item, amount = amount, total = res })
     else
-        if res == 'invalid_amount' then return reply(src, ('Amount must be a whole number from 1 to %d.'):format(cfg.maxBuyPerTx or 100)) end
-        if res == 'unknown_item' then return reply(src, 'The post does not sell that.') end
-        reply(src, reason(res) .. (extra and res ~= 'refund_failed' and (' (' .. tostring(extra) .. ')') or ''))
+        reply(src, FhTradeScreen.buyMessage(cfg, res, extra, reason))
     end
+    return ok, res, extra
 end
 
 -- ---------------------------------------------------------------- exports
@@ -256,16 +259,8 @@ exports('previewSell', previewSell)
 local function menuData(src)
     local post = nearestPost(src)
     if not post then return nil end
-    local t, goods = now(), {}
-    for name, g in pairs(cfg.goods) do
-        local price, d = P.quote(cfg, state, post.region, name, t)
-        goods[#goods + 1] = { item = name, label = g.label, price = price, shortage = d.shortage, saturation = d.saturation }
-    end
-    table.sort(goods, function(a, b) return a.item < b.item end)
-    local supplies = {}
-    for _, e in ipairs(S.list(cfg)) do supplies[#supplies + 1] = { item = e.item, label = labelOf(e.item), price = e.price } end
-    return { post = post.id, label = post.label, region = post.region, goods = goods, maxAmount = cfg.maxSellPerTx,
-        supplies = supplies, maxBuy = cfg.maxBuyPerTx or 100 }
+    local t = now()
+    return FhTradeScreen.screenData(cfg, post, function(region, item, tt) return P.quote(cfg, state, region, item, tt) end, labelOf, t)
 end
 
 RegisterNetEvent('fh:trade:menu', function()
@@ -273,7 +268,8 @@ RegisterNetEvent('fh:trade:menu', function()
     if throttled(src) then return end
     local data = menuData(src)
     if not data then return reply(src, 'You are not at a trade post.') end
-    TriggerClientEvent('fh:trade:menu', src, data)
+    TriggerClientEvent('fh:ui:open', src, { screen = 'tradepost', data = data })
+    TriggerClientEvent('fh:trade:menu', src, data) -- fh_tutorial step 5 still keys on this signal (the ox_lib menu is gone)
 end)
 
 RegisterNetEvent('fh:trade:sell', function(item, amount)
@@ -287,6 +283,34 @@ RegisterNetEvent('fh:trade:buy', function(item, amount)
     if type(item) ~= 'string' or #item > 64 then return end
     doBuy(src, item, amount)
 end)
+
+-- fh_ui `tradepost` screen (T1). The relay re-emits fh:trade:ui_sell / fh:trade:ui_buy as ONE table
+-- { src, screen, action, payload } (src from the net source, never the payload). The same doSell/doBuy that the
+-- chat fallback uses runs (throttle, proximity, item/qty validation), then the fresh screen data is re-sent with an
+-- inline notice. Only ev.screen == 'tradepost' is handled; anything else is ignored.
+local function uiTrade(kind)
+    return function(ev)
+        if type(ev) ~= 'table' or ev.screen ~= 'tradepost' or type(ev.src) ~= 'number' or type(ev.payload) ~= 'table' then return end
+        local p = ev.payload
+        local item = p.item
+        if type(item) ~= 'string' or #item > 64 then return end
+        local max = kind == 'buy' and (cfg.maxBuyPerTx or 100) or cfg.maxSellPerTx
+        local amount = tonumber(p.amount)
+        if not amount or amount ~= amount or amount % 1 ~= 0 or amount < 1 or amount > max then return end
+        local ok, res, extra
+        if kind == 'buy' then ok, res, extra = doBuy(ev.src, item, amount)
+        else ok, res, extra = doSell(ev.src, item, amount) end
+        if ok == nil then return end -- throttled: no update, screen stays as-is
+        local data = menuData(ev.src) or {}
+        local msg, k
+        if kind == 'buy' then msg, k = FhTradeScreen.buyNotice(cfg, labelOf(item), amount, ok, res, extra, reason)
+        else msg, k = FhTradeScreen.sellNotice((cfg.goods[item] or {}).label or item, amount, ok, res, reason) end
+        data.notice, data.notice_kind = msg, k
+        TriggerClientEvent('fh:ui:update', ev.src, { screen = 'tradepost', data = data })
+    end
+end
+AddEventHandler('fh:trade:ui_sell', uiTrade('sell'))
+AddEventHandler('fh:trade:ui_buy', uiTrade('buy'))
 
 -- Chat fallback: /tradequote  and  /tradesell <item> <amount>  and  /tradebuy <item> <amount>
 RegisterCommand('tradequote', function(src)

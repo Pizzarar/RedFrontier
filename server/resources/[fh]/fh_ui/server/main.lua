@@ -40,7 +40,7 @@ RegisterCommand('fh_ui_demo', function(src, args)
     if src == 0 then return reply(0, 'fh_ui_demo: run in-game') end
     if not IsPlayerAceAllowed(src, 'command.fh_ui_demo') then return reply(src, 'fh_ui_demo: not allowed') end
     local p, err = fx.parseDemo(args)
-    if not p then return reply(src, 'fh_ui_demo: ' .. err .. ' (screens: heat insurance jobs journal dialogue station fence)') end
+    if not p then return reply(src, 'fh_ui_demo: ' .. err .. ' (screens: heat insurance jobs journal dialogue station fence tradepost)') end
     if p.action == 'close' then
         local list = {}
         if p.screen then list[1] = p.screen else for s in pairs(fx.fixtures) do list[#list + 1] = s end end

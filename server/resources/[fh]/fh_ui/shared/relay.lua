@@ -16,6 +16,7 @@ M.screens = {
     station     = 'homestead', -- station menus (L1 stations; L5 crafting may take over later)
     fence       = 'fence',     -- fence shop (fh_fence owns it)
     survival    = 'survival',  -- survival needs HUD (passive, fh_survival state; idea-854)
+    tradepost   = 'trade',     -- trade post (fh_trade owns it)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.

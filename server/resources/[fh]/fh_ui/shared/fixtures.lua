@@ -65,6 +65,21 @@ M.fixtures = {
             { id = 'silver_ring', label = 'Silver ring', price = 45, qty = 1 },
         },
     },
+    tradepost = {
+        label = 'Valentine Trade Post',
+        region = 'heartlands',
+        goods = {
+            { item = 'trade_salt', label = 'Salt Sack', price = 6.0, shortage = 0.5, saturation = 0.0 },
+            { item = 'trade_cloth', label = 'Bolt of Cloth', price = 14.0, shortage = 0.0, saturation = 0.4 },
+            { item = 'trade_whiskey', label = 'Whiskey Crate', price = 40.0, shortage = 0.0, saturation = 0.0 },
+        },
+        supplies = {
+            { item = 'lumber', label = 'Lumber', price = 3 },
+            { item = 'nails', label = 'Nails', price = 2 },
+        },
+        max_sell = 100,
+        max_buy = 100,
+    },
 }
 
 -- Tiny schema: field -> type, with '?' suffix for optional. 'table[]' / '<name>[]' nested lists via {list=schema}.
@@ -99,6 +114,13 @@ S.fence = {
     title = 'string?',
     stock = { list = { id = 'string', label = 'string', price = 'number', qty = 'number', category = 'string' } },
     sell = { list = { id = 'string', label = 'string', price = 'number', qty = 'number' } },
+}
+S.tradepost = {
+    label = 'string', region = 'string',
+    goods = { list = { item = 'string', label = 'string', price = 'number', shortage = 'number', saturation = 'number' } },
+    supplies = { list = { item = 'string', label = 'string', price = 'number' } },
+    max_sell = 'number', max_buy = 'number',
+    notice = 'string?', notice_kind = 'string?',
 }
 M.schemas = S
 

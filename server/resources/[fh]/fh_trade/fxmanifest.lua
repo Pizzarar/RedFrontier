@@ -15,6 +15,7 @@ shared_scripts {
     'shared/freight.lua',
     'shared/supplies.lua',
     'shared/posts.lua',
+    'shared/screen.lua',
 }
 
 server_scripts {

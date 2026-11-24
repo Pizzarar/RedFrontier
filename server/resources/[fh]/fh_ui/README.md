@@ -39,6 +39,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `station` | `homestead` | interactive |
 | `fence` | `fence` | interactive |
 | `survival` | `survival` | passive (idea-854) |
+| `tradepost` | `trade` | interactive |
 
 Action must match `^[a-z_]{1,32}$`. Payload must be a table of plain data (strings, finite numbers, booleans, nested
 tables with string/number keys), <= 2048 bytes estimated, depth <= 4. Rate limit: token bucket per player, 5/s, burst 10.
@@ -141,8 +142,18 @@ revalidates everything. fh_fence maps its menu with `FhFenceLogic.screenData`, s
 `fh:fence:screen`, handles the actions as server events `fh:fence:ui_buy` / `fh:fence:ui_sell`, and answers each with
 `fh:ui:update` `{ screen = 'fence', data = { ...fresh lists, notice } }`.
 
+### tradepost (owner `trade`)
+`open/update` data `{ label, region, goods = { { item, label, price, shortage, saturation } }, supplies = { { item, label, price } }, max_sell, max_buy, notice?, notice_kind? }`.
+Goods show "In demand here" when `shortage >= 0.15`, "Market is flooded" when `saturation > 0.3` (same text as the old
+ox_lib menu). `max_sell`/`max_buy` are the per-request caps (one shared max per side, 1..max qty input); `notice` is a
+lane message (trade result or refusal text) shown inline above the lists; an update carrying only `notice` keeps the
+previous lists. No autofocus, Enter does nothing. Actions: `sell` `{ item, amount }`, `buy` `{ item, amount }`
+(relays `fh:trade:ui_sell` / `fh:trade:ui_buy`; amount clamped 1..max client-side, the lane revalidates), `close` `{}`.
+fh_trade serves the screen via `/tradepost` -> `fh:ui:open`, handles the actions with the same `doSell`/`doBuy` as the
+chat fallback, and answers each with `fh:ui:update` `{ screen = 'tradepost', data = { ...fresh lists, notice } }`.
+
 ### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
 
