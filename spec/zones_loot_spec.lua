@@ -11,7 +11,7 @@ local rsg = here .. '../server/resources/[rsg]/'
 local R = dofile(fh .. 'fh_zones/shared/camp_rules.lua')
 local coreConfig = require('config')
 
--- Set _G.FhRegions/_G.FhPlaceResolver + vector3 (world-02 block F), then load fh_zones/config.lua (resolves camps + tier).
+-- Set _G.FhRegions/_G.FhPlaceResolver + vector3 (world-02 block F), then load fh_zones/config.lua (resolves camps).
 local regions = dofile(here .. 'support/world_config.lua')
 dofile(fh .. 'fh_zones/config.lua')
 local cfg = FhZonesConfig
@@ -69,6 +69,11 @@ case('every loot entry is a non-empty list of { name, chance } entries', functio
     end
 end)
 
+case('item registry is populated (dollar/ammo/fh foods/tools known)', function()
+    assert(known.dollar and known.ammo_box_revolver and known.fh_jerky and known.resource_coal and known.tonic_healing,
+        'registry empty or incomplete')
+end)
+
 case('every loot item id exists in the item registry', function()
     local bad = {}
     for faction, tiers in pairs(cfg.lootByFaction) do
@@ -82,24 +87,29 @@ case('every loot item id exists in the item registry', function()
     assert(#bad == 0, 'unknown item ids: ' .. table.concat(bad, ', '))
 end)
 
-case('every camp resolves its tier from its territory', function()
+case('every camp resolves its tier through its territory to a tiered loot table', function()
     for id, camp in pairs(cfg.camps) do
-        local terr = regions.territories[camp.territory]
+        local terr = regions.getTerritory(camp.territory)
         assert(terr, id .. ' missing territory')
-        eq(terr.tier, camp.tier, id .. ' tier')
+        -- tier comes from the territory (camp carries no tier field); never hardcoded
+        local tier = camp.tier or (terr or {}).tier
+        assert(type(tier) == 'string', id .. ' no territory tier')
+        local owner = regions.getFaction(terr.faction)
+        assert(owner, id .. ' missing faction ' .. tostring(terr.faction))
+        local tbl = R.pickLootTable(cfg.lootByFaction, owner.id, camp.loot.table, tier)
+        eq(cfg.lootByFaction[owner.id][tier], tbl, id .. ' tiered table ' .. owner.id .. '/' .. tostring(tier))
     end
 end)
 
-case('every camp\'s owner faction x tier resolves to a loot table', function()
-    for id, camp in pairs(cfg.camps) do
-        local terr = regions.territories[camp.territory]
-        local owner = regions.getFaction(terr.faction)
-        assert(owner, id .. ' missing faction ' .. tostring(terr.faction))
-        local tier = camp.tier or terr.tier
-        assert(type(tier) == 'string', id .. ' missing tier')
-        local tbl = cfg.lootByFaction[owner.id] and cfg.lootByFaction[owner.id][tier]
-        assert(type(tbl) == 'table', id .. ': no loot table for ' .. owner.id .. '/' .. tostring(tier))
-    end
+case('legacy rhodes_law owner canonicalises to lawmen before the loot lookup', function()
+    local camp = cfg.camps.heartlands_t1_01
+    local tier = (regions.getTerritory(camp.territory) or {}).tier
+    assert(type(tier) == 'string', 'no territory tier')
+    local owner = 'rhodes_law'
+    local f = regions.getFaction(owner)
+    owner = f and f.id or owner
+    eq('lawmen', owner)
+    eq(cfg.lootByFaction.lawmen[tier], R.pickLootTable(cfg.lootByFaction, owner, camp.loot.table, tier))
 end)
 
 case('old flat [faction] -> table shape still resolves (backward compat)', function()

@@ -1403,12 +1403,3 @@ FhZonesConfig = {
 -- Single source for camp coordinates (world-02 block F, idea-809): fill center/region from FhRegions at load.
 -- FhRegions + FhPlaceResolver are loaded before this file in every fxmanifest and spec that reads it.
 if FhPlaceResolver and FhRegions then FhPlaceResolver.resolveCamps(FhZonesConfig.camps, FhRegions) end
-
--- world-02 block E: each camp's loot tier resolves from its territory (FhRegions.territories[].tier), the same single
--- source as center/region — no duplicated tier field. The server reads camp.tier to index lootByFaction[owner][tier].
-if FhRegions then
-    for _, camp in pairs(FhZonesConfig.camps) do
-        local terr = FhRegions.territories[camp.territory]
-        if terr and terr.tier then camp.tier = terr.tier end
-    end
-end
