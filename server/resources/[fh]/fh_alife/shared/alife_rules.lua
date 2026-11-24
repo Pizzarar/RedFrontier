@@ -7,7 +7,7 @@
 --  * squads: plain data { id, faction, strength, from, to, etaTick, goal = 'raid'|'reinforce'|'retake' }.
 --  * tick(n) advances the clock and resolves squads whose etaTick has passed. The weighted dice rolls squad
 --    strength and etaTick at spawn; a retake squad of any strength >= 1 dislodges the (empty) camp on arrival.
---  * effects are plain tables { type = 'broadcast'|'heat'|'shortage'|'flipped', ... } the server applies.
+--  * effects are plain tables { type = 'broadcast'|'shortage'|'flipped', ... } the server applies.
 -- Law detection: a faction is law if its `kind == 'law'`; when `kind` is absent, fall back to { lawmen, rhodes_law }.
 local M = {}
 
@@ -195,11 +195,12 @@ function M.tick(ctx, state, n, rng)
     return effects
 end
 
----The owner cleared a camp: law holds it now. Effects: flip to region law, heat per participant against the old owner,
----shortage relief (on the transition), broadcast. Also schedules the retake squad when one is not already en route.
+---The owner cleared a camp: law holds it now. Effects: flip to region law, shortage relief (on the transition), broadcast.
+---Also schedules the retake squad when one is not already en route. Camp_clear HEAT is not emitted here: fh_heat owns it
+---via its own fh:zones:camp_cleared listener, so a clear must never double-apply heat.
 ---A region with no law faction (regionLawFaction -> nil) is logged and the flip is skipped: no flip effects
----(flipped / broadcast / shortage / retake), but the camp was still cleared so heat still applies, and this never errors.
----@param participants string[] citizenids inside the camp at clear
+---(flipped / broadcast / shortage / retake) and no error.
+---@param participants string[] citizenids inside the camp at clear (accepted for API stability; fh_alife no longer uses it)
 ---@param log fun(msg:string)? called once with a reason string when there is no law faction to flip to
 ---@return table effects
 function M.onCampCleared(ctx, state, campId, participants, rng, log)
@@ -221,14 +222,6 @@ function M.onCampCleared(ctx, state, campId, participants, rng, log)
         effects[#effects + 1] = { type = 'flipped', camp_id = campId, region_id = camp.region, from = oldOwner, to = law }
         effects[#effects + 1] = { type = 'broadcast', message = ('%s has taken the %s'):format(factionLabel(ctx.regions, law),
             campLabel(ctx.regions, ctx.camps, campId)) }
-    end
-
-    if oldOwner then
-        for _, pid in ipairs(participants or {}) do
-            if type(pid) == 'string' and pid ~= '' then
-                effects[#effects + 1] = { type = 'heat', citizenid = pid, faction = oldOwner }
-            end
-        end
     end
 
     if M.isLawHeld(ctx, state, campId) then

@@ -45,20 +45,6 @@ end
 
 -- ---------------------------------------------------------------- effect application
 
-local function srcOfCitizenid(citizenid)
-    local ok, p = pcall(function() return exports['rsg-core']:GetPlayerByCitizenId(citizenid) end)
-    if ok and p and p.PlayerData and p.PlayerData.source then return p.PlayerData.source end
-    return nil
-end
-
-local function applyHeat(effect)
-    local src = srcOfCitizenid(effect.citizenid)
-    if not src then return end
-    local ok, a, b = pcall(function() return exports.fh_heat:addSource(src, effect.faction, 'camp_clear') end)
-    if not ok then log('heat apply failed for %s: %s', tostring(effect.citizenid), tostring(a))
-    elseif a == false then log('heat refused for %s: %s', tostring(effect.citizenid), tostring(b)) end
-end
-
 local function applyShortage(effect)
     local ok, a, b = pcall(function() return exports.fh_trade:setShortage(effect.region, effect.item, effect.level) end)
     if not ok then log('shortage apply failed for %s/%s: %s', tostring(effect.region), tostring(effect.item), tostring(a))
@@ -72,8 +58,6 @@ local function applyEffect(effect)
     elseif t == 'flipped' then
         TriggerEvent('fh:alife:camp_flipped', { camp_id = effect.camp_id, region_id = effect.region_id,
             from = effect.from, to = effect.to })
-    elseif t == 'heat' then
-        applyHeat(effect)
     elseif t == 'shortage' then
         applyShortage(effect)
     end

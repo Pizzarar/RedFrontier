@@ -85,16 +85,17 @@ case('getOwner: default owner is the territory faction', function()
     eq(false, R.isLawHeld(ctx, st, heartlandsCamp))
 end)
 
-case('onCampCleared: flips to law, heat per participant, shortage relief, broadcast, schedules retake', function()
+case('onCampCleared: flips to law, shortage relief, broadcast, schedules retake, no heat', function()
     local st = R.newState()
     local effects = R.onCampCleared(ctx, st, heartlandsCamp, { 'CID1', 'CID2' }, seq(5, 25))
     same({
         { type = 'flipped', camp_id = heartlandsCamp, region_id = 'heartlands', from = 'outlaws', to = 'lawmen' },
         { type = 'broadcast', message = 'Valentine Law has taken the Heartlands Outlaw Camp' },
-        { type = 'heat', citizenid = 'CID1', faction = 'outlaws' },
-        { type = 'heat', citizenid = 'CID2', faction = 'outlaws' },
         { type = 'shortage', region = 'heartlands', item = 'trade_salt', level = 0 },
     }, effects)
+    for _, e in ipairs(effects) do
+        assert(e.type ~= 'heat', 'fh_alife must not emit heat (fh_heat owns camp_clear heat)')
+    end
     eq('lawmen', R.getOwner(ctx, st, heartlandsCamp))
     eq(true, R.isLawHeld(ctx, st, heartlandsCamp))
     local _, squad = next(st.squads)
@@ -103,13 +104,20 @@ case('onCampCleared: flips to law, heat per participant, shortage relief, broadc
     eq('heartlands', squad.from); eq(heartlandsCamp, squad.to); eq(25, squad.etaTick)
 end)
 
+case('onCampCleared: emits no heat effect (fh_heat owns camp_clear heat)', function()
+    local st = R.newState()
+    for _, e in ipairs(R.onCampCleared(ctx, st, heartlandsCamp, { 'CID1', 'CID2' }, seq(5, 25))) do
+        assert(e.type ~= 'heat', 'unexpected heat effect: ' .. tostring(e.type))
+    end
+end)
+
 case('onCampCleared: unknown camp produces no effects', function()
     local st = R.newState()
     eq(0, #R.onCampCleared(ctx, st, 'bogus', { 'CID1' }, seq(5, 25)))
     eq(0, #st.squads)
 end)
 
-case('onCampCleared: region with no law faction -> logs, skips the flip, keeps heat, no error', function()
+case('onCampCleared: region with no law faction -> logs, skips the flip, no effects, no error', function()
     -- A region whose factions are all non-law (kind present, none 'law'): regionLawFaction -> nil.
     local lawless = {
         factions = {
@@ -127,8 +135,8 @@ case('onCampCleared: region with no law faction -> logs, skips the flip, keeps h
     local logged
     local effects = R.onCampCleared(c, st, 'badlands_t1_01', { 'CID1' }, seq(5, 25), function(msg) logged = msg end)
     assert(logged and logged:find('no law faction', 1, true), 'logged a reason: ' .. tostring(logged))
-    -- no flip effects (flipped / broadcast / shortage); heat against the old owner still applies
-    same({ { type = 'heat', citizenid = 'CID1', faction = 'outlaws' } }, effects)
+    -- no flip effects (flipped / broadcast / shortage) and no heat (fh_heat owns camp_clear heat)
+    same({}, effects)
     eq('outlaws', R.getOwner(c, st, 'badlands_t1_01'), 'owner unchanged')
     eq(false, R.isLawHeld(c, st, 'badlands_t1_01'))
     eq(0, (function() local n = 0 for _ in pairs(st.squads) do n = n + 1 end return n end)(), 'no retake squad')

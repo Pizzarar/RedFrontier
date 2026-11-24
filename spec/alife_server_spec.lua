@@ -1,7 +1,7 @@
--- Stubbed-server spec (plan a-life-01 A2): loads fh_alife's real server/main.lua with a fake rsg-core, fh_heat,
--- fh_trade, KVP and json, and drives the camp_cleared handler + admin command end to end. Focus: the citizenid->src
--- mapping (participants are citizenids), the fh_heat addSource(src, faction, 'camp_clear') call, the fh_trade
--- setShortage call, the fh:alife:camp_flipped event, the KVP JSON save/load and the /alife tick admin command.
+-- Stubbed-server spec (plan a-life-01 A2): loads fh_alife's real server/main.lua with a fake fh_heat, fh_trade,
+-- KVP and json, and drives the camp_cleared handler + admin command end to end. Focus: the fh_trade setShortage call,
+-- the fh:alife:camp_flipped event, the KVP JSON save/load and the /alife tick admin command. fh_alife emits no heat:
+-- camp_clear heat is owned by fh_heat's own fh:zones:camp_cleared listener (heatCalls stays empty, asserted below).
 -- Not a substitute for a live boot: exports are captured in-process, KVP is in-memory, the tick loop thread is not run.
 local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 local T = dofile(here .. 'support/fh_prelude.lua')
@@ -101,10 +101,10 @@ end
 local function boot(preKvp)
     local B = {
         exported = {}, handlers = {}, commands = {}, broadcasts = {}, flipped = {}, heatCalls = {},
-        shortageCalls = {}, kvp = preKvp or {}, cidToPlayer = {},
+        shortageCalls = {}, kvp = preKvp or {},
     }
     local exportsT = setmetatable({
-        ['rsg-core'] = { GetPlayerByCitizenId = function(_, cid) return B.cidToPlayer[cid] end },
+        -- fh_heat is stubbed as a spy: fh_alife must NOT call addSource (camp_clear heat is fh_heat's own job).
         fh_heat = { addSource = function(_, src, faction, key)
             B.heatCalls[#B.heatCalls + 1] = { src, faction, key } return true, 1 end },
         fh_trade = { setShortage = function(_, region, item, level)
@@ -151,14 +151,13 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         T.eq(false, B.exported.isLawHeld('heartlands_t1_01'))
     end)
 
-    T.it('camp_cleared: flips to law, maps citizenid->src, applies heat/shortage, broadcasts, saves KVP', function()
+    T.it('camp_cleared: flips to law, applies no heat, relieves shortage, broadcasts, saves KVP', function()
         local B = boot()
-        B.cidToPlayer.CID1 = { PlayerData = { source = 3, citizenid = 'CID1' } }
         B.handlers['fh:zones:camp_cleared']({ camp_id = 'heartlands_t1_01', region_id = 'heartlands',
             participants = { 'CID1', 'CID2' } })
         T.eq('lawmen', B.exported.getOwner('heartlands_t1_01'))
         T.eq(true, B.exported.isLawHeld('heartlands_t1_01'))
-        T.same({ { 3, 'outlaws', 'camp_clear' } }, B.heatCalls, 'only CID1 maps to src 3; CID2 is offline')
+        T.eq(0, #B.heatCalls, 'no fh_heat.addSource call: fh_alife must not apply camp_clear heat')
         T.same({ { 'heartlands', 'trade_salt', 0 } }, B.shortageCalls, 'shortage relieved on law flip')
         T.eq(1, #B.flipped)
         T.same({ camp_id = 'heartlands_t1_01', region_id = 'heartlands', from = 'outlaws', to = 'lawmen' }, B.flipped[1])

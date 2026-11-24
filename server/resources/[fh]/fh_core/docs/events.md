@@ -49,5 +49,10 @@ The emitting lane owns the name and documents it in its README.
 | `fh:spawn:adopted` | fh_core (LOCAL client event, post-adopt hook) | `{ requestId, tag, owner, kind, netId, entity }`; fires on the spawning client when the server released the adopted entity (again after a re-request, on the new spawner). `tag`/`owner` ride on `fh:spawn:create` |
 | `fh:saddlebag:open` | fh_core (client -> server request) | `{ netId }`; the horse the player rides or stands next to. The server checks the entity exists, is a horse and is within reach of the server-side ped (`FhSaddlebagRules.canAccess`), then opens the character's saddlebag |
 | `fh:saddlebag:transfer` | fh_core (client -> server request) | `{ netId, dir = 'in' or 'out', slot, amount? }`; moves a stack between the container the server says the player has open and their saddlebag. The server re-checks the horse and reach; one `fh_core.move` applies it (events `fh:inventory:moved` / `refused` fire as for any move) |
+| `fh:alife:camp_flipped` | fh_alife | `{ camp_id, region_id, from, to }`; a camp changed owner (cleared -> law, or outlaw retake). `from`/`to` are faction ids |
+
+## fh_alife exports
+- `exports.fh_alife:getOwner(campId)` -> `string|nil` factionId: the camp's effective owner (an explicit flip, else its territory's default faction).
+- `exports.fh_alife:isLawHeld(campId)` -> `boolean`: whether the camp's owner is a law faction.
 
 Payloads for events not emitted by B4b are a contract proposal; the emitting lane may extend them additively.
