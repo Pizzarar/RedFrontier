@@ -56,18 +56,21 @@ local function onUse(src, item)
     local inv = exports['rsg-inventory']
     if eff.kind == 'food' then
         local pok, removed = pcall(function() return inv:RemoveItem(src, item.name, 1, live.slot, 'survival use') end)
-        if not (pok and removed) then
+        local removedOk = pok and removed
+        -- Consume first, grant after (I.consumeOutcome): a failed remove grants nothing; a refused buff is refunded.
+        local applied = removedOk and applyBuff(src, eff.buff_id, eff.magnitude, eff.duration)
+        local outcome = I.consumeOutcome(removedOk, applied)
+        if outcome == 'blocked' then
             print(('[fh_survival] RemoveItem %s failed for %s; nothing granted'):format(item.name, tostring(src)))
             notify(src, 'You cannot eat right now.')
             return
-        end
-        if not applyBuff(src, eff.buff_id, eff.magnitude, eff.duration) then
+        elseif outcome == 'refund' then
             local rok, added = pcall(function() return inv:AddItem(src, item.name, 1, nil, live.info, 'survival refund') end)
             if not (rok and added) then print(('[fh_survival] refund of %s to %s FAILED'):format(item.name, tostring(src))) end
             notify(src, 'You cannot eat right now.')
             return
         end
-        notify(src, 'You feel fed.')
+        notify(src, eff.buff_id == 'hydrated' and 'You feel refreshed.' or 'You feel fed.')
     else -- canteen
         local ok, res = I.useCanteen(live.info, cfg.CanteenMax)
         if not ok then notify(src, res == 'empty' and 'The canteen is empty. Refill it at water.' or 'The canteen is damaged.') return end
@@ -87,8 +90,23 @@ local function onUse(src, item)
     end
 end
 
+-- Live item registry (RSGCore.Shared.Items) for the skip-if-missing check on foreign rows. A fresh core object
+-- each call, so an rsg-core restart (which resets Shared.Items) is seen.
+local function sharedItems()
+    local ok, core = pcall(function() return exports['rsg-core']:GetCoreObject() end)
+    if not (ok and type(core) == 'table' and type(core.Shared) == 'table' and type(core.Shared.Items) == 'table') then
+        return {}
+    end
+    return core.Shared.Items
+end
+
 local function registerUsables()
-    for name in pairs(I.USE) do
+    local known = sharedItems()
+    local register, skipped = I.usableRows(function(name) return known[name] ~= nil end)
+    if #skipped > 0 then
+        print(('[fh_survival] skipped %d useable(s) not in RSGCore.Shared.Items: %s'):format(#skipped, table.concat(skipped, ', ')))
+    end
+    for _, name in ipairs(register) do
         local ok, err = pcall(function() exports['rsg-core']:CreateUseableItem(name, onUse) end)
         if not ok then print(('[fh_survival] CreateUseableItem %s failed: %s'):format(name, tostring(err))) end
     end

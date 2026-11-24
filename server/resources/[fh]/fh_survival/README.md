@@ -31,6 +31,22 @@ Items are defined in `shared/items.lua` and registered with `exports.fh_core:reg
 | `fh_biscuit` | consumed, `well_fed` 1.0 for 35% |
 | `fh_stew` | consumed, `well_fed` 1.15 for 100% |
 | `fh_canteen` | spends one charge (`info.charges`, max `CanteenMax`), gives `hydrated` 1.0. No `charges` key = fresh = full. Empty refuses |
+
+Base rsg-core/loot consumables (`rsg-core/shared/items.lua`) are also consumed through the same S3 path. They are
+**not** defined by `fh_core:registerItems` — fh_survival only registers their useable callback (`CreateUseableItem`,
+again on `rsg-core` restart) and skips (one log line) any row whose item is not yet in `RSGCore.Shared.Items`, so a
+`@crafting`/`@hunting` item is a one-row add later. Fractions are on the jerky/biscuit/stew scale (see
+`shared/items.lua` for the per-row justification); no new config keys are needed (durations still come from `Durations`).
+| Item | Effect |
+|---|---|
+| `bread` | consumed, `well_fed` 1.0 for 35% |
+| `canned_beans` / `canned_salmon` | consumed, `well_fed` 1.0 for 60% |
+| `canned_apricots` | consumed, `well_fed` 1.0 for 40% |
+| `cooked_meat` / `jerky_meat` | consumed, `well_fed` 1.0 for 50% |
+| `stew` | consumed, `well_fed` 1.0 for 100% |
+| `stew_veg` | consumed, `well_fed` 1.0 for 85% |
+| `water` | consumed, `hydrated` 1.0 for 100% |
+| `coffee` | consumed, `hydrated` 1.0 for 60% |
 Commands (client, any player): `/refill` (canteen back to full) and `/wash` (`clean`, once per `WashCooldownSeconds`). Both need standing in water:
 server-side zone check against `WaterZones` by default; `WaterCheck = 'native'` trusts the client's `IsEntityInWater` (unverified, see `fh_core/docs/natives.md`).
 Warmth: every `HeatCheckSeconds` a player within `HeatRadius` of a `Campfires` entry (or a `setHeatSource` source) gets `warm` 1.0 for the full `warm` duration.

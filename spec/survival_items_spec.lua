@@ -19,15 +19,62 @@ case('item -> buff mapping', function()
     assert(I.effectOf('fh_stew', { well_fed = 100 }).duration == 100)
 end)
 
-case('every usable item is defined and every buff is a known need buff', function()
+case('every usable item maps to a known need buff on the fraction scale', function()
     local known = {}
     for _, id in pairs(N.NEED_BUFF) do known[id] = true end
     for name, u in pairs(I.USE) do
-        assert(I.ITEMS[name], name .. ' missing def')
+        assert(I.ITEMS[name] or I.isForeign(name), name .. ' neither fh-defined nor foreign')
         assert(known[u.buff], name .. ' unknown buff')
-        assert(u.magnitude > 0 and u.scale > 0)
+        assert(u.magnitude > 0, name .. ' magnitude')
+        assert(u.scale > 0 and u.scale <= 1, name .. ' scale must be a fraction')
     end
     assert(I.ITEMS.fh_canteen.stackable == false, 'canteen carries per-item charges')
+end)
+
+case('food/drink map: rows are valid or skipped by registry existence', function()
+    local names = {
+        bread = true, canned_beans = true, canned_apricots = true, canned_salmon = true,
+        cooked_meat = true, stew = true, stew_veg = true, jerky_meat = true, coffee = true, water = true,
+    }
+    for name in pairs(names) do assert(I.isForeign(name), name .. ' should be foreign') end
+    assert(I.isForeign('fh_jerky') == false and I.isForeign('fh_canteen') == false, 'fh items are ours')
+    -- all 10 foreign items exist -> nothing skipped; 4 fh + 10 foreign = 14 rows register
+    local register, skipped = I.usableRows(function(n) return names[n] == true end)
+    assert(#skipped == 0, 'known rsg items must not be skipped')
+    assert(#register == 14, '#register = ' .. #register)
+    -- a future @crafting/@hunting item that does not exist yet is skipped; our fh items still register
+    local r2, s2 = I.usableRows(function() return false end)
+    assert(#r2 == 4 and #s2 == 10, 'foreign rows skipped, fh rows kept: ' .. #r2 .. '/' .. #s2)
+end)
+
+case('food/drink fractions match the jerky/biscuit/stew scale', function()
+    local function scale(name) local u = I.USE[name]; return u and u.scale end
+    -- existing fh foods keep their shipped values
+    assert(scale('fh_jerky') == 0.5 and scale('fh_biscuit') == 0.35 and scale('fh_stew') == 1.0)
+    -- rsg-core food: bread/jerky_meat/cooked_meat sit at hardtack/jerky; stew is a full meal
+    assert(scale('bread') == 0.35 and scale('jerky_meat') == 0.5 and scale('cooked_meat') == 0.5)
+    assert(scale('canned_beans') == 0.6 and scale('canned_salmon') == 0.6 and scale('canned_apricots') == 0.4)
+    assert(scale('stew') == 1.0 and scale('stew_veg') == 0.85)
+    -- drinks: water equals a canteen charge; coffee is a smaller cup
+    assert(scale('water') == 1.0 and scale('coffee') == 0.6)
+    -- target buffs: food -> well_fed, drinks -> hydrated, all consumed (remove 1)
+    local d = N.DEFAULT_DURATIONS
+    for _, name in ipairs({ 'bread', 'canned_beans', 'canned_apricots', 'canned_salmon', 'cooked_meat', 'stew', 'stew_veg', 'jerky_meat' }) do
+        local e = I.effectOf(name, d)
+        assert(e.kind == 'food' and e.buff_id == 'well_fed', name)
+    end
+    for _, name in ipairs({ 'coffee', 'water' }) do
+        local e = I.effectOf(name, d)
+        assert(e.kind == 'food' and e.buff_id == 'hydrated', name)
+    end
+end)
+
+case('consume outcome: a failed remove grants no buff, a refused buff refunds', function()
+    assert(I.consumeOutcome(false, nil) == 'blocked')
+    assert(I.consumeOutcome(nil, true) == 'blocked')
+    assert(I.consumeOutcome(true, false) == 'refund')
+    assert(I.consumeOutcome(true, nil) == 'refund')
+    assert(I.consumeOutcome(true, true) == 'granted')
 end)
 
 case('canteen charges: use', function()
