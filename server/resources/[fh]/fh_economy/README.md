@@ -60,6 +60,15 @@ that DELETE itself fails, the server console logs `[fh_economy] WARNING: could n
 The ledger insert yields: after it, both re-fetch the player by `src` and check it is still the same citizenid.
 If the player dropped -> `no_player`; if another character is now loaded on `src` -> `player_changed`. Either way
 the row is deleted again and no money moves (the Player object from before the insert is never used).
+**Logout window (core-07 A1):** rsg-core saves a character on `RSGCore:Server:OnPlayerUnload` / `PlayerDropped` and
+keeps it in `RSGCore.Players` for a moment after; money moved then is never saved. From either event until a
+character loads on that `src` again, `pay` / `charge` refuse with `no_player` (row voided if one was in flight),
+`credit` queues (`'pending'`) and the load claim pays nothing (rows released, paid on the next load).
+**Amounts** (`pay`, `charge`): rounded to whole cents (`FhLedgerLogic.toCents`, the same rounding as rsg-core's money
+items), and that rounded amount is what moves, what the ledger row and the event carry; a whole amount stays a Lua
+integer. One that rounds to 0 (e.g. `0.004`) -> `invalid_amount`. The cap is checked on the amount as given.
+**AddMoney / RemoveMoney throwing** after the balance moved counts as moved (same exact-operation check as `credit`),
+so the row is kept and the call succeeds; a throw before anything moved fails as refused.
 
 Refused (returns `false, code`): `invalid_amount`, `amount_too_large`, `invalid_delta`, `delta_too_large`,
 `invalid_reason` (empty or longer than `maxReason`), `unknown_region`, `no_player`, `ledger_failed`. Validation lives

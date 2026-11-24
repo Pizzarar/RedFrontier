@@ -14,6 +14,13 @@ end
 local INSERT_LEDGER = 'INSERT INTO fh_ledger (citizenid, kind, amount, reason, region_id) VALUES (?, ?, ?, ?, ?)'
 local VOID_LEDGER = 'DELETE FROM fh_ledger WHERE id = ?'
 
+-- src -> citizenid of a character that is logging out / dropping. rsg-core's Logout fires RSGCore:Server:OnPlayerUnload,
+-- SAVES the character, then Wait(200)s before RSGCore.Players[src] = nil (rsg-core/server/player.lua Logout); its
+-- playerDropped fires RSGCore:Server:PlayerDropped, then saves. Money moved on that Player after the save is never
+-- written back: lost on pay / credit / claim, and a charge that "took" it would hand out goods for free. So from the
+-- unload event on, that character counts as gone here. Cleared when a character loads on the src again.
+local unloading = {}
+
 ---Fresh lookup of the character a call started for. Every MySQL await yields, and during the yield the player can
 ---drop or switch character: after a yield, call this again and never touch the Player object from before it.
 ---@return table|nil Player, string? err  'no_player' (gone) | 'player_changed' (another character on this src)
@@ -21,6 +28,7 @@ local function playerFor(src, citizenid)
     local Player = getPlayer(src)
     if not Player then return nil, 'no_player' end
     if type(Player.PlayerData) ~= 'table' or Player.PlayerData.citizenid ~= citizenid then return nil, 'player_changed' end
+    if unloading[src] == citizenid then return nil, 'no_player' end
     return Player
 end
 
@@ -39,13 +47,44 @@ local function loadedCitizenid(src)
     return citizenid
 end
 
+local function cashOf(Player)
+    local money = type(Player.PlayerData) == 'table' and Player.PlayerData.money
+    return type(money) == 'table' and tonumber(money[cfg.moneyType]) or nil
+end
+
+---AddMoney that tells "added" from "not added" even when it throws: rsg-core's AddMoney adds to PlayerData.money
+---first and only then runs its client / log side effects, so a throw can come after the money moved. Nothing in here
+---yields, so the balance change is ours alone. true = the money is on the character.
+---The check redoes rsg-core's own float addition (`money[mt] + amount`, player.lua:357, amount unchanged by
+---prepMoney's tonumber) and compares exactly: same IEEE operation, same operands -> bit-identical result. Never
+---`after - before == amount`: with a fractional balance (127.2 + 5) - 127.2 ~= 5, which would class money that
+---moved as unpaid and pay it again.
+local function addMoneyChecked(Player, amount, reason)
+    local before = cashOf(Player)
+    local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
+    if called then return added == true end
+    local after = cashOf(Player)
+    return before ~= nil and after ~= nil and after == before + amount
+end
+
+---RemoveMoney twin of addMoneyChecked: RemoveMoney also moves the balance first and runs its side effects after, so a
+---throw does not mean "nothing taken". Same exact-operation check (`money[mt] - amount`, player.lua RemoveMoney).
+local function removeMoneyChecked(Player, amount, reason)
+    local before = cashOf(Player)
+    local called, removed = pcall(Player.Functions.RemoveMoney, cfg.moneyType, amount, reason)
+    if called then return removed == true end
+    local after = cashOf(Player)
+    return before ~= nil and after ~= nil and after == before - amount
+end
+
 ---Pay: ledger row FIRST, then AddMoney on a Player looked up again after the insert yield. If the player left or
 ---switched character during the yield, or AddMoney fails, our own just-inserted row is deleted again, so there is
 ---never money without a row nor a row without money. Sequence: FhLedgerLogic.runPay.
 ---@return boolean ok, string? err, integer? ledgerId
 local function pay(src, amount, reason, region_id)
-    local ok, err = logic.validatePay({ amount = amount, reason = reason, region_id = region_id }, ctx)
+    local ok, err, n = logic.validatePay({ amount = amount, reason = reason, region_id = region_id }, ctx)
     if not ok then return false, err end
+    amount = n -- whole cents (logic.toCents): what the cash balance can actually hold
     local citizenid = loadedCitizenid(src)
     if not citizenid then return false, 'no_player' end
 
@@ -55,11 +94,9 @@ local function pay(src, amount, reason, region_id)
             local inserted, newId = pcall(MySQL.insert.await, INSERT_LEDGER, { citizenid, 'pay', amount, reason, region_id })
             return inserted and newId or nil
         end,
-        -- Player.Functions.AddMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:353)
-        add = function(Player)
-            local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
-            return called and added == true
-        end,
+        -- Player.Functions.AddMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:353); a throw
+        -- after the balance moved is still "added" (else the row is voided for money that moved; a retry pays twice)
+        add = function(Player) return addMoneyChecked(Player, amount, reason) end,
         void = voidRow,
         warn = warnVoid,
     })
@@ -80,8 +117,9 @@ local chargeLocks = {}
 ---returns `false, 'fh_charge_busy'` at once (no row, no money); the caller may retry.
 ---@return boolean ok, string? err, integer? ledgerId
 local function charge(src, amount, reason, region_id)
-    local ok, err = logic.validateCharge({ amount = amount, reason = reason, region_id = region_id }, ctx)
+    local ok, err, n = logic.validateCharge({ amount = amount, reason = reason, region_id = region_id }, ctx)
     if not ok then return false, err end
+    amount = n -- whole cents (logic.toCents): a sub-cent part would never be taken from the cash items
     local citizenid = loadedCitizenid(src)
     if not citizenid then return false, 'no_player' end
 
@@ -96,11 +134,9 @@ local function charge(src, amount, reason, region_id)
             local inserted, newId = pcall(MySQL.insert.await, INSERT_LEDGER, { citizenid, 'charge', amount, reason, region_id })
             return inserted and newId or nil
         end,
-        -- Player.Functions.RemoveMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:368)
-        remove = function(Player)
-            local called, removed = pcall(Player.Functions.RemoveMoney, cfg.moneyType, amount, reason)
-            return called and removed == true
-        end,
+        -- Player.Functions.RemoveMoney(moneytype, amount, reason) -> boolean (rsg-core/server/player.lua:368); a throw
+        -- after the balance moved is still "removed" (else the row is voided and the money silently gone)
+        remove = function(Player) return removeMoneyChecked(Player, amount, reason) end,
         void = voidRow,
         warn = warnVoid,
     }, amount)
@@ -188,6 +224,7 @@ function onlineByCitizenid(citizenid)
     local called, Player = pcall(function() return exports['rsg-core']:GetPlayerByCitizenId(citizenid) end)
     if not called or type(Player) ~= 'table' or type(Player.PlayerData) ~= 'table' then return nil end
     if Player.PlayerData.citizenid ~= citizenid or not logic.validSrc(Player.PlayerData.source) then return nil end
+    if unloading[Player.PlayerData.source] == citizenid then return nil end -- logging out: treat as offline (queue)
     return Player
 end
 
@@ -207,26 +244,6 @@ local function repByCitizenid(citizenid, region_id, delta, reason)
         if known == nil then return false, 'unknown_citizenid' end
     end
     return applyRep(citizenid, Player and Player.PlayerData.source or nil, region_id, delta, reason)
-end
-
-local function cashOf(Player)
-    local money = type(Player.PlayerData) == 'table' and Player.PlayerData.money
-    return type(money) == 'table' and tonumber(money[cfg.moneyType]) or nil
-end
-
----AddMoney that tells "added" from "not added" even when it throws: rsg-core's AddMoney adds to PlayerData.money
----first and only then runs its client / log side effects, so a throw can come after the money moved. Nothing in here
----yields, so the balance change is ours alone. true = the money is on the character.
----The check redoes rsg-core's own float addition (`money[mt] + amount`, player.lua:357, amount unchanged by
----prepMoney's tonumber) and compares exactly: same IEEE operation, same operands -> bit-identical result. Never
----`after - before == amount`: with a fractional balance (127.2 + 5) - 127.2 ~= 5, which would class money that
----moved as unpaid and pay it again.
-local function addMoneyChecked(Player, amount, reason)
-    local before = cashOf(Player)
-    local called, added = pcall(Player.Functions.AddMoney, cfg.moneyType, amount, reason)
-    if called then return added == true end
-    local after = cashOf(Player)
-    return before ~= nil and after ~= nil and after == before + amount
 end
 
 local function enqueueCredit(citizenid, amount, reason, region_id)
@@ -358,7 +375,23 @@ end
 -- so the claim's awaits are fine here.
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     local pd = type(Player) == 'table' and Player.PlayerData
-    if type(pd) == 'table' and logic.validCitizenid(pd.citizenid) then claimPending(pd.citizenid) end
+    if type(pd) ~= 'table' then return end
+    if logic.validSrc(pd.source) then unloading[pd.source] = nil end -- a character is (re)loaded on this src
+    if logic.validCitizenid(pd.citizenid) then claimPending(pd.citizenid) end
+end)
+
+-- The unload window (see `unloading`). Both are server-only TriggerEvents fired BEFORE rsg-core's final save, and
+-- nothing here yields, so no money step of ours can land between the flag and the save.
+AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src)
+    src = tonumber(src)
+    local citizenid = logic.validSrc(src) and loadedCitizenid(src)
+    if citizenid then unloading[src] = citizenid end
+end)
+AddEventHandler('RSGCore:Server:PlayerDropped', function(Player)
+    local pd = type(Player) == 'table' and Player.PlayerData
+    if type(pd) == 'table' and logic.validSrc(pd.source) and type(pd.citizenid) == 'string' then
+        unloading[pd.source] = pd.citizenid
+    end
 end)
 
 -- No claim is in flight at start: any claimed row now is from an earlier run (crash mid-claim, or a failed clear).

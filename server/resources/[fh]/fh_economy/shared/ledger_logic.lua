@@ -14,16 +14,29 @@ local function isFinite(n)
     return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge
 end
 
+---A positive finite amount rounded to whole cents, the way rsg-core's money items do it (moneyitems.lua getParts:
+---math.floor(a * 100 + 0.5)); nil when it rounds to 0. Whole amounts come back as Lua integers (5.0 -> 5).
+---Cash is held as dollar / cent items, so a sub-cent part never moves: without this, pay / charge would record an
+---amount the balance never saw (charge(0.004) took nothing and still succeeded).
+function logic.toCents(amount)
+    local c = math.floor(amount * 100 + 0.5)
+    if c < 1 then return nil end
+    if c % 100 == 0 then return c // 100 end
+    return c / 100
+end
+
 ---@param args { amount:any, reason:any, region_id:any }
 ---@param ctx { isKnownRegion:fun(id:any):boolean, maxPay:number? }
----@return boolean ok, string? err
+---@return boolean ok, string? err, number? amount  the amount rounded to whole cents (logic.toCents) when ok
 function logic.validatePay(args, ctx)
     args = args or {}
     if not isFinite(args.amount) or args.amount <= 0 then return false, 'invalid_amount' end
     if ctx.maxPay and args.amount > ctx.maxPay then return false, 'amount_too_large' end
+    local n = logic.toCents(args.amount)
+    if not n then return false, 'invalid_amount' end
     if not validReason(args.reason, ctx.maxReason) then return false, 'invalid_reason' end
     if not ctx.isKnownRegion(args.region_id) then return false, 'unknown_region' end
-    return true
+    return true, nil, n
 end
 
 ---@param args { delta:any, reason:any, region_id:any }
@@ -41,7 +54,7 @@ end
 ---Charge (debit) uses the same rules as pay, with its own cap (ctx.maxCharge).
 ---@param args { amount:any, reason:any, region_id:any }
 ---@param ctx { isKnownRegion:fun(id:any):boolean, maxCharge:number?, maxReason:number? }
----@return boolean ok, string? err
+---@return boolean ok, string? err, number? amount  rounded to whole cents, as validatePay
 function logic.validateCharge(args, ctx)
     return logic.validatePay(args, { isKnownRegion = ctx.isKnownRegion, maxPay = ctx.maxCharge,
         maxReason = ctx.maxReason })
