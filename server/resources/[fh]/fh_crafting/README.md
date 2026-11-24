@@ -115,9 +115,9 @@ come from `FhCraftRules.tonicFor` (`TONICS` + `TonicDurations`).
 | Kind | Event | Payload |
 |---|---|---|
 | Emits (client) | `chat:addMessage` | `/fh_craft` and `fh:crafting:gather` replies: `{ args = { 'Crafting', msg } }` |
-| Consumes (server) | `onResourceStart` | validates recipes for this resource; re-registers items for this resource or `fh_core` |
+| Consumes (server) | `onResourceStart` | validates recipes and herb patches for this resource; re-registers items for this resource or `fh_core` |
 | Consumes (server) | `playerDropped` | clears the per-player `busy` craft and gather flags |
-| Consumes (server) | `fh:crafting:gather` | `{ patchId }` -> pick that patch (server decides reach, cooldown and grant; replies via `chat:addMessage`) |
+| Consumes (server) | `fh:crafting:gather` | `patchId` (bare string) -> pick that patch (server decides reach, cooldown and grant; replies via `chat:addMessage`) |
 | Registers | rsg-core usable items | `tonic_vigor`, `tonic_steady` -> `exports['rsg-core']:CreateUseableItem`; results go out via `exports['rsg-core']:Notify` |
 
 The only custom net event is `fh:crafting:gather` (consumed by the server; nothing else is emitted).

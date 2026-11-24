@@ -1,5 +1,5 @@
 -- fh_crafting server (spec L5). C1: item registration, recipe validation and the adapter exports.
-local cfg, rules, recipes = FhCraftingConfig, FhCraftRules, FhCraftRecipes
+local cfg, rules, recipes, gather = FhCraftingConfig, FhCraftRules, FhCraftRecipes, FhGatherRules
 
 local function registerItems()
     local ok, err, bad = exports.fh_core:registerItems(cfg.items)
@@ -7,10 +7,26 @@ local function registerItems()
     return ok
 end
 
+---Items a gather patch may name: everything fh_crafting registers (config.items) plus the rsg-core items it uses but
+---does not re-register (config.lua:4). Mirrors the spec EXISTING set so the runtime check and the specs agree.
+local function knownItems()
+    local known = {}
+    for name in pairs(cfg.items or {}) do known[name] = true end
+    for _, name in ipairs({ 'resource_gunpowder', 'ammo_box_revolver', 'ammo_box_rifle',
+        'herb_american_ginseng', 'herb_oregano', 'herb_red_sage', 'herb_wild_mint' }) do
+        known[name] = true
+    end
+    return known
+end
+
 local function validate()
     local ok, errs = rules.validateRecipes(recipes.list)
     if not ok then
         for _, e in ipairs(errs) do print(('^1[fh_crafting] recipe error: %s^7'):format(e)) end
+    end
+    local okP, errsP = gather.validatePatches(cfg.herbPatches, knownItems())
+    if not okP then
+        for _, e in ipairs(errsP) do print(('^1[fh_crafting] herb patch error: %s^7'):format(e)) end
     end
 end
 

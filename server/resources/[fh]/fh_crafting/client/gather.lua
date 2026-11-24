@@ -1,6 +1,6 @@
 -- fh_crafting herb gathering client (plan crafting-02 C9b). A lib.points point per patch shows the [E] prompt; on E a
--- short progress bar runs (pcall, same pattern as fh_hunting/client/main.lua:114) and then the client asks the server
--- to gather. The server decides everything (reach, cooldown, grant). No new game natives.
+-- short progress bar runs in its own thread (FH.thread, like fh_hunting/client/main.lua:143) and then the client asks
+-- the server to gather. The server decides everything (reach, cooldown, grant). No new game natives.
 local cfg = FhCraftingConfig
 local INPUT_CONTEXT = 0xCEFD9220 -- E (unverified)
 local GATHER_MS = 4000           -- progress bar duration (~4 s)
@@ -13,11 +13,27 @@ local function herbLabel(herb)
     return (name:gsub('(%a)([%w]*)', function(a, b) return a:upper() .. b end))
 end
 
+-- Runs off the lib.points loop so the blocking progress bar never stalls the points tick. The `busy` guard (re-checked
+-- here AND in the points callback) means a second E press while one pick runs starts no second bar.
+local function pick(patch)
+    if busy then return end
+    busy = true
+    -- pcall: if the progress bar throws, `busy` must still reset or the patch stays locked forever.
+    local ok, done = pcall(lib.progressBar, {
+        duration = GATHER_MS, label = 'Picking ' .. herbLabel(patch.herb) .. '...', canCancel = true,
+        disable = { move = true, car = true, combat = true },
+    })
+    busy = false
+    if ok and done then
+        TriggerServerEvent('fh:crafting:gather', patch.id)
+    end
+end
+
 for _, p in ipairs(cfg.herbPatches or {}) do
     local patch = p
     lib.points.new({
         coords = vector3(patch.coords.x, patch.coords.y, patch.coords.z),
-        distance = 2.0,
+        distance = FhGatherRules.PROMPT_RADIUS,
         onEnter = FH.wrap(function()
             near = patch.id
             lib.showTextUI('[E] Pick ' .. herbLabel(patch.herb))
@@ -30,16 +46,7 @@ for _, p in ipairs(cfg.herbPatches or {}) do
         end),
         nearby = FH.wrap(function()
             if not busy and IsControlJustReleased(0, INPUT_CONTEXT) then
-                busy = true
-                -- pcall: if the progress bar throws, `busy` must still reset or the patch stays locked forever.
-                local ok, done = pcall(lib.progressBar, {
-                    duration = GATHER_MS, label = 'Picking ' .. herbLabel(patch.herb) .. '...', canCancel = true,
-                    disable = { move = true, car = true, combat = true },
-                })
-                busy = false
-                if ok and done then
-                    TriggerServerEvent('fh:crafting:gather', patch.id)
-                end
+                FH.thread(function() pick(patch) end)
             end
         end),
     })

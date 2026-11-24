@@ -40,11 +40,11 @@ FhCraftingConfig = {
     -- per herb, spread over 2 regions. TODO-verify-in-game: every coordinate is an approximate placeholder.
     herbPatches = {
         { id = 'ginseng_heartlands', herb = 'herb_american_ginseng', coords = { x = -290.0, y = 810.0, z = 118.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
-        { id = 'ginseng_scarlett',   herb = 'herb_american_ginseng', coords = { x = 1288.0, y = -1276.0, z = 77.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
+        { id = 'ginseng_scarlett',   herb = 'herb_american_ginseng', coords = { x = 1320.0, y = -1290.0, z = 76.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
         { id = 'oregano_heartlands', herb = 'herb_oregano',          coords = { x = -275.0, y = 800.0, z = 119.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
         { id = 'oregano_scarlett',   herb = 'herb_oregano',          coords = { x = 1292.0, y = -1282.0, z = 77.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
         { id = 'red_sage_heartlands', herb = 'herb_red_sage',        coords = { x = -265.0, y = 808.0, z = 118.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
-        { id = 'red_sage_scarlett',   herb = 'herb_red_sage',        coords = { x = 1285.0, y = -1275.0, z = 77.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
+        { id = 'red_sage_scarlett',   herb = 'herb_red_sage',        coords = { x = 1258.0, y = -1270.0, z = 78.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
         { id = 'wild_mint_heartlands', herb = 'herb_wild_mint',      coords = { x = -150.0, y = 840.0, z = 117.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
         { id = 'wild_mint_scarlett',   herb = 'herb_wild_mint',      coords = { x = 1295.0, y = -1285.0, z = 76.0 }, yield = { 1, 2 }, respawnSeconds = 900 },
     },

@@ -7,6 +7,11 @@ local M = {}
 
 M.REACH = 3.5 -- metres, same as FhContainers' default interact distance
 
+-- The client shows the [E] prompt within this radius (client/gather.lua lib.points distance). Patches must be at least
+-- 2x this apart so two prompts never overlap; validatePatches enforces MIN_SPACING.
+M.PROMPT_RADIUS = 2.0
+M.MIN_SPACING = M.PROMPT_RADIUS * 2
+
 ---Accepts vector3 or {x=,y=,z=}; returns x,y,z or nil. Rejects nil, NaN, and infinities.
 local function xyz(v)
     if v == nil then return nil end
@@ -44,7 +49,8 @@ function M.canPick(patch, playerCoords, now, lastPicked)
 end
 
 ---Roll a yield for `patch` using an injected rng so specs stay deterministic. `rng(min, max)` returns an integer in
----[min, max] inclusive (defaults to math.random). A missing/bad `yield` reads as {1, 2}.
+---[min, max] inclusive (defaults to math.random). A missing `yield` reads as the default {1, 2}; a partial/bad entry
+---defaults to 1 (lo) or 2 (hi) and is clamped so hi >= lo.
 ---@param patch table { yield = {min, max} }
 ---@param rng function|nil (min, max) -> integer
 ---@return integer amount
@@ -52,7 +58,7 @@ function M.rollYield(patch, rng)
     rng = rng or math.random
     local y = type(patch) == 'table' and patch.yield or nil
     local lo = (type(y) == 'table' and type(y[1]) == 'number') and math.floor(y[1]) or 1
-    local hi = (type(y) == 'table' and type(y[2]) == 'number') and math.floor(y[2]) or lo
+    local hi = (type(y) == 'table' and type(y[2]) == 'number') and math.floor(y[2]) or 2
     if lo < 1 then lo = 1 end
     if hi < lo then hi = lo end
     return rng(lo, hi)
@@ -96,6 +102,23 @@ function M.validatePatches(patches, known)
             end
             if not (type(p.respawnSeconds) == 'number' and p.respawnSeconds > 0) then
                 errs[#errs + 1] = (tag .. ': respawnSeconds must be a positive number')
+            end
+        end
+    end
+    -- Minimum spacing: no two patches within MIN_SPACING (2x the prompt radius), so two [E] prompts never overlap.
+    for i = 1, #patches do
+        for j = i + 1, #patches do
+            local a, b = patches[i], patches[j]
+            if type(a) == 'table' and type(b) == 'table' then
+                local ax, ay, az = xyz(a.coords)
+                local bx, by, bz = xyz(b.coords)
+                if ax and bx then
+                    local dx, dy, dz = ax - bx, ay - by, az - bz
+                    if dx * dx + dy * dy + dz * dz < M.MIN_SPACING * M.MIN_SPACING then
+                        errs[#errs + 1] = ('%s and %s: patches too close (min %.1f m)')
+                            :format(tostring(a.id), tostring(b.id), M.MIN_SPACING)
+                    end
+                end
             end
         end
     end

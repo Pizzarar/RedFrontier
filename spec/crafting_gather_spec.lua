@@ -62,9 +62,15 @@ describe('gather: rollYield', function()
         eq(2, R.rollYield(patch, function() return 2 end))
     end)
     it('missing or bad yield reads as {1, 2}', function()
-        eq(1, R.rollYield({ yield = nil }, function(lo) return lo end))
-        eq(5, R.rollYield({ yield = { 5 } }, function(lo) return lo end)) -- {5,5}
-        eq(1, R.rollYield({ yield = { 0, -1 } }, function(lo) return lo end)) -- clamped to {1,1}
+        local function bounds(p)
+            local got
+            R.rollYield(p, function(lo, hi) got = { lo, hi }; return lo end)
+            return got
+        end
+        same({ 1, 2 }, bounds({ yield = nil }))    -- missing -> default {1, 2}
+        same({ 1, 2 }, bounds({}))                 -- empty table -> default {1, 2}
+        same({ 5, 5 }, bounds({ yield = { 5 } }))  -- partial: hi defaults 2 then clamps to lo
+        same({ 1, 1 }, bounds({ yield = { 0, -1 } })) -- bad: clamped to {1, 1}
     end)
 end)
 
@@ -108,6 +114,15 @@ describe('gather: validatePatches', function()
         eq(false, ok); eq(1, #errs)
         ok, errs = R.validatePatches({}, known)
         eq(false, ok)
+    end)
+    it('rejects two patches closer than 2x the prompt radius', function()
+        local close = {
+            { id = 'a', herb = 'herb_oregano', coords = { x = 0, y = 0, z = 0 }, yield = { 1, 2 }, respawnSeconds = 900 },
+            { id = 'b', herb = 'herb_wild_mint', coords = { x = 3, y = 0, z = 0 }, yield = { 1, 2 }, respawnSeconds = 900 },
+        }
+        local ok, errs = R.validatePatches(close, known)
+        eq(false, ok)
+        eq(true, table.concat(errs, '; '):find('too close', 1, true) ~= nil)
     end)
 end)
 
