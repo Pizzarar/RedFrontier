@@ -72,4 +72,51 @@ case('validCoords/inRadius/plotAt accept vector3-like values that are not plain 
     assert(R.plotAt({ v = vplot }, vec(1, 1, 1)) == vplot)
     assert(R.canClaim(vplot, vec(1, 1, 1), 'ABC', empty))
 end)
+
+-- homestead-02 H6: per-class uniqueness (one claim + one town lot per character).
+local here0 = { x = 0, y = 0, z = 0 }
+local claimPlot = { id = 'c1', center = here0, radius = 10.0 }                       -- no class = claim
+local lotPlot = { id = 'l1', center = here0, radius = 10.0, class = 'town_lot', claimable = true }
+local function why(p, cl) local ok, e = R.canClaim(p, here0, 'ABC', cl) return ok, e end
+
+case('classOf: missing/blank class is claim, explicit class kept', function()
+    assert(R.classOf(claimPlot) == 'claim')
+    assert(R.classOf({ class = '' }) == 'claim')
+    assert(R.classOf({ class = 'claim' }) == 'claim')
+    assert(R.classOf(lotPlot) == 'town_lot')
+    assert(R.classOf(nil) == 'claim')
+end)
+case('canClaim per class: a claim owner may take a lot, a lot owner may take a claim', function()
+    local hasClaim = { byPlot = { c0 = 'ABC' }, byOwner = { claim = { ABC = 'c0' }, town_lot = {} } }
+    assert(why(lotPlot, hasClaim))
+    local hasLot = { byPlot = { l0 = 'ABC' }, byOwner = { claim = {}, town_lot = { ABC = 'l0' } } }
+    assert(why(claimPlot, hasLot))
+end)
+case('canClaim per class: second claim refused fh_already_has_plot, second lot refused fh_already_has_lot', function()
+    local both = { byPlot = { c0 = 'ABC', l0 = 'ABC' }, byOwner = { claim = { ABC = 'c0' }, town_lot = { ABC = 'l0' } } }
+    local ok, e = why(claimPlot, both)
+    assert(not ok and e == 'fh_already_has_plot', tostring(e))
+    ok, e = why(lotPlot, both)
+    assert(not ok and e == 'fh_already_has_lot', tostring(e))
+    -- explicit class = 'claim' behaves like a missing class
+    ok, e = why({ id = 'c2', center = here0, radius = 10.0, class = 'claim' }, both)
+    assert(not ok and e == 'fh_already_has_plot', tostring(e))
+    -- another character's lot does not block ABC
+    assert(why(lotPlot, { byPlot = { l0 = 'XYZ' }, byOwner = { town_lot = { XYZ = 'l0' } } }))
+end)
+case('canClaim: claimable=false refused fh_not_claimable (nil/true allowed)', function()
+    local ok, e = why({ id = 'l2', center = here0, radius = 10.0, class = 'town_lot', claimable = false }, empty)
+    assert(not ok and e == 'fh_not_claimable', tostring(e))
+    ok, e = why({ id = 'c3', center = here0, radius = 10.0, claimable = false }, empty)
+    assert(not ok and e == 'fh_not_claimable', tostring(e))
+    assert(why(lotPlot, empty))
+    assert(why(claimPlot, empty))
+end)
+case('canClaim: old flat byOwner { [cid] = plot_id } still read, as class claim', function()
+    local flat = { byPlot = { p2 = 'ABC' }, byOwner = { ABC = 'p2' } }
+    local ok, e = why(claimPlot, flat)
+    assert(not ok and e == 'fh_already_has_plot', tostring(e))
+    assert(why(claimPlot, { byPlot = { p2 = 'XYZ' }, byOwner = { XYZ = 'p2' } }))   -- other cid's flat entry
+    assert(why(lotPlot, flat))                                                         -- flat entries are claims only
+end)
 T.finish()

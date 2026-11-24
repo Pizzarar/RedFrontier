@@ -35,15 +35,45 @@ function M.plotAt(plots, coords)
     return nil
 end
 
----claims = { byPlot = { [plot_id] = citizenid }, byOwner = { [citizenid] = plot_id } }
+---Plot class (fh_plots.class): 'claim' (homestead claim) or 'town_lot'. A plot with no class is a claim.
+function M.classOf(plot)
+    local c = type(plot) == 'table' and plot.class or nil
+    if type(c) ~= 'string' or c == '' then return 'claim' end
+    return c
+end
+
+---Refusal reason when a character already holds a plot of this class.
+local function alreadyHasReason(class)
+    if class == 'town_lot' then return 'fh_already_has_lot' end
+    return 'fh_already_has_plot'
+end
+
+---True when citizenid already holds a plot of `class`. byOwner is per class ({ [class] = { [citizenid] = plot_id } });
+---the old flat shape ({ [citizenid] = plot_id }, pre-class server) is still read, and every entry in it is a claim.
+local function ownsInClass(byOwner, class, citizenid)
+    if type(byOwner) ~= 'table' then return false end
+    local bucket = byOwner[class]
+    if type(bucket) == 'table' and bucket[citizenid] ~= nil then return true end
+    if class == 'claim' then
+        local flat = byOwner[citizenid]
+        if flat ~= nil and type(flat) ~= 'table' then return true end
+    end
+    return false
+end
+
+---claims = { byPlot = { [plot_id] = citizenid }, byOwner = { [class] = { [citizenid] = plot_id } } }
+---(byOwner may also be the old flat { [citizenid] = plot_id }, read as class 'claim').
+---One plot per character per class: a character may hold one claim and one town lot.
 ---@return boolean ok, string|nil reason
 function M.canClaim(plot, coords, citizenid, claims)
     if type(citizenid) ~= 'string' or citizenid == '' then return false, 'fh_no_character' end
     if type(plot) ~= 'table' then return false, 'fh_no_plot' end
+    if plot.claimable == false then return false, 'fh_not_claimable' end
     if not M.inRadius(plot, coords) then return false, 'fh_not_in_plot' end
     claims = claims or {}
     if claims.byPlot and claims.byPlot[plot.id] then return false, 'fh_plot_taken' end
-    if claims.byOwner and claims.byOwner[citizenid] then return false, 'fh_already_has_plot' end
+    local class = M.classOf(plot)
+    if ownsInClass(claims.byOwner, class, citizenid) then return false, alreadyHasReason(class) end
     return true
 end
 
