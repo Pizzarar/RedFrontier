@@ -873,6 +873,36 @@ Items (from `fh_survival/shared/items.lua`): `fh_jerky`, `fh_biscuit`, `fh_stew`
     Expected: stamina regen and walk are normal; health was never touched in any step.
     RESULT:
 
+### F1 foods and drinks, F2 owned campfire, native spikes (survival-02)
+
+The `@core` buff caps (`hydrated`, `clean`) are on this base, so steps 21-28 need no SKIP. Base rsg-core/loot foods and
+drinks use the same consume path as the S3 items; fractions are of `Durations` (`well_fed` 3600 s, `hydrated` 2700 s).
+
+21. Give yourself `bread` and `canned_beans` (`fh_give <id> bread 1`, `fh_give <id> canned_beans 1`) and use each from the inventory, with `well_fed` not active.
+    Expected: each is consumed with `You feel fed.`; `well_fed` appears for 35% of `Durations.well_fed` (about 21 min) from bread and 60% (about 36 min) from canned beans. Using bread again while it is active refreshes it (duration restarts, magnitude stays 1.0) instead of stacking.
+    RESULT:
+22. Give yourself `water` and `coffee` and use each with `hydrated` not active.
+    Expected: each is consumed with `You feel refreshed.`; `hydrated` appears for 100% of `Durations.hydrated` (about 45 min) from water and 60% (about 27 min) from coffee. Drinking at the cap (1.0) refreshes the duration but never raises the magnitude above 1.0.
+    RESULT:
+23. Refund when fh_buffs refuses the buff. fh_buffs clamps a known buff to its cap instead of refusing it (the food is then consumed), so the only refusal is an unknown buff id: comment out `well_fed = 1.25` in the `caps` table of `fh_buffs/config.lua`, `restart fh_buffs` (this also drops the active buffs in memory, expected), then eat a `bread` you are carrying.
+    Expected: `You cannot eat right now.`, no `well_fed`, the bread is back in your inventory (refund), and the server console logs `[fh_survival] apply well_fed refused for <yourId>: unknown_buff`. Put the cap back and `restart fh_buffs` afterwards. Note that eating with `well_fed` already active does NOT refuse (cap only): record if you see otherwise.
+    RESULT:
+24. Build your own homestead campfire (F2): stand inside a claim you own (`/fh_claim` first if needed), put 5 `lumber` in that plot's main chest, and run `/fh_build station_2` ($25 + 5 lumber).
+    Expected: `fh_build: built station_2 tier 1 ($25, 5 lumber)`; the campfire prop appears near the plot centre (offset about 6 m east, 4 m south). The seeded `Campfires` entries are separate and do not cover this: `-300,790` r8 is about 200 m from the `heartlands_01` plot centre `-500,750`. No `[fh_survival]` console errors.
+    RESULT:
+25. Stand within `HomesteadHeatRadius` (8 m) of that campfire and wait. F2 re-syncs owned stations every `HomesteadHeatSyncSeconds` (15 s) and the warm tick runs every `HeatCheckSeconds` (10 s), so allow up to ~25 s.
+    Expected: `warm` appears at magnitude 1.0 and refreshes about every 10 s while you stay (any player near the fire, not only the plot owner). Walk more than 8 m away: no more refresh and `warm` expires on its own after `Durations.warm` (shorten it, e.g. 60 s, to see it quickly). If a seeded `Campfires` coord is off when you stand at the real fire, write the corrected `{x, y, radius}` in RESULT.
+    RESULT:
+26. Log off while standing at that campfire and, on a second character, stand at the same spot. Then rejoin.
+    Expected per the F2 code: `playerDropped` / `RSGCore:Server:OnPlayerUnload` removes your `hs:<plot_id>:<slot_id>` heat source, so while you are offline the fire warms nobody (allow the second character's remaining `warm` to lapse with short durations). On rejoin `RSGCore:Server:PlayerLoaded` re-syncs the fire at once, and your own `warm` is restored by the S2 persistence for its remaining time. The offline half needs a second character.
+    RESULT:
+27. Water native spike: set `WaterCheck = 'native'` in `fh_survival/config.lua` and `restart fh_survival`. Stand in the Dakota River and run `/refill` (with a canteen that is not full) and `/wash`. Then step out of the water and try both again.
+    Expected: in water `You refill the canteen.` and `You wash off the grime.`; out of water `You need to stand in water to refill.` / `You need to stand in water to wash.` In native mode the server trusts the client's `IsEntityInWater` and ignores `WaterZones`. Record PASS/FAIL per native: the default stays `'zones'` unless this is PASS. If the seeded `WaterZones` coords are off, write the corrected `{x, y, radius}` here.
+    RESULT: PASS/FAIL water native:
+28. Sluggish native spike: with `SluggishEffect = 'native'` and fh_survival restarted, starve the needs to level 2, then level 3 (as in steps 17-18), and sprint/swim to drain stamina at each level.
+    Expected: stamina regenerates visibly slower at level 2 (~70%) then level 3 (~50%), never stops, and the notify line still shows. Dead-eye is untouched (`SluggishDeadeyeHash` nil) and health never drops. Record PASS/FAIL per native: the default stays `'notify'` unless this is PASS. Leave `SluggishEffect` back on `'notify'` and `WaterCheck` back on `'zones'` afterwards.
+    RESULT: PASS/FAIL sluggish stamina:
+
 ## Roads
 
 Wagons, cargo, freight, shortages, heat (M4 + M5). Not runtime-tested (no Cfx key); every natives side is unverified, so report what you see.
