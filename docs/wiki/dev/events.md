@@ -12,7 +12,7 @@
 | `fh:economy:paid` | `server/resources/[fh]/fh_economy/server/main.lua:37` | `{ src, citizenid, amount, reason, region_id, ledger_id }` |
 | `fh:economy:rep_changed` | `server/resources/[fh]/fh_economy/server/main.lua:63` | `{ src, citizenid, region_id, delta, value, reason }` |
 | `fh:economy:charged` | `server/resources/[fh]/fh_economy/server/main.lua:109` | `{ src, citizenid, amount, reason, region_id, ledger_id }` (a debit) |
-| `fh:economy:credited` | `server/resources/[fh]/fh_economy/server/main.lua:299` | `{ src, citizenid, amount, reason, region_id, ledger_id, queued }` (E2 offline-safe credit) |
+| `fh:economy:credited` | `server/resources/[fh]/fh_economy/server/main.lua:340` (online) · `:299` (queued claimPending) | `{ src, citizenid, amount, reason, region_id, queued, ledger_id? }` — `ledger_id` online-only (E2 offline-safe credit) |
 | `fh:buffs:applied` | `server/resources/[fh]/fh_buffs/server/main.lua:19` | `{ src, buff_id, magnitude, expires_at, refreshed }` |
 | `fh:homestead:claimed` | `server/resources/[fh]/fh_homestead/server/main.lua:84` | `{ src, citizenid, plot_id, region_id }` |
 | `fh:homestead:unclaimed` | `server/resources/[fh]/fh_homestead/server/main.lua:107` | `{ src, citizenid, plot_id }` |

@@ -11,7 +11,7 @@ Outlaw camps are scattered across the four open regions — the Heartlands, Scar
 If the outlaws fail to appear, the camp resets and can't wake for 60 seconds.
 
 ## Loot
-Clearing an outlaw camp rolls its stash: a **Worn Rifle** (condition 20-45), a **Small Safe**, and usually **Gun Parts** (2-3), plus the odd bit of contraband. The rifle and safe are bulky — bring a saddlebag, wagon or chest (see [Items](../items.md)).
+Clearing an outlaw camp rolls its stash from the gang's tier table: a **Worn Rifle** (condition 20-45) at 0.6-0.7, a **Small Safe** at 0.5-0.6, and **Gun Parts** (2-3 on tier 1, 2-4 on tier 2), plus the odd bit of contraband. The rifle and safe are bulky — bring a saddlebag, wagon or chest (see [Items](../items.md)).
 
 ## Camp ownership
 Clear a camp and law takes it over; the camp goes quiet until an outlaw squad retakes it 20-30 minutes later. See [A-Life](fh_alife.md).
