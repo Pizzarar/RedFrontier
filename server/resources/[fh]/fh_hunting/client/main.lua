@@ -152,8 +152,8 @@ end)
 
 -- ---------------------------------------------------------------- H3 trapper
 
--- Sell prompt at the trapper (cfg.Trapper). The server re-checks range, container, item and price; the rows below
--- are only what it sent us for display.
+-- Sell prompt at the trapper (cfg.Trapper). E asks the server (fh:hunting:sell_open), which opens the fh_ui `trapper`
+-- screen with the rows it computed itself; the server re-checks range, container, item and price on every sale.
 local CONTEXT_KEY = 0xCEFD9220 -- INPUT_CONTEXT (E). UNVERIFIED
 local tp = cfg.Trapper
 
@@ -259,27 +259,6 @@ local function trapperRumour()
     end
     return nil
 end
-
-local function stars(n) return string.rep('*', n) end
-
-FH.onNet('fh:hunting:sell_rows', function(rows)
-    if type(rows) ~= 'table' or #rows == 0 then
-        return lib.notify({ title = 'Trapper', description = 'You have no pelts to sell here.', type = 'inform' })
-    end
-    local options = {}
-    for _, r in ipairs(rows) do
-        options[#options + 1] = {
-            title = ('%s %s%s'):format(r.label, stars(r.stars), r.legendary and ' (Legendary)' or ''),
-            description = ('$%d, from your %s'):format(r.price, r.container),
-            onSelect = function()
-                TriggerServerEvent('fh:hunting:sell', { container = r.container, slot = r.slot, item = r.item })
-            end,
-        }
-    end
-    lib.registerContext({ id = 'fh_hunting_trapper', title = tp.label, options = options })
-    lib.showContext('fh_hunting_trapper')
-end)
-
 local trapperPoint
 FH.thread(function()
     trapperPoint = lib.points.new({

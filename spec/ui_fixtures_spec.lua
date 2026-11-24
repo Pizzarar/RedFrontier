@@ -5,7 +5,7 @@ local case = T.it
 local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_ui/shared/fixtures.lua')
 
-local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial' }
+local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial', trapper = 'hunting' }
 local passive = { heat = true }
 
 case('every fixture validates against its schema', function()
@@ -15,7 +15,7 @@ case('every fixture validates against its schema', function()
         local ok, errs = F.validate(screen, data)
         assert(ok, screen .. ': ' .. table.concat(errs or {}, '; '))
     end
-    T.eq(9, n)
+    T.eq(10, n)
 end)
 case('schema checker rejects bad data', function()
     local bad = { title = 'x', fee = 'free', delay_minutes = 1 }
@@ -65,6 +65,24 @@ case('fieldguide fixture has 3 entries and only relays close to tutorial', funct
     assert(not R.validate({ screen = 'fieldguide', action = 'abandon', payload = {} }), 'fieldguide must not relay non-close actions')
     T.eq('fh:tutorial:ui_close', R.eventName('tutorial', 'close'))
     T.same({ action = 'open', screen = 'fieldguide' }, F.parseDemo({ 'fieldguide' }))
+end)
+case('trapper fixture has rows with stars and a legendary flag; sell/close relay to hunting', function()
+    local t = F.fixtures.trapper
+    assert(t.title and #t.rows >= 1)
+    local seenLegendary = false
+    for _, r in ipairs(t.rows) do
+        assert(type(r.container) == 'string' and type(r.slot) == 'number' and type(r.item) == 'string')
+        assert(type(r.label) == 'string' and type(r.stars) == 'number' and type(r.price) == 'number')
+        if r.legendary then seenLegendary = true end
+    end
+    assert(seenLegendary)
+    T.eq('hunting', R.screens.trapper)
+    assert(not R.passive.trapper)
+    assert(R.validate({ screen = 'trapper', action = 'sell', payload = { container = 'saddlebag', slot = 1, item = 'pelt_deer' } }))
+    assert(R.validate({ screen = 'trapper', action = 'close', payload = {} }))
+    assert(not R.validate({ screen = 'trapper', action = 'buy', payload = {} }), 'trapper must not relay non-sell/close actions')
+    T.eq('fh:hunting:ui_sell', R.eventName('hunting', 'sell'))
+    T.same({ action = 'open', screen = 'trapper' }, F.parseDemo({ 'trapper' }))
 end)
 case('parseDemo', function()
     T.same({ action = 'open', screen = 'fence' }, F.parseDemo({ 'Fence' }))

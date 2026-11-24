@@ -96,6 +96,14 @@ M.fixtures = {
               wiki_path = 'docs/wiki/systems/fh_hunting.md' },
         },
     },
+    trapper = {
+        title = 'Trapper',
+        rows = {
+            { container = 'saddlebag', slot = 1, item = 'pelt_deer', label = 'Deer pelt', stars = 3, legendary = false, price = 25 },
+            { container = 'saddlebag', slot = 3, item = 'pelt_fox', label = 'Fox pelt', stars = 1, legendary = false, price = 3 },
+            { container = 'wagon', slot = 2, item = 'pelt_legendary_bear', label = 'Legendary bear pelt', stars = 3, legendary = true, price = 432 },
+        },
+    },
 }
 
 -- Tiny schema: field -> type, with '?' suffix for optional. 'table[]' / '<name>[]' nested lists via {list=schema}.
@@ -141,6 +149,12 @@ S.tradepost = {
 S.fieldguide = {
     selected = 'string?',
     entries = { list = { id = 'string', title = 'string', lines = 'table', controls = 'table', wiki_path = 'string' } },
+}
+S.trapper = {
+    title = 'string',
+    notice = 'string?', notice_kind = 'string?',
+    rows = { list = { container = 'string', slot = 'number', item = 'string', label = 'string',
+        stars = 'number', legendary = 'boolean', price = 'number' } },
 }
 M.schemas = S
 

@@ -51,6 +51,26 @@ function M.parseRequest(payload)
     return { container = payload.container, slot = slot, item = payload.item }
 end
 
+-- fh_ui `trapper` screen (T2): pure builders for the screen data and the inline sale notice, so the specs cover them.
+-- server/main.lua only wires the relay event into these; nothing here reads the client beyond what parseRequest allows.
+function M.soldNotice(res)
+    return ('Sold %s (%d star%s) for $%d.'):format(res.label, res.stars, res.stars == 1 and '' or 's', res.price)
+end
+
+---Build the fh:ui open/update data for the trapper screen. rows = T.list's output (nil on a refusal, e.g. walked out
+---of range, so the screen keeps its last rows and only the notice changes); notice/notice_kind are the inline sale
+---result and are only included when non-nil.
+---@return table { title, rows?, notice?, notice_kind? }
+function M.screenData(cfg, rows, notice, notice_kind)
+    local data = { title = cfg.Trapper and cfg.Trapper.label or 'Trapper' }
+    if rows ~= nil then data.rows = rows end
+    if notice ~= nil then
+        data.notice = notice
+        if notice_kind ~= nil then data.notice_kind = notice_kind end
+    end
+    return data
+end
+
 ---Build a trapper. opts = { cfg, animals, price (FhHuntingPrice), deps = {
 ---  citizenid(src)            -> string|nil
 ---  playerCoords(src)         -> coords|nil

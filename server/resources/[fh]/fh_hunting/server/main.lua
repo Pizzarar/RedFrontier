@@ -218,25 +218,38 @@ local function sellThrottled(src, kind)
     return false
 end
 
--- Client asks to open the sell menu; the server answers with the rows it computed itself.
+-- Client asks to open the sell screen; the server answers with the rows it computed itself, opened in fh_ui.
 RegisterNetEvent('fh:hunting:sell_open', function()
     local src = source
     if sellThrottled(src, 'open') then return end
     local rows, err = trapper.list(src)
     if not rows then return notify(src, 'error', FhHuntingSell.message(err)) end
-    TriggerClientEvent('fh:hunting:sell_rows', src, rows)
+    TriggerClientEvent('fh:ui:open', src, { screen = 'trapper', data = FhHuntingSell.screenData(cfg, rows) })
 end)
 
--- Client request: { container, slot, item }. Position, container, item, quality and price are all re-read here.
-RegisterNetEvent('fh:hunting:sell', function(payload)
-    local src = source
+-- fh_ui `trapper` screen (T2). Sell actions arrive as the server event fh_ui relays (`fh:hunting:ui_sell`, one table
+-- { src, screen, action, payload }). We re-validate the payload shape, run trapper.sell (it re-reads position,
+-- container, item, stars and price server-side, never trusting the client), then answer with a fresh list and an
+-- inline notice via fh:ui:update.
+AddEventHandler('fh:hunting:ui_sell', function(ev)
+    if type(ev) ~= 'table' or ev.screen ~= 'trapper' then return end
+    local src = ev.src
+    if type(src) ~= 'number' then return end
     if sellThrottled(src, 'sell') then return end
-    local ok, res = trapper.sell(src, payload)
-    if ok then
-        notify(src, 'success', ('Sold %s (%d star%s) for $%d.'):format(res.label, res.stars, res.stars == 1 and '' or 's', res.price))
+    local req, perr = FhHuntingSell.parseRequest(type(ev.payload) == 'table' and ev.payload or {})
+    local ok, res, notice, kind
+    if not req then
+        ok, res, notice, kind = false, perr, FhHuntingSell.message(perr), 'error'
     else
-        notify(src, 'error', FhHuntingSell.message(res))
+        ok, res = trapper.sell(src, req)
+        if ok then
+            notice, kind = FhHuntingSell.soldNotice(res), 'ok'
+        else
+            notice, kind = FhHuntingSell.message(res), 'error'
+        end
     end
+    local data = FhHuntingSell.screenData(cfg, trapper.list(src), notice, kind)
+    TriggerClientEvent('fh:ui:update', src, { screen = 'trapper', data = data })
 end)
 
 -- ---------------------------------------------------------------- H4 legendary chains (one per region, hunting-02)

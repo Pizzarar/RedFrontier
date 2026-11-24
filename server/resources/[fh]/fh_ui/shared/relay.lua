@@ -18,6 +18,7 @@ M.screens = {
     survival    = 'survival',  -- survival needs HUD (passive, fh_survival state; idea-854)
     tradepost   = 'trade',     -- trade post (fh_trade owns it)
     fieldguide  = 'tutorial',  -- field guide help pages (read-only, @guide lane owns content)
+    trapper     = 'hunting',   -- trapper sell screen (fh_hunting owns it)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
@@ -28,6 +29,7 @@ M.passive = { buffs = true, heat = true, bags = true, survival = true }
 -- revalidates ev.screen itself. Keep this small; add an entry only when a screen must not send other actions.
 M.actions = {
     fieldguide = { close = true },
+    trapper    = { sell = true, close = true },
 }
 
 M.limits = {

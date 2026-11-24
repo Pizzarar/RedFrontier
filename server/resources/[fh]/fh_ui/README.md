@@ -41,6 +41,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `survival` | `survival` | passive (idea-854) |
 | `tradepost` | `trade` | interactive |
 | `fieldguide` | `tutorial` | interactive |
+| `trapper` | `hunting` | interactive |
 
 Action must match `^[a-z_]{1,32}$`. Payload must be a table of plain data (strings, finite numbers, booleans, nested
 tables with string/number keys), <= 2048 bytes estimated, depth <= 4. Rate limit: token bucket per player, 5/s, burst 10.
@@ -153,8 +154,6 @@ previous lists. No autofocus, Enter does nothing. Actions: `sell` `{ item, amoun
 fh_trade serves the screen via `/tradepost` -> `fh:ui:open`, handles the actions with the same `doSell`/`doBuy` as the
 chat fallback, and answers each with `fh:ui:update` `{ screen = 'tradepost', data = { ...fresh lists, notice } }`.
 
-### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost>` opens that screen with `shared/fixtures.lua` data for the caller;
 ### fieldguide (owner `tutorial`)
 Read-only help pages (idea-849); the @guide lane owns the content (future `fh_tutorial/shared/field_guide.lua`) and the
 `/guide` command. `open/update` data `{ entries = { { id, title, lines = { "3-5 short lines" }, controls = { "E: open
@@ -165,8 +164,18 @@ no round trip. Empty entries show "The field guide is empty.". Actions: `close` 
 actions. The content is static and read-only, so the producer may open it client-locally with
 `TriggerEvent('fh:ui:open', { screen = 'fieldguide', data = ... })`.
 
+### trapper (owner `hunting`)
+`open/update` data `{ title, rows = { { container, slot, item, label, stars, legendary, price } }, notice?, notice_kind? }`.
+`rows` are the sellable pelts the server computed (the player's saddlebag plus a nearby wagon); empty `rows` shows
+"You have no pelts to sell here." Each row shows its star count and a `Legendary` flag. An `update` carrying only
+`notice`/`notice_kind` keeps the previous rows (e.g. walked out of range). No autofocus, Enter does nothing, Sell is
+click-only. Actions: `sell` `{ container, slot, item }`, `close` `{}`; the lane revalidates position, container, item
+and price. fh_hunting lists its sellable pelts with `trapper.list`, opens the screen via `fh:ui:open` from
+`fh:hunting:sell_open`, and answers `sell` actions as the server event `fh:hunting:ui_sell` -> `trapper.sell` -> a fresh
+`fh:ui:update` with the new rows and an inline `notice` (`ok` = "Sold ...", else the refusal text).
+
 ### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|fieldguide>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost|fieldguide|trapper>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
 
