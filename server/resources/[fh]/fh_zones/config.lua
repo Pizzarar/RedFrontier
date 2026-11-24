@@ -1410,5 +1410,8 @@ if FhRegions then
     for _, camp in pairs(FhZonesConfig.camps) do
         local terr = FhRegions.territories[camp.territory]
         if terr and terr.tier then camp.tier = terr.tier end
+        -- world-03 block I: camp.enabled follows FhRegions.isEnabled (data flags or the fh_regions_enabled convar), so
+        -- a region switched on from server.cfg also wakes its camps. The literal flags above are only the fallback.
+        if type(FhRegions.isEnabled) == 'function' and camp.region then camp.enabled = FhRegions.isEnabled(camp.region) end
     end
 end

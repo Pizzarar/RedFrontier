@@ -781,12 +781,58 @@ function regions.isKnownRegion(id)
     return type(id) == 'string' and regions.regions[id] ~= nil
 end
 
----Enabled gate (world-01 block D): true only for a known region with enabled == true. Unknown/missing = false,
----so a place referencing a bogus region id is hidden rather than shown.
+-- world-03 (block I): `setr fh_regions_enabled "heartlands,scarlett_meadows,..."` in server.cfg replaces the static
+-- `enabled` flags without a code edit. `setr` (not `set`) so the value replicates and this shared file reads the same
+-- list on the client. Unset / empty / blank = the data flags apply. Ids split on commas and/or whitespace, are trimmed
+-- and lowercased; unknown ids are logged once each and ignored (a list of only unknown ids enables nothing).
+regions.ENABLED_CONVAR = 'fh_regions_enabled'
+regions.log = function(msg) print(msg) end -- swappable in specs
+
+local warnedUnknown = {}  -- unknown id -> true, so each is logged once per Lua state
+local lastRaw, lastSet    -- parse cache keyed on the raw convar string (isEnabled reads the convar every call)
+
+---Parse a convar value into a set of known region ids, or nil when it holds no ids (unset / empty / blank).
+---@return table|nil set, string[] unknown
+function regions.parseEnabledList(raw)
+    if type(raw) ~= 'string' then return nil, {} end
+    local set, unknown, any = {}, {}, false
+    for token in raw:gmatch('[^,%s]+') do
+        any = true
+        local id = token:lower()
+        if regions.regions[id] then set[id] = true else unknown[#unknown + 1] = id end
+    end
+    if not any then return nil, unknown end
+    return set, unknown
+end
+
+---The convar override set, or nil when unset or when GetConvar is unavailable (specs, plain Lua).
+local function enabledOverride()
+    if type(GetConvar) ~= 'function' then return nil end
+    local ok, raw = pcall(GetConvar, regions.ENABLED_CONVAR, '')
+    if not ok or type(raw) ~= 'string' then return nil end
+    if raw ~= lastRaw then
+        local set, unknown = regions.parseEnabledList(raw)
+        for _, id in ipairs(unknown) do
+            if not warnedUnknown[id] then
+                warnedUnknown[id] = true
+                regions.log(('[fh_core] %s: unknown region id "%s" ignored'):format(regions.ENABLED_CONVAR, id))
+            end
+        end
+        lastRaw, lastSet = raw, set
+    end
+    return lastSet
+end
+
+---Enabled gate (world-01 block D): true only for a known region that is enabled. Unknown/missing = false,
+---so a place referencing a bogus region id is hidden rather than shown. With fh_regions_enabled set (world-03 I),
+---the convar list replaces the static `enabled` flags; it is read at call time, never cached at load.
 ---@return boolean
 function regions.isEnabled(id)
-    local r = regions.regions[id]
-    return r ~= nil and r.enabled == true
+    local r = type(id) == 'string' and regions.regions[id] or nil
+    if r == nil then return false end
+    local override = enabledOverride()
+    if override then return override[id] == true end
+    return r.enabled == true
 end
 
 ---Return the territory containing (x, y), or nil. 2D distance; the nearest center wins on overlap.
