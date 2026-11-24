@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Survival
 - Lead: ★ Sur2
-- Workers: 0
+- Workers: 1
 
 ## Done when
 - S1-S5 of plan survival-01 merged on local main (specs green), `## Survival` card in OWNER-TESTS.md, `survival playtest-ready <hash>` logged. S3b/S4b (remove the stubs) done once @core B7 and @homestead H3/H4 are on main.
@@ -14,13 +14,15 @@
 - Overlord integration rules (2026-11-22), which every plan and lead must follow: work only in `vs worktree create` units, never the primary checkout. Merge to local main only after the review PASSes: rebase on current main, `python tools/run-specs.py` all green, merge, log the hash. One lane merges at a time; rebase again if main moved. No pushes. In-game checks go in a `## Survival` section of `OWNER-TESTS.md` (no separate test doc). When ready, log `decision survival playtest-ready <hash>`; Overlord gates the combined playtest.
 - `fh_homestead` belongs to @homestead (core B6b-g are on main at 06f2d3b). Correction: Well-Rested from comfort is done HERE (homestead-01 says @survival reads getComfort and applies the buff).
 - Shape (Buddy lean, acted on per the Overlord's "finish now"): needs are positive timed buffs (well_fed/hydrated/rested/warm/clean). Sluggish is worked out from what's missing (0-3), never lethal, behind the `SluggishEffect` flag (default `notify`). warm only counts in cold regions. Relog uses the lane table `fh_survival_needs` plus a 10-min grace for new characters. rsg-core hunger/thirst metadata is unused. Alt (`fh_buffs.remove` + debuff ids) is deferred.
+- survival-02 (2026-11-24, Red3 quota push): `docs/brainstorm/plans/survival-02-food-and-fire.md`. F1 food/drink map (loot + rsg-core foods) || F2 owned homestead campfire = warm, then F3 card + natives spike. Cooking/meat/HUD routed: @crafting idea-852, @hunting idea-853, @ui idea-854. No new export/command/migration.
 - Plan: `docs/brainstorm/plans/survival-01-needs.md`. S1 → S2 → (S3||S4||S5); S3b/S4b remove the stubs for @core registerItems (B7) and @homestead isNearStation/getComfort (H3/H4).
 
 ## Open
-- @core idea-613 DONE on main 1013520 (fh_buffs caps hydrated=1.0, clean=1.0): OWNER-TESTS steps 8/10/13 now testable.
-- ColdRegions ids. Lean: use the high-elevation/snow §4.4 region ids if the registry has them, otherwise an empty list (warm is then only a bonus). The lead decides at S3 from the registry, no owner input needed.
+- ColdRegions: wait for @world to add a cold region id, then add it.
+- Native default flip (WaterCheck/SluggishEffect) after the owner's F3 spike PASS.
 
 ## In flight
+- survival-02 handed to Sur2 rn-9bba3824750e (2026-11-24). survival-01 fully merged (caebf25).
 - MERGED S1 on main @ 9730266 (range-diff '=' vs 1d21178, venv specs 36/697/0).
 - MERGED S2 on main @ 1408a01 (101d57d 1c40722 a2986fd 1408a01; mig 0012_survival_needs.sql; range-diff 1 '!' server.cfg ctx only, 2/3 '='; venv 57/1159/0).
 - MERGED S3+S3b on main @ 883d46c (c239455 40a24fe eeea378 f92c87e 883d46c; Gemini PASS 0/0/0 on 4a513b6; range-diff 1 '!' natives.md keep-both doc, rest '='; venv 58/1172/0).

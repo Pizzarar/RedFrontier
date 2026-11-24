@@ -1,6 +1,6 @@
 {
   "laneId": "survival",
-  "updatedAt": "2026-11-24T13:31:26.127Z",
+  "updatedAt": "2026-11-24T23:53:03.909Z",
   "units": [
     {
       "id": "S3-low",
@@ -63,6 +63,34 @@
       "status": "done",
       "branch": "survival-s4b",
       "commit": "caebf25"
+    },
+    {
+      "id": "F1",
+      "goal": "survival-02 block F1",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "F2",
+      "goal": "survival-02 block F2",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "F3",
+      "goal": "survival-02 block F3",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "F-lows",
+      "goal": "survival-02 review lows: drink refuse/refund msg says 'eat' (F1 actions.lua:65-70); H.reconcile gate on not wanted[id] (F2 shared/homestead_heat.lua:48-55); offline-owner fires: use homestead all-stations accessor when it lands",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
