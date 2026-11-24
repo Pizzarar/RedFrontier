@@ -18,6 +18,15 @@ Lane L6 (spec §5, M4), blocks R1 and R2 (wheel break + repair): wagon tiers, ca
 
 Tier numbers are not config: they live in `shared/cargo_rules.lua` (`TIERS`).
 
+## Rep-unlock gate (R8, roads-02)
+
+t2/t3 wagons are gated on regional rep via `fh_progression`: `spawnWagon` calls `exports.fh_progression:canUnlock(src,
+'wagon_t2')` / `'wagon_t3'` (the id lives in `shared/cargo_rules.lua` `UNLOCKS`). t1 is always allowed. Fail closed:
+if fh_progression is not started, `canUnlock` throws, or it returns `false`, the spawn is refused and the reason is
+surfaced to the player (`fh_locked` when no reason is available, otherwise the returned reason, e.g. `tier_too_low`).
+`wagon_t3` is not yet in fh_progression's config (requested from @progression), so t3 correctly refuses with
+`unknown_unlock` until it lands. Soft dependency only: there is no `dependencies` entry for fh_progression.
+
 ## Tiers
 
 | Tier | Slots | Max weight (g) | Speed cap (m/s, empty) |
@@ -44,7 +53,7 @@ Only `cargo` items move (spec §4.1). Cargo cannot live in a backpack, so loadin
 | Export | Returns |
 |---|---|
 | `canFastTravel(src)` | `ok, reason`. Blocked (`fh_cargo_carried`) while carrying cargo, or (`fh_cargo_wagon_near`) while your own wagon holding cargo is within `FastTravelReach` (30 m). Emits `fh:cargo:fasttravel_blocked`. No fast-travel system exists: whoever adds one must call this |
-| `spawnWagon(src, tier, coords)` | `wagonId` or `nil, reason` |
+| `spawnWagon(src, tier, coords)` | `wagonId` or `nil, reason`. t2/t3 are gated on fh_progression `canUnlock` (see "Rep-unlock gate"); t1 always allowed |
 | `nearestWagon(src, coords, range)` | Container ref `{ type = 'wagon', id = 'fh:wagon:...' }` (what `fh_core` `move` accepts) of the nearest LIVE wagon within `range` m of `coords` (nil = the player's ped) that `src` may load into (v1: owner only), else `nil`. `range` must be > 0 and is capped at 25 m. Bad args return `nil`, never throw. Used by fh_hunting |
 | `getWagon(wagonId)` | `{ id, owner, tier, netId, coords }` or `nil` |
 
@@ -59,6 +68,7 @@ Only `cargo` items move (spec §4.1). Cargo cannot live in a backpack, so loadin
 ## In-game check list (spec §9; needs R0 merged for step 1)
 
 1. As admin: `/fh_wagon t2`. A wagon appears 4 m ahead; chat confirms. Before R0: chat says it cannot spawn wagons yet.
+   Since R8, t2 needs heartlands tier 2 rep (`fh_rep_region <id> heartlands 100` first); a lower tier refuses `tier_too_low`.
 2. Open a homestead chest holding a cargo item (`/fh_give <id> test_cargo_crate`, drop it in the chest). Stand by the wagon, `/fh_cargo load 1`: the crate moves to the wagon.
 3. Walk 20 m away, `/fh_cargo load 1` again: refused `fh_out_of_reach`. A second character cannot load into your wagon (`fh_not_owner`).
 4. Try a non-cargo item (`bread`): refused `fh_not_cargo`. Fill a `t1` past 120 kg: refused `fh_too_heavy`.

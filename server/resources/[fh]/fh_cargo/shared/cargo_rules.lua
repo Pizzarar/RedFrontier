@@ -234,6 +234,34 @@ function M.fastTravelVerdict(f)
     return true
 end
 
+-- ---------------------------------------------------------------- R8: wagon tier rep-unlock gate (roads-02)
+-- t2/t3 wagons need an fh_progression unlock (wagon_t2 / wagon_t3); t1 is always allowed, so it is absent here.
+-- wagon_t3 is not yet in fh_progression's config: until @progression adds it, t3 fails closed with the surfaced
+-- 'unknown_unlock' (correct). The server pcall's exports.fh_progression:canUnlock and passes the result to
+-- wagonTierGate, keeping the decision pure and specced.
+M.UNLOCKS = {
+    t2 = 'wagon_t2',
+    t3 = 'wagon_t3',
+}
+
+---Unlock id a wagon tier requires, or nil when the tier needs none (t1).
+function M.unlockForTier(tierKey)
+    return M.UNLOCKS[tierKey]
+end
+
+---Gate a wagon tier spawn on the fh_progression canUnlock result. Fail closed.
+---callOk = the canUnlock call finished without throwing (pcall's first return); ok = its first return; reason = its second.
+---A failed call (export missing / not started / threw) and any non-true ok are refused; the caller surfaces the returned
+---reason when it is a non-empty string, else 'fh_locked'. A tier with no unlock (t1) is always allowed.
+---@return boolean allowed, string|nil reason
+function M.wagonTierGate(tierKey, callOk, ok, reason)
+    if M.UNLOCKS[tierKey] == nil then return true end -- t1 / unknown tier: no gate (unknown tier is caught by parseTier)
+    if callOk ~= true then return false, 'fh_locked' end -- export missing / not started / threw
+    if ok == true then return true end
+    if type(reason) == 'string' and reason ~= '' then return false, reason end
+    return false, 'fh_locked'
+end
+
 -- ---------------------------------------------------------------- R2: wheel break + repair (spec L6)
 -- The break roll runs on the server each tick from server-known state. A client hint is only ever a bool (off-road),
 -- and any reported speed goes through sanitizeSpeed first.

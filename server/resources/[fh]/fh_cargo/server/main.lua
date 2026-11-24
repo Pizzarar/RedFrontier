@@ -60,12 +60,27 @@ local function register(w, coords)
     return ok, why
 end
 
+---R8: gate a t2/t3 spawn on the fh_progression rep unlock (wagon_t2 / wagon_t3); t1 is always allowed. Fail closed.
+---Mirrors fh_fence/fh_hands: a plain pcall of exports.fh_progression:canUnlock, then the pure rules.wagonTierGate.
+---canUnlock may yield (rep read), so the character is re-read afterwards (same guard as fh_hands hire).
+local function gateTier(src, tierKey, citizenid)
+    local unlockId = rules.unlockForTier(tierKey)
+    if not unlockId then return true end
+    local callOk, ok, reason = pcall(function() return exports.fh_progression:canUnlock(src, unlockId) end)
+    local allowed, why = rules.wagonTierGate(tierKey, callOk, ok, reason)
+    if not allowed then return nil, why end
+    if citizenidOf(src) ~= citizenid then return nil, 'fh_no_character' end
+    return true
+end
+
 ---Request a networked wagon of `tierKey` for `src`'s character at `coords` (vector4/table). Returns wagonId or nil, reason.
 local function spawnWagon(src, tierKey, coords)
     local tier = rules.TIERS[tierKey]
     if not tier then return nil, 'fh_bad_tier' end
     local citizenid = citizenidOf(src)
     if not citizenid then return nil, 'fh_no_character' end
+    local allowed, why = gateTier(src, tierKey, citizenid)
+    if not allowed then return nil, why end
     local id = rules.wagonId(citizenid, tierKey)
     local w = { id = id, owner = citizenid, tier = tierKey }
     -- TODO(R0 @core idea-602): fh_core requestSpawn has no kind 'wagon' yet (spawn_rules.KINDS = ped/object/horse), so
