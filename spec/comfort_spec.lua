@@ -671,4 +671,49 @@ case('server H15: claim unclaimed mid-load still aborts with a lot held (gen gua
     T.eq(2, finish(), 'stale claim ignored, lot value reported')
     T.eq(2, S.X.getComfort('A'))
 end)
+case('server H15: lot bought and built while the claim trophy load awaits is not lost', function()
+    local S = server()
+    S.tiers[PLOT] = {} -- claim 0, cache cold
+    S.hold.query = true
+    local finish = S.start(function() return S.X.getComfort('A') end)
+    withLot(S, 'A', { station_1 = 1 }) -- bought + built during the await: 3
+    S.handlers['fh:homestead:slot_changed'](LOT, 'station_1', 1)
+    local cc = S.last('fh:homestead:comfort_changed')
+    T.eq('A', cc[1]); T.eq(3, cc[2]); T.eq(0, cc[3])
+    T.eq(3, finish(), 'the suspended call reports the lot')
+    T.eq(1, changes(S), 'no bogus 0 afterwards')
+    T.eq(3, S.X.getComfort('A'))
+    S.tiers[LOT] = { station_1 = 1, chest_2 = 1 }
+    S.handlers['fh:homestead:slot_changed'](LOT, 'chest_2', 1) -- byPlot still routes lot builds to A
+    T.eq(5, S.last('fh:homestead:comfort_changed')[2])
+end)
+case('server H15: lot released (and re-bought by someone else) while the claim trophy load awaits', function()
+    local S = server()
+    S.tiers[PLOT] = {} -- claim 0
+    withLot(S, 'A', { station_1 = 1, chest_2 = 1 }) -- would be 5
+    S.hold.query = true
+    local finish = S.start(function() return S.X.getComfort('A') end)
+    S.lots.A, S.plots[LOT] = nil, nil
+    S.handlers['fh:homestead:unclaimed']({ citizenid = 'A', plot_id = LOT })
+    withLot(S, 'B', { station_1 = 1, chest_2 = 1 }) -- B buys and builds it
+    S.handlers['fh:homestead:slot_changed'](LOT, 'chest_2', 1)
+    T.eq(5, S.last('fh:homestead:comfort_changed')[2]); T.eq('B', S.last('fh:homestead:comfort_changed')[1])
+    local n = changes(S)
+    T.eq(0, finish(), "A does not inherit B's lot")
+    T.eq(n, changes(S), 'nothing emitted for A')
+    S.tiers[LOT] = { station_1 = 1 }
+    S.handlers['fh:homestead:slot_changed'](LOT, 'chest_2', 0) -- the lot still routes to B, not A
+    local cc = S.last('fh:homestead:comfort_changed')
+    T.eq('B', cc[1]); T.eq(3, cc[2]); T.eq(5, cc[3])
+end)
+case('server H15: claim swapped repeatedly mid-load retries once, never loops', function()
+    local S = server()
+    S.unclaim(PLOT)
+    S.claim(PLOT, 'A')
+    S.hold.query = true
+    local finish = S.start(function() return S.X.getComfort('A') end)
+    S.unclaim(PLOT)
+    S.claim('heartlands_02', 'A'); S.tiers.heartlands_02 = { trophy_wall = 1 }
+    T.eq(5, finish(), 'one retry lands on the new claim')
+end)
 T.finish()
