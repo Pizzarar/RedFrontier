@@ -92,6 +92,18 @@ T.describe('fh_economy.repByCitizenid (stubbed server)', function()
             T.eq(false, a1); T.eq(e2, e1); T.eq(a2, a1)
         end
     end)
+    T.it('offline at call, online by the time the write lands: event carries the fresh src', function()
+        known.CIDLATE = true
+        local orig = MySQL.transaction.await
+        MySQL.transaction.await = function(qs)
+            local r = orig(qs)
+            players[9] = { PlayerData = { source = 9, citizenid = 'CIDLATE', money = { cash = 0 } } } -- logs in mid-await
+            return r
+        end
+        assert(repBy('CIDLATE', 'heartlands', 4, 'x'))
+        MySQL.transaction.await = orig; players[9] = nil
+        T.eq(9, events[#events].payload.src)
+    end)
     T.it('transaction failure -> ledger_failed, no event', function()
         local ne = #events
         fail.tx = true

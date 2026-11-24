@@ -134,6 +134,7 @@ end
 ---Shared rep write (rep + repByCitizenid): atomic clamped `value = value + delta` upsert plus ledger insert in one
 ---transaction, then the read-back and fh:economy:rep_changed. `src` = the online server id, or nil (offline write).
 ---@return boolean ok, string? err
+local onlineByCitizenid -- defined below (credit section); applyRep re-resolves src after its awaits
 local function applyRep(citizenid, src, region_id, delta, reason)
     local done, committed = pcall(MySQL.transaction.await, {
         { query = 'INSERT INTO fh_rep (citizenid, region_id, `value`) VALUES (?, ?, LEAST(?, GREATEST(?, ?))) '
@@ -147,6 +148,11 @@ local function applyRep(citizenid, src, region_id, delta, reason)
     local readOk, value = pcall(MySQL.scalar.await, 'SELECT `value` FROM fh_rep WHERE citizenid = ? AND region_id = ?',
         { citizenid, region_id })
     if not readOk then value = nil end
+    -- offline write: the character may have logged in during the awaits above; carry the id if so
+    if src == nil then
+        local P = onlineByCitizenid(citizenid)
+        src = P and P.PlayerData.source or nil
+    end
     TriggerEvent('fh:economy:rep_changed', { src = src, citizenid = citizenid, region_id = region_id,
         delta = delta, value = value, reason = reason })
     return true
@@ -178,7 +184,7 @@ local RELEASE_CLAIMED = 'UPDATE fh_pending_credit SET claimed_by = NULL WHERE id
 local RELEASE_TOKEN = 'UPDATE fh_pending_credit SET claimed_by = NULL WHERE claimed_by = ?'
 
 ---Online Player for a citizenid (rsg-core's loaded players only), nil when not loaded or on any doubt.
-local function onlineByCitizenid(citizenid)
+function onlineByCitizenid(citizenid)
     local called, Player = pcall(function() return exports['rsg-core']:GetPlayerByCitizenId(citizenid) end)
     if not called or type(Player) ~= 'table' or type(Player.PlayerData) ~= 'table' then return nil end
     if Player.PlayerData.citizenid ~= citizenid or not logic.validSrc(Player.PlayerData.source) then return nil end
