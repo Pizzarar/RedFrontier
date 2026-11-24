@@ -147,6 +147,7 @@ CreateThread(function()
     local defs = {
         hunt_request = hooks('hunt_request'),
         camp_clear = hooks('camp_clear'),
+        supply_run = hooks('supply_run'),
         bounty = hooks('bounty', { accept = accept, abandon = abandon, events = { JT.BOUNTY_EVENT } }),
     }
     for _, name in ipairs(JT.TYPES) do

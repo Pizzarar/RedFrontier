@@ -32,6 +32,7 @@ M.INTAKE = {
     'fh:death:dropped',
     'fh:death:recovered',
     'fh:death:expired',
+    'fh:trade:sold',
     'fh:quests:talked',
 }
 local INTAKE_SET = {}

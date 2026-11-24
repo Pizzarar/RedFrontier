@@ -9,7 +9,7 @@ local M = {}
 
 local function match() return FhQuestsMatch or require('match') end
 
-M.TYPES = { 'hunt_request', 'camp_clear', 'bounty' }
+M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run' }
 M.BOUNTY_EVENT = 'fh:quests:bounty_down' -- local server event fired by the bounty death watcher: { citizenid, offer_key, region_id }
 M.BOUNTY_TAG_PREFIX = 'fh_quests:bounty:'
 
@@ -99,7 +99,10 @@ end
 if GetCurrentResourceName then
     FhQuestsJobTypes = M
 else
-    -- Specs: load what the manifest loads in-game. Each file takes this module as its chunk argument.
+    -- Specs: load what the manifest loads in-game. The per-type files read this module as the FhQuestsJobTypes
+    -- global (not via the `...` chunk arg, which is a number under FXServer); the C0 `... or` files still take it
+    -- as the chunk argument below.
+    FhQuestsJobTypes = M
     local dir = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
     for _, job_type in ipairs(M.TYPES) do assert(loadfile(dir .. 'jobtypes/' .. job_type .. '.lua'))(M) end
     local ids = {}

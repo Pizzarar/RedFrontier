@@ -14,4 +14,7 @@ JT.registerRegion('heartlands', {
         { key = 'mabel_teague', name = 'Mabel Teague', model = 'g_m_m_unibanditos_01',
             coords = { x = -170.0, y = 860.0, z = 118.0 }, heading = 20.0, money = 36, rep = 2 },
     },
+    supply = { -- { post, item, amount, money, rep }: sell `amount` (or more) of `item` at that fh_trade post
+        { post = 'valentine_post', item = 'trade_cloth', amount = 2, money = 10, rep = 1 },
+    },
 })
