@@ -71,6 +71,15 @@ local function applyEffects(effects)
     end
 end
 
+-- ---------------------------------------------------------------- shared surface (server/squads.lua)
+-- squads.lua (loaded after this file) materialises/despawns ambush squads near players and runs the death watch. It
+-- shares this resource's context, state and persistence through this table.
+FhAlifeServer = {
+    ctx = ctx,
+    getState = function() return state end, -- state is reassigned by load()
+    save = save,
+}
+
 -- ---------------------------------------------------------------- exports (FIXED API CONTRACT)
 
 ---@return string|nil factionId
@@ -110,6 +119,19 @@ local function split(raw)
     return out
 end
 
+-- One /alife line per squad: "<id> <goal>[@<node label>|-><to>] x<strength> [<phase>]". Ambush squads use their
+-- node's display label when present (rules.nodeLabel), else the node id; strength is the surviving member count.
+local function squadLine(sq)
+    local where
+    if sq.goal == 'ambush' then
+        where = sq.node and ('@' .. rules.nodeLabel(ctx, sq.node)) or ''
+    else
+        where = sq.to and ('->' .. sq.to) or ''
+    end
+    return ('%s %s%s x%d%s'):format(tostring(sq.id), tostring(sq.goal), where, sq.strength or 0,
+        sq.phase and (' ' .. sq.phase) or '')
+end
+
 local function statusLine()
     local parts = { ('tick %d'):format(state.tick) }
     local ids = {}
@@ -120,11 +142,17 @@ local function statusLine()
         parts[#parts + 1] = ('%s=%s%s'):format(id, owner or 'none', rules.isLawHeld(ctx, state, id) and '(law)' or '')
     end
     local sqs = {}
-    for _, sq in pairs(state.squads) do
-        sqs[#sqs + 1] = ('%s:%s->%s eta%s'):format(tostring(sq.id), tostring(sq.faction), tostring(sq.to), tostring(sq.etaTick))
-    end
+    for _, sq in pairs(state.squads) do sqs[#sqs + 1] = squadLine(sq) end
     table.sort(sqs)
     for _, s in ipairs(sqs) do parts[#parts + 1] = s end
+    -- Ambush nodes per region (rules.describeAmbush prints "<region>: no ambush nodes" for a region with none).
+    local rids = {}
+    for _, camp in pairs(ctx.camps) do rids[camp.region] = true end
+    for rid in pairs(ctx.graph.ambushByRegion) do rids[rid] = true end
+    local ordered = {}
+    for rid in pairs(rids) do ordered[#ordered + 1] = rid end
+    table.sort(ordered)
+    for _, rid in ipairs(ordered) do parts[#parts + 1] = rules.describeAmbush(ctx, state, rid) end
     return table.concat(parts, ' | ')
 end
 

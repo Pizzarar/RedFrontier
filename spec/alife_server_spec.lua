@@ -96,12 +96,16 @@ do
     Json.decode = dec
 end
 
----Boot a fresh copy of server/main.lua. `preKvp` = the KVP store to load from. Returns a probe table with captured
----exports, handlers, commands, KVP writes and cross-resource calls.
-local function boot(preKvp)
+---Boot a fresh copy of server/main.lua + server/squads.lua. `preKvp` = the KVP store to load from; `ambush` =
+---{ [regionId] = { ambush node entries } } overlaid onto FhRegions before the rules build the node graph. Returns a
+---probe table with captured exports, handlers, commands, KVP writes, cross-resource calls and squad spawn/despawn
+---records (the stubbed fh_core adopts each spawn synchronously with a fake netId).
+local function boot(preKvp, ambush)
     local B = {
         exported = {}, handlers = {}, commands = {}, broadcasts = {}, flipped = {}, heatCalls = {},
         shortageCalls = {}, printed = {}, kvp = preKvp or {},
+        spawns = {}, despawns = {}, wiped = {}, healths = {}, nextReq = 1,
+        players = {}, playerPeds = {}, pedCoords = {},
     }
     local exportsT = setmetatable({
         -- fh_heat is stubbed as a spy: fh_alife must NOT call addSource (camp_clear heat is fh_heat's own job).
@@ -109,16 +113,36 @@ local function boot(preKvp)
             B.heatCalls[#B.heatCalls + 1] = { src, faction, key } return true, 1 end },
         fh_trade = { setShortage = function(_, region, item, level)
             B.shortageCalls[#B.shortageCalls + 1] = { region, item, level } return true end },
+        -- fh_core is stubbed: requestSpawn records the spec and "adopts" synchronously (onReady with a fake netId);
+        -- despawn records the request id. Ambush squads own their entities through this contract.
+        fh_core = {
+            requestSpawn = function(_, spec, opts)
+                local id = B.nextReq; B.nextReq = B.nextReq + 1
+                local netId = 9000 + id
+                B.spawns[id] = { spec = spec, opts = opts, netId = netId }
+                B.healths[netId] = 100
+                if type(opts) == 'table' and type(opts.onReady) == 'function' then opts.onReady(netId, id) end
+                return id
+            end,
+            despawn = function(_, id) B.despawns[#B.despawns + 1] = id B.spawns[id] = nil end,
+        },
     }, { __call = function(_, name, fn) B.exported[name] = fn end })
     local env = setmetatable({
         exports = exportsT,
         GetCurrentResourceName = function() return 'fh_alife' end,
         GetResourceState = function() return 'started' end,
-        GetPlayers = function() return {} end, GetPlayerPed = function() return 0 end, GetGameTimer = function() return 0 end,
+        GetPlayers = function() return B.players end,
+        GetPlayerPed = function(src) return B.playerPeds[src] or 0 end,
+        GetEntityCoords = function(e) return B.pedCoords[e] end,
+        GetEntityHealth = function(e) return B.healths[e] or 100 end,
+        NetworkGetEntityFromNetworkId = function(netId) return netId end,
+        DoesEntityExist = function(e) return e ~= 0 end,
+        GetGameTimer = function() return 0 end,
         SetResourceKvp = function(k, v) B.kvp[k] = v end,
         GetResourceKvpString = function(k) return B.kvp[k] end,
         TriggerEvent = function(name, payload)
             if name == 'fh:alife:camp_flipped' then B.flipped[#B.flipped + 1] = payload end
+            if name == 'fh:alife:squad_wiped' then B.wiped[#B.wiped + 1] = payload end
             local h = B.handlers[name]
             if h then h(payload) end
         end,
@@ -133,12 +157,24 @@ local function boot(preKvp)
         print = function(...) B.printed[#B.printed + 1] = table.concat({ ... }, ' ') end,
     }, { __index = _G })
     env._G = env
-    for _, p in ipairs({ R .. 'fh_core/shared/regions.lua', R .. 'fh_core/shared/place_resolver.lua', R .. 'fh_zones/config.lua',
-        R .. 'fh_alife/config.lua', R .. 'fh_alife/shared/alife_rules.lua', R .. 'fh_alife/server/main.lua' }) do
+    local function run(p)
         local fh = assert(io.open(p, 'rb')); local src = fh:read('a'); fh:close()
         assert(load(src, '@' .. p, 't', env))()
     end
+    run(R .. 'fh_core/shared/regions.lua')
+    if ambush then
+        for rid, list in pairs(ambush) do env.FhRegions.regions[rid].ambush = list end
+    end
+    run(R .. 'fh_core/shared/place_resolver.lua')
+    run(R .. 'fh_zones/config.lua')
+    run(R .. 'fh_alife/config.lua')
+    run(R .. 'fh_alife/shared/alife_rules.lua')
+    run(R .. 'fh_alife/server/main.lua')
+    run(R .. 'fh_alife/server/squads.lua')
     B.cfg = env.FhAlifeConfig
+    B.rules = env.FhAlifeRules
+    B.server = env.FhAlifeServer
+    B.squads = env.FhAlifeSquads
     return B
 end
 
@@ -208,6 +244,90 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         local seen = false
         for _, l in ipairs(B.printed) do if l:find('tick 0', 1, true) then seen = true end end
         assert(seen, 'console status printed')
+    end)
+
+    -- ---------------------------------------------------------------- a-life-02 B2: squads (materialise / despawn / death watch)
+
+    local HEART_AMBUSH = {
+        { id = 'heartlands_amb_bend', x = 100.0, y = 500.0, z = 110.0, label = 'Dakota bend', verified = true },
+    }
+    local function always(lo) return lo end -- deterministic rng: chance hits, first node, min travel/strength
+    local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+
+    ---Boot with heartlands ambush data, create one ambush squad (sq1) and hold it at the node, with a player at the node.
+    local function heldSquad()
+        local B = boot(nil, { heartlands = HEART_AMBUSH })
+        local st = B.server.getState()
+        B.rules.planRaids(B.server.ctx, st, always) -- sq1: heartlands_amb_bend, strength = raids.strengthMin (2)
+        st.squads.sq1.phase = 'hold'
+        B.players = { 1 }
+        B.playerPeds[1] = 101
+        B.pedCoords[101] = { x = 100, y = 500, z = 110 }
+        return B, st
+    end
+
+    T.it('B2 materialise: one ped per strength, owner tag {kind="alife_squad"}', function()
+        local B, st = heldSquad()
+        B.squads.sweep()
+        local spawns = {}
+        for _, s in pairs(B.spawns) do spawns[#spawns + 1] = s end
+        T.eq(st.squads.sq1.strength, #spawns, 'one ped per strength point')
+        for _, s in ipairs(spawns) do
+            T.eq('ped', s.spec.kind)
+            T.eq('alife_squad', s.spec.owner.kind)
+            T.eq('sq1', s.spec.owner.id)
+        end
+    end)
+
+    T.it('B2 a travelling squad stays invisible (no peds) even with a player at the node', function()
+        local B = boot(nil, { heartlands = HEART_AMBUSH })
+        B.rules.planRaids(B.server.ctx, B.server.getState(), always) -- phase 'travel'
+        B.players = { 1 }; B.playerPeds[1] = 101; B.pedCoords[101] = { x = 100, y = 500, z = 110 }
+        B.squads.sweep()
+        T.eq(0, count(B.spawns), 'no visible riding: a travelling squad does not materialise')
+    end)
+
+    T.it('B2 despawn when no player near keeps surviving strength', function()
+        local B, st = heldSquad()
+        B.squads.sweep() -- materialise
+        assert(count(B.spawns) > 0, 'materialised first')
+        B.pedCoords[101] = { x = 99999, y = 99999, z = 0 } -- player leaves
+        B.squads.sweep()
+        assert(#B.despawns >= 1, 'peds despawned')
+        T.eq(2, st.squads.sq1.strength, 'strength preserved (no kill counted)')
+    end)
+
+    T.it('B2 a region with no ambush data is a clean no-op (sweep does nothing)', function()
+        local B = boot() -- real FhRegions: no ambush data anywhere
+        B.squads.sweep()
+        T.eq(0, count(B.spawns))
+        T.eq(0, #B.despawns)
+    end)
+
+    T.it('B2 squad_wiped is emitted once when the last member dies (server health check)', function()
+        local B, st = heldSquad()
+        B.squads.sweep() -- materialise
+        for _, s in pairs(B.spawns) do B.healths[s.netId] = 0 end -- every member dies
+        B.squads.sweep()
+        T.eq(1, #B.wiped, 'one wipe event')
+        T.same({ squad_id = 'sq1', goal = 'ambush', faction = 'outlaws', node = 'heartlands_amb_bend',
+            camp_id = 'heartlands_t1_01', region_id = 'heartlands', label = 'Dakota bend' }, B.wiped[1])
+        T.eq(nil, st.squads.sq1, 'squad removed from state')
+    end)
+
+    T.it('/alife lists squads by goal, node and strength; prints "no ambush nodes" for empty regions', function()
+        -- no ambush data: every camp region prints "<region>: no ambush nodes"
+        local B0 = boot()
+        B0.commands.alife(1, {}, 'alife')
+        local msg0
+        for _, b in ipairs(B0.broadcasts) do if b[1] == 1 then msg0 = b[2].args[2] end end
+        assert(msg0 and msg0:find('heartlands: no ambush nodes', 1, true), 'no-ambush line: ' .. tostring(msg0))
+        -- with ambush data and a held squad: the squad line shows goal, node label and strength
+        local B = heldSquad()
+        B.commands.alife(1, {}, 'alife')
+        local msg
+        for _, b in ipairs(B.broadcasts) do if b[1] == 1 then msg = b[2].args[2] end end
+        assert(msg and msg:find('sq1 ambush@Dakota bend x2 hold', 1, true), 'squad line: ' .. tostring(msg))
     end)
 end)
 
