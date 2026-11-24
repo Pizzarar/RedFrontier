@@ -27,3 +27,4 @@
 
 ## In flight
 - a-life-01 MERGED + pushed c1eed21. Follow-ups on main and pushed: idea-803 e7a2783 (no law heat inside your own town lot, via homestead lawSafeAt) and idea-805 53770c3 (review minors, factionLabel broadcasts); 82/1510/0. Lane idle. Waiting on the owner's in-game check, then the owner picks a v2 item from Open.
+- a-life-02 B1 rules on a-life-b1 (61de786), W1 dropped: @world H ships regions[].ambush.
