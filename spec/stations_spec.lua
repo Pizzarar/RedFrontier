@@ -26,6 +26,11 @@ case('nearest within radius (inclusive); outside refused', function()
     T.eq('station_1', s.slot_id); T.eq(1.0, d)
     assert(S.nearest(l, at(p1, 6.0, 7.0), 3.0) ~= nil, 'exactly at maxDist counts')
     assert(S.nearest(l, at(p1, 6.0, 7.5), 3.0) == nil)
+    -- ground-snapped station: 12 m below hint z within 2 m horizontally -> found; 4 m horizontally or >20 m dz -> nil
+    local below = { x = p1.center.x + 8.0, y = p1.center.y + 4.0, z = p1.center.z - 12.0 }
+    T.eq('station_1', S.nearest(l, below, 3.0).slot_id)
+    assert(S.nearest(l, { x = p1.center.x + 10.0, y = p1.center.y + 4.0, z = p1.center.z - 12.0 }, 3.0) == nil)
+    assert(S.nearest(l, { x = p1.center.x + 8.0, y = p1.center.y + 4.0, z = p1.center.z - 21.0 }, 3.0) == nil)
 end)
 case('nearest picks the closest of several', function()
     local l = S.builtStations(p1, { station_1 = 1, station_2 = 1, station_3 = 1 })

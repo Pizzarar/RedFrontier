@@ -112,6 +112,24 @@ case('planTransfer: reach to the wagon and to the source container', function()
     assert(why(plan({ open = false })) == 'fh_nothing_open')
     assert(why(plan({ playerCoords = false })) == 'fh_no_player_coords')
 end)
+case('planTransfer: ground-snapped chest uses horizontal reach + vertical snap tolerance; non-snapped stays 3D', function()
+    local hint = { x = -496, y = 750, z = 105 }
+    local player = { x = -494, y = 750, z = 93 } -- 12 m below hint, 2 m horizontal
+    local w = { id = 'C1:t2', owner = 'C1', tier = 't2', coords = { x = -493, y = 750, z = 93 } }
+    local p = plan({ playerCoords = player, wagon = w })
+    p.open.coords = hint
+    assert(why(p) == 'ok')
+    p.playerCoords = { x = -492, y = 750, z = 93 } -- 4 m horizontal
+    assert(why(p) == 'fh_out_of_reach')
+    p.playerCoords = { x = -494, y = 750, z = 84.5 } -- 20.5 m below hint (beyond tolerance)
+    p.wagon = { id = 'C1:t2', owner = 'C1', tier = 't2', coords = { x = -493, y = 750, z = 84.5 } }
+    assert(why(p) == 'fh_out_of_reach')
+    -- non-snapped open container (drop_bag) keeps strict 3D
+    local p2 = plan({ playerCoords = player, wagon = w })
+    p2.open.type = 'drop_bag'
+    p2.open.coords = hint
+    assert(why(p2) == 'fh_out_of_reach')
+end)
 case('planTransfer: wagon cannot be the other side; bad inputs', function()
     local p = plan()
     p.open.type = 'wagon'

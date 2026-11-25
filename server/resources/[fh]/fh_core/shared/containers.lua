@@ -46,6 +46,9 @@ function M.defaults(containerType)
     return { slots = c.slots, maxWeight = c.maxWeight }
 end
 
+M.DEFAULT_SNAP_ABOVE = 20.0
+M.DEFAULT_SNAP_BELOW = 20.0
+
 ---Reach distance in metres for a type (per-type override, else Access.InteractDistance).
 function M.interactDistance(containerType)
     local c = cfg()
@@ -54,11 +57,27 @@ function M.interactDistance(containerType)
     return (c.Access and c.Access.InteractDistance) or 3.5
 end
 
----Accepts vector3 or {x=,y=,z=}. Returns nil when the value has no numeric x/y/z.
+---True when a container type's client prop/prompt is ground-snapped from a config z-hint.
+function M.isSnapped(containerType)
+    local per = (cfg().Containers or {})[containerType]
+    return per ~= nil and per.snapped == true
+end
+
+---Vertical tolerance (above, below) in metres for ground-snapped world containers.
+function M.snapTolerance()
+    local a = cfg().Access or {}
+    local above = type(a.SnapToleranceAbove) == 'number' and a.SnapToleranceAbove or M.DEFAULT_SNAP_ABOVE
+    local below = type(a.SnapToleranceBelow) == 'number' and a.SnapToleranceBelow or M.DEFAULT_SNAP_BELOW
+    return above, below
+end
+
+local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
+
+---Accepts vector3 or {x=,y=,z=}. Returns nil when the value has no finite numeric x/y/z.
 local function xyz(v)
     if v == nil then return nil end
     local ok, x, y, z = pcall(function() return v.x, v.y, v.z end)
-    if not ok or type(x) ~= 'number' or type(y) ~= 'number' or type(z) ~= 'number' then return nil end
+    if not ok or not finite(x) or not finite(y) or not finite(z) then return nil end
     return x, y, z
 end
 
@@ -66,16 +85,34 @@ function M.validCoords(v) return xyz(v) ~= nil end
 
 ---Can a player at `playerCoords` use a container of `containerType` at `containerCoords`?
 ---Carried types always pass. World types fail without coords (fh_no_coords) or beyond reach (fh_out_of_reach).
+---Ground-snapped types (config `snapped = true`, or `opts.snapped == true`) check horizontal distance <= reach and
+---vertical offset within [-SnapToleranceBelow, +SnapToleranceAbove] of the container's config z-hint; all other
+---world types keep strict 3D distance <= reach.
+---@param opts table|nil optional { snapped = boolean } override
 ---@return boolean ok, string|nil reason
-function M.canReach(containerType, containerCoords, playerCoords)
+function M.canReach(containerType, containerCoords, playerCoords, opts)
     if not M.ACCEPTS[containerType] then return false, 'fh_unknown_container' end
     if M.CARRIED[containerType] then return true end
     local cx, cy, cz = xyz(containerCoords)
     if not cx then return false, 'fh_no_coords' end
     local px, py, pz = xyz(playerCoords)
     if not px then return false, 'fh_no_player_coords' end
-    local dx, dy, dz = cx - px, cy - py, cz - pz
+    local dx, dy = cx - px, cy - py
     local reach = M.interactDistance(containerType)
+    local snapped
+    if type(opts) == 'table' and opts.snapped ~= nil then
+        snapped = opts.snapped == true
+    else
+        snapped = M.isSnapped(containerType)
+    end
+    if snapped then
+        if dx * dx + dy * dy > reach * reach then return false, 'fh_out_of_reach' end
+        local above, below = M.snapTolerance()
+        local dzPlayer = pz - cz -- >0: player above hint; <0: player below hint
+        if dzPlayer > above or dzPlayer < -below then return false, 'fh_out_of_reach' end
+        return true
+    end
+    local dz = cz - pz
     if dx * dx + dy * dy + dz * dz > reach * reach then return false, 'fh_out_of_reach' end
     return true
 end

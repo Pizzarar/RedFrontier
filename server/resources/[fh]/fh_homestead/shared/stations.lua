@@ -11,13 +11,19 @@ local function validCoords(c)
     return ok and finite(x) and finite(y) and finite(z)
 end
 
-local function dist(a, b)
-    if not validCoords(a) or not validCoords(b) then return nil end
-    local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
-    return math.sqrt(dx * dx + dy * dy + dz * dz)
-end
-
 M.DEFAULT_MAX_DIST = 3.0
+-- Built station props are ground-snapped client-side (fh_homestead/client/main.lua), while s.coords holds the config z-hint.
+-- Match fh_core FhConfig.Access.SnapToleranceAbove / SnapToleranceBelow (20.0 m).
+M.SNAP_ABOVE = 20.0
+M.SNAP_BELOW = 20.0
+
+local function snappedDist(stationCoords, playerCoords)
+    if not validCoords(stationCoords) or not validCoords(playerCoords) then return nil end
+    local dzPlayer = playerCoords.z - stationCoords.z
+    if dzPlayer > M.SNAP_ABOVE or dzPlayer < -M.SNAP_BELOW then return nil end
+    local dx, dy = playerCoords.x - stationCoords.x, playerCoords.y - stationCoords.y
+    return math.sqrt(dx * dx + dy * dy)
+end
 
 ---World coords of a slot: plot center + prop offset (verified prop when verifiedProps and present).
 function M.slotCoords(plot, slot, verifiedProps)
@@ -69,7 +75,7 @@ function M.nearest(stations, coords, maxDist, stationType)
     local best, bestD
     for _, s in ipairs(stations) do
         if stationType == nil or s.station_type == stationType then
-            local d = dist(s.coords, coords)
+            local d = snappedDist(s.coords, coords)
             if d and d <= maxDist and (bestD == nil or d < bestD) then best, bestD = s, d end
         end
     end

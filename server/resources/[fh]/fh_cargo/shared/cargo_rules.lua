@@ -14,6 +14,8 @@ M.ORDER = { 't1', 't2', 't3' }
 M.SPEED_LOAD_PENALTY = 0.4 -- a wagon at max weight goes at (1 - 0.4) of its cap
 M.DEFAULT_REACH = 5.0
 M.DEFAULT_OPEN_REACH = 3.5
+M.SNAP_ABOVE = 20.0 -- matches FhConfig.Access.SnapToleranceAbove / FhGroundSnap.PROBE_ABOVE
+M.SNAP_BELOW = 20.0 -- matches FhConfig.Access.SnapToleranceBelow
 M.DEFAULT_FAST_TRAVEL_REACH = 30.0
 M.MAX_NEAREST_RANGE = 25.0
 
@@ -61,6 +63,17 @@ local function within(a, b, reach)
     if not ax or not bx then return nil end
     local dx, dy, dz = ax - bx, ay - by, az - bz
     return dx * dx + dy * dy + dz * dz <= reach * reach
+end
+
+---Horizontal reach + vertical snap tolerance for ground-snapped containers (e.g. chests whose server coords are a config z-hint).
+local function withinSnapped(hintCoords, playerCoords, reach, above, below)
+    local cx, cy, cz = xyz(hintCoords)
+    local px, py, pz = xyz(playerCoords)
+    if not cx or not px then return nil end
+    local dx, dy = cx - px, cy - py
+    if dx * dx + dy * dy > reach * reach then return false end
+    local dzPlayer = pz - cz
+    return dzPlayer <= above and dzPlayer >= -below
 end
 
 ---Own wagon, in reach. wagon = { owner = citizenid, coords = ... }.
@@ -160,7 +173,15 @@ function M.planTransfer(p)
     if type(open) ~= 'table' or not open.type or not open.id then return nil, 'fh_nothing_open' end
     if open.type == 'wagon' then return nil, 'fh_same_container' end
     if not xyz(open.coords) then return nil, 'fh_no_coords' end
-    if not within(open.coords, p.playerCoords, open.reach or M.DEFAULT_OPEN_REACH) then return nil, 'fh_out_of_reach' end
+    local openReach = open.reach or M.DEFAULT_OPEN_REACH
+    local openSnapped = open.snapped == true or (open.snapped == nil and open.type == 'chest')
+    local openInReach
+    if openSnapped then
+        openInReach = withinSnapped(open.coords, p.playerCoords, openReach, M.SNAP_ABOVE, M.SNAP_BELOW)
+    else
+        openInReach = within(open.coords, p.playerCoords, openReach)
+    end
+    if not openInReach then return nil, 'fh_out_of_reach' end
 
     local wagonRef = { type = 'wagon', id = M.stashId(p.wagon.id) }
     local openRef = { type = open.type, id = open.id }

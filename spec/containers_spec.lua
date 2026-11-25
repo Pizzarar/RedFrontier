@@ -65,8 +65,37 @@ describe('fh_core shared/containers', function()
             assert(Containers.canReach('wagon', { x = 0, y = 0, z = 0 }, { x = 0, y = 4.9, z = 0 }))
             eq(false, (Containers.canReach('wagon', { x = 0, y = 0, z = 0 }, { x = 0, y = 5.1, z = 0 })))
         end)
-        it('measures in 3D', function()
-            eq(false, (Containers.canReach('chest', { x = 0, y = 0, z = 0 }, { x = 2, y = 2, z = 3 })))
+        it('measures non-snapped types in 3D (unchanged)', function()
+            for _, t in ipairs({ 'saddlebag', 'drop_bag', 'fence_stash' }) do
+                eq(false, Containers.isSnapped(t), t)
+                local ok, reason = Containers.canReach(t, { x = 0, y = 0, z = 0 }, { x = 2, y = 2, z = 3 })
+                eq(false, ok, t); eq('fh_out_of_reach', reason, t)
+                ok, reason = Containers.canReach(t, { x = -496, y = 750, z = 105 }, { x = -494, y = 750, z = 93 })
+                eq(false, ok, t); eq('fh_out_of_reach', reason, t)
+            end
+            eq(false, Containers.isSnapped('wagon'))
+            local ok, reason = Containers.canReach('wagon', { x = -496, y = 750, z = 105 }, { x = -494, y = 750, z = 93 })
+            eq(false, ok); eq('fh_out_of_reach', reason)
+        end)
+        it('ground-snapped chest checks horizontal reach + vertical snap tolerance', function()
+            eq(true, Containers.isSnapped('chest'))
+            local hint = { x = -496, y = 750, z = 105 }
+            -- 12 m below hint z, 2 m horizontally -> ok
+            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 93 }))
+            -- at vertical tolerance edges (±20 m) within horizontal reach -> ok
+            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 85 }))
+            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 125 }))
+            -- 4 m horizontally -> fh_out_of_reach
+            local ok, reason = Containers.canReach('chest', hint, { x = -492, y = 750, z = 93 })
+            eq(false, ok); eq('fh_out_of_reach', reason)
+            -- dz beyond tolerance (below and above) -> fh_out_of_reach
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 84.9 })
+            eq(false, ok); eq('fh_out_of_reach', reason)
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 125.1 })
+            eq(false, ok); eq('fh_out_of_reach', reason)
+            -- explicit opts.snapped = false forces 3D even for chest
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 93 }, { snapped = false })
+            eq(false, ok); eq('fh_out_of_reach', reason)
         end)
     end)
 

@@ -16,6 +16,7 @@ M.DefaultSizeClass = 'pocket'
 -- Per-container capacity. Which size classes a container accepts lives in shared/containers.lua (contract, not tuning).
 --   slots / maxWeight : defaults for a new container of that type
 --   interactDistance  : reach override in metres (falls back to Access.InteractDistance)
+--   snapped           : true when client props/prompts ground-snap z from a config hint (horizontal reach + vertical snap window)
 M.Containers = {
     -- equipped = the first `slots` player slots (rsg-inventory hotbar). Its own weight sub-cap sits inside the
     -- player's total; backpack gets the rest of the player slots and the rest of the total.
@@ -23,7 +24,7 @@ M.Containers = {
     backpack    = { slots = 20 }, -- no own cap: total carry weight minus equipped (set maxWeight to add one)
     saddlebag   = { slots = 20, maxWeight = 60000 },
     wagon       = { slots = 60, maxWeight = 500000, interactDistance = 5.0 },
-    chest       = { slots = 50, maxWeight = 1000000 },
+    chest       = { slots = 50, maxWeight = 1000000, snapped = true },
     drop_bag    = { slots = 30, maxWeight = 1000000 },
     fence_stash = { slots = 20, maxWeight = 200000 },
 }
@@ -42,6 +43,12 @@ M.Saddlebag = {
 
 M.Access = {
     InteractDistance = 3.5,
+    -- Vertical reach bounds (metres) for ground-snapped containers (`snapped = true`), relative to the config z-hint:
+    -- SnapToleranceAbove matches FhGroundSnap.PROBE_ABOVE (20.0 m: probe starts 20 m above hint);
+    -- SnapToleranceBelow (20.0 m) covers FhGroundSnap.SNAP_TOLERANCE (10.0 m) + InteractDistance (3.5 m) and downward
+    -- groundZAt probes (e.g. fh_zones camp stashes) whose real ground sits >10 m below an unverified config z-hint.
+    SnapToleranceAbove = 20.0,
+    SnapToleranceBelow = 20.0,
 }
 
 -- Items fh_core defines outright (pushed into rsg-core with SetItems at start). Shape: see shared/items.lua.
