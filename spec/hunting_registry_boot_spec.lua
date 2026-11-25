@@ -100,11 +100,24 @@ describe('hunting registry boot (FXServer mode, fxmanifest order)', function()
     end)
     it('a colliding id and an unknown species_model are absent from every consumer', function()
         eq(true, FhRegions.isEnabled('great_plains'))
-        same({ 'legendary_bear' }, (function()
-            local ids = {}
-            for _, e in ipairs(L.list) do ids[#ids + 1] = e.id end
-            return ids
-        end)())
+        -- the injected bad ids are absent from the registry list; every good data file is still present
+        local have = {}
+        for _, e in ipairs(L.list) do have[e.id] = true end
+        eq(nil, have.wolf); eq(nil, have.legendary_panther)
+        local good = 0
+        for _, rid in ipairs(L.regionIds()) do
+            local f = io.open(base .. 'data/legendaries/' .. rid .. '.lua', 'r')
+            if f and not BAD[rid] then
+                f:close()
+                local e = dofile(base .. 'data/legendaries/' .. rid .. '.lua')
+                if type(e) == 'table' then
+                    good = good + 1
+                    assert(have[e.id], rid .. ': good entry ' .. e.id .. ' is missing')
+                    eq(e.id, L.byRegion[rid].id, rid)
+                end
+            elseif f then f:close() end
+        end
+        assert(good >= 1, 'no good data file was checked')
         eq(nil, L:get('wolf')); eq(nil, L:get('legendary_panther'))
         eq(nil, L.byRegion.great_plains); eq(nil, L.byRegion.roanoke_ridge)
         for _, e in ipairs(L:active()) do assert(e.id ~= 'wolf' and e.id ~= 'legendary_panther', e.id) end

@@ -24,7 +24,6 @@ local function entry(b) return L.byRegion[b.region] end
 describe('hunting legendaries batch A: data', function()
     it('all five regions hold an entry and the loader reports no warnings', function()
         same({}, L.warnings)
-        eq(6, #L.list) -- the bear plus the five batch-A entries; the other nine regions are still stubs
         for _, b in ipairs(BATCH) do
             local e = entry(b)
             assert(e, b.region .. ': missing entry')
