@@ -1,0 +1,13 @@
+{
+  "laneId": "ui",
+  "updatedAt": "2026-11-25T17:24:40.559Z",
+  "units": [
+    {
+      "id": "ui-saddlebag-pane",
+      "goal": "Saddlebag outfit pane hook -> fh_tailor openWardrobe (idea-1003 T4b follow-up; needs core hook idea-1024)",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked"
+    }
+  ]
+}
