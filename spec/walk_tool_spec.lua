@@ -32,6 +32,26 @@ it('a camp aliases its territory: one entry per camp, both ids resolve', functio
     eq('heartlands_t1_camp', byId.heartlands_t1_01.id, 'canonical id is the territory (added first)')
 end)
 
+it('places of different kinds at identical coords never merge; only camp->territory aliases', function()
+    local r = {
+        regions = { r1 = { id = 'r1', towns = { { id = 'town1', label = 'Town', x = 10, y = 20, z = 30 } },
+            ambush = { { id = 'r1_amb_1', x = 10, y = 20, z = 30 } } } },
+        territories = { t1 = { id = 't1', region = 'r1', center = { x = 10, y = 20, z = 30 } } },
+        posts = { post1 = { id = 'post1', region = 'r1', x = 10, y = 20, z = 30 } },
+    }
+    local zones = { camps = {
+        c1 = { id = 'c1', territory = 't1', center = { x = 10, y = 20, z = 30 }, region = 'r1' },
+        c2 = { id = 'c2', territory = 'nope', center = { x = 10, y = 20, z = 30 }, region = 'r1' }, -- no territory
+    } }
+    local hs = { plots = { lot1 = { class = 'town_lot', region = 'r1', center = { x = 10, y = 20, z = 30 } } } }
+    local p, b = P.index(r, { homestead = hs, zones = zones })
+    eq('town', b.town1.kind); eq('post', b.post1.kind); eq('ambush', b.r1_amb_1.kind); eq('lot', b.lot1.kind)
+    eq('town1', b.town1.id); eq('post1', b.post1.id); eq('r1_amb_1', b.r1_amb_1.id); eq('lot1', b.lot1.id)
+    eq(b.t1, b.c1, 'a camp still aliases its territory')
+    eq('c2', b.c2.id, 'a camp without an indexed territory is its own place, not merged by coords')
+    eq(6, #p, 'town, ambush, territory, post, lot and the unaliased camp are each listed once')
+end)
+
 it('index carries class for lots/claims (drives the tight town-lot probe)', function()
     eq('town_lot', byId.heartlands_lot_01.class)
     eq('lot', byId.heartlands_lot_01.kind)

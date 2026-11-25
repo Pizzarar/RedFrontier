@@ -64,24 +64,15 @@ end
 ---sources = { homestead = FhHomesteadConfig, zones = FhZonesConfig } (both optional).
 function M.index(regions, sources)
     local places, byId = {}, {}
-    local byCoord = {}
     sources = sources or {}
-    local function coordKey(x, y, z) return tostring(x) .. ',' .. tostring(y) .. ',' .. tostring(z) end
     local function put(id, kind, label, x, y, z, region, verified, class)
         if type(id) ~= 'string' or id == '' then return end
         if not (finite(x) and finite(y) and finite(z)) then return end
         if byId[id] then return end
-        local key = coordKey(x, y, z)
-        local existing = byCoord[key]
-        if existing then
-            byId[id] = existing -- alias: same physical spot (a camp and its territory), listed once
-            return
-        end
         local p = { id = id, kind = kind, x = x, y = y, z = z, region = region, verified = verified == true }
         if class ~= nil then p.class = class end
         if type(label) == 'string' and label ~= '' then p.label = label end
         byId[id] = p
-        byCoord[key] = p
         places[#places + 1] = p
     end
 
@@ -116,8 +107,15 @@ function M.index(regions, sources)
     if type(zn) == 'table' and type(zn.camps) == 'table' then
         for id, camp in pairs(zn.camps) do
             if type(camp) == 'table' then
-                local x, y, z = xyz(camp.center)
-                if x then put(id, 'camp', camp.name, x, y, z, camp.region, camp.verified) end
+                -- Explicit alias (not a coordinate match): a camp whose territory is indexed is the same place, so
+                -- both ids resolve to one entry. Places of any other kind never merge, even at identical coords.
+                local terr = type(camp.territory) == 'string' and byId[camp.territory] or nil
+                if terr and terr.kind == 'camp' then
+                    if byId[id] == nil then byId[id] = terr end
+                else
+                    local x, y, z = xyz(camp.center)
+                    if x then put(id, 'camp', camp.name, x, y, z, camp.region, camp.verified) end
+                end
             end
         end
     end
