@@ -4,13 +4,14 @@
 
 ## Who's here
 - Brainstorm: Crafting
-- Lead: ★ Cra2
+- Lead: ★ Cra3
 - Workers: 0
 
 ## Done when
 - The M2 crafting loop plays end to end in game: loot worn_rifle → restore at the bench, craft ammo, brew a tonic and see the buff. Every input has an in-game source (C8 sources spec has no PENDING), and the Crafting OWNER-TESTS card PASSes.
 
 ## Decided
+- 2026-11-25 Plan docs/brainstorm/plans/crafting-03-cooking.md (C10a-b, idea-852): station type cook→campfire; cook_meat/cook_stew/cook_stew_veg into rsg cooked_meat/stew/stew_veg (survival already maps them to well_fed). raw_meat from @hunting skin grant; carrot/potato/corn BUY via @roads supplies.
 - 2026-11-24 Plan docs/brainstorm/plans/crafting-02-herbs.md (C9a-c, idea-720): herb patches via lib.points + [E] + progressBar, server reach + shared per-patch cooldown, addItem carried. No new natives. Props/blips → spikes spk_herb (Open).
 - 2026-11-23 C7 merged 9211816, playtest-ready. idea-712 UN-PARKED as C8: buy lumber/nails/lead/casings at fh_trade posts (@roads `supplies` list); gun_parts = outlaw camp loot (@core fh_zones). No gathering. Crafting adds a sources spec + OWNER-TESTS only. idea-718: gunpowder + 4 herbs also BUY via idea-716 supplies; herb gathering parked.
 - 2026-11-23 CORRECTION: B7 removeItem was already on main. C1-C6 + C5a/C5b merged to main 40e0b57 (docs 11bb2ce, specs 57/1155/0). Next: C7 = H3 type map + ready gate + owner-plot reach via getStations + core-03 carried API/setItemInfo swap (lead packet-crafting.md). Not playtest-ready until C7.
@@ -22,13 +23,12 @@
 - Visual wear behind existing `fh_spike_gated` convar (fh_core/docs/spike-gated.md); no new flag. Condition already in item info via FhItems.condition (fh_core/shared/items.lua:132); worn_rifle drops at 20-45 (fh_zones/config.lua:27).
 
 ## Open
+- C10 contracts: @hunting raw_meat on skin; @roads veg in supplies. Farming parked.
 - C8 contracts: @roads supplies buy list; @core gun_parts in camp loot.
 - @ui buff HUD: lead-queued.
-- C7 (next lead): H3 type map + ready gate + getStations reach + core-03 carried API/setItemInfo swap. Tonic caps idea-612 status unverified.
 
 ## In flight
 - 2026-11-25 PASS+MERGED C9a-c herb gathering (idea-720, plan crafting-02-herbs) to main 3ee435d (ff on 743221f; Gemini PASS 0/0/0 7314883; venv 111/2046/0, contracts 0, syntax 0). Herb patches = second herb source next to trade supplies; coords TODO-verify-in-game.
 - 2026-11-23 PASS+MERGED C8 (idea-712) to main dc6c11e (ff on efc5227; Gemini PASS 0/0/2 + spec-only minors; venv 70/1357/0). spec/crafting_sources_spec.lua PENDING: 9 buy items -> @roads idea-716, gun_parts -> @core idea-717; must shrink to {}.
 - 2026-11-23 PASS+MERGED C7 to main 9211816 (ff on 9c86f29; Gemini PASS 0/0/0 51413f3 + docs-only 612 commit; venv 67/1335/0). Crafting plan complete: playtest-ready 9211816 (owner test needs H2 /fh_build or fh_dev 1).
-- 2026-11-24 Cra2 rn-ba5485686a96: C8 sources spec running; C9 herbs handed over.
-- 2026-11-23 MERGED C1-C6 (incl. C5a, C5b) to main 40e0b57 (ff, on 9beb4c0; venv specs 57/1155/0; crafting files identical to reviewed b6fb09a; shared append-only files +lines only). NEXT unit C7 (not started): H3 type map + ready gate + owner-plot reach via getStations, and swap to core-03 carried API (addItem/removeItem carried refs, setItemInfo). Not playtest-ready until C7.
+- 2026-11-25 PASS+MERGED C10a-b cooking (idea-852, plan crafting-03-cooking) to main c657135 (ff on db4bd55; Gemini PASS 0/0/2 5236cc4, low 2 fixed c657135, low 1 places.lua ok by UI3; venv 122/2226/0, contracts 0, syntax 231/0). Live playtest needs fh_give until idea-914 raw_meat + idea-915 veg land.
