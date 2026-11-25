@@ -4,13 +4,13 @@
 -- animal through fh_core requestSpawn. All coordinates UNVERIFIED in game (stand at each spot, read coords, adjust).
 return {
     id = 'legendary_palehorn_elk',
-    label = 'Palehorn Elk',
+    label = 'Legendary Palehorn Elk',
     species_model = 'a_c_elk_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                   -- TODO-verify-in-game
     scale = 1.25,                 -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_palehorn_elk', label = 'Palehorn Elk Pelt', value = 51, weight = 24000,
+    pelt = { item = 'pelt_legendary_palehorn_elk', label = 'Legendary Palehorn Elk Pelt', value = 51, weight = 24000,
         image = 'perfect_pelt.png' },
-    trophy = { item = 'trophy_legendary_palehorn_elk', label = 'Palehorn Elk Trophy', comfort = 25 },
+    trophy = { item = 'trophy_legendary_palehorn_elk', label = 'Legendary Palehorn Elk Trophy', comfort = 25 },
     rumour = {
         coords = { x = -1300.0, y = 1600.0, z = 240.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

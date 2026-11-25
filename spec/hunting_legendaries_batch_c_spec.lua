@@ -13,10 +13,10 @@ local regions = require('regions')
 
 -- The four Batch C entries, in region order.
 local BATCH = {
-    { region = 'hennigans_stead', id = 'legendary_saltbrush_buck',   label = 'Saltbrush Buck',   species = 'a_c_deer_01' },
-    { region = 'cholla_springs',  id = 'legendary_cinderjaw_coyote', label = 'Cinderjaw Coyote', species = 'a_c_coyote_01' },
-    { region = 'gaptooth_ridge',  id = 'legendary_sandveil_fox',     label = 'Sandveil Fox',     species = 'a_c_fox_01' },
-    { region = 'rio_bravo',       id = 'legendary_canyonback_boar',  label = 'Canyonback Boar',  species = 'a_c_boar_01' },
+    { region = 'hennigans_stead', id = 'legendary_saltbrush_buck',   label = 'Legendary Saltbrush Buck',   species = 'a_c_deer_01' },
+    { region = 'cholla_springs',  id = 'legendary_cinderjaw_coyote', label = 'Legendary Cinderjaw Coyote', species = 'a_c_coyote_01' },
+    { region = 'gaptooth_ridge',  id = 'legendary_sandveil_fox',     label = 'Legendary Sandveil Fox',     species = 'a_c_fox_01' },
+    { region = 'rio_bravo',       id = 'legendary_canyonback_boar',  label = 'Legendary Canyonback Boar',  species = 'a_c_boar_01' },
 }
 
 describe('hunting legendaries batch C: data files', function()

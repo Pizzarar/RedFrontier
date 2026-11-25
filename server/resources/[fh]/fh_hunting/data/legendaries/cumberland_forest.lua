@@ -4,13 +4,13 @@
 -- animal through fh_core requestSpawn. All coordinates UNVERIFIED in game (stand at each spot, read coords, adjust).
 return {
     id = 'legendary_greyhowl_wolf',
-    label = 'Greyhowl Wolf',
+    label = 'Legendary Greyhowl Wolf',
     species_model = 'a_c_wolf', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                 -- TODO-verify-in-game
     scale = 1.2,                -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_greyhowl_wolf', label = 'Greyhowl Wolf Pelt', value = 27, weight = 8000,
+    pelt = { item = 'pelt_legendary_greyhowl_wolf', label = 'Legendary Greyhowl Wolf Pelt', value = 27, weight = 8000,
         image = 'resource_pelt_wolf.png' },
-    trophy = { item = 'trophy_legendary_greyhowl_wolf', label = 'Greyhowl Wolf Trophy', comfort = 25 },
+    trophy = { item = 'trophy_legendary_greyhowl_wolf', label = 'Legendary Greyhowl Wolf Trophy', comfort = 25 },
     rumour = {
         coords = { x = -810.0, y = 1340.0, z = 130.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

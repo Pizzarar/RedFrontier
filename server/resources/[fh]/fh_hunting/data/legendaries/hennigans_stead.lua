@@ -4,13 +4,13 @@
 -- animal through fh_core requestSpawn. All coordinates UNVERIFIED in game (stand at each spot, read coords, adjust).
 return {
     id = 'legendary_saltbrush_buck',
-    label = 'Saltbrush Buck',
+    label = 'Legendary Saltbrush Buck',
     species_model = 'a_c_deer_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                    -- TODO-verify-in-game
     scale = 1.25,                  -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_saltbrush_buck', label = 'Saltbrush Buck Pelt', value = 19, weight = 6000,
+    pelt = { item = 'pelt_legendary_saltbrush_buck', label = 'Legendary Saltbrush Buck Pelt', value = 19, weight = 6000,
         image = 'good_pelt.png' },
-    trophy = { item = 'trophy_legendary_saltbrush_buck', label = 'Saltbrush Buck Trophy', comfort = 25 },
+    trophy = { item = 'trophy_legendary_saltbrush_buck', label = 'Legendary Saltbrush Buck Trophy', comfort = 25 },
     rumour = {
         coords = { x = -2275.0, y = -2485.0, z = 60.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

@@ -4,13 +4,13 @@
 -- animal through fh_core requestSpawn. All coordinates UNVERIFIED in game (stand at each spot, read coords, adjust).
 return {
     id = 'legendary_canyonback_boar',
-    label = 'Canyonback Boar',
+    label = 'Legendary Canyonback Boar',
     species_model = 'a_c_boar_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                    -- TODO-verify-in-game
     scale = 1.2,                   -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_canyonback_boar', label = 'Canyonback Boar Pelt', value = 16, weight = 6000,
+    pelt = { item = 'pelt_legendary_canyonback_boar', label = 'Legendary Canyonback Boar Pelt', value = 16, weight = 6000,
         image = 'good_pelt.png' },
-    trophy = { item = 'trophy_legendary_canyonback_boar', label = 'Canyonback Boar Trophy', comfort = 25 },
+    trophy = { item = 'trophy_legendary_canyonback_boar', label = 'Legendary Canyonback Boar Trophy', comfort = 25 },
     rumour = {
         coords = { x = -2000.0, y = -3000.0, z = 55.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

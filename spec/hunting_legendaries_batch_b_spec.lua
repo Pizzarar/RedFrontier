@@ -13,11 +13,11 @@ local regions = require('regions')
 
 -- The five Batch B entries, in region order.
 local BATCH = {
-    { region = 'grizzlies_east',    id = 'legendary_frostmane_moose',  label = 'Frostmane Moose',  species = 'a_c_moose_01' },
-    { region = 'grizzlies_west',    id = 'legendary_palehorn_elk',     label = 'Palehorn Elk',     species = 'a_c_elk_01' },
-    { region = 'cumberland_forest', id = 'legendary_greyhowl_wolf',    label = 'Greyhowl Wolf',    species = 'a_c_wolf' },
-    { region = 'big_valley',        id = 'legendary_copperhide_deer',  label = 'Copperhide Deer',  species = 'a_c_deer_01' },
-    { region = 'tall_trees',        id = 'legendary_embercoat_coyote', label = 'Embercoat Coyote', species = 'a_c_coyote_01' },
+    { region = 'grizzlies_east',    id = 'legendary_frostmane_moose',  label = 'Legendary Frostmane Moose',  species = 'a_c_moose_01' },
+    { region = 'grizzlies_west',    id = 'legendary_palehorn_elk',     label = 'Legendary Palehorn Elk',     species = 'a_c_elk_01' },
+    { region = 'cumberland_forest', id = 'legendary_greyhowl_wolf',    label = 'Legendary Greyhowl Wolf',    species = 'a_c_wolf' },
+    { region = 'big_valley',        id = 'legendary_copperhide_deer',  label = 'Legendary Copperhide Deer',  species = 'a_c_deer_01' },
+    { region = 'tall_trees',        id = 'legendary_embercoat_coyote', label = 'Legendary Embercoat Coyote', species = 'a_c_coyote_01' },
 }
 
 describe('hunting legendaries batch B: data files', function()
