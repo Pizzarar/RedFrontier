@@ -16,6 +16,7 @@ local points = {}
 local shownText = nil
 local applySeq = 0
 local lastLook = nil
+local previewing = false -- a previewLook is on the ped (cleared by revertLook)
 
 -- ---------------------------------------------------------------- UI helpers
 
@@ -55,12 +56,14 @@ end
 
 -- ---------------------------------------------------------------- client apply (Config.FittedOutfits)
 
-local function applyLook(look)
-    if not cfg.FittedOutfits then return end
-    local plan = logic.resolveApply(cfg, look)
-    if not plan then return end
+---@param force boolean|nil preview only: apply even when Config.FittedOutfits is off
+---@return boolean applied
+local function applyLook(look, force)
+    if not cfg.FittedOutfits and not force then return false end
+    local plan = logic.resolveApply(cfg, look, force)
+    if not plan then return false end
     local ped = PlayerPedId()
-    if not ped or ped == 0 or not DoesEntityExist(ped) then return end
+    if not ped or ped == 0 or not DoesEntityExist(ped) then return false end
     -- Replaces rsg-character clothes with the fitted outfit preset; face/body stay as rsg-character set them.
     SetPedOutfitPreset(ped, plan.preset, true)
     for _, comp in ipairs(plan.components) do
@@ -70,6 +73,7 @@ local function applyLook(look)
         end
     end
     Citizen.InvokeNative(0xCC8CA3E88256E58F, ped, false, true, true, true, false)
+    return true
 end
 
 local function refreshAndApply(delayMs)
@@ -89,6 +93,35 @@ local function refreshAndApply(delayMs)
         end
     end)
 end
+
+-- Preview API for the @ui mirror screen (README "Client exports"). Local and cosmetic only: nothing is saved or sent.
+-- Allowed with Config.FittedOutfits off so a catalog can be previewed before the flag flips; the look is validated
+-- against the catalog like any apply (unknown ids / wrong kind -> false), and revertLook undoes it.
+---@param look table { outfit = id, items = { id, ... } }
+---@return boolean applied
+exports('previewLook', function(look)
+    if not applyLook(look, true) then return false end
+    previewing = true
+    return true
+end)
+
+---Undo a preview. Flag on: re-applies the saved look (server's worn look, else the last one pushed). Flag off: nothing
+---is applied normally, so a previewed ped is restored by reloading the character's saved skin through rsg-character's
+---ApplySkin export (it swaps the ped model briefly). Flag off and nothing previewed: does nothing.
+---@return boolean reverted
+exports('revertLook', function()
+    if cfg.FittedOutfits then
+        applySeq = applySeq + 1
+        previewing = false
+        local look = lib.callback.await('fh:tailor:worn', false)
+        if type(look) == 'table' then lastLook = look else look = lastLook end
+        return look ~= nil and applyLook(look)
+    end
+    if not previewing then return false end
+    previewing = false
+    local ok = pcall(function() exports['rsg-character']:ApplySkin() end)
+    return ok
+end)
 
 FH.onNet('fh:tailor:apply', function(look)
     if type(look) ~= 'table' then return end
@@ -281,7 +314,11 @@ local function openSavedMenu(data)
     lib.showContext('fh_tailor_saved')
 end
 
+local wardrobeReturnShop = nil
+local refreshWardrobeMenu
+
 local function openWardrobeMenu(returnShopId)
+    wardrobeReturnShop = returnShopId
     local ok, data = lib.callback.await('fh:tailor:wardrobe', false)
     if not ok then
         return notify(logic.message(data), 'error')
@@ -315,6 +352,16 @@ local function openWardrobeMenu(returnShopId)
         options = options,
     })
     lib.showContext('fh_tailor_wardrobe')
+end
+
+-- After a successful equip / save / wear the open fh_tailor menu holds stale (Worn) labels: reopen the wardrobe with
+-- fresh data. Only when one of our menus is the one on screen.
+refreshWardrobeMenu = function()
+    local open = lib.getOpenContextMenu and lib.getOpenContextMenu() or nil
+    if type(open) ~= 'string' or not open:find('^fh_tailor_') or open == 'fh_tailor_shop' or open == 'fh_tailor_stop' then
+        return
+    end
+    FH.thread(function() openWardrobeMenu(wardrobeReturnShop) end)
 end
 
 local function openTailorMenu(shopId)
@@ -354,10 +401,13 @@ FH.onNet('fh:tailor:result', function(res)
         end
     elseif res.action == 'equip' then
         notify(('Equipped %s.'):format(entryLabel(res.outfit_id)), 'success')
+        refreshWardrobeMenu()
     elseif res.action == 'save_outfit' then
         notify(('Saved outfit to slot %s.'):format(tostring(res.slot)), 'success')
+        refreshWardrobeMenu()
     elseif res.action == 'wear_saved' then
         notify(('Equipped saved outfit (slot %s).'):format(tostring(res.slot)), 'success')
+        refreshWardrobeMenu()
     end
 end)
 
@@ -383,21 +433,39 @@ FH.thread(function()
 end)
 
 -- Homestead wardrobe: references fh_homestead's chest points read-only (does not edit fh_homestead).
--- Uses [G] so fh_homestead's own [E] Homestead chest prompt is not shadowed.
+-- Uses [G] so fh_homestead's own [E] Homestead chest prompt is not shadowed. The prompt shows only at a chest of one of
+-- the player's OWN plots (server callback fh:tailor:own_plots, asked on entering the chest radius so a fresh claim counts).
 FH.thread(function()
-    if GetResourceState('fh_homestead') ~= 'started' then return end
-    local ok, plots = pcall(function() return lib.callback.await('fh:homestead:plots', false) end)
-    if not ok or type(plots) ~= 'table' then return end
+    local plots
+    for _ = 1, 60 do -- fh_homestead may start after us (or its callback not be registered yet): retry for ~5 min
+        if GetResourceState('fh_homestead') == 'started' then
+            local ok, res = pcall(function() return lib.callback.await('fh:homestead:plots', false) end)
+            if ok and type(res) == 'table' then plots = res break end
+        end
+        Wait(5000)
+    end
+    if not plots then return end
     local dist = cfg.homesteadWardrobeDistance or 3.0
     for _, p in ipairs(plots) do
-        if type(p) == 'table' and p.coords then
+        if type(p) == 'table' and type(p.id) == 'string' and p.coords then
+            local own, inside = false, false
             points[#points + 1] = lib.points.new({
                 coords = vector3(p.coords.x, p.coords.y, p.coords.z),
                 distance = dist,
-                onEnter = FH.wrap(function() showText('[G] Wardrobe') end),
-                onExit = FH.wrap(function() hideText() end),
+                onEnter = FH.wrap(function()
+                    own, inside = false, true
+                    FH.thread(function()
+                        local ids = lib.callback.await('fh:tailor:own_plots', false)
+                        if type(ids) == 'table' then
+                            for _, id in ipairs(ids) do if id == p.id then own = true end end
+                        end
+                        if not inside then own = false end
+                        if own then showText('[G] Wardrobe') end
+                    end)
+                end),
+                onExit = FH.wrap(function() own, inside = false, false; hideText() end),
                 nearby = FH.wrap(function()
-                    if IsControlJustReleased(0, INPUT_WARDROBE) then openWardrobeMenu(nil) end
+                    if own and IsControlJustReleased(0, INPUT_WARDROBE) then openWardrobeMenu(nil) end
                 end),
             })
         end

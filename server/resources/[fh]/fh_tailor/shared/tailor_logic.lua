@@ -81,6 +81,9 @@ function M.validateConfig(cfg, isKnownRegion)
     end
     if cfg.maxSavedOutfits < 1 or cfg.maxSavedOutfits > 255 then return false, 'bad_maxSavedOutfits' end
     -- worn/saved items are comma-joined into varchar(512)
+    if cfg.actionDebounceMs ~= nil and not (isInt(cfg.actionDebounceMs) and cfg.actionDebounceMs >= 0) then
+        return false, 'bad_actionDebounceMs'
+    end
     if cfg.maxItems * (M.MAX_ID + 1) > M.MAX_ITEMS_TEXT then return false, 'bad_maxItems' end
     if type(cfg.shops) ~= 'table' then return false, 'bad_shops' end
     for id, s in pairs(cfg.shops) do
@@ -282,6 +285,7 @@ M.messages = {
     bad_slot = 'There is no such wardrobe slot.',
     empty_slot = 'That wardrobe slot is empty.',
     bad_label = 'That name is not allowed.',
+    too_fast = 'Slow down a moment.',
     not_at_wardrobe = 'You need to be at a tailor or your homestead wardrobe.',
     -- grant (other resources)
     invalid_citizenid = 'Invalid character id.',
@@ -294,13 +298,74 @@ function M.message(code)
     return M.messages[code] or ('Refused: ' .. tostring(code))
 end
 
+-- ---------------------------------------------------------------- player-action guards (server)
+
+---Per-key debounce. allow(key) is false when the last allowed call for this key was < ms ago (the refused call does
+---not extend the window). ms <= 0 disables it. forget(key) drops the entry (player left).
+function M.newDebounce(ms, clock)
+    local last = {}
+    return {
+        allow = function(key)
+            if not (isInt(ms) and ms > 0) then return true end
+            local now = clock()
+            local prev = last[key]
+            if prev ~= nil and now >= prev and now - prev < ms then return false end
+            last[key] = now
+            return true
+        end,
+        forget = function(key) last[key] = nil end,
+    }
+end
+
+---Player-action wrappers around the core: exactly the guards a player's net event gets (range, debounce), so a relay
+---(another resource forwarding a player action) cannot skip them. deps = { core, shops, inShopRange(src, shop),
+---inWardrobeRange(src), debounce }. Every function returns the core's `ok, res|code`.
+function M.makeActions(deps)
+    local core = deps.core
+    local function wardrobeGate(src)
+        if not deps.inWardrobeRange(src) then return 'not_at_wardrobe' end
+        if not deps.debounce.allow(src) then return 'too_fast' end
+        return nil
+    end
+    local A = {}
+    -- buy range + the per-character lock live in the core; no debounce (a refused buy takes nothing).
+    function A.actBuy(src, shopId, entryId) return core.buy(src, shopId, entryId) end
+    function A.actStock(src, shopId)
+        local shop = type(shopId) == 'string' and deps.shops[shopId] or nil
+        if not shop then return false, 'unknown_shop' end
+        if not deps.inShopRange(src, shop) then return false, 'out_of_range' end
+        return core.getStock(src, shopId)
+    end
+    function A.actWardrobe(src)
+        if not deps.inWardrobeRange(src) then return false, 'not_at_wardrobe' end
+        return core.getWardrobe(src)
+    end
+    function A.actEquip(src, outfitId, items)
+        local code = wardrobeGate(src)
+        if code then return false, code end
+        return core.equip(src, outfitId, items)
+    end
+    function A.actSave(src, slot, label, outfitId, items)
+        local code = wardrobeGate(src)
+        if code then return false, code end
+        return core.saveOutfit(src, slot, label, outfitId, items)
+    end
+    function A.actWear(src, slot)
+        local code = wardrobeGate(src)
+        if code then return false, code end
+        return core.wearSaved(src, slot)
+    end
+    return A
+end
+
 -- ---------------------------------------------------------------- client apply + menu helpers
 
 ---Resolve a worn look into the ped apply plan ({ outfit, preset, components }) when cfg.FittedOutfits is on.
 ---When FittedOutfits is off (or the look is missing/invalid), returns nil so the client applies nothing.
+---`force = true` (UI preview only, never persisted) resolves the look even with the flag off.
 ---@return table|nil plan { outfit = id, preset = int, components = { hash|name, ... } }
-function M.resolveApply(cfg, look)
-    if type(cfg) ~= 'table' or cfg.FittedOutfits ~= true then return nil end
+function M.resolveApply(cfg, look, force)
+    if type(cfg) ~= 'table' or (cfg.FittedOutfits ~= true and force ~= true) then return nil end
     if type(look) ~= 'table' or type(look.outfit) ~= 'string' then return nil end
     local catalog = cfg.catalog
     if type(catalog) ~= 'table' then return nil end

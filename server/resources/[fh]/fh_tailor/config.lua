@@ -11,6 +11,7 @@ FhTailorConfig = {
     maxSavedOutfits = 5,    -- wardrobe slots 1..N
     chargeRetries = 3,      -- extra charge attempts after fh_charge_busy (nothing was taken on busy)
     chargeRetryMs = 250,    -- wait between those attempts
+    actionDebounceMs = 750, -- per-player cooldown on equip / save outfit / wear saved (code 'too_fast'); 0 = off
     lockWaitMs = 10000,     -- grant / load / equip wait this long for the character's lock; buy never waits
     promptDistance = 3.0,            -- [E] tailor stop prompt distance (m)
     homesteadWardrobeDistance = 3.0, -- [G] wardrobe prompt distance at homestead chests (m)

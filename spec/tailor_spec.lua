@@ -697,4 +697,86 @@ case('formatPrice and withinDistance', function()
     eq(false, logic.withinDistance(nil, { x = 0, y = 0, z = 0 }, 5))
 end)
 
+-- ---------------------------------------------------------------- T2b player-action guards
+
+case('resolveApply: force previews with the flag off but still validates', function()
+    local c = fixture()
+    same({ outfit = 'starter_m', preset = 1, components = {} }, logic.resolveApply(c, { outfit = 'starter_m' }, true))
+    eq(nil, logic.resolveApply(c, { outfit = 'nope' }, true))
+    eq(nil, logic.resolveApply(c, { outfit = 'starter_m' }, false), 'no force -> flag off applies nothing')
+end)
+
+case('validateConfig: actionDebounceMs optional, non-negative int', function()
+    local c = fixture(); c.actionDebounceMs = 750
+    eq(true, (logic.validateConfig(c, regions.isKnownRegion)))
+    c.actionDebounceMs = -1
+    local ok, why = logic.validateConfig(c, regions.isKnownRegion)
+    eq(false, ok); eq('bad_actionDebounceMs', why)
+    eq(750, realCfg.actionDebounceMs)
+end)
+
+case('newDebounce: window per key, refused calls do not extend it, forget, 0 = off', function()
+    local t = 1000
+    local d = logic.newDebounce(750, function() return t end)
+    eq(true, d.allow(1)); eq(false, d.allow(1), 'same instant')
+    eq(true, d.allow(2), 'other key independent')
+    t = 1700; eq(false, d.allow(1), '700ms')
+    t = 1750; eq(true, d.allow(1), 'window measured from the last ALLOWED call')
+    d.forget(1); eq(true, d.allow(1))
+    local off = logic.newDebounce(0, function() return t end)
+    eq(true, off.allow(1)); eq(true, off.allow(1))
+end)
+
+local function actionsFixture(opts)
+    opts = opts or {}
+    local calls, t = {}, { now = 0 }
+    local function rec(name) return function(...) calls[#calls + 1] = name; return true, { name = name, ... } end end
+    local A = logic.makeActions({
+        core = { buy = rec('buy'), getStock = rec('getStock'), getWardrobe = rec('getWardrobe'), equip = rec('equip'),
+            saveOutfit = rec('saveOutfit'), wearSaved = rec('wearSaved') },
+        shops = { s1 = { id = 's1' } },
+        inShopRange = function() return opts.shop ~= false end,
+        inWardrobeRange = function() return opts.wardrobe ~= false end,
+        debounce = logic.newDebounce(750, function() return t.now end),
+    })
+    return A, calls, t
+end
+
+case('actions: range guards run before the core (core never reached when refused)', function()
+    local A, calls = actionsFixture({ shop = false, wardrobe = false })
+    local ok, code = A.actStock(1, 's1'); eq(false, ok); eq('out_of_range', code)
+    ok, code = A.actStock(1, 'nope'); eq('unknown_shop', code)
+    ok, code = A.actStock(1, nil); eq('unknown_shop', code)
+    ok, code = A.actWardrobe(1); eq('not_at_wardrobe', code)
+    ok, code = A.actEquip(1, 'o', {}); eq('not_at_wardrobe', code)
+    ok, code = A.actSave(1, 1, 'x', 'o', {}); eq('not_at_wardrobe', code)
+    ok, code = A.actWear(1, 1); eq('not_at_wardrobe', code)
+    eq(0, #calls, 'nothing reached the core')
+end)
+
+case('actions: in range pass through with the same arguments', function()
+    local A, calls = actionsFixture()
+    local ok, res = A.actStock(1, 's1'); eq(true, ok); eq('getStock', res.name)
+    ok, res = A.actWardrobe(1); eq('getWardrobe', res.name)
+    ok, res = A.actBuy(1, 's1', 'e'); eq('buy', res.name); eq('s1', res[2]); eq('e', res[3])
+    ok, res = A.actEquip(1, 'o', { 'i' }); eq('equip', res.name); eq('o', res[2])
+    eq(4, #calls)
+end)
+
+case('actions: equip / save / wear share one per-src debounce; range refusal does not consume it', function()
+    local A, calls, t = actionsFixture()
+    eq(true, (A.actEquip(1, 'o', {})))
+    local ok, code = A.actSave(1, 1, 'x', 'o', {}); eq(false, ok); eq('too_fast', code)
+    ok, code = A.actWear(1, 1); eq('too_fast', code)
+    eq(true, (A.actEquip(2, 'o', {})), 'other player unaffected')
+    eq(true, (A.actStock(1, 's1')), 'reads and buys are not debounced')
+    eq(true, (A.actBuy(1, 's1', 'e')))
+    t.now = 800
+    eq(true, (A.actWear(1, 1)))
+    eq(3, #(function() local n = {} for _, c in ipairs(calls) do if c == 'equip' or c == 'wearSaved' or c == 'saveOutfit' then n[#n+1] = c end end return n end)())
+    local B, bcalls = actionsFixture({ wardrobe = false })
+    B.actEquip(1, 'o', {}); B.actEquip(1, 'o', {})
+    eq(0, #bcalls)
+end)
+
 T.finish()

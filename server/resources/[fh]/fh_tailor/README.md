@@ -62,6 +62,40 @@ fh_economy export throws, it is unknown whether money moved. The buy returns `tr
 ownership row stays, and the server logs an `ALERT` line with citizenid, entry, price and shop; the fh_ledger charge
 row tells an admin whether it was paid. At worst the clothes were free; the player is never charged a second time.
 
+### Player-action exports (use these for any player-driven call)
+
+The raw exports above (`buy`, `equip`, `saveOutfit`, `wearSaved`, `getStock`, `getWardrobe`) are **trusted server-side
+calls: no range check, no debounce** (rewards, admin tools, tests). A resource relaying a player's action (e.g. the
+@ui catalog screen) must call the `act*` wrappers, which apply exactly the guards the net events apply. Same
+`ok, res | false, code` shapes as the core call they wrap.
+
+| Export | Guards, then calls |
+|---|---|
+| `actBuy(src, shopId, entryId)` | `buy` (range, lock and charge rules live in the core) |
+| `actStock(src, shopId)` | `unknown_shop`, `out_of_range`, then `getStock` |
+| `actWardrobe(src)` | `not_at_wardrobe`, then `getWardrobe` |
+| `actEquip(src, outfitId, items?)` | `not_at_wardrobe`, `too_fast`, then `equip` |
+| `actSave(src, slot, label?, outfitId, items?)` | `not_at_wardrobe`, `too_fast`, then `saveOutfit` |
+| `actWear(src, slot)` | `not_at_wardrobe`, `too_fast`, then `wearSaved` |
+
+`too_fast`: equip / save / wear share one cooldown per player (`Config.actionDebounceMs`, default 750 ms, 0 = off). A
+refused call does not extend the window; a call refused for range does not start it. The net events
+(`fh:tailor:buy` / `equip` / `save_outfit` / `wear_saved`) and the `fh:tailor:stock` / `fh:tailor:wardrobe` callbacks
+go through the same functions.
+
+## Client exports (preview)
+
+For @ui's mirror screen. Local and cosmetic: nothing is saved or sent to the server.
+
+- `exports.fh_tailor:previewLook(look) -> boolean`: `look = { outfit = id, items = { id, ... } }`, applied with the same
+  code path as the saved look (validated against the catalog; unknown ids or wrong kinds return `false`). It works even
+  when `Config.FittedOutfits` is `false`: the flag gates applying the *saved* look to the ped, a preview is transient and
+  the UI needs it to show stock before S1 clears. Caveat: with the flag off the preset's compatibility with the
+  rsg-character face/body is unverified (S1), so always call `revertLook` when the screen closes.
+- `exports.fh_tailor:revertLook() -> boolean`: flag on: re-applies the saved (worn) look. Flag off: if something was
+  previewed, restores the ped by reloading the character's saved skin through `exports['rsg-character']:ApplySkin()`
+  (brief model swap); if nothing was previewed it does nothing and returns `false`.
+
 ## Client apply and stopgap menus (T2)
 
 - **Client apply (`client/main.lua`)**: listens to `rsg-character:client:ApplySkin`, `RSGCore:Client:OnPlayerLoaded`,
@@ -75,7 +109,7 @@ row tells an admin whether it was paid. At worst the clothes were free; the play
   / Open Wardrobe).
 - **Homestead wardrobe**: references `fh_homestead` read-only (`fh:homestead:plots` callback on the client,
   `getPlot` + `plotInfo` exports on the server; `fh_homestead` is never edited). Press `[G]` near a homestead chest to
-  open the Wardrobe menu (uses `[G]` so `fh_homestead`'s `[E]` chest prompt is untouched).
+  open the Wardrobe menu, shown only at a chest of one of your own plots (`fh:tailor:own_plots` callback; the plots fetch retries until `fh_homestead` is up; uses `[G]` so `fh_homestead`'s `[E]` chest prompt is untouched).
 - **Client-server contract** (server validates everything; client sends only ids):
   - Callbacks: `fh:tailor:worn` (player's worn look when `FittedOutfits` is on), `fh:tailor:stock` (`shopId`, range
     checked), `fh:tailor:wardrobe` (tailor or own homestead range checked).
@@ -98,7 +132,7 @@ row tells an admin whether it was paid. At worst the clothes were free; the play
 - Shop: `not_ready`, `tailor_busy`, `tailor_error`, `db_failed`, `unknown_shop`, `unknown_entry`, `out_of_range`,
   `earned_only`, `not_stocked`, `wrong_sex`, `tier_too_low`, `tier_unavailable`, `already_owned`.
 - Wardrobe: `not_owned`, `not_outfit`, `not_item`, `too_many_items`, `duplicate_item`, `bad_slot`, `empty_slot`,
-  `bad_label`, `not_at_wardrobe`.
+  `bad_label`, `not_at_wardrobe`, `too_fast`.
 - Grant: `invalid_citizenid`, `unknown_citizenid`, `invalid_source`.
 
 ## Money rules (Tier A)

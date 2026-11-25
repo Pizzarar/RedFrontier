@@ -191,8 +191,21 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     if pd and type(pd.source) == 'number' then onLoaded(pd.source) end
 end)
 
-AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) core.forget(tonumber(src)) end)
-AddEventHandler('playerDropped', function() core.forget(tonumber(source)) end)
+local debounce = logic.newDebounce(cfg.actionDebounceMs or 0, GetGameTimer)
+local act = logic.makeActions({
+    core = core, shops = cfg.shops, inShopRange = inRange, inWardrobeRange = inWardrobeRange, debounce = debounce,
+})
+
+AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src)
+    src = tonumber(src)
+    core.forget(src)
+    if src then debounce.forget(src) end
+end)
+AddEventHandler('playerDropped', function()
+    local src = tonumber(source)
+    core.forget(src)
+    if src then debounce.forget(src) end
+end)
 
 CreateThread(function()
     -- Idempotent, same DDL as server/migrations/0020_fh_tailor.sql (belt and braces for a DB that skipped the migration).
@@ -243,23 +256,28 @@ lib.callback.register('fh:tailor:worn', function(src)
     return view.worn
 end)
 
-lib.callback.register('fh:tailor:stock', function(src, shopId)
-    local shop = type(shopId) == 'string' and cfg.shops[shopId] or nil
-    if not shop then return false, 'unknown_shop' end
-    if not inRange(src, shop) then return false, 'out_of_range' end
-    return core.getStock(src, shopId)
+lib.callback.register('fh:tailor:stock', function(src, shopId) return act.actStock(src, shopId) end)
+
+-- Plot ids of the caller's own claimed plots (claim / town lot): the client shows the [G] prompt only at those chests.
+lib.callback.register('fh:tailor:own_plots', function(src)
+    local out = {}
+    local cid = citizenOf(src)
+    if cid and GetResourceState('fh_homestead') == 'started' then
+        for _, class in ipairs({ 'claim', 'town_lot' }) do
+            local okP, plotId = pcall(function() return exports.fh_homestead:getPlot(cid, class) end)
+            if okP and type(plotId) == 'string' then out[#out + 1] = plotId end
+        end
+    end
+    return out
 end)
 
-lib.callback.register('fh:tailor:wardrobe', function(src)
-    if not inWardrobeRange(src) then return false, 'not_at_wardrobe' end
-    return core.getWardrobe(src)
-end)
+lib.callback.register('fh:tailor:wardrobe', function(src) return act.actWardrobe(src) end)
 
 RegisterNetEvent('fh:tailor:buy', function(payload)
     local src = source
     local shopId = type(payload) == 'table' and payload.shop_id or nil
     local entryId = type(payload) == 'table' and payload.entry_id or nil
-    local ok, res = core.buy(src, shopId, entryId)
+    local ok, res = act.actBuy(src, shopId, entryId)
     TriggerClientEvent('fh:tailor:result', src, {
         action = 'buy', ok = ok, code = (not ok) and res or nil,
         shop_id = shopId, entry_id = entryId,
@@ -269,12 +287,9 @@ end)
 
 RegisterNetEvent('fh:tailor:equip', function(payload)
     local src = source
-    if not inWardrobeRange(src) then
-        return TriggerClientEvent('fh:tailor:result', src, { action = 'equip', ok = false, code = 'not_at_wardrobe' })
-    end
     local outfitId = type(payload) == 'table' and payload.outfit_id or nil
     local itemIds = type(payload) == 'table' and payload.items or nil
-    local ok, res = core.equip(src, outfitId, itemIds)
+    local ok, res = act.actEquip(src, outfitId, itemIds)
     TriggerClientEvent('fh:tailor:result', src, {
         action = 'equip', ok = ok, code = (not ok) and res or nil,
         outfit_id = ok and res.outfit or nil,
@@ -283,14 +298,11 @@ end)
 
 RegisterNetEvent('fh:tailor:save_outfit', function(payload)
     local src = source
-    if not inWardrobeRange(src) then
-        return TriggerClientEvent('fh:tailor:result', src, { action = 'save_outfit', ok = false, code = 'not_at_wardrobe' })
-    end
     local slot = type(payload) == 'table' and payload.slot or nil
     local label = type(payload) == 'table' and payload.label or nil
     local outfitId = type(payload) == 'table' and payload.outfit_id or nil
     local itemIds = type(payload) == 'table' and payload.items or nil
-    local ok, err = core.saveOutfit(src, slot, label, outfitId, itemIds)
+    local ok, err = act.actSave(src, slot, label, outfitId, itemIds)
     TriggerClientEvent('fh:tailor:result', src, {
         action = 'save_outfit', ok = ok, code = (not ok) and err or nil, slot = slot,
     })
@@ -298,11 +310,8 @@ end)
 
 RegisterNetEvent('fh:tailor:wear_saved', function(payload)
     local src = source
-    if not inWardrobeRange(src) then
-        return TriggerClientEvent('fh:tailor:result', src, { action = 'wear_saved', ok = false, code = 'not_at_wardrobe' })
-    end
     local slot = type(payload) == 'table' and payload.slot or nil
-    local ok, res = core.wearSaved(src, slot)
+    local ok, res = act.actWear(src, slot)
     TriggerClientEvent('fh:tailor:result', src, {
         action = 'wear_saved', ok = ok, code = (not ok) and res or nil,
         slot = slot, outfit_id = ok and res.outfit or nil,
@@ -310,6 +319,7 @@ RegisterNetEvent('fh:tailor:wear_saved', function(payload)
 end)
 
 -- ---------------------------------------------------------------- exports (contract: README.md)
+-- Raw exports below are trusted server-side calls: NO range check, NO debounce.
 exports('buy', core.buy)
 exports('grant', core.grant)
 exports('equip', core.equip)
@@ -317,4 +327,11 @@ exports('saveOutfit', core.saveOutfit)
 exports('wearSaved', core.wearSaved)
 exports('getStock', core.getStock)
 exports('getWardrobe', core.getWardrobe)
+-- Player-action exports: the same range guards + debounce as the net events. Relays must use these, not the raw ones.
+exports('actBuy', act.actBuy)
+exports('actStock', act.actStock)
+exports('actWardrobe', act.actWardrobe)
+exports('actEquip', act.actEquip)
+exports('actSave', act.actSave)
+exports('actWear', act.actWear)
 exports('message', logic.message)
