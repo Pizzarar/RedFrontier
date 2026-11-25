@@ -77,14 +77,13 @@ end)
 
 case('refusals pass error codes and details through unchanged with exact MSG text', function()
     local cases = {
-        { 'buy',  { false, 'fh_not_at_post' },              'Stand at a trade post first.',                'fh_not_at_post',   nil },
         { 'buy',  { false, 'fh_locked' },                   'You have not earned that wagon yet.',         'fh_locked',        nil },
         { 'buy',  { false, 'fh_already_owned', 'refunded' }, 'You already own that wagon.',                'fh_already_owned', 'refunded' },
         { 'call', { false, 'fh_wagon_live', 't1' },         'You already have a wagon out. Stow it first.', 'fh_wagon_live',   't1' },
         { 'stow', { false, 'fh_wagon_far' },                'Your wagon is too far from the post.',        'fh_wagon_far',     nil },
     }
     for _, c in ipairs(cases) do
-        local r = rig({ atPost = c[2][2] ~= 'fh_not_at_post', res = { [c[1]] = c[2] } })
+        local r = rig({ res = { [c[1]] = c[2] } })
         if c[1] == 'buy' then r.ui.onBuy(ev('buy', { tier = 't1' }))
         elseif c[1] == 'call' then r.ui.onCall(ev('call', { tier = 't2' }))
         else r.ui.onStow(ev('stow', {})) end
@@ -93,8 +92,17 @@ case('refusals pass error codes and details through unchanged with exact MSG tex
         eq(c[3], d.notice, c[2][2])
         eq(c[4], d.err, c[2][2])
         eq(c[5], d.detail, c[2][2])
-        if c[2][2] == 'fh_not_at_post' then eq(nil, d.tiers, 'notice-only when away from post') end
     end
+end)
+
+case('away from a post: forced buy/call notifies in chat and sends no fh:ui:update', function()
+    local away = rig({ atPost = false })
+    away.ui.onBuy(ev('buy', { tier = 't1' }, 7))
+    away.ui.onCall(ev('call', { tier = 't1' }, 7))
+    eq(0, #away.sent)
+    eq(2, #away.notes)
+    eq(7, away.notes[1][1]); eq('Stand at a trade post first.', away.notes[1][2])
+    eq(7, away.notes[2][1]); eq('Stand at a trade post first.', away.notes[2][2])
 end)
 
 case('forged tier: bad string reaches post handler and returns fh_bad_tier; non-string/oversized ignored', function()

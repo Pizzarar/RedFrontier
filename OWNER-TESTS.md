@@ -1437,8 +1437,8 @@ Run as a NON-admin player (no `/fh_wagon`). Money = your cash. Prices: t1 $150, 
 42. Stow far from the post. Call the cart, drive it more than ~10 m beyond the post radius, walk back to the post (or stay at the post), `/wagonpost` -> click Stow my wagon.
    Expected: inline notice "Your wagon is too far from the post." The wagon stays out, cargo untouched.
    RESULT:
-43. Away from any post. Leave every trade post (200+ m), run `/wagonpost`.
-   Expected: no screen opens; chat error "Stand at a trade post first." (`fh_not_at_post`). The same refusal applies to a forced `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='buy', payload={tier='t1'}})`.
+43. Away from any post. Leave every trade post (200+ m), run `/wagonpost`, then also force `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='buy', payload={tier='t1'}})` from the client console.
+   Expected: no screen opens; both `/wagonpost` and the forced `fh:ui:action` print the chat line `Wagons: Stand at a trade post first.` (`fh_not_at_post`) and send no `fh:ui:update`.
    RESULT:
 44. t2 refused at tier 1. At the Valentine post with heartlands rep 0 (tier 1) run `/wagonpost` and inspect Wagon (t2).
    Expected: row is greyed out with "Locked (needs higher regional standing)" and Buy is disabled; a forced buy via `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='buy', payload={tier='t2'}})` is refused (`tier_too_low` / `fh_locked`); cash unchanged, no charge row. Rep before: 0 = tier 1.

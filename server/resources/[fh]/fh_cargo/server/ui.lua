@@ -47,8 +47,11 @@ function M.new(d)
     local U = {}
 
     local function pushResult(src, action, ok, err, detail)
-        local data = d.menu(src)
-        if type(data) ~= 'table' then data = {} end
+        local data, menuErr = d.menu(src)
+        if type(data) ~= 'table' then
+            d.notify(src, ok and (M.OK_MSG[action] or 'Done.') or M.message(menuErr or err))
+            return
+        end
         if ok then
             data.notice = M.OK_MSG[action] or 'Done.'
             data.notice_kind = 'ok'

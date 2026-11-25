@@ -212,7 +212,8 @@ local function boot(o)
         E.handlers['fh:cargo:ui_' .. action]({ src = 7, screen = 'wagonyard', action = action, payload = tier and { tier = tier } or {} })
         local sent = E.client[#E.client]
         local d = sent and sent.payload and sent.payload.data or {}
-        return { ok = d.notice_kind == 'ok', err = d.err, detail = d.detail, data = d, event = sent and sent.name or nil }
+        local chat = sent and sent.name == 'chat:addMessage' and sent.payload and sent.payload.args and sent.payload.args[2] or nil
+        return { ok = d.notice_kind == 'ok', err = d.err, detail = d.detail, data = d, event = sent and sent.name or nil, chat = chat }
     end
     return E
 end
@@ -240,8 +241,10 @@ case('wiring: stow refused when the wagon is far; call refused unowned and away 
     E.wagonPos = { x = 900, y = 900, z = 30 }
     T.eq('fh_wagon_far', E.act('stow').err); T.eq(0, #E.despawns)
     E.at = false
-    T.eq('fh_not_at_post', E.act('stow').err)
-    T.eq('fh_not_at_post', E.act('call', 't1').err)
+    local rStow = E.act('stow')
+    T.eq('chat:addMessage', rStow.event); T.eq('Stand at a trade post first.', rStow.chat)
+    local rCall = E.act('call', 't1')
+    T.eq('chat:addMessage', rCall.event); T.eq('Stand at a trade post first.', rCall.chat)
     E.at = true; E.wagonPos = { x = 100, y = 200, z = 30 }
     T.eq(true, E.act('stow').ok)
     T.eq(true, E.act('call', 't1').ok)
