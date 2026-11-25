@@ -10,8 +10,9 @@
 --     every yield before the charge: fh_economy charges whichever character `src` has loaded at call time.
 --  3. Charge: fh_economy:charge(src, price, 'wagon_buy', region). fh_charge_busy (nothing taken) is retried
 --     cfg.BuyChargeRetries times after cfg.BuyRetryMs, then refused; every other refusal is refused as returned
---     (nothing taken, no row). A charge that THREW has an unknown outcome: the row is still written (never a refund
---     that could pay twice, never money taken with nothing given; at worst the wagon was free) and an ALERT is logged.
+--     (nothing taken, no row). A charge that THREW has an unknown outcome: fail closed like every other charge
+--     consumer: no row, no refund (it could pay twice), ALERT log (cid, tier, price, region, err) so ops can check
+--     fh_ledger for a 'wagon_buy' charge; returns 'fh_charge_error'.
 --  4. The fh_wagons row is written ONLY after the charge succeeded, for the citizenid captured before any yield.
 --     INSERT IGNORE on PK (citizenid, tier): 1 = bought; 0 = a concurrent buy (e.g. across an fh_cargo restart that lost
 --     the lock) already owns it, so this charge is refunded; nil / throw = DB failure, refunded. Refund =
@@ -30,8 +31,13 @@ function M.buy(cfg, rules, deps, locks, src, tierArg, region)
         pcall(function() deps.log(fmt:format(table.unpack(a, 1, a.n))) end)
     end
     local function emit(name, payload) if deps.emit then pcall(deps.emit, name, payload) end end
+    ---tostring that never throws (a value with a throwing __tostring must not break the refund / lock release)
+    local function str(v)
+        local ok, r = pcall(tostring, v)
+        return ok and r or '<unprintable>'
+    end
 
-    if type(src) ~= 'number' or src <= 0 then return false, 'fh_no_player' end
+    if type(src) ~= 'number' or not (src > 0) then return false, 'fh_no_player' end -- not (> 0) also refuses NaN
     local tier = rules.parseTier(tierArg)
     if not tier then return false, 'fh_bad_tier' end
     local key = tier.key
@@ -48,8 +54,8 @@ function M.buy(cfg, rules, deps, locks, src, tierArg, region)
     if locks[kSrc] or locks[kCid] then return false, 'fh_buy_busy' end
     locks[kSrc], locks[kCid] = true, true
 
-    -- charged = money taken (or unknown when unknown = true); inserted = row written; refundTried = refund() ran
-    local st = { charged = false, inserted = false, unknown = false, refundTried = false }
+    -- charged = money taken; inserted = row written; refundTried = refund() ran
+    local st = { charged = false, inserted = false, refundTried = false }
 
     local function alive()
         local now = deps.citizenid(src)
@@ -63,10 +69,10 @@ function M.buy(cfg, rules, deps, locks, src, tierArg, region)
         local called, ok, err, mode = pcall(function() return deps.refund(cid, price, rules.REFUND_REASON, region) end)
         if called and ok == true then
             log('wagon_buy refunded cid=%s tier=%s amount=%d region=%s (%s, mode=%s)', cid, key, price, region, why,
-                tostring(mode))
+                str(mode))
             return true
         end
-        local e = called and tostring(err or 'refused') or ('threw: ' .. tostring(ok))
+        local e = called and str(err or 'refused') or ('threw: ' .. str(ok))
         log('ALERT wagon_buy REFUND FAILED cid=%s tier=%s amount=%d region=%s (%s): %s. OWED $%d, credit it by hand',
             cid, key, price, region, why, e, price)
         emit('fh:cargo:wagon_buy_owed', { src = src, citizenid = cid, tier = key, owed = price, region = region,
@@ -78,7 +84,7 @@ function M.buy(cfg, rules, deps, locks, src, tierArg, region)
         -- already owned (DB read, may yield)
         local oCalled, owned = pcall(deps.owned, cid, key)
         if not oCalled or owned == nil then
-            log('ERROR fh_wagons read failed cid=%s tier=%s: %s', cid, key, tostring(oCalled and 'nil' or owned))
+            log('ERROR fh_wagons read failed cid=%s tier=%s: %s', cid, key, str(oCalled and 'nil' or owned))
             return false, 'fh_db_error'
         end
         if owned == true then return false, 'fh_already_owned' end
@@ -104,11 +110,10 @@ function M.buy(cfg, rules, deps, locks, src, tierArg, region)
                 if not a then return false, aw end
             end
             local called, ok, err = pcall(deps.charge, src, price, rules.BUY_REASON, region)
-            if not called then
-                st.charged, st.unknown = true, true
-                log('ALERT wagon_buy charge threw cid=%s tier=%s amount=%d region=%s: %s. Outcome unknown: wagon granted, '
-                    .. 'check fh_ledger for a wagon_buy charge', cid, key, price, region, tostring(ok))
-                break
+            if not called then -- outcome unknown: fail closed, no row, no refund (could pay twice)
+                log('ALERT wagon_buy charge threw cid=%s tier=%s amount=%d region=%s: %s. Outcome unknown, no wagon '
+                    .. 'granted, nothing refunded: check fh_ledger for a wagon_buy charge', cid, key, price, region, str(ok))
+                return false, 'fh_charge_error'
             end
             if ok == true then st.charged = true break end
             if err ~= 'fh_charge_busy' or i == attempts then
@@ -122,28 +127,27 @@ function M.buy(cfg, rules, deps, locks, src, tierArg, region)
             st.inserted = true
             return true
         end
-        if st.unknown then -- never refund an unknown charge (could pay twice)
-            log('ALERT wagon_buy row not written after an unknown charge cid=%s tier=%s amount=%d: %s', cid, key, price,
-                tostring(iCalled and n or ('threw: ' .. tostring(n))))
-            return false, iCalled and n == 0 and 'fh_already_owned' or 'fh_db_error'
-        end
         if iCalled and n == 0 then -- a concurrent buy already owns it: give this charge back
             if refund('already_owned') then return false, 'fh_already_owned', 'refunded' end
             return false, 'fh_refund_failed'
         end
         log('ERROR fh_wagons insert failed after charge cid=%s tier=%s: %s', cid, key,
-            tostring(iCalled and n or ('threw: ' .. tostring(n))))
+            iCalled and str(n) or ('threw: ' .. str(n)))
         if refund('insert_failed') then return false, 'fh_buy_refunded' end
         return false, 'fh_refund_failed'
     end
 
     local called, ok, code, detail = pcall(run)
     if not called then
-        log('ERROR wagon_buy cid=%s tier=%s: %s', cid, key, tostring(ok))
+        local thrown = ok
         ok, code, detail = false, 'fh_buy_error', nil
-        if st.charged and not st.inserted and not st.unknown and not st.refundTried then -- threw after the charge
-            code = refund('error') and 'fh_buy_refunded' or 'fh_refund_failed'
-        end
+        -- str/log/refund never throw; the pcall is belt and braces so the lock below is always released
+        pcall(function()
+            log('ERROR wagon_buy cid=%s tier=%s: %s', cid, key, str(thrown))
+            if st.charged and not st.inserted and not st.refundTried then -- threw after the charge: give it back
+                code = refund('error') and 'fh_buy_refunded' or 'fh_refund_failed'
+            end
+        end)
     end
     locks[kSrc], locks[kCid] = nil, nil
     if ok then

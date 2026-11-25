@@ -293,7 +293,7 @@ local buyDeps = {
     -- fh_progression README: canUnlock(src, unlock_id) -> ok, reason. Throws when not started (fail closed upstream).
     canUnlock = function(src, unlockId) return exports.fh_progression:canUnlock(src, unlockId) end,
     -- fh_economy README: charge(src, amount, reason, region_id) -> ok, err, ledgerId (B7). Not started = refused, nothing
-    -- taken; a throw while started is an unknown outcome (FhCargoBuy keeps the wagon, logs an ALERT).
+    -- taken; a throw while started is an unknown outcome (FhCargoBuy fails closed fh_charge_error, no row, ALERT).
     charge = function(src, amount, why, region)
         if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
         return exports.fh_economy:charge(src, amount, why, region)

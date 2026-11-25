@@ -110,8 +110,9 @@ stowing an owned wagon at a trade post is R17.
 5. The character is re-checked after every yield (`player_changed` / `fh_no_character`), then
    `fh_economy:charge(src, price, 'wagon_buy', region_id)`. `fh_charge_busy` is retried once after `BuyRetryMs`, then
    refused; every other charge error is returned as is (nothing taken, no row). `fh_economy` not started ->
-   `fh_economy_unavailable`. A charge that **throws** has an unknown outcome: the row is written anyway (never a refund
-   that could pay twice) and an `ALERT` line is printed; check `fh_ledger` for a `wagon_buy` charge.
+   `fh_economy_unavailable`. A charge that **throws** has an unknown outcome and fails closed like every other charge
+   consumer: `fh_charge_error`, no row, no refund (it could pay twice), and an `ALERT` line with citizenid, tier, price,
+   region and the error; check `fh_ledger` for a `wagon_buy` charge and credit by hand if one is there.
 6. Only after the charge: `INSERT IGNORE INTO fh_wagons` for the captured citizenid. 1 row -> `true`, emits
    `fh:cargo:wagon_bought`. 0 rows (a concurrent buy already owns it) -> refund, `false, 'fh_already_owned', 'refunded'`.
    DB failure -> refund, `false, 'fh_buy_refunded'`. Refund = `fh_economy:credit(citizenid, price, 'wagon_buy_refund',
@@ -121,7 +122,7 @@ stowing an owned wagon at a trade post is R17.
 Errors: `fh_no_player`, `fh_bad_tier`, `fh_no_price`, `fh_unknown_region`, `fh_no_character`, `player_changed`,
 `fh_buy_busy`, `fh_already_owned`, `fh_db_error`, `fh_locked` / canUnlock reasons, fh_economy charge codes
 (`fh_insufficient_funds`, `fh_charge_busy`, `amount_too_large`, `unknown_region`, `no_player`, `player_changed`,
-`removemoney_refused`, `ledger_failed`, ...), `fh_economy_unavailable`, `charge_refused`, `fh_buy_refunded`,
+`removemoney_refused`, `ledger_failed`, ...), `fh_economy_unavailable`, `charge_refused`, `fh_charge_error`, `fh_buy_refunded`,
 `fh_refund_failed`, `fh_buy_error`.
 
 **Cargo persists per wagon:** the stash id is `fh:wagon:<citizenid>:<tier>` (`rules.wagonId` / `stashId`), the same on
