@@ -91,13 +91,23 @@ describe('hunting legendaries: data files', function()
         eq(15, n)
         eq(15, #L.regionIds())
     end)
-    it('the files load cleanly: heartlands is the only entry, the 14 stubs are ignored', function()
+    it('the files load cleanly: stubs are ignored, every filled entry loads', function()
         same({}, L.warnings)
-        eq(1, #L.list)
-        eq('legendary_bear', L.list[1].id)
+        local filled = 0
         for _, rid in ipairs(L.regionIds()) do
-            if rid ~= 'heartlands' then eq(nil, L.byRegion[rid], rid) end
+            local fn, err = loadfile(base .. 'data/legendaries/' .. rid .. '.lua')
+            assert(fn, rid .. ': ' .. tostring(err))
+            local raw = fn() -- nil = stub, otherwise the raw entry table
+            if raw == nil then
+                eq(nil, L.byRegion[rid], rid)
+            else
+                assert(L.byRegion[rid], rid .. ': filled entry was not loaded')
+                eq(raw.id, L.byRegion[rid].id, rid)
+                filled = filled + 1
+            end
         end
+        eq('legendary_bear', L.byRegion.heartlands.id)
+        eq(filled, #L.list) -- the registry holds exactly the files that returned a table
     end)
     it('heartlands is the Legendary Bear with the H4 values unchanged (moved from config.LegendaryBear)', function()
         local b = L.byRegion.heartlands
