@@ -18,6 +18,18 @@ local LOCK_TRY = { wait = function() Wait(0) end, clock = GetGameTimer } -- poll
 
 local function log(msg) print(('^3[fh_hands] %s^7'):format(msg)) end
 
+-- Legacy item kept registered so existing chest stacks stay valid; no longer produced by hands
+-- (feed_topup tops up the homestead trough via fh_homestead's feedTrough, see below).
+local LEGACY_FEED_ITEM = 'feed'
+local function registerFeed()
+    local called, ok, err = pcall(function()
+        return exports.fh_core:registerItems({
+            [LEGACY_FEED_ITEM] = { label = 'Feed', weight = 500, size_class = 'bulky', stackable = true, value_base = 2 },
+        })
+    end)
+    if not called or not ok then log(('feed item register failed: %s'):format(tostring(called and err or ok))) end
+end
+
 local function citizenOf(src)
     local P = exports['rsg-core']:GetPlayer(src)
     return P and P.PlayerData and P.PlayerData.citizenid or nil
@@ -184,6 +196,11 @@ end
 AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) forget(tonumber(src)) end)
 AddEventHandler('playerDropped', function() forget(tonumber(source)) end)
 
+-- fh_core keeps runtime-registered items in memory: re-register the legacy feed item when it restarts.
+AddEventHandler('onResourceStart', function(res)
+    if res == 'fh_core' and ready then registerFeed() end
+end)
+
 CreateThread(function()
     -- Idempotent, same DDL as server/migrations/0009_hands.sql (belt and braces for a DB that skipped the migration).
     local okDDL, err = pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_hands` (
@@ -197,6 +214,7 @@ CreateThread(function()
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci]])
     if not okDDL then log(('CREATE TABLE failed (relying on migration 0009): %s'):format(tostring(err))) end
     ready = true
+    registerFeed() -- fh_core item registry: legacy 'feed' stays registered (see LEGACY_FEED_ITEM)
     -- Resource (re)start: load everyone already online.
     for _, id in ipairs(GetPlayers()) do
         local src = tonumber(id)

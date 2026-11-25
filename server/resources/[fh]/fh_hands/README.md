@@ -19,7 +19,8 @@ State lives in `fh_hands` (migration `0009_hands`, PK `(citizenid, hand_kind)`: 
 All hands share `tickSeconds` (one wage per interval), `maxCatchupTicks` (offline catch-up cap) and `quitAfterUnpaid`.
 `feed_topup` uses `FhHandsLogic.troughTopup` over `fh_homestead`'s `getTrough` / `feedTrough` exports (feedbags are
 implicit; `fh_hands` never writes the trough stash directly): a full trough is an ok no-op, while a missing, unready,
-or busy trough (or stopped `fh_homestead`) is a soft task failure. `lumber` is `fh_homestead`'s build item (never
+or busy trough (or stopped `fh_homestead`, reason `trough_unavailable`: export threw; wage still charged) is a soft
+task failure. Legacy `feed` stays registered by fh_hands for existing chest stacks; hands no longer produce it. `lumber` is `fh_homestead`'s build item (never
 registered here) and stays on `FhHandsLogic.chestTopup`: never past the cap, never reduce a chest the owner filled
 above it.
 
