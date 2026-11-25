@@ -89,22 +89,28 @@ describe('hunting trappers: data + loader', function()
             L.isEnabled = real
             return reg
         end
-        local build = run
         for _, tr in ipairs({ 'x', { label = 'T' }, { label = 'T', coords = { x = 0, y = 0 } } }) do
-            local d = build(false, tr)
+            local d = run(false, tr)
             assert(d.byRegion[SCARLETT] and d.byRegion[SCARLETT].trapper == nil, 'disabled keeps entry')
             assert(d.warnings[1] and d.warnings[1]:match('bad trapper') and not d.warnings[1]:match('error'), tostring(d.warnings[1]))
-            local en = build(true, tr)
+            local en = run(true, tr)
             eq(nil, en.byRegion[SCARLETT])
             assert(en.warnings[1]:match('error: bad trapper'), tostring(en.warnings[1]))
         end
-        local d = build(false, nil)
+        local d = run(false, nil)
         assert(d.byRegion[SCARLETT] and d.warnings[1]:match('missing trapper') and not d.warnings[1]:match('error'))
-        local en = build(true, nil)
+        local en = run(true, nil)
         eq(nil, en.byRegion[SCARLETT])
         assert(en.warnings[1]:match('error: missing trapper'))
-        local ok = build(true, raw.trapper)
+        local ok = run(true, raw.trapper)
         assert(ok.byRegion[SCARLETT] and #ok.warnings == 0)
+        local heartRaw = dofile(base .. 'data/legendaries/' .. HEART .. '.lua')
+        local heartNoTr = {}
+        for k, v in pairs(heartRaw) do heartNoTr[k] = v end
+        heartNoTr.trapper = nil
+        local h = L.build({ [L.FALLBACK_TRAPPER_REGION] = heartNoTr }, { L.FALLBACK_TRAPPER_REGION })
+        assert(h.byRegion[L.FALLBACK_TRAPPER_REGION] and h.byRegion[L.FALLBACK_TRAPPER_REGION].trapper == nil)
+        eq(0, #h.warnings)
     end)
     it('S.trappers lists every registry trapper and falls back to config for heartlands', function()
         local list = S.trappers(cfg, L)
