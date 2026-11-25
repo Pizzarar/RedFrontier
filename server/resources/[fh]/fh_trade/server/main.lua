@@ -1,6 +1,6 @@
 -- fh_trade server (spec L6). The server owns all price state; the pure model is shared/trade_prices.lua.
 -- Selling: validate -> quote (dry run) -> fh_core.removeItem (all-or-nothing) -> commit the sale into the price
--- state -> fh_economy:pay. Buying (supplies, idea-716/719): shared/supplies.lua -> fh_economy:charge -> fh_core.addItem
+-- state -> fh_economy:credit (by citizenid captured before removal). Buying (supplies, idea-716/719): shared/supplies.lua -> fh_economy:charge -> fh_core.addItem
 -- (backpack) -> fh_economy:credit refund if the grant fails. Natives: GetPlayerPed, GetEntityCoords, GetGameTimer.
 -- NOT runtime-tested (no Cfx key).
 local cfg = FhTradeConfig
@@ -112,6 +112,11 @@ end
 
 -- ---------------------------------------------------------------- sell
 
+local function citizenidOf(src)
+    local ok, p = pcall(function() return exports['rsg-core']:GetCoreObject().Functions.GetPlayer(src) end)
+    return ok and p and p.PlayerData and p.PlayerData.citizenid or nil
+end
+
 local function removeFromPlayer(src, item, amount)
     -- TODO(B7 @core): fh_core.removeItem(ref, item, amount) -> true | false, 'fh_not_enough' (all-or-nothing per ref).
     -- Takes from the backpack only for now; equipped-slot goods are not sold (trade goods are not hotbar items).
@@ -131,14 +136,20 @@ local function sell(src, post, item, amount)
         local t = now()
         local preview, err = P.previewSell(cfg, state, post.region, item, amount, t) -- validates item/amount/region
         if not preview then return false, err end
+        -- Capture WHO is paid before the goods leave: after removal the player may drop or switch character, and the
+        -- payout must still reach the character that owned the goods (credit is by citizenid, queued when offline).
+        local citizenid = citizenidOf(src)
+        if not citizenid then return false, 'no_player' end
         local removed, why = removeFromPlayer(src, item, amount)
         if not removed then return false, why end
         local total = P.sell(cfg, state, post.region, item, amount, t) or preview -- items are gone: pay what was quoted
         markDirty(post.region, item)
-        local paid, perr = exports.fh_economy:pay(src, total, 'trade_sell:' .. item, post.region)
-        if not paid then
+        local okc, paid, perr, mode = pcall(function() return exports.fh_economy:credit(citizenid, total, 'trade_sell:' .. item, post.region) end)
+        if not okc or not paid then
             -- Items are already gone and fh_core has no player-refund export (addItem is world containers only).
-            log('ALERT pay failed after removing %dx%s from src %d (%s): owed $%d', amount, item, src, tostring(perr), total)
+            log('ALERT credit failed after removing %dx%s from %s (src %d) (%s): owed $%d', amount, item, citizenid, src,
+                tostring(okc and perr or paid), total)
+            TriggerEvent('fh:trade:owed', { src = src, citizenid = citizenid, region = post.region, item = item, amount = amount, owed = total })
             return false, 'pay_failed'
         end
         TriggerEvent('fh:trade:sold', { src = src, region = post.region, post = post.id, item = item, amount = amount, total = total })
@@ -154,10 +165,6 @@ end
 
 -- ---------------------------------------------------------------- buy (supplies)
 
-local function citizenidOf(src)
-    local ok, p = pcall(function() return exports['rsg-core']:GetCoreObject().Functions.GetPlayer(src) end)
-    return ok and p and p.PlayerData and p.PlayerData.citizenid or nil
-end
 
 local function labelOf(item)
     local ok, l = pcall(function() return exports['rsg-core']:GetCoreObject().Shared.Items[item].label end)

@@ -22,7 +22,7 @@ Regional trade prices, shortages, trade-post selling and supplies buying (spec L
 - Consumes (from clients, server re-validates everything): `fh:trade:menu`; the fh_ui `tradepost` screen actions relayed as `fh:trade:ui_sell` / `fh:trade:ui_buy` (payload `{item, amount}`; src comes from the relay, not the payload).
 
 ## Selling
-Server checks the player stands within a post's `radius`, validates item/amount, `fh_core.removeItem({type='backpack', id=src}, item, amount)` (all-or-nothing), commits the sale to the price state, then `fh_economy:pay(src, total, 'trade_sell:<item>', region)`. Money only comes from `pay`.
+Server checks the player stands within a post's `radius`, validates item/amount, `fh_core.removeItem({type='backpack', id=src}, item, amount)` (all-or-nothing), commits the sale to the price state, then pays `fh_economy:credit(citizenid, total, 'trade_sell:<item>', region)`. The citizenid is captured **before** the goods are removed (no loaded character -> `no_player`, nothing taken), so a drop or character switch mid-sale still pays the character that owned the goods (online pay or queued for next load). If `credit` throws or refuses after removal: console `ALERT credit failed ... owed $N`, event `fh:trade:owed` `{ src, citizenid, region, item, amount, owed }`, player sees `pay_failed` (fix by hand).
 Goods are registered by this resource with `fh_core.registerItems` at start (and when fh_core restarts).
 
 ## Buying supplies (`shared/supplies.lua`, pure, `spec/trade_supplies_spec.lua`)
@@ -46,7 +46,7 @@ Sequence (all-or-nothing, one trade per player at a time; the busy lock is share
 `~/.venvs/rf/bin/python tools/run-specs.py spec/trade_prices_spec.lua spec/trade_supplies_spec.lua spec/freight_spec.lua spec/freight_server_spec.lua`
 
 ## TODO(B7 @core)
-`fh_core:removeItem` and `fh_core:registerItems` ship with @core B7. Until then the resource logs "not available yet", goods are not registered, and every sale is refused (`Trading is not available yet.`). If `pay` fails after the items were removed there is no player refund export: it logs `ALERT ... owed $N`.
+`fh_core:removeItem` and `fh_core:registerItems` ship with @core B7. Until then the resource logs "not available yet", goods are not registered, and every sale is refused (`Trading is not available yet.`). If `credit` fails after the items were removed there is no player refund export: it logs `ALERT ... owed $N` and emits `fh:trade:owed`.
 
 ## In-game checklist (needs Cfx key + B7)
 - [ ] Next to the post: `/tradequote` lists three goods with prices; away from it: "not at a trade post".
