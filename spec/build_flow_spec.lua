@@ -805,11 +805,33 @@ T.describe('H9 town lots: slots, stations, safety, plotInfo', function()
     end)
     case('plotInfo: claim = raidable, lot = lawSafe and not raidable; owner or nil; unknown id = nil', function()
         local W = lotWorld()
-        T.same({ class = 'claim', raidable = true, lawSafe = false, owner = 'A' }, W.ex.plotInfo(P1))
-        T.same({ class = 'town_lot', raidable = false, lawSafe = true, owner = 'A' }, W.ex.plotInfo(LOT))
-        T.same({ class = 'town_lot', raidable = false, lawSafe = true }, W.ex.plotInfo(LOT2), 'unowned lot: owner nil')
-        T.same({ class = 'claim', raidable = true, lawSafe = false }, W.ex.plotInfo(P2))
+        local function xyz(pl) return { x = pl.center.x, y = pl.center.y, z = pl.center.z } end
+        T.same({ class = 'claim', raidable = true, lawSafe = false, owner = 'A', coords = xyz(p1), region = p1.region,
+            fenceBuilt = false }, W.ex.plotInfo(P1))
+        T.same({ class = 'town_lot', raidable = false, lawSafe = true, owner = 'A', coords = xyz(lot), region = 'heartlands',
+            fenceBuilt = false }, W.ex.plotInfo(LOT))
+        T.same({ class = 'town_lot', raidable = false, lawSafe = true, coords = xyz(lotCfg.plots[LOT2]), region = 'heartlands',
+            fenceBuilt = false }, W.ex.plotInfo(LOT2), 'unowned lot: owner nil')
+        T.same({ class = 'claim', raidable = true, lawSafe = false, coords = xyz(cfg.plots[P2]), region = cfg.plots[P2].region,
+            fenceBuilt = false }, W.ex.plotInfo(P2))
         T.eq(nil, W.ex.plotInfo('nope')); T.eq(nil, W.ex.plotInfo(nil)); T.eq(nil, W.ex.plotInfo(5))
+    end)
+    case('plotInfo fenceBuilt: true once the fence tier is built (same slot state as isInSafeZone), claim only', function()
+        local W = world({ fence = 1 })
+        T.eq(true, W.ex.plotInfo(P1).fenceBuilt)
+        T.eq(false, W.ex.plotInfo(P2).fenceBuilt, 'other plot')
+        local W2 = world()
+        T.eq(false, W2.ex.plotInfo(P1).fenceBuilt, 'no fence yet')
+        assert(W2.build(1, 'fence'))
+        T.eq(true, W2.ex.plotInfo(P1).fenceBuilt, 'after building')
+        T.eq(true, W2.ex.plotInfo(P1).coords.x == p1.center.x)
+    end)
+    case('plotInfo before the slot cache loads: fenceBuilt false, no error', function()
+        local W = newWorld()
+        W.db.plots[P1] = 'A'; W.db.slots[P1 .. '|fence'] = 1
+        W.threads[1]() -- claims load only; slots.load() not run yet
+        local info = W.ex.plotInfo(P1)
+        T.eq(false, info.fenceBuilt); T.eq(P1 and p1.region, info.region); T.eq(p1.center.x, info.coords.x)
     end)
 end)
 T.finish()

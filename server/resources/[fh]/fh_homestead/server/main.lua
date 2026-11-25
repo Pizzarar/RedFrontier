@@ -574,15 +574,25 @@ local function claimedPlots()
     return out
 end
 
----H9 plot facts for other resources (@alife raids, law AI): { class, raidable, lawSafe, owner } or nil for an unknown
----plot id. raidable = class 'claim', lawSafe = class 'town_lot'; owner = citizenid or nil (unclaimed). Class is the
----held row's class, else config.lua's.
+---H9 plot facts for other resources (@alife raids, law AI): { class, raidable, lawSafe, owner, coords, region,
+---fenceBuilt } or nil for an unknown plot id. raidable = class 'claim', lawSafe = class 'town_lot'; owner = citizenid or
+---nil (unclaimed). Class is the held row's class, else config.lua's. a-life-03 C0 (additive, read-only): coords = copy
+---{x,y,z} of the plot center (cfg.plots); region = the plot's config region; fenceBuilt = the same built-fence state
+---isInSafeZone counts (slot tiers' safeRadiusBonus > 0), false before the slot cache loads and for town lots.
 -- Workaround: report only, nothing enforces lawSafe/raidable yet; follow-up idea-803 (@a-life) enforces it.
 local function plotInfo(plotId)
     local plot = type(plotId) == 'string' and cfg.plots[plotId] or nil
     if not plot then return nil end
     local class = claims.classByPlot[plotId] or rules.classOf(plot)
-    return { class = class, raidable = class == DEFAULT_CLASS, lawSafe = class == TOWN_LOT, owner = claims.byPlot[plotId] }
+    local c = plot.center
+    local slots = FhHomesteadSlots -- server/slots.lua (loaded after this file); nil-safe before it and the cache load
+    local tiers = slots and slots.getTiers and slots.getTiers(plotId) or {}
+    local okf, state = pcall(FhBuildRules.unlockedState, plot, tiers)
+    return {
+        class = class, raidable = class == DEFAULT_CLASS, lawSafe = class == TOWN_LOT, owner = claims.byPlot[plotId],
+        coords = c and { x = c.x, y = c.y, z = c.z } or nil, region = plot.region,
+        fenceBuilt = class ~= TOWN_LOT and okf and type(state) == 'table' and (tonumber(state.safeRadiusBonus) or 0) > 0 or false,
+    }
 end
 
 ---Safe zone query (spec L139: homestead is a safe zone). True when coords are within the safe radius of a CLAIMED
