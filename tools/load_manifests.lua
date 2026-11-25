@@ -38,7 +38,7 @@ local function stub()
     })
 end
 
--- Minimal but real JSON encoder (decode is Python's json via the `_jd` global set by the driver).
+-- Minimal but real JSON encoder (the decoder below is pure Lua too).
 local ESC = {
     ['\\'] = '\\\\', ['"'] = '\\"', ['\b'] = '\\b', ['\f'] = '\\f',
     ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t',
@@ -97,7 +97,7 @@ local function json_decode(s)
                 if e == 'n' then out[#out + 1] = '\n' elseif e == 't' then out[#out + 1] = '\t'
                 elseif e == 'r' then out[#out + 1] = '\r' elseif e == 'b' then out[#out + 1] = '\b'
                 elseif e == 'f' then out[#out + 1] = '\f' elseif e == 'u' then
-                    out[#out + 1] = string.char(tonumber(s:sub(pos + 1, pos + 4), 16)); pos = pos + 4
+                    out[#out + 1] = utf8.char(tonumber(s:sub(pos + 1, pos + 4), 16)); pos = pos + 4
                 else out[#out + 1] = e end
                 pos = pos + 1
             else
@@ -174,8 +174,10 @@ end
 function M.run(plan)
     local real_G = _G
     local findings = {}
-    local registry = {}   -- resName -> { exportName = true }
-    local declared = {}   -- resName -> { exportName = true } (server + client merged; load-only)
+    -- Exports are per side, like FXServer: a client script cannot call a server-only export.
+    local registry = { server = {}, client = {} }  -- side -> resName -> { exportName = true }
+    local declared = { server = {}, client = {} }  -- side -> resName -> { exportName = true } (manifest)
+    local started_res = {}                         -- resName -> true once its load has begun (cfg order)
     local providers = {}  -- alias -> realRes  (from `provide 'x'`)
     local known_res = {}  -- resName -> true (ensured or provided)
     local system_res = {} -- resName -> true (ox_lib/oxmysql: bodies skipped, exports autovivify)
@@ -184,10 +186,11 @@ function M.run(plan)
     for _, res in ipairs(plan.resources) do
         known_res[res.name] = true
         for _, p in ipairs(res.provides or {}) do providers[p] = res.name end
-        local d = {}
-        for _, e in ipairs(res.server_exports or {}) do d[e] = true end
-        for _, e in ipairs(res.client_exports or {}) do d[e] = true end
-        declared[res.name] = d
+        local ds, dc = {}, {}
+        for _, e in ipairs(res.server_exports or {}) do ds[e] = true end
+        for _, e in ipairs(res.client_exports or {}) do dc[e] = true end
+        declared.server[res.name] = ds
+        declared.client[res.name] = dc
         if res.system then system_res[res.name] = true end
     end
     for p in pairs(providers) do known_res[p] = true end
@@ -215,18 +218,18 @@ function M.run(plan)
             if system_res[target] then
                 return (fn == 'hasLoaded') and true or stub() -- ox_lib's init.lua requires hasLoaded()==true
             end
-            local r = registry[target]
+            local r = registry[side][target]
             if r and r[fn] ~= nil then return stub() end -- registered: ok; return a stub so callers can keep going
-            if known_res[target] and declared[target] and declared[target][fn] then
+            if known_res[target] and declared[side][target] and declared[side][target][fn] then
                 -- Declared in the manifest but not registered yet (a later file in this resource, or a
                 -- later resource in cfg order). Resolve after all resources load.
-                deferred[#deferred + 1] = { caller = caller, target = target, fn = fn, file = current.file }
+                deferred[#deferred + 1] = { caller = caller, target = target, fn = fn, file = current.file, side = side }
                 return stub()
             end
             local info = debug.getinfo(2, 'l')
             add('unresolved_export', caller, current.file,
                 info and info.currentline or nil,
-                ("exports['%s']:%s has no such export (not registered, not declared)"):format(target, fn))
+                ("exports['%s']:%s has no such %s export (not registered, not declared)"):format(target, fn, side))
             return stub()
         end
     end
@@ -241,8 +244,8 @@ function M.run(plan)
     local function make_exports(res_name, side)
         return setmetatable({}, {
             __call = function(_, name, fn)
-                local r = registry[res_name]
-                if not r then r = {} registry[res_name] = r end
+                local r = registry[side][res_name]
+                if not r then r = {} registry[side][res_name] = r end
                 r[name] = fn or true
             end,
             __index = function(_, target)
@@ -261,7 +264,8 @@ function M.run(plan)
             IsDuplicityVersion = function() return side == 'server' end,
             GetGameName = function() return 'rdr3' end,
             GetResourceState = function(name)
-                if known_res[name] then return 'started' end
+                if started_res[name] then return 'started' end -- only resources already loaded (cfg order)
+                if known_res[name] then return 'stopped' end   -- ensured later in server.cfg
                 return 'missing'
             end,
             GetNumResourceMetadata = function() return 0 end,
@@ -309,6 +313,9 @@ function M.run(plan)
         }, { __index = function(_, k)
             local v = real_G[k]
             if v ~= nil then return v end
+            -- Fh* module tables (FhQuestsJobTypes, FhRegions, ...) are plain globals set by an earlier file of
+            -- the SAME resource; a read before it is set is a manifest-order bug, so yield nil like FXServer.
+            if type(k) == 'string' and k:match('^Fh%u') then return nil end
             return stub()
         end })
         env._G = env
@@ -352,6 +359,8 @@ function M.run(plan)
     local n_res, n_files, n_system = 0, 0, 0
     for _, res in ipairs(plan.resources) do
         n_res = n_res + 1
+        started_res[res.name] = true
+        for _, p in ipairs(res.provides or {}) do started_res[p] = true end
         if res.system then
             n_system = n_system + 1
         else
@@ -364,7 +373,7 @@ function M.run(plan)
 
     -- ---- resolve deferred (declared-but-not-yet-registered) export calls ----
     for _, d in ipairs(deferred) do
-        local r = registry[d.target]
+        local r = registry[d.side][d.target]
         if not (r and r[d.fn] ~= nil) then
             add('unresolved_export', d.caller, d.file, nil,
                 ("exports['%s']:%s was declared in the manifest but never registered by load time"):format(d.target, d.fn))

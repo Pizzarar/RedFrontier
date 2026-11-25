@@ -53,6 +53,60 @@ class GateTest(unittest.TestCase):
         kinds = [(f['kind'], f['line']) for f in r['findings']]
         self.assertEqual(kinds, [('unresolved_export', 1)], r['findings'])
 
+    # ---- review fixes (rn-c5401c5a016e) ----
+    def _res(self, name, server=(), client=(), sexp=(), cexp=()):
+        return {'name': name, 'system': False, 'dir': QUESTS, 'server': list(server), 'client': list(client),
+                'server_exports': list(sexp), 'client_exports': list(cexp), 'provides': []}
+
+    def _write(self, d, name, text):
+        p = os.path.join(d, name)
+        with open(p, 'w') as f:
+            f.write(text)
+        return ent(p, 'x/' + name)
+
+    def test_exports_are_per_side(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            srv = self._write(d, 's.lua', "exports('onlyServer', function() end)\n")
+            cli = self._write(d, 'c.lua', "exports['a']:onlyServer()\n")
+            r = lm.run_plan(LUA, {'resources': [self._res('a', server=[srv], client=[cli], sexp=['onlyServer'])]})
+        self.assertEqual([(f['kind'], f['line']) for f in r['findings']], [('unresolved_export', 1)], r['findings'])
+        self.assertIn('client export', r['findings'][0]['msg'])
+
+    def test_missing_ensure_target_is_a_finding(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            cfg = os.path.join(d, 'server.cfg')
+            with open(cfg, 'w') as f:
+                f.write('ensure fh_quests\nensure not_vendored\n')
+            old = lm.CFG_PATH
+            lm.CFG_PATH = cfg
+            try:
+                plan_ = lm.build_plan(LUA)
+            finally:
+                lm.CFG_PATH = old
+        self.assertEqual(plan_['missing'], ['not_vendored'])
+        self.assertEqual([r['name'] for r in plan_['resources']], ['fh_quests'])
+        r = lm.run_plan(LUA, {'resources': [], 'missing': ['not_vendored']})
+        self.assertEqual([(f['kind'], f['res']) for f in r['findings']], [('missing_resource', 'not_vendored')])
+
+    def test_resource_state_follows_load_order(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            probe = self._write(d, 'p.lua', "STATES = { GetResourceState('a'), GetResourceState('b'), GetResourceState('zz') }\n"
+                                            "assert(GetResourceState('a') == 'started' and GetResourceState('b') == 'stopped'"
+                                            " and GetResourceState('zz') == 'missing', table.concat(STATES, ','))\n")
+            r = lm.run_plan(LUA, {'resources': [self._res('a', server=[probe]), self._res('b')]})
+        self.assertEqual(r['findings'], [])
+
+    def test_unset_fh_module_global_is_nil(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f1 = self._write(d, 'u.lua', "assert(FhNotSetYet == nil, 'Fh* global must be nil before it is set')\n"
+                                         "local x = FhNotSetYet.field\n")
+            r = lm.run_plan(LUA, {'resources': [self._res('a', server=[f1])]})
+        self.assertEqual([(f['kind'], f['line']) for f in r['findings']], [('top_error', 2)], r['findings'])
+
 
 if __name__ == '__main__':
     unittest.main()

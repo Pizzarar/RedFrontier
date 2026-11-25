@@ -174,6 +174,7 @@ def _expand(dirname, rel, display):
 
 def build_plan(lua_mod):
     resources = []
+    missing = []
     for name in parse_cfg(CFG_PATH):
         d = resolve_resource(name)
         entry = {
@@ -199,10 +200,11 @@ def build_plan(lua_mod):
             man = parse_manifest(lua_mod, d)
             entry['provides'] = man['provides']
         else:
-            # resource name in server.cfg but no manifest on disk (e.g. a non-vendored system resource)
-            entry['system'] = True
+            # in server.cfg but no manifest on disk (typo or unvendored): a finding, never a silent system stub
+            missing.append(name)
+            continue
         resources.append(entry)
-    return {'resources': resources}
+    return {'resources': resources, 'missing': missing}
 
 
 def load_known(path):
@@ -253,7 +255,11 @@ def run_plan(lua_mod, plan):
     with open(os.path.join(ROOT, 'tools', 'load_manifests.lua'), 'r', encoding='utf-8') as fh:
         lua.execute(fh.read())
     lua.execute('RF_PLAN = ' + to_lua(plan))
-    return json.loads(lua.globals().load_manifests.run_from_global())
+    result = json.loads(lua.globals().load_manifests.run_from_global())
+    for name in plan.get('missing', []):
+        result['findings'].append({'kind': 'missing_resource', 'res': name, 'file': 'server/server.cfg', 'line': None,
+                                   'msg': "ensure %s: no fxmanifest.lua found under [fh]/[rsg]/[spikes]" % name})
+    return result
 
 
 def run():
