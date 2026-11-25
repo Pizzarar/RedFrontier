@@ -18,14 +18,12 @@
 
 - 2026-11-23: fh_quests contract = README on quests-q1 d277f55 (Q1 PASS, not on main yet). Tutorial = registerQuest kind='tutorial'; steps advance only on intake whitelist + fh:quests:talked. Exports need Q2 (server) before any code runs.
 
+- 2026-11-24: fh_tutorial already on main (f17d3ce, ff783fe; 8 steps, no rewards, client checks -> talk). Plan guide-02 (plans/guide-02-tutorial-gaps.md): T1 add stash/gunsmith/cargo/fence steps; T2 Field Guide content file for an @ui screen (quest journal already exists in fh_ui). Handed to Guide lead rn-2ab38ea7f111.
+
 ## Open
-- guide-02 design: no intake event yet for chest/board/cargo/gunsmith/fence. Lean: chained short tutorial quests; steps use real events where they exist (homestead:claimed, hunting:pelt_skinned/sold), talk steps elsewhere, swapped as additive whitelist events land. Flag to @quests: README example prereq {'tutorial_intro'} on family_hale_1 conflicts with never-blocking.
-- In-game journal: ask @ui after wiki settles.
-- guide-02 fh_tutorial: write after @quests publishes fh_quests API; lands last.
-- (orig) Teach the player. (A) Wiki: docs/wiki/ markdown covering every system, default controls (read from lane configs, not guessed), items, regions, tips; source of truth = lane READMEs/configs; later an in-game journal screen via @ui. (C) Optional intro tutorial (fh_tutorial, built on @quests' engine): over the first 1-2 hours, nudges the player to each system in turn (claim plot, chest, hunting spot, contract board, cargo run, gunsmith, fence...), skippable, never blocking. Wiki can start now; the tutorial script follows the engine API. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md (non-goal 'story missions' amended 2026-11-23 by Aub: optional one-time questlines + tutorial are IN; text dialogue only, no cutscenes/VO). Follow the Overlord integration rules in docs/brainstorm/redfrontier.md Decided. Use only other lanes' exports/events; requests go to their Buddy. No push.
+- T2 waits on @ui reply to idea-849 (Field Guide screen schema).
+- Wiki coverage gaps (fh_alife, fh_hands, fh_gunsmith, fh_fence pages): lead's W3 round 2.
 
 ## In flight
-- PASS W3 wiki-refreshed on main 93e9014: survival, progression, crafting, quests, roads, homestead, hunting, ui pages + shared pages (check-wiki 21/0, specs 71/1382/0). Remaining: core page refresh (E2 merged), journal ask to @ui, guide-02 tutorial.
-- PASS wiki-merged: W1 18cc57b + W2 3ef1455 on main (21 pages, check-wiki green, specs 36/697/0). R3 = W3 per-lane refresh when a lane logs playtest-ready; journal ask to @ui now unblocked.
-- (history) Freeze lifted 15:11Z (C2 cutover). Resume section added to plans/guide-01-wiki.md: R1 review W1 cfcc4e1 + W2 5d80476 -> R2 rebase (clean, main moved docs-only) -> merge W1 then W2, no push, one lane at a time -> R3 = W3 when lanes go playtest-ready. Handed to Overlord to spawn Guide Lead.
-- Journal: asking @ui waits until wiki-merged.
+- guide-02 T1 (Guide lead) || W3 round 2 (core + coverage gaps). Then T2 after @ui schema.
+- PASS wiki W1/W2/W3 merged (main 415a736), playtest-ready logged.
