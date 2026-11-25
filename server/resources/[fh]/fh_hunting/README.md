@@ -29,7 +29,7 @@ H2 keys:
 - `DeadCacheSeconds` (900): keep a dead animal's shot data this long, by netId.
 - `SellCooldownMs` (500): server, per-player per-event throttle for the sell menu and sale requests.
 - `Trapper` (H3): `{ region_id = 'heartlands', label, coords, SellRange = 4.0, PromptDistance = 2.0 }`. Coordinates are approximate and unverified; `region_id` is the fh_economy ledger region.
-- `LegendaryBear` (H4): `{ chain_id, model, rumourPrice, region_id, RumourRange, markers[2|3] { id, label, coords, radius }, spawn.coords }`. Clue 1 is the trapper; clues 2 and 3 are inspectable world markers; the spawn area is where the bear appears. Coordinates approximate and unverified.
+- `LegendaryBear`: removed. The bear moved to `data/legendaries/heartlands.lua` unchanged (see Legendaries). `Trapper.coords` is still the heartlands rumour point.
 - `ExplosiveWeapons`: cause-of-death weapons that count as explosive (1 star). Unverified names.
 - `NativeQualityStars`, `NativeCleanlinessStars`: result maps for the `'native'` source.
 
@@ -82,15 +82,41 @@ Wagon lookup (`shared/wagon.lua`): `exports.fh_cargo:nearestWagon(src, coords, C
 wagon": big-game skins are refused and the carcass stays claimable. The adapter reports the player's position as the
 wagon position because `fh_cargo` already applied the range.
 
+## Legendaries (hunting-02)
+
+One legendary per region, each a pure-data file `data/legendaries/<region_id>.lua` that returns one entry (or nothing for a stub). The schema, its validation and the loader rules live in the header of `shared/legendaries.lua`; add a region's hunt by filling its file, no code change. Pelt values follow `round(plain species value * 4/3)` (the bear's 45 -> 60); the owner tunes them after the playtest.
+
+| region | enabled | id | label | species | pelt value |
+|---|---|---|---|---|---|
+| heartlands | yes | `legendary_bear` | Legendary Bear | `a_c_bear_01` | 60 |
+| scarlett_meadows | yes | `legendary_redclay_stag` | Legendary Red Clay Stag | `a_c_deer_01` | 19 |
+| bayou_nwa | yes | `legendary_mossback_gator` | Legendary Mossback Gator | `a_c_alligator_01` | 73 |
+| great_plains | yes | `legendary_dusthorn_bison` | Legendary Dusthorn Bison | `a_c_buffalo_01` | 53 |
+| big_valley | no | `legendary_copperhide_deer` | Legendary Copperhide Deer | `a_c_deer_01` | 19 |
+| bluewater_marsh | no | `legendary_brackhide_boar` | Legendary Brackhide Boar | `a_c_boar_01` | 16 |
+| cholla_springs | no | `legendary_cinderjaw_coyote` | Legendary Cinderjaw Coyote | `a_c_coyote_01` | 11 |
+| cumberland_forest | no | `legendary_greyhowl_wolf` | Legendary Greyhowl Wolf | `a_c_wolf` | 27 |
+| gaptooth_ridge | no | `legendary_sandveil_fox` | Legendary Sandveil Fox | `a_c_fox_01` | 11 |
+| grizzlies_east | no | `legendary_frostmane_moose` | Legendary Frostmane Moose | `a_c_moose_01` | 67 |
+| grizzlies_west | no | `legendary_palehorn_elk` | Legendary Palehorn Elk | `a_c_elk_01` | 51 |
+| hennigans_stead | no | `legendary_saltbrush_buck` | Legendary Saltbrush Buck | `a_c_deer_01` | 19 |
+| rio_bravo | no | `legendary_canyonback_boar` | Legendary Canyonback Boar | `a_c_boar_01` | 16 |
+| roanoke_ridge | no | `legendary_coalhorn_moose` | Legendary Coalhorn Moose | `a_c_moose_01` | 67 |
+| tall_trees | no | `legendary_embercoat_coyote` | Legendary Embercoat Coyote | `a_c_coyote_01` | 11 |
+
+All coordinates are unverified in game (`TODO-verify-in-game` in each file). A region's `enabled` flag comes from `fh_core` regions (`FhRegions.isEnabled`), read live.
+
+**Gate.** While a legendary's region is disabled, the rumour, both markers and the spawn refuse with `fh_chain_region_closed` ("There is no legendary hunt here."), and the client draws no prompt or marker there. A chain in progress freezes: its state is kept as it is (not reset) and resumes when the region is enabled again. Each character has one chain per legendary, so two hunts in two regions can run at once.
+
 ## Legendary bear (H4)
 
-One Legendary Bear hunt per character, a three-clue chain inside the Heartlands. The state machine is pure
+One Legendary Bear hunt per character, a three-clue chain inside the Heartlands (the same chain runs for every legendary in the table above; the steps below use the bear as the example). The state machine is pure
 (`shared/chain.lua`, `FhHuntingChain`); `server/main.lua` injects the DB, the rumour charge and `fh_core:requestSpawn`
 sides. Chain state persists in `fh_hunting_chains` (one row per `(citizenid, chain_id)`), so a relog resumes where the
 character left off.
 
 1. **Clue 1 (rumour):** at the trapper, the client prompt becomes "[E] Ask about the legendary bear" while the
-   character is at step 1. The server charges `LegendaryBear.rumourPrice` via `fh_economy:charge` (ledger row, B7) with reason `hunting:rumour` and advances to step 2. Refused if already bought, paid-for, complete, or out of
+   character is at step 1. The server charges the entry's `rumour.price` via `fh_economy:charge` (ledger row, B7) with reason `hunting:rumour` and advances to step 2. Refused if already bought, paid-for, complete, or out of
    range.
 2. **Clue 2 (track):** a track marker appears; inspecting it (in range, current step only) advances to step 3.
 3. **Clue 3 (carcass):** a carcass marker appears; inspecting it requests the bear through
@@ -134,9 +160,9 @@ Consumed (requests, client to server):
 
 - `fh:hunting:sell_open` (no payload) and `fh:hunting:sell` `{ container, slot, item }` (H3, see Trapper). Server replies with `fh:hunting:sell_rows` (client event, display only).
 
-- `fh:hunting:chain_status` (no payload) — the client asks for the current legendary-chain step; the server replies with `fh:hunting:chain_state` `{ step, spawned, completed }` (client event, display only).
-- `fh:hunting:chain_rumour` (no payload) — buy the rumour from the trapper (clue 1).
-- `fh:hunting:chain_inspect` `{ marker = 'track'|'carcass' }` — inspect a marker (clues 2 and 3). The server re-reads the player position and the marker for the current step.
+- `fh:hunting:chain_status` (no payload) — the client asks for the current legendary-chain step; the server replies with `fh:hunting:chain_state` `{ step, spawned, completed, chains = { [legendary id] = { step, spawned, completed } } }` (client event, display only; the top-level fields are the bear's, `chains` covers every legendary in an enabled region).
+- `fh:hunting:chain_rumour` `{ legendary? }` — buy the rumour (clue 1). `legendary` is the legendary id; omitted means `legendary_bear`.
+- `fh:hunting:chain_inspect` `{ marker = 'track'|'carcass', legendary? }` — (`legendary` omitted means `legendary_bear`) inspect a marker (clues 2 and 3). The server re-reads the player position and the marker for the current step.
 
 Consumed (engine): `onResourceStart` (own resource and `fh_core`, to register the items), `playerDropped`.
 
@@ -145,10 +171,10 @@ Emitted (server-only, for @quests and @guide; never sent to clients):
 - `fh:hunting:pelt_skinned` `{ src, citizenid, item_id, animal, quality, size_class }`: now, after a grant only.
   Never fired on a refusal.
 - `fh:hunting:pelt_sold` `{ citizenid, item_id, animal, size_class, quality, price, region_id }`: H3, after a payout succeeded only. `price` is what `fh_economy:pay` was given.
-- `fh:hunting:clue_found` `{ citizenid, chain_id = 'legendary_bear', step = 1|2|3 }`: H4, each clue of the legendary
-  bear chain, when it is found (rumour bought, track inspected, carcass inspected).
-- `fh:hunting:legendary_spawned` `{ citizenid, chain_id }`: H4, when the bear's spawn is adopted. Fires once per chain.
-- `fh:hunting:chain_complete` `{ citizenid, chain_id }`: H4, after the legendary pelt is skinned. Fires once per chain.
+- `fh:hunting:clue_found` `{ citizenid, chain_id, region_id, legendary, step = 1|2|3 }`: H4, each clue of a legendary
+  chain (`chain_id` = `legendary` = the legendary id, `region_id` its region), when it is found (rumour bought, track inspected, carcass inspected).
+- `fh:hunting:legendary_spawned` `{ citizenid, chain_id, region_id, legendary }`: H4, when the bear's spawn is adopted. Fires once per chain.
+- `fh:hunting:chain_complete` `{ citizenid, chain_id, region_id, legendary }`: H4, after the legendary pelt is skinned. Fires once per chain.
 
 No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_hunting:getTrophyComfort(itemId)`
 (number, or nil for a non-trophy), see Exports.

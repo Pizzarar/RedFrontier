@@ -737,7 +737,7 @@ Hunting only exposes `exports.fh_hunting:getTrophyComfort(item)` (`trophy_legend
 
 ### H4 legendary bear chain (fh_hunting)
 
-All unverified in-game. One hunt per character. Marker/trapper coordinates are approximate: if a prompt does not show, stand where it should be, read your coordinates and adjust `LegendaryBear` in `fh_hunting/config.lua`.
+All unverified in-game. One hunt per character. Marker/trapper coordinates are approximate: if a prompt does not show, stand where it should be, read your coordinates and adjust `fh_hunting/data/legendaries/heartlands.lua`.
 
 1. New character (step 1): walk to the trapper. Expected: the prompt reads `[E] Ask about the legendary bear` (not `[E] Sell pelts`). Press E. Expected: cash -$25 (rsg-core `RemoveMoney`, no `fh_ledger` row until @core ships `fh_economy:charge`), and the server emits `fh:hunting:clue_found { step = 1 }`.
 2. Go to the track marker (`markers[2]`, roughly -260, 800, 116). Expected: `[E] Inspect Bear tracks` shows; E emits `clue_found { step = 2 }`. A marker you are not on (or the carcass marker out of order) shows no prompt and is refused server-side.
@@ -749,6 +749,17 @@ All unverified in-game. One hunt per character. Marker/trapper coordinates are a
    RESULT:
 
 
+
+### hunting-02 legendaries in other regions (fh_hunting)
+
+All unverified in-game. Table of legendaries: `fh_hunting/README.md`, section Legendaries. Coordinates are guesses (`TODO-verify-in-game`): if a prompt does not show, stand where it should be, read your coordinates and adjust the region's `data/legendaries/<region>.lua`. Enabled regions: heartlands, scarlett_meadows, bayou_nwa, great_plains.
+
+1. **Full chain in an enabled non-heartlands region.** Pick `scarlett_meadows` (Legendary Red Clay Stag; `bayou_nwa` gator or `great_plains` bison work the same). Stand at its rumour point (`data/legendaries/scarlett_meadows.lua`, roughly 1265, -1305). Expected: `[E] Ask about the red clay stag`; press E, cash -$25, `clue_found { step = 1, region_id = 'scarlett_meadows', legendary = 'legendary_redclay_stag' }`. Inspect the track marker, then the carcass marker (`clue_found` 2 and 3); the stag spawns once (`legendary_spawned`). Kill it, skin it with a wagon within 8 m: `pelt_legendary_redclay_stag` (3 stars, cargo, labelled "Legendary Red Clay Stag Pelt") in the wagon, `trophy_legendary_redclay_stag` in the saddlebag, `chain_complete` fires once.
+2. **Bear regression.** In heartlands run the old bear card above (H4) once more: trapper prompt reads `[E] Ask about the legendary bear` at step 1 and `Sell pelts` after, cash -$25, track, carcass, spawn, pelt (value now 60 base, unchanged) and trophy as before. Relog mid-chain resumes at the right marker.
+3. **Disabled region shows nothing.** Stand at a disabled region's rumour coords (e.g. `hennigans_stead`, roughly -2275, -2485, or `bluewater_marsh`). Expected: no `[E]` prompt and no marker or blip anywhere in that region; nothing to buy. (A forged `chain_rumour { legendary = 'legendary_saltbrush_buck' }` is refused with "There is no legendary hunt here.")
+4. **Two hunts at once.** Buy the scarlett_meadows rumour and the bayou_nwa rumour (or the bear's). Expected: each region shows only its own next marker, progress in one does not move the other, and relog resumes both at their own steps. Killing and skinning one stag does not complete the other chain.
+
+   RESULT:
 
 ### H7 skinned animals leave the spawn lifecycle (fh_hunting)
 
