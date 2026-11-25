@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor4
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -28,6 +28,7 @@
 - 2026-11-23 core-05 (plans/core-05-gun-parts-loot.md): gun_parts outlaw loot 0.8 x2-3 + unpend crafting sources spec. idea-721 declined: fh_core timeout cannot stop the late write; root fix = fence-side token.
 - 2026-11-24 Host network moved Tailscale -> NordVPN Meshnet (Media-Host), idea-744. core-06 infra sweep (743 ace grants, 744 docs, 750 idempotent rocks_zones INSERT) dispatched by lead as I1 rn-c1105e8f1c5c tierA; 762 bounced to @roads.
 - 2026-11-24 core-07 (plans/core-07-keyless-hardening.md), quota push: L1 static contract lint (exports/events/items), A1 tierA money audit, S1 fh_core edge specs, B6f pane toggle DARK behind convar fh_saddlebag_pane=false (flip after owner saddlebag RESULT; then remove /saddlebag in|out). Lane SPEC.md written (docs/lanes/core/SPEC.md, uncommitted, lead commits in merge slot).
+- 2026-11-25 core-09 (plans/core-09-nits-wear-reach.md): CHEST-REACH is core-owned (fh_zones from B6b); R1 clamp groundZAt via snapZ + tighten reach band, camp coords -> owner-gated CHEST-COORDS. W1 P1-wear: canonical info.quality (rsg-weapons stays unforked), condition read fallback; @crafting OK'd 11-25 (core does all, keep fh_gunsmith:conditionChanged name, craft_rules numbers unchanged, ping Cra3 on merge). N1 P2+P5 nits.
 
 ## Open
 - Horse ownership/stables: no lane owns it (B6e saddlebag is per-character stopgap).
@@ -72,3 +73,8 @@
 - 11-25 core-08 P3 PASS: 29 placeholder icons copied from existing pngs (d9b7746), Gemini PASS 0/0/0. venv 122/2224/0. P2 use handlers in fix (FAIL 3/0/3).
 - 11-25 core-08 P5 PASS: fh_log provides rsg-log (console + server/logs/audit.log, sanitized, server-only event) + rsg-weapons WeaponComponents=false; 2561926, Sonnet PASS 0/0/2 (lows -> P5-nit). venv 130/2322/0.
 - 11-25 core-08 P2 PASS: first-play use handlers (bandage/tonics/money clips, useable=false for handlerless loot). Clips remove-first under per-player lock, cid captured pre-consume, logout-window fail-closed, give-back only to same cid else credit. a686aaf, Gemini tierA FAIL 3/0/3 -> FAIL 1/0/2 -> FAIL 1/0/0 -> PASS 0/0/1 (low -> P2-nit). venv 133/2422/0. CHEST-REACH declined (10m refuted: unverified fh_zones camp z-hints).
+- 11-25 core-08 done pending P2 slot (a686aaf); P4 dropped. core-09 handed to Cor4 rn-263740f80b3e (R1/W1/N1).
+- 11-25 core-08 COMPLETE: P2 merged 27a0231, M2-nit (atomic cent-stack removal, one HUD event) e928864 Gemini tierA PASS 0/0/1.
+- 11-25 core-09 R1 PASS (Sonnet 0/0/3) merged e0c7b78: groundZAt clamped via snapZ everywhere, snapped reach band 20 -> 13.5m (+ cargo/homestead/gunsmith mirrors), admin /fh_where, OWNER-TESTS CHEST-COORDS (owner-gated). Lows -> R1-nit.
+- 11-25 core-09 N1 PASS (Gemini tierA 0/0/0) df718fa: useables unload settle + monotonic gen, money applying depth counter, fh_log buffered + rotated.
+- 11-25 core-09 W1 PASS (Gemini 0/0/2) 57fc935: weapon wear on info.quality across fh_zones/fh_gunsmith/fh_crafting, read quality-or-condition, conditionChanged kept (@crafting OK). Lows -> W1-nit. core-09 COMPLETE.

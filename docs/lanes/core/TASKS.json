@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T16:39:43.143Z",
+  "updatedAt": "2026-11-25T17:12:52.291Z",
   "units": [
     {
       "id": "B5",
@@ -244,12 +244,12 @@
     },
     {
       "id": "R1",
-      "goal": "idea-804 fh_economy repByCitizenid (offline rep for homestead H8 lot abandon)",
+      "goal": "core-09 R1 950d5b3 (band 13.5m, fh_zones snapZ clamp) -> Review Sonnet rn-925ff6327932",
       "files": [],
       "doneCheck": "",
       "status": "done",
       "branch": "core-r1",
-      "commit": "7bb75f6"
+      "commit": "e0c7b78"
     },
     {
       "id": "L1",
@@ -331,7 +331,8 @@
       "goal": "atomic cent-stack removal + single HUD event 58f27b2 -> tierA Review Gemini rn-e29f1504c265",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done",
+      "commit": "e928864"
     },
     {
       "id": "P1",
@@ -346,7 +347,7 @@
       "files": [],
       "doneCheck": "",
       "status": "done",
-      "commit": "a686aaf"
+      "commit": "a24ae1b"
     },
     {
       "id": "P3",
@@ -394,6 +395,50 @@
     {
       "id": "P2-nit",
       "goal": "fh_core useables.lua:78-87,205-210 unloadCid/unloadSeq never cleared after playerDropped (no settle like fh_economy main.lua:403-410); clear once playerOf(src) no longer holds cid, don't reset seq while clipBusy (P2 review low)",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "M2-nit2",
+      "goal": "rsg-core moneyitems.lua:219-221 applying[cid] boolean -> depth counter (re-entrant Add/RemoveMoney via SetPlayerData/log listeners would re-enable mid-op HUD syncs); M2-nit review low",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "N1",
+      "goal": "core-09 N1 abf6f56 -> tierA Review Gemini rn-ecd86ee8bd8e",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "df718fa"
+    },
+    {
+      "id": "W1",
+      "goal": "core-09 W1 a0014a6 -> Review Gemini rn-8e9a5adcbe71; ping Cra3 rn-b599d27a1b32 with merge hash",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "57fc935"
+    },
+    {
+      "id": "R1-nit",
+      "goal": "spec/ground_snap_spec.lua static scan matches only literal groundZAt( calls (aliases/function values invisible); plotcheck exemption keyed on string literal; wagon headroom margin at +10m snap (12.5/13.5) — confirm in CHEST-COORDS owner test. R1 review lows",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "CHEST-COORDS",
+      "goal": "owner: stand at each outlaw camp stash, /fh_where, paste coords; swap verified=false hints in fh_zones/config.lua",
+      "files": [],
+      "doneCheck": "",
+      "status": "blocked"
+    },
+    {
+      "id": "W1-nit",
+      "goal": "doc drift: fh_zones/config.lua:30 comment says info.condition; fh_core/README.md:43-44 documents info.condition; spec/items_spec.lua:80-83 lacks quality-precedence assert (W1 review lows)",
       "files": [],
       "doneCheck": "",
       "status": "todo"
