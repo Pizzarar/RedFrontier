@@ -68,6 +68,22 @@ for _, name in ipairs(E.INTAKE) do
     if I.accepts(name) then listen(name) end
 end
 
+-- Regional tier crossing (fh_progression server/main.lua:15): refresh the board for that player only.
+AddEventHandler('fh:progression:tier_changed', function(payload)
+    local s = tonumber(source)
+    if s and s > 0 then return end
+    if not Q.ready or type(payload) ~= 'table' then return end
+    local region_id = payload.region_id
+    if type(region_id) ~= 'string' or not regions()[region_id] then return end
+    local src = type(payload.src) == 'number' and payload.src > 0 and payload.src or nil
+    local cid = type(payload.citizenid) == 'string' and payload.citizenid ~= '' and payload.citizenid or nil
+    if not cid and src then cid = Q.citizenidOf(src) end
+    if not src and cid then src = Q.srcOf[cid] end
+    if not src or not cid or Q.citizenidOf(src) ~= cid then return end
+    Q.boardChanged(region_id, src)
+    if Q.viewing[src] == region_id then Q.sync(cid) end
+end)
+
 -- ---------------------------------------------------------------- registries
 local function rebuildJobEvents()
     local set = {}
@@ -161,7 +177,7 @@ local function getBoard(src, region_id)
     local view = nil
     local ok, err = withPlayer(src, function(cid, states)
         Q.viewing[src] = region_id
-        view = Q.boardView(region_id, states, os.time())
+        view = Q.boardView(region_id, states, os.time(), src)
         Q.sync(cid)
         return true
     end)
@@ -177,6 +193,10 @@ local function acceptOffer(src, offer_id)
         local offer = B.find(Q.boardFor(region_id, now).offers, offer_id)
         local jt = offer and Q.jobTypes[offer.job_type]
         if not jt then return false, 'fh_offer_gone' end
+        -- Server-side tier re-check against the offer's own region (client never decides eligibility).
+        if B.offerMinTier(offer) > Q.tierOf(src, Q.offerRegionOf(offer, region_id)) then
+            return false, 'fh_offer_locked'
+        end
         local snap, err = Jobs.snapshot(offer.job_type, offer.offer, region_id, jt.hooks.onEvent ~= nil)
         if not snap then return false, err end
         local def

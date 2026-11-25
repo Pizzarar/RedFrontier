@@ -22,7 +22,7 @@ JT.registerBuilder('survey', function(region_id, d)
                 key = 'survey_' .. s.key, title = 'Survey: ' .. s.name,
                 text = ('Ride out and mark %d spots%s.'):format(#points, ordered and ', in order' or ''),
                 on = WR.POINT_EVENT, count = #points, rewards = JT.rewards(region_id, s.money, s.rep),
-                region_id = region_id,
+                region_id = region_id, min_tier = JT.minTier(s.min_tier),
                 -- the rest rides along to accept only (the watcher's targets); rebuilt from the template on re-arm
                 points = points, ordered = ordered,
             }

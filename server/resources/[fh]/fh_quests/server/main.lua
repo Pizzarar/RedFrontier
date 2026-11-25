@@ -208,13 +208,61 @@ function Q.boardFor(region_id, now)
     return board
 end
 
-function Q.boardView(region_id, states, now)
+---Region id of a board offer (prefers offer.offer.region_id, then offer.region_id, then fallback).
+function Q.offerRegionOf(o, fallback)
+    if type(o) == 'table' then
+        if type(o.offer) == 'table' and type(o.offer.region_id) == 'string' and o.offer.region_id ~= '' then
+            return o.offer.region_id
+        end
+        if type(o.region_id) == 'string' and o.region_id ~= '' then return o.region_id end
+    end
+    return fallback
+end
+
+---Player's reputation tier in `region_id` via fh_progression (1..3). Falls back to 1 when fh_progression is not
+---started, src/region_id is missing, or getTier errors / returns a non-number.
+function Q.tierOf(src, region_id)
+    if type(src) ~= 'number' or src < 1 or type(region_id) ~= 'string' or region_id == '' then return 1 end
+    if GetResourceState('fh_progression') ~= 'started' then return 1 end
+    local ok, tier = pcall(function() return exports.fh_progression:getTier(src, region_id) end)
+    if not ok or type(tier) ~= 'number' or tier ~= tier or tier < 1 then return 1 end
+    return math.floor(tier)
+end
+
+function Q.boardView(region_id, states, now, src)
     local board = Q.boardFor(region_id, now)
     local accepted = {}
     for qid, st in pairs(states or {}) do
         if st.status == 'active' then accepted[qid] = true end
     end
-    return J.boardView(region_id, board.epoch, board.expires_at, board.offers, accepted, Jobs.questId)
+    local tiers = {}
+    local function tierFor(r)
+        if tiers[r] == nil then tiers[r] = Q.tierOf(src, r) end
+        return tiers[r]
+    end
+    local showLocked = FhQuestsConfig and FhQuestsConfig.showLockedOffers == true
+    if showLocked then
+        local locked = {}
+        for _, o in ipairs(board.offers) do
+            local minTier = B.offerMinTier(o)
+            if minTier > tierFor(Q.offerRegionOf(o, region_id)) then locked[o.id] = minTier end
+        end
+        return J.boardView(region_id, board.epoch, board.expires_at, board.offers, accepted, Jobs.questId, locked)
+    end
+    local uniform = true
+    for _, o in ipairs(board.offers) do
+        if Q.offerRegionOf(o, region_id) ~= region_id then uniform = false; break end
+    end
+    local visible
+    if uniform then
+        visible = B.visible(board.offers, tierFor(region_id))
+    else
+        visible = {}
+        for _, o in ipairs(board.offers) do
+            if #B.visible({ o }, tierFor(Q.offerRegionOf(o, region_id))) == 1 then visible[#visible + 1] = o end
+        end
+    end
+    return J.boardView(region_id, board.epoch, board.expires_at, visible, accepted, Jobs.questId)
 end
 
 ---Send the full fh:quests:sync snapshot to a character's client (if online).
@@ -223,11 +271,15 @@ function Q.sync(cid)
     local states = Q.cache[cid]
     if not src or not states then return end
     local region = Q.viewing[src]
-    local boardObj = region and Q.boardView(region, states, os.time()) or nil
+    local boardObj = region and Q.boardView(region, states, os.time(), src) or nil
     TriggerClientEvent('fh:quests:sync', src, J.snapshot(Q.defsFor(states), states, boardObj))
 end
 
-function Q.boardChanged(region_id) TriggerEvent('fh:quests:board_changed', { region_id = region_id }) end
+function Q.boardChanged(region_id, src)
+    local payload = { region_id = region_id }
+    if type(src) == 'number' and src > 0 then payload.src = src end
+    TriggerEvent('fh:quests:board_changed', payload)
+end
 
 -- ---------------------------------------------------------------- lifecycle
 local function playerLoaded(src, cid)

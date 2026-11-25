@@ -37,7 +37,7 @@ JT.registerBuilder('rescue', function(region_id, d)
                 key = 'rescue_' .. s.key, title = 'Rescue: ' .. s.name,
                 text = ('%s is held at an outlaw camp. Clear the camp, then cut them loose.'):format(s.name),
                 on = JT.CAPTIVE_FREED, count = 1, rewards = JT.rewards(region_id, s.money, s.rep),
-                region_id = region_id,
+                region_id = region_id, min_tier = JT.minTier(s.min_tier),
                 -- the rest rides along to accept only (spawn setup + watcher target); rebuilt from the template on re-arm
                 name = s.name, camp = s.camp, model = s.model, coords = at, heading = s.heading,
             }

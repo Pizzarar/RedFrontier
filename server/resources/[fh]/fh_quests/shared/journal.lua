@@ -57,16 +57,19 @@ function M.journal(defs, states, activeOnly)
 end
 
 ---Board object for the sync payload / getBoard (README "board"). offers = board.rotate() output;
----accepted = { [quest_id] = true } for this player's active jobs; questId(job_type, key) -> quest id.
-function M.boardView(region_id, epoch, expires_at, offers, accepted, questId)
+---accepted = { [quest_id] = true } for this player's active jobs; questId(job_type, key) -> quest id;
+---locked (optional, dev flag only) = { [offer_id] = min_tier } for hidden offers.
+function M.boardView(region_id, epoch, expires_at, offers, accepted, questId, locked)
     local out = { region_id = region_id, epoch = epoch, expires_at = expires_at, offers = {} }
     for i, o in ipairs(offers or {}) do
         local src = o.offer or {}
+        local minTier = type(locked) == 'table' and locked[o.id] or nil
         out.offers[i] = {
             id = o.id, job_type = o.job_type, title = o.title,
             text = type(src.text) == 'string' and src.text or nil,
             rewards = rewardsView(src.rewards),
             accepted = (accepted or {})[questId(o.job_type, o.key)] == true,
+            locked = minTier and { min_tier = minTier } or nil,
         }
     end
     return out

@@ -9,6 +9,7 @@ description 'RedFrontier quests: data-driven quest engine, jobs board, family qu
 -- Pure modules (specced by tools/run-specs.py). Order matters: later modules use the earlier globals.
 shared_scripts {
     '@fh_core/shared/regions.lua', -- FhRegions global (region ids for validate)
+    'config.lua',
     'shared/match.lua',
     'shared/engine.lua',
     'shared/board.lua',

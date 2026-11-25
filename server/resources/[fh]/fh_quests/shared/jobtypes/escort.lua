@@ -28,7 +28,7 @@ JT.registerBuilder('escort', function(region_id, d)
                 key = 'escort_' .. s.key, title = 'Escort: ' .. s.name,
                 text = ('Meet %s and see them safely to their destination.'):format(s.name),
                 on = JT.ESCORT_ARRIVED, count = 1, rewards = JT.rewards(region_id, s.money, s.rep),
-                region_id = region_id,
+                region_id = region_id, min_tier = JT.minTier(s.min_tier),
                 -- the rest rides along to accept only (spawn setup + watcher target); rebuilt from the template on re-arm
                 name = s.name, model = s.model, start = start, heading = s.heading, destination = dest,
             }

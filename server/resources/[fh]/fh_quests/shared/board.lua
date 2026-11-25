@@ -54,6 +54,19 @@ local function sortedKeys(t)
     return keys
 end
 
+local function normalizeTier(v)
+    if type(v) == 'number' and v == v and v >= 1 then return math.floor(v) end
+    return 1
+end
+
+---Effective minimum tier of an offer (rotated board entry or raw template). Defaults to 1.
+function M.offerMinTier(o)
+    if type(o) ~= 'table' then return 1 end
+    local v = o.min_tier
+    if v == nil and type(o.offer) == 'table' then v = o.offer.min_tier end
+    return normalizeTier(v)
+end
+
 ---Pick this epoch's board for one region.
 ---opts = { min = 3, max = 5, rotate_min = 60 } (rotate_min only sets expires_at)
 ---@return table offers  fewer than min only when fewer valid offers exist; never more than max
@@ -99,7 +112,7 @@ function M.rotate(region_id, epoch, offerLists, opts)
                 out[#out + 1] = {
                     id = region_id .. ':' .. epoch .. ':' .. jt .. ':' .. o.key,
                     job_type = jt, key = o.key, title = o.title, region_id = region_id, epoch = epoch,
-                    expires_at = expires, offer = o,
+                    expires_at = expires, min_tier = normalizeTier(o.min_tier), offer = o,
                 }
             end
         end
@@ -114,6 +127,17 @@ function M.find(board, offer_id)
         if o.id == offer_id then return o end
     end
     return nil
+end
+
+---Per-player view of a rotated board (or raw offer list): only offers with min_tier <= tier.
+---Rotation stays per region and shared; this never mutates `offers`.
+function M.visible(offers, tier)
+    local t = (type(tier) == 'number' and tier == tier) and math.floor(tier) or 1
+    local out = {}
+    for _, o in ipairs(offers or {}) do
+        if M.offerMinTier(o) <= t then out[#out + 1] = o end
+    end
+    return out
 end
 
 ---Candidate offer lists of a region's board: each registered job type's hooks.offers(region_id) (jobTypes =

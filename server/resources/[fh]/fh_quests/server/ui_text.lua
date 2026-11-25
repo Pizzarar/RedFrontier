@@ -4,6 +4,7 @@ local M = {}
 
 M.TEXT = {
     fh_offer_gone = 'That job is no longer on the board.',
+    fh_offer_locked = 'Your standing in this region is not high enough for that job.',
     fh_bounty_taken = 'Somebody is already after that one.',
     fh_busy = 'Try again in a moment.',
     fh_not_ready = 'The board is not ready yet.',

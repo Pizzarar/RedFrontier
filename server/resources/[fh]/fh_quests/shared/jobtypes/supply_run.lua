@@ -17,6 +17,7 @@ JT.registerBuilder('supply_run', function(region_id, d)
             -- least `amount` must be sold in one sale.
             where = { post = { eq = e.post }, item = { eq = e.item }, amount = { min = e.amount } },
             rewards = JT.rewards(region_id, e.money, e.rep), region_id = region_id,
+            min_tier = JT.minTier(e.min_tier),
         }
     end
     return out

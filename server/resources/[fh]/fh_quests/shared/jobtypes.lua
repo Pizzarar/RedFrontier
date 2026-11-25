@@ -29,6 +29,12 @@ function M.rewards(region_id, money, rep)
     return { money = money, rep = { region_id = region_id, delta = rep } }
 end
 
+---Normalize an offer's minimum tier (defaults to 1 when omitted or invalid).
+function M.minTier(v)
+    if type(v) == 'number' and v == v and v >= 1 then return math.floor(v) end
+    return 1
+end
+
 ---Offer templates of one job type for a region (hooks.offers). Fresh tables every call; unknown region = {}.
 function M.offers(job_type, region_id)
     local build, d = M.BUILDERS[job_type], M.DATA[region_id]
