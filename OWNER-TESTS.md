@@ -584,6 +584,9 @@ Resource: `fh_homestead`. Claims only. Prepare: apply the trough migration (`ser
 3. Load. At the prop use a feedbag. Then walk to the plot center (-500, 750) and use another.
    Expected: first `The feed trough is loaded.` (backpack feedbag 3 -> 2). At the center: `Could not load the trough: fh_not_near_trough`, still 2. Use the carrot: nothing happens to the trough (it is not a feedbag; the trough never takes anything else).
    RESULT:
+3b. Cap. `/giveitem <id> feedbag 10`, stand at the prop and use feedbags until the trough holds 10 (`trough.capacity`), then use one more.
+   Expected: `Could not load the trough: fh_trough_full`; that feedbag stays in the backpack (count unchanged by the last use).
+   RESULT:
 4. Flag off. With `troughRefill = false` (default), mount your horse inside the plot.
    Expected: nothing happens, the trough keeps its feedbag, no console error.
    RESULT:
