@@ -15,7 +15,7 @@ case('every fixture validates against its schema', function()
         local ok, errs = F.validate(screen, data)
         assert(ok, screen .. ': ' .. table.concat(errs or {}, '; '))
     end
-    T.eq(8, n)
+    T.eq(9, n)
 end)
 case('schema checker rejects bad data', function()
     local bad = { title = 'x', fee = 'free', delay_minutes = 1 }
