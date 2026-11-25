@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: UI
-- Lead: ★ UI2
-- Workers: 0
+- Lead: ★ UI3
+- Workers: 1
 
 ## Done when
 - fh_ui on local main with U1-U4 PASS, specs green, `## UI` card in OWNER-TESTS.md, `decision ui playtest-ready <hash>` logged.
@@ -19,16 +19,14 @@
 - Overlord rules: vs worktree units, merge after PASS + rebase + run-specs green, one lane at a time, OWNER-TESTS `## UI` only, no push, log playtest-ready.
 
 ## Open
-- U3 jobs rename must use the real board schema (above), not the brief's guessed rows (kind/region_id/payout/risk tier: no risk tier exists; payout = rewards{money,rep,items}).
-- fh_quests has no fh:quests:ui_* handlers; its ox_lib fallback uses lib callbacks fh:quests:menu:board/active/accept/abandon (server/menu.lua:8-28). U5 handlers can wrap the same exports.
-- Proposed U5 quest journal + jobs board live wiring: fh_ui client adapter on fh:quests:sync -> journal/jobs screens; actions ui_accept/ui_abandon need @quests net handlers calling acceptOffer/abandon (request to @quests). Dialogue screen (talk() lines) = later.
-- @guide handbook + tutorial prompts: wait for schema.
-- idea-601 (accepted): fh_fence (@progression P2) ships data + temporary ox_lib menu; @ui then wires the `fence` screen to it (schema in fh_ui README, actions fh:fence:ui_buy/ui_sell) and fh_fence drops its menu. Blocked on: forge freeze, U3 merge, fh_fence on main.
-- idea-601 pre-read (fh_fence @ prog-p2 99bb8bf, review PASS, not on main): `fh:fence:menu` returns {label, stock[{item,price,category=common|rare|leads,lead}], sells[{item,price}]}; buy/sell = lib callbacks via trade.lua, return ok+code. fh_ui fence schema (U3) wants {title, stock[{id,label,price,qty,rare?}], sell[{id,label,price,qty}]}. Lean: U3 fix swaps `rare?` for `category` (3 tiers); fh_fence's 601 side maps item->id, adds labels, stock qty cap, and held qty for sell rows; ui_buy/ui_sell handlers call trader.buy/sell and push refused codes back via fh:ui:update.
-- Real wiring per fixture screen as lanes ship: heat (L7), insurance (L4), jobs board (@quests: contracts/bounties/hunting requests; replaces contract board), station menus (L1/L5), fence (L9).
-- (orig ask) L10 fh_ui: one shared NUI shell (vanilla JS): buff HUD, heat indicator, insurance dialog, contract board, station menus, fence shop. Lanes ship data/events, UI ships screens. Hypnospace-light surrealism but readability first. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
+- Insurance dialog live: blocked on fh_death L4 insurance block.
+- Station/crafting menus live: blocked, fh_crafting has no client surface yet.
+- @guide handbook + tutorial prompts: no schema yet.
+- `ui playtest-ready <hash>` still to log after the last live screen.
 
 ## In flight
-- Shell plan + plan 2 (ui-wiring-fence-quests) complete; idea-715 merged 60ec4aa.
-- Plan 3: docs/plans/ui-giver-dialogue.md (idea-722: fh_ui `dialogue` screen replaces fh_quests ox_lib giver dialogue; D1 ∥ D2 -> D3). Handed to UI2 rn-8c7a9bce2671 2026-11-23; D2 coordinates with Que2.
-- idea-722 D1 PASS (0/0/1) + D2 PASS (delta 0/0/0) + D3 PASS (0/0/0), merged main 53bf1c7 (3ec82df, e26f028, 83e2903, 53bf1c7). PLAN ui-giver-dialogue COMPLETE.
+- Done: shell U1-U4 (1ccf7b5), plan 2 fence/jobs/journal, idea-715 (60ec4aa), plan 3 giver dialogue idea-722 (53bf1c7, docs 814075a).
+- Plan 4: docs/plans/ui-live-trade-heat.md (T1 trade post ∥ T2 trapper ∥ T3 heat HUD -> T4 test card). Handed to UI2 rn-8c7a9bce2671 2026-11-24 (Red3: use quota, no parking). Dispatched: T1 rn-ee8719325f84, T2 rn-2f2273ccb86b, T3 rn-a7e00dec968c; Roa3 (fh_trade, fh_heat) + Hun2 pinged.
+- idea-690 archived: satisfied by U2 buff HUD.
+- SPEC seeded: docs/lanes/ui/SPEC.md (Done-when checklist; tick as plans land).
+- PASS merged d19a22e: T3 heat HUD live (837390b) + idea-854 survival HUD (881aaaa). T1 held: contracts lint 2 findings (fh:trade:sell/buy handlers lost their sender) -> fix. T2+T4 wait on hunting-l1.
