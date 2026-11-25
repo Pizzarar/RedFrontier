@@ -594,6 +594,7 @@ local playertables = { -- Add tables as needed
     { table = 'address_book'},
     { table = 'telegrams'},
     { table = 'player_jobs'}, -- multi-job list (built into rsg-core)
+    { table = 'fh_starter_granted'}, -- FH core-10 I2: rsg-character's pending/claimed starter-item row
 }
 
 local function deleteCharacterRows(citizenid, onDone)

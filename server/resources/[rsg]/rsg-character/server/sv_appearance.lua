@@ -5,7 +5,7 @@ RSGCore = exports['rsg-core']:GetCoreObject()
 CreatorSessions = {}   -- [src] = { cid = number|nil, isNew = bool, created = bool }
 local assignedBuckets = {} -- [src] = bucket this resource put the player in
 local previousBuckets = {} -- [src] = bucket the player was in before this resource moved them
-local pendingStarterItems = {} -- [citizenid] = true until their first spawn grants RSG.StarterItems
+local MarkStarterPending -- defined with the starter-item grant below (FH core-10 I2)
 
 local MAX_JSON_SIZE = 32768
 
@@ -352,9 +352,10 @@ RegisterNetEvent('rsg-multicharacter:server:createCharacter', function(newData)
 
     -- Starter items are granted on the first spawn (RSGCore:Server:OnPlayerLoaded below), not here: granting
     -- now fires the add-item toasts while the player is still in the creator. Deferring the whole grant (not just
-    -- the toast) keeps the item boxes to one per item, at the right time. Keyed by citizenid (not src) so a
-    -- disconnect mid-creation does not lose them.
-    pendingStarterItems[Player.PlayerData.citizenid] = true
+    -- the toast) keeps the item boxes to one per item, at the right time. FH core-10 I2: the pending grant is a DB
+    -- row (fh_starter_granted, keyed by citizenid), so a disconnect, resource restart or server restart before the
+    -- first spawn does not lose it.
+    MarkStarterPending(Player.PlayerData.citizenid)
 
     TriggerEvent('rsg-character:server:characterCreated', src, Player.PlayerData.citizenid, cid)
 
@@ -376,22 +377,57 @@ end)
 -- Starter items for a brand-new character are granted on their first spawn (after creation), so the add-item
 -- toasts appear in-world instead of over the creator. AddItem already fires its own `rsg-inventory:client:ItemBox`,
 -- so nothing else is needed here; the grant is the mirror of what createCharacter used to do inline.
-local function GrantStarterItems(src)
+--
+-- FH core-10 I2 (idea-923): the pending grant lives in `fh_starter_granted` (server/migrations/0023), not memory.
+--   * createCharacter: MarkStarterPending upserts (citizenid, granted = 0). ON DUPLICATE KEY resets the row because
+--     rsg-core's CreateCitizenId only checks `players`, so a deleted character's citizenid can be handed out again.
+--   * first spawn: an atomic UPDATE ... WHERE granted = 0 claims the row; only the caller that sees affectedRows = 1
+--     grants. A second load, a concurrent load, or a character with no row (made before this table) grants nothing.
+--   * failure policy: the claim is taken BEFORE the items are added. If an AddItem then fails or throws, it is
+--     logged (citizenid, item, amount) and NOT retried: a missed kit is an admin give, a double grant is a dupe.
+--     A DB error on the mark or the claim is logged the same way and grants nothing.
+local STARTER_TAG = '[rsg-character] starter items:'
+
+MarkStarterPending = function(citizenid)
+    local ok, err = pcall(MySQL.insert.await,
+        'INSERT INTO fh_starter_granted (citizenid, granted) VALUES (?, 0) ON DUPLICATE KEY UPDATE granted = 0, granted_at = NULL, created_at = current_timestamp()',
+        { citizenid })
+    if not ok then
+        print(('%s could not mark %s pending (is migration 0023 applied?): %s'):format(STARTER_TAG, tostring(citizenid), tostring(err)))
+    end
+end
+
+-- true only for the one caller whose UPDATE flipped the row from pending to granted.
+local function ClaimStarterGrant(citizenid)
+    local ok, affected = pcall(MySQL.update.await,
+        'UPDATE fh_starter_granted SET granted = 1, granted_at = current_timestamp() WHERE citizenid = ? AND granted = 0',
+        { citizenid })
+    if not ok then
+        print(('%s claim failed for %s (nothing granted): %s'):format(STARTER_TAG, tostring(citizenid), tostring(affected)))
+        return false
+    end
+    return tonumber(affected) == 1
+end
+
+local function GrantStarterItems(src, citizenid)
     for _, entry in ipairs(RSG.StarterItems or {}) do
         local itemName, amount = entry.item, tonumber(entry.amount) or 1
         if itemName and amount > 0 and RSGCore.Shared.Items[itemName] then
-            exports['rsg-inventory']:AddItem(src, itemName, amount, nil, nil, 'rsg-character:starter-items')
+            local ok, added = pcall(exports['rsg-inventory'].AddItem, exports['rsg-inventory'], src, itemName, amount, nil, nil, 'rsg-character:starter-items')
+            if not ok or not added then
+                print(('%s %s x%d NOT granted to %s (claim already taken, not retried; give by hand): %s'):format(
+                    STARTER_TAG, itemName, amount, tostring(citizenid), ok and 'AddItem returned false' or tostring(added)))
+            end
         end
     end
 end
 
--- First spawn after character creation: flush the pending starter items (and their item-box toasts) once.
+-- First spawn after character creation: claim the pending row and grant the starter items (and their toasts) once.
 RegisterNetEvent('RSGCore:Server:OnPlayerLoaded', function()
     local src = source
     local Player = RSGCore.Functions.GetPlayer(src)
     if not Player then return end
     local citizenid = Player.PlayerData.citizenid
-    if not pendingStarterItems[citizenid] then return end
-    pendingStarterItems[citizenid] = nil
-    GrantStarterItems(src)
+    if not citizenid or not ClaimStarterGrant(citizenid) then return end
+    GrantStarterItems(src, citizenid)
 end)
