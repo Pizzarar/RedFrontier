@@ -19,13 +19,13 @@ JT.registerRegion('tall_trees', {
         { key = 'timber_line', name = 'Timber line', money = 24, rep = 2, ordered = true, points = {
             { x = -1800.0, y = -1600.0, z = 150.0 }, -- TODO-verify-in-game
             { x = -1950.0, y = -1620.0, z = 140.0 }, -- TODO-verify-in-game
-            { x = -2145.0, y = -1645.0, z = 130.0 }, -- TODO-verify-in-game
+            { x = -2050.0, y = -1635.0, z = 130.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'odessa_finch', name = 'Odessa Finch', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -1800.0, y = -1600.0, z = 150.0 },       -- TODO-verify-in-game
-            destination = { x = -2145.0, y = -1645.0, z = 130.0 }, -- TODO-verify-in-game
+            destination = { x = -2050.0, y = -1635.0, z = 130.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

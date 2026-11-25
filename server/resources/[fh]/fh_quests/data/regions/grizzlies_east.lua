@@ -19,13 +19,13 @@ JT.registerRegion('grizzlies_east', {
         { key = 'frost_heights', name = 'Frost heights', money = 24, rep = 2, ordered = true, points = {
             { x = 1675.0, y = 1900.0, z = 200.0 }, -- TODO-verify-in-game
             { x = 1550.0, y = 1650.0, z = 195.0 }, -- TODO-verify-in-game
-            { x = 1385.0, y = 1385.0, z = 190.0 }, -- TODO-verify-in-game
+            { x = 1430.0, y = 1465.0, z = 190.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'nell_brightwater', name = 'Nell Brightwater', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = 1675.0, y = 1900.0, z = 200.0 },       -- TODO-verify-in-game
-            destination = { x = 1385.0, y = 1385.0, z = 190.0 }, -- TODO-verify-in-game
+            destination = { x = 1430.0, y = 1465.0, z = 190.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

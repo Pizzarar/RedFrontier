@@ -19,13 +19,13 @@ JT.registerRegion('grizzlies_west', {
         { key = 'tundra_points', name = 'Tundra points', money = 24, rep = 2, ordered = true, points = {
             { x = -1305.0, y = 1600.0, z = 240.0 }, -- TODO-verify-in-game
             { x = -1380.0, y = 1300.0, z = 225.0 }, -- TODO-verify-in-game
-            { x = -1455.0, y = 985.0,  z = 210.0 }, -- TODO-verify-in-game
+            { x = -1435.0, y = 1075.0,  z = 210.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'ingrid_solberg', name = 'Ingrid Solberg', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -1305.0, y = 1600.0, z = 240.0 },       -- TODO-verify-in-game
-            destination = { x = -1455.0, y = 985.0, z = 210.0 }, -- TODO-verify-in-game
+            destination = { x = -1435.0, y = 1075.0, z = 210.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

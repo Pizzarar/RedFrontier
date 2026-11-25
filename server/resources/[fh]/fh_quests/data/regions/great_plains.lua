@@ -19,13 +19,13 @@ JT.registerRegion('great_plains', {
         { key = 'plains_markers', name = 'Plains markers', money = 24, rep = 2, ordered = true, points = {
             { x = -860.0,  y = -1340.0, z = 44.0 }, -- TODO-verify-in-game
             { x = -1200.0, y = -1340.0, z = 42.0 }, -- TODO-verify-in-game
-            { x = -1590.0, y = -1345.0, z = 40.0 }, -- TODO-verify-in-game
+            { x = -1500.0, y = -1350.0, z = 40.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'inez_barlow', name = 'Inez Barlow', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -860.0, y = -1340.0, z = 44.0 },       -- TODO-verify-in-game
-            destination = { x = -1595.0, y = -1345.0, z = 40.0 }, -- TODO-verify-in-game
+            destination = { x = -1500.0, y = -1350.0, z = 40.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

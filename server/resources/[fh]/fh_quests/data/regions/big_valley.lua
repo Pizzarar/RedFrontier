@@ -19,13 +19,13 @@ JT.registerRegion('big_valley', {
         { key = 'valley_survey', name = 'Valley survey', money = 24, rep = 2, ordered = true, points = {
             { x = -1815.0, y = -445.0, z = 120.0 }, -- TODO-verify-in-game
             { x = -1700.0, y = -650.0, z = 105.0 }, -- TODO-verify-in-game
-            { x = -1655.0, y = -895.0, z = 90.0 },  -- TODO-verify-in-game
+            { x = -1685.0, y = -805.0, z = 90.0 },  -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'marta_vasquez', name = 'Marta Vasquez', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -1815.0, y = -445.0, z = 120.0 },       -- TODO-verify-in-game
-            destination = { x = -1655.0, y = -895.0, z = 90.0 }, -- TODO-verify-in-game
+            destination = { x = -1685.0, y = -805.0, z = 90.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

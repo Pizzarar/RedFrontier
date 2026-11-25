@@ -19,13 +19,13 @@ JT.registerRegion('roanoke_ridge', {
         { key = 'ridge_crests', name = 'Ridge crests', money = 24, rep = 2, ordered = true, points = {
             { x = 2925.0, y = 1290.0, z = 96.0 }, -- TODO-verify-in-game
             { x = 2600.0, y = 1100.0, z = 92.0 }, -- TODO-verify-in-game
-            { x = 2255.0, y = 805.0,  z = 90.0 }, -- TODO-verify-in-game
+            { x = 2330.0, y = 860.0,  z = 90.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'cordelia_harker', name = 'Cordelia Harker', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = 2925.0, y = 1290.0, z = 96.0 },       -- TODO-verify-in-game
-            destination = { x = 2255.0, y = 805.0, z = 90.0 }, -- TODO-verify-in-game
+            destination = { x = 2330.0, y = 860.0, z = 90.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

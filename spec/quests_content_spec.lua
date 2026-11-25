@@ -74,6 +74,37 @@ describe('quests content: keys and coverage', function()
             end
         end
     end)
+    it('every region (enabled or not) builds one offer per data entry, for every job type', function()
+        for id, d in pairs(JT.DATA) do
+            for _, jt in ipairs(JT.TYPES) do
+                local want = #(d[FIELD[jt]] or {})
+                eq(want, #JT.offers(jt, id), id .. ' ' .. jt .. ' offers vs data entries')
+            end
+        end
+    end)
+    it('escort/survey points stay at least activationRadius+25 m from EVERY fh_zones camp', function()
+        local function check(id, what, p)
+            for cid, camp in pairs(zones.camps) do
+                local need = (camp.activationRadius or 0) + 25.0
+                local dx, dy = p.x - camp.center.x, p.y - camp.center.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                assert(dist >= need, ('%s %s (%.0f,%.0f) is %.1f m from camp %s, need >= %.0f'):format(
+                    id, what, p.x, p.y, dist, cid, need))
+            end
+        end
+        local n = 0
+        for id, d in pairs(JT.DATA) do
+            for _, sv in ipairs(d.surveys or {}) do
+                for i, p in ipairs(sv.points) do check(id, 'survey ' .. sv.key .. ' point ' .. i, p); n = n + 1 end
+            end
+            for _, e in ipairs(d.escorts or {}) do
+                check(id, 'escort ' .. e.key .. ' start', e.start)
+                check(id, 'escort ' .. e.key .. ' destination', e.destination)
+                n = n + 2
+            end
+        end
+        assert(n > 0, 'no survey/escort points checked')
+    end)
     it('every enabled region offers at least one of each type it has data for', function()
         for id, d in pairs(JT.DATA) do
             if regions.isEnabled(id) then

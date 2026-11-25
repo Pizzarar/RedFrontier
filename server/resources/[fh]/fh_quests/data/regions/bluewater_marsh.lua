@@ -19,13 +19,13 @@ JT.registerRegion('bluewater_marsh', {
         { key = 'marsh_line', name = 'Marsh line', money = 24, rep = 2, ordered = true, points = {
             { x = 2300.0, y = -600.0, z = 20.0 }, -- TODO-verify-in-game
             { x = 2350.0, y = -500.0, z = 22.0 }, -- TODO-verify-in-game
-            { x = 2395.0, y = -405.0, z = 25.0 }, -- TODO-verify-in-game
+            { x = 2355.0, y = -490.0, z = 25.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'delphine_roy', name = 'Delphine Roy', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = 2300.0, y = -600.0, z = 20.0 },       -- TODO-verify-in-game
-            destination = { x = 2395.0, y = -405.0, z = 25.0 }, -- TODO-verify-in-game
+            destination = { x = 2355.0, y = -490.0, z = 25.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

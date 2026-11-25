@@ -19,13 +19,13 @@ JT.registerRegion('cholla_springs', {
         { key = 'springs_traverse', name = 'Springs traverse', money = 24, rep = 2, ordered = true, points = {
             { x = -3715.0, y = -2585.0, z = 70.0 }, -- TODO-verify-in-game
             { x = -3550.0, y = -2530.0, z = 72.0 }, -- TODO-verify-in-game
-            { x = -3355.0, y = -2485.0, z = 75.0 }, -- TODO-verify-in-game
+            { x = -3445.0, y = -2510.0, z = 75.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'petra_moreno', name = 'Petra Moreno', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -3715.0, y = -2585.0, z = 70.0 },       -- TODO-verify-in-game
-            destination = { x = -3355.0, y = -2485.0, z = 75.0 }, -- TODO-verify-in-game
+            destination = { x = -3445.0, y = -2510.0, z = 75.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

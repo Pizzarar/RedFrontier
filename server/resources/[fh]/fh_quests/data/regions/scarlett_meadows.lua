@@ -19,13 +19,13 @@ JT.registerRegion('scarlett_meadows', {
         { key = 'rhodes_ridges', name = 'Rhodes ridges', money = 24, rep = 2, ordered = true, points = {
             { x = 1270.0, y = -1300.0, z = 78.0 }, -- TODO-verify-in-game
             { x = 1100.0, y = -1150.0, z = 76.0 }, -- TODO-verify-in-game
-            { x = 900.0,  y = -1060.0, z = 75.0 }, -- TODO-verify-in-game
+            { x = 935.0,  y = -1100.0, z = 75.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'etta_callahan', name = 'Etta Callahan', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = 1265.0, y = -1300.0, z = 78.0 },       -- TODO-verify-in-game
-            destination = { x = 860.0, y = -1055.0, z = 75.0 }, -- TODO-verify-in-game
+            destination = { x = 935.0, y = -1100.0, z = 75.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

@@ -19,13 +19,13 @@ JT.registerRegion('rio_bravo', {
         { key = 'bravo_overlooks', name = 'Bravo overlooks', money = 24, rep = 2, ordered = true, points = {
             { x = -2005.0, y = -3005.0, z = 55.0 }, -- TODO-verify-in-game
             { x = -1900.0, y = -3100.0, z = 55.0 }, -- TODO-verify-in-game
-            { x = -1805.0, y = -3195.0, z = 55.0 }, -- TODO-verify-in-game
+            { x = -1870.0, y = -3130.0, z = 55.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'vida_salazar', name = 'Vida Salazar', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -2005.0, y = -3005.0, z = 55.0 },       -- TODO-verify-in-game
-            destination = { x = -1805.0, y = -3195.0, z = 55.0 }, -- TODO-verify-in-game
+            destination = { x = -1870.0, y = -3130.0, z = 55.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game

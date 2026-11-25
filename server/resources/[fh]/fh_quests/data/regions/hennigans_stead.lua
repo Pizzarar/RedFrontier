@@ -19,13 +19,13 @@ JT.registerRegion('hennigans_stead', {
         { key = 'stead_bounds', name = 'Stead bounds', money = 24, rep = 2, ordered = true, points = {
             { x = -2285.0, y = -2495.0, z = 60.0 }, -- TODO-verify-in-game
             { x = -2100.0, y = -2200.0, z = 55.0 }, -- TODO-verify-in-game
-            { x = -1905.0, y = -1955.0, z = 60.0 }, -- TODO-verify-in-game
+            { x = -1960.0, y = -2030.0, z = 60.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
         { key = 'rosalind_mercer', name = 'Rosalind Mercer', model = 'a_f_m_valtownfolk_01', heading = 90.0, money = 28, rep = 2,
             start = { x = -2285.0, y = -2495.0, z = 60.0 },       -- TODO-verify-in-game
-            destination = { x = -1905.0, y = -1955.0, z = 60.0 }, -- TODO-verify-in-game
+            destination = { x = -1960.0, y = -2030.0, z = 60.0 }, -- TODO-verify-in-game
         },
     },
     rescues = { -- captive held at an fh_zones camp: clear that camp, then reach the captive. Coords/model TODO-verify-in-game
