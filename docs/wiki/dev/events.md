@@ -71,11 +71,11 @@ Payloads are as each README states them. One table unless noted "positional".
 
 | Lane | Event | Payload | Source |
 |---|---|---|---|
-| hunting | `fh:hunting:pelt_skinned` | `{ src, citizenid, item_id, animal, quality, size_class }` | `server/resources/[fh]/fh_hunting/README.md` |
-| hunting | `fh:hunting:pelt_sold` | `{ citizenid, item_id, animal, size_class, quality, price, region_id }` | same |
-| hunting | `fh:hunting:clue_found` | `{ citizenid, chain_id, step }` (step 1-3) | same |
-| hunting | `fh:hunting:legendary_spawned` | `{ citizenid, chain_id }` | same |
-| hunting | `fh:hunting:chain_complete` | `{ citizenid, chain_id }` | same |
+| hunting | `fh:hunting:pelt_skinned` | `{ src, citizenid, item_id, animal, quality, size_class }` (`animal` = plain key or legendary id) | `server/resources/[fh]/fh_hunting/README.md` |
+| hunting | `fh:hunting:pelt_sold` | `{ citizenid, item_id, animal, size_class, quality, price, region_id }` (`animal` = plain key or legendary id) | same |
+| hunting | `fh:hunting:clue_found` | `{ citizenid, chain_id, region_id, legendary, step }` (step 1-3; `chain_id` = `legendary` = legendary id) | same |
+| hunting | `fh:hunting:legendary_spawned` | `{ citizenid, chain_id, region_id, legendary }` | same |
+| hunting | `fh:hunting:chain_complete` | `{ citizenid, chain_id, region_id, legendary }` | same |
 | quests | `fh:quests:started`, `step`, `completed`, `failed`, `abandoned` | `{ citizenid, quest_id, kind, step }` | `server/resources/[fh]/fh_quests/README.md` |
 | quests | `fh:quests:board_changed` | `{ region_id }` | same |
 | quests | `fh:quests:talked` | `{ src, citizenid, npc_id }` (emit only, never advances a quest) | same |

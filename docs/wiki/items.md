@@ -25,7 +25,7 @@ Some items carry extra data: **condition** (0-100) and **stars** (1-3, the quali
 | Bedroll (`bedroll`) | bulky | 2500 g | Use for `rested`. Source not listed in the code |
 | Gun Parts, Lead, Brass Casings | pocket | 150 / 60 / 20 g | Crafting inputs. Gun Parts drop from outlaw camps; Lead and Brass Casings still need an admin `/giveitem` |
 | Vigor Tonic, Steady Tonic | pocket | 200 g | Brewed at an apothecary station. Use for a buff |
-| Pelts (12) and the legendary bear trophy | bulky or cargo | see [Hunting](systems/fh_hunting.md) | Skin dead animals. Sell to the trapper |
+| Pelts (11 plain, 15 legendary) and legendary trophies (15) | bulky or cargo | see [Hunting](systems/fh_hunting.md) | Skin dead animals. Sell pelts to the trapper; trophies go on your homestead wall |
 | Salt Sack, Bolt of Cloth | pocket | 1500 / 2500 g | Trade goods, sold at a trade post |
 | Whiskey Crate | cargo | 15000 g | Trade good, sold at a trade post. Wagon or chest only |
 
