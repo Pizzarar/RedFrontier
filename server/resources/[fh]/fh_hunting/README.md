@@ -40,8 +40,8 @@ through `fh_core:registerItems` (again whenever `fh_core` restarts).
 
 | Size class | Items |
 |---|---|
-| bulky (saddlebag OK) | `pelt_rabbit`, `pelt_fox`, `pelt_coyote`, `pelt_deer`, `pelt_boar`, `pelt_wolf`, `trophy_legendary_bear` |
-| cargo (wagon or chest only) | `pelt_bear`, `pelt_bison`, `pelt_elk`, `pelt_moose`, `pelt_alligator`, `pelt_legendary_bear` (always 3 stars) |
+| bulky (saddlebag OK) | `pelt_rabbit`, `pelt_fox`, `pelt_coyote`, `pelt_deer`, `pelt_boar`, `pelt_wolf`, `trophy_legendary_<id>` (one per region in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`) |
+| cargo (wagon or chest only) | `pelt_bear`, `pelt_bison`, `pelt_elk`, `pelt_moose`, `pelt_alligator`, `pelt_legendary_<id>` (always 3 stars; one per region in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`) |
 
 Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect_pelt`, `legendary_bear_pelt`).
 
@@ -60,7 +60,7 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 - `getAnimal(model|hash, legendary)`: the animal table entry or nil.
 - `getPeltItem(model|hash, legendary)`: pelt item id or nil.
 - `price(peltItem, stars)`: payout amount or `nil, err`.
-- `getTrophyComfort(itemId)`: comfort number for a trophy item (`trophy_legendary_bear` = 25), nil for pelts, unknown ids and non-strings. Homestead places the trophy and reads this; Hunting fires no trophy events.
+- `getTrophyComfort(itemId)`: comfort number for any legendary trophy item (`trophy_legendary_<id>`, e.g. 25 from `data/legendaries/*.lua`; see [Legendaries](#legendaries-hunting-02)), nil for pelts, unknown ids and non-strings. Homestead places the trophy and reads this; Hunting fires no trophy events.
 
 ## Trapper (H3)
 
@@ -174,7 +174,7 @@ Emitted (server-only, for @quests and @guide; never sent to clients):
 - `fh:hunting:pelt_sold` `{ citizenid, item_id, animal, size_class, quality, price, region_id }`: H3, after a payout succeeded only. `price` is what `fh_economy:pay` was given.
 - `fh:hunting:clue_found` `{ citizenid, chain_id, region_id, legendary, step = 1|2|3 }`: H4, each clue of a legendary
   chain (`chain_id` = `legendary` = the legendary id, `region_id` its region), when it is found (rumour bought, track inspected, carcass inspected).
-- `fh:hunting:legendary_spawned` `{ citizenid, chain_id, region_id, legendary }`: H4, when the bear's spawn is adopted. Fires once per chain.
+- `fh:hunting:legendary_spawned` `{ citizenid, chain_id, region_id, legendary }`: H4, when the legendary's spawn is adopted (for any entry in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`). Fires once per chain.
 - `fh:hunting:chain_complete` `{ citizenid, chain_id, region_id, legendary }`: H4, after the legendary pelt is skinned. Fires once per chain.
 
 No trophy events, ever: @homestead owns trophy placement and reads `exports.fh_hunting:getTrophyComfort(itemId)`

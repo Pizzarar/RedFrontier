@@ -7,6 +7,7 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local describe, it, eq, same = T.describe, T.it, T.eq, T.same
 local base = here .. '../server/resources/[fh]/fh_hunting/'
 local L = dofile(base .. 'shared/legendaries.lua')
+local P = dofile(base .. 'shared/plain_animals.lua')
 local A = dofile(base .. 'shared/animals.lua')
 local Tr = dofile(base .. 'shared/trophies.lua')
 local regions = require('regions')
@@ -38,7 +39,7 @@ describe('hunting legendaries batch B: data files', function()
         for _, b in ipairs(BATCH) do
             local e = L.byRegion[b.region]
             assert(A.byModel[e.species_model], b.id .. ': no plain row for ' .. e.species_model)
-            assert(not A.byModel[e.id], b.id .. ': id collides with a plain animal key')
+            assert(not P.byKey[e.id], b.id .. ': id collides with a plain animal key')
             eq(A.byLegendary[e.id], A.byKey[e.id], b.id)
         end
     end)
