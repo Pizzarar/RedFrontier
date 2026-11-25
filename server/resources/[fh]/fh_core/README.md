@@ -40,9 +40,10 @@ Resolved definition: `{ name, label, weight, size_class, stackable, value_base, 
 - New items go in `FhConfig.Items` or `exports.fh_core:registerItems`. fh_core pushes both, plus the overrides,
   into `RSGCore.Shared.Items` with `exports['rsg-core']:SetItems` on start (and again if rsg-core restarts).
 - Per-instance data lives in `item.info`, because rsg-inventory persists only `{name, amount, info, slot}`:
-  `info.condition` (nullable 0-100) and `info.stars` (nullable 1-3, the spec's "quality"; `info.quality` is
-  already rsg's 0-100 freshness). Read them with `FhItems.condition(item)` / `FhItems.stars(item)`: items saved
-  before the fields existed return `nil`, never an error.
+  `info.quality` (nullable 0-100, canonical wear; legacy `info.condition` is still read as fallback) and
+  `info.stars` (nullable 1-3, the spec's "quality"; `info.quality` is already rsg's 0-100 wear/freshness). Read
+  them with `FhItems.condition(item)` / `FhItems.stars(item)`: items saved before the fields existed return
+  `nil`, never an error.
 - `cargo` items have `fast_travel = false`.
 - `registerItems` rules (B7): names are lowercase letters, digits and `_` (`fh_bad_item_name`; rsg-inventory
   lowercases names when it counts/removes). A name already taken by `FhConfig.Items`, a base rsg item or another

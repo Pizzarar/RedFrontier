@@ -157,27 +157,74 @@ local function findMatchingParen(s, openPos)
     return nil
 end
 
-case('static scan: no raw groundZAt reaches a reach/placement decision across [fh]', function()
-    local root = here .. '../server/resources/[fh]'
-    local files = listFhLua(root)
-    assert(#files > 0, 'no [fh] lua files found')
+local function blankStrings(src)
+    local out, i, n = {}, 1, #src
+    while i <= n do
+        local c = src:sub(i, i)
+        if c == '"' or c == "'" then
+            local q, j = c, i + 1
+            while j <= n do
+                if src:sub(j, j) == '\\' then j = j + 2
+                elseif src:sub(j, j) == q then j = j + 1; break
+                else j = j + 1 end
+            end
+            out[#out + 1] = string.rep(' ', j - i)
+            i = j
+        else
+            out[#out + 1] = c
+            i = i + 1
+        end
+    end
+    return table.concat(out)
+end
+
+local function findLocalFunctionSpan(src, fnName)
+    local clean = blankStrings(src)
+    local startPos, bodyPos = clean:find('local%s+function%s+' .. fnName .. '%s*%b()%s*')
+    if not startPos then return nil, nil end
+    local depth = 1
+    local pos = bodyPos + 1
+    while pos <= #clean do
+        local s, e, word = clean:find('(%f[%w_][%a_][%w_]*%f[^%w_])', pos)
+        if not s then break end
+        local prev = s > 1 and clean:sub(s - 1, s - 1) or ''
+        if prev ~= '.' and prev ~= ':' then
+            if word == 'function' or word == 'if' or word == 'do' then
+                depth = depth + 1
+            elseif word == 'end' then
+                depth = depth - 1
+                if depth == 0 then return startPos, e end
+            end
+        end
+        pos = e + 1
+    end
+    return nil, nil
+end
+
+local function scanGroundZAt(path, rawSrc)
+    local src = stripComments(rawSrc)
     local clampedCount, diagCount = 0, 0
     local rawViolations = {}
-    for _, path in ipairs(files) do
-        local f = assert(io.open(path, 'r'))
-        local src = stripComments(f:read('*a'))
-        f:close()
-        local pos = 1
-        while true do
-            local a, b = src:find('groundZAt%s*%(', pos)
-            if not a then break end
-            local before = src:sub(math.max(1, a - 200), a - 1)
-            local callEnd = findMatchingParen(src, b)
-            local callBody = callEnd and src:sub(b + 1, callEnd - 1) or ''
-            if before:match('function%s+FhSnap%.%s*$') then
-                -- definition in fh_core/client/ground_snap.lua
-            elseif path:match('fh_homestead/client/main%.lua$') and callBody:match("^%s*'plotcheck:'") then
-                -- read-only admin diagnostic (/fh_plotcheck): reports raw ground delta, never places or gates reach
+    local isDefFile = path:match('fh_core/client/ground_snap%.lua$') ~= nil
+    local diagStart, diagEnd
+    if path:match('fh_homestead/client/main%.lua$') then
+        diagStart, diagEnd = findLocalFunctionSpan(src, 'runPlotcheckProbe')
+    end
+    local pos = 1
+    while true do
+        local a, b = src:find('%f[%w_]groundZAt%f[^%w_]', pos)
+        if not a then break end
+        local before = src:sub(math.max(1, a - 40), a - 1)
+        local openParen = src:match('^%s*()%(', b + 1)
+        if isDefFile and openParen and before:match('function%s+FhSnap%.%s*$') then
+            -- definition in fh_core/client/ground_snap.lua
+        elseif not openParen then
+            -- Alias, value reference, or dynamic lookup (e.g. local g = FhSnap.groundZAt, FhSnap['groundZAt'])
+            rawViolations[#rawViolations + 1] = path .. ' (non-direct reference) near: ' .. src:sub(math.max(1, a - 40), math.min(#src, b + 40)):gsub('%s+', ' ')
+        else
+            local callEnd = findMatchingParen(src, openParen)
+            if diagStart and callEnd and a >= diagStart and callEnd <= diagEnd then
+                -- read-only admin diagnostic (/fh_plotcheck, runPlotcheckProbe): reports raw ground delta, never places or gates reach
                 diagCount = diagCount + 1
             else
                 -- Must be wrapped in FhGroundSnap.snapZ(..., FhSnap.groundZAt(...), FhGroundSnap.SNAP_TOLERANCE)
@@ -198,12 +245,45 @@ case('static scan: no raw groundZAt reaches a reach/placement decision across [f
                     rawViolations[#rawViolations + 1] = path .. ' near: ' .. src:sub(math.max(1, a - 40), math.min(#src, (callEnd or b) + 40)):gsub('%s+', ' ')
                 end
             end
-            pos = b + 1
         end
+        pos = b + 1
+    end
+    return clampedCount, diagCount, rawViolations
+end
+
+case('static scan: no raw groundZAt reaches a reach/placement decision across [fh]', function()
+    local root = here .. '../server/resources/[fh]'
+    local files = listFhLua(root)
+    assert(#files > 0, 'no [fh] lua files found')
+    local clampedCount, diagCount = 0, 0
+    local rawViolations = {}
+    for _, path in ipairs(files) do
+        local f = assert(io.open(path, 'r'))
+        local c, d, v = scanGroundZAt(path, f:read('*a'))
+        f:close()
+        clampedCount = clampedCount + c
+        diagCount = diagCount + d
+        for _, msg in ipairs(v) do rawViolations[#rawViolations + 1] = msg end
     end
     T.eq(0, #rawViolations, 'raw groundZAt caller(s) found:\n' .. table.concat(rawViolations, '\n'))
     assert(clampedCount >= 5, 'expected at least 5 clamped groundZAt callers, saw ' .. tostring(clampedCount))
     T.eq(1, diagCount, 'expected exactly 1 read-only plotcheck diagnostic caller')
+end)
+
+case('static scan self-test: rejects aliases, value references, and unexempted plotcheck calls', function()
+    local _, _, vAlias = scanGroundZAt('fh_zones/client/evil.lua', 'local g = FhSnap.groundZAt\nlocal z = g("x", 1, 2, 3)\n')
+    T.eq(1, #vAlias, 'aliasing FhSnap.groundZAt must fail static scan')
+
+    local _, _, vPass = scanGroundZAt('fh_zones/client/evil.lua', 'runLater(FhSnap.groundZAt)\n')
+    T.eq(1, #vPass, 'passing FhSnap.groundZAt as a value must fail static scan')
+
+    local _, _, vIndex = scanGroundZAt('fh_zones/client/evil.lua', 'local z = FhSnap["groundZAt"]("x", 1, 2, 3)\n')
+    T.eq(1, #vIndex, 'string-indexed groundZAt lookup must fail static scan')
+
+    local _, dOutside, vOutside = scanGroundZAt('fh_homestead/client/main.lua',
+        "local function otherFn()\n    local gz = FhSnap.groundZAt('plotcheck:fake', 1, 2, 3)\nend\n")
+    T.eq(0, dOutside, 'plotcheck string literal outside runPlotcheckProbe must not be exempted')
+    T.eq(1, #vOutside, 'raw groundZAt outside runPlotcheckProbe must fail static scan')
 end)
 
 case('mirrored server snap tolerances match fh_core config and cover SNAP_TOLERANCE + headroom', function()

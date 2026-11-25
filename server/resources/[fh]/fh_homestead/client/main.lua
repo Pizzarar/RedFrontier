@@ -192,7 +192,7 @@ local function waterAt(x, y, z)
 end
 
 local plotcheckToken -- newest probe run wins: a re-run after a server timeout stops the older loop instead of stacking a second one
-FH.onNet('fh:homestead:plotcheck:probe', function(token, list)
+local function runPlotcheckProbe(token, list)
     if type(list) ~= 'table' then return end
     plotcheckToken = token
     local results = {}
@@ -207,4 +207,6 @@ FH.onNet('fh:homestead:plotcheck:probe', function(token, list)
     if plotcheckToken ~= token then return end
     plotcheckToken = nil
     TriggerServerEvent('fh:homestead:plotcheck:result', token, results)
-end)
+end
+
+FH.onNet('fh:homestead:plotcheck:probe', runPlotcheckProbe)

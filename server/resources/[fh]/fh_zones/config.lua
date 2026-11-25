@@ -27,7 +27,7 @@ FhZonesConfig = {
             loot = {
                 coords = vector3(-145.0, 845.0, 117.0),
                 label = 'Outlaw camp stash',
-                -- chance 0..1 per entry; quality = {min,max} is rolled per instance into info.condition (0-100)
+                -- chance 0..1 per entry; quality = {min,max} is rolled per instance into info.quality (0-100)
                 table = {
                     { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
