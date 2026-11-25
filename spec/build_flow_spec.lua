@@ -720,7 +720,7 @@ T.describe('H9 town lots: slots, stations, safety, plotInfo', function()
         local st = W.ex.getStations('A')
         T.eq(1, #st); T.eq(LOT, st[1].plot_id); T.eq('workbench', st[1].station_type)
         local wb = { x = lot.center.x + 6.0, y = lot.center.y + 4.0, z = lot.center.z }
-        T.same({ plot_id = LOT, slot_id = 'station_1', station_type = 'workbench' }, W.ex.stationAt(wb, 1.0))
+        T.same({ plot_id = LOT, slot_id = 'station_1', station_type = 'workbench', coords = wb }, W.ex.stationAt(wb, 1.0))
         W.peds[1] = wb
         T.eq(true, W.ex.isNearStation(1, 'workbench'))
         W.peds[2] = wb

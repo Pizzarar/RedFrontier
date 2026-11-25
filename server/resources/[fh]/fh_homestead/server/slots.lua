@@ -205,12 +205,14 @@ local function getStations(citizenid)
     return out
 end
 
----Nearest built station (any plot) to coords within maxDist, or nil (nil before the load finishes).
-local function stationAt(coords, maxDist)
+---Nearest built station (any plot, owner online or not: it reads the slot cache loaded from fh_plot_slots) to coords
+---within maxDist, or nil (nil before the load finishes). Optional stationType ('workbench', 'campfire', ...) restricts
+---the search to that type; nil = nearest of any type. Returns { plot_id, slot_id, station_type, coords }.
+local function stationAt(coords, maxDist, stationType)
     if not S.isReady() then return nil end
-    local s = stations.nearest(listStations(), coords, maxDist)
+    local s = stations.nearest(listStations(), coords, maxDist, stationType)
     if not s then return nil end
-    return { plot_id = s.plot_id, slot_id = s.slot_id, station_type = s.station_type }
+    return { plot_id = s.plot_id, slot_id = s.slot_id, station_type = s.station_type, coords = s.coords }
 end
 
 ---Owner-only: is the src's character within maxDist of a built station_type on one of their own plots (claim or town

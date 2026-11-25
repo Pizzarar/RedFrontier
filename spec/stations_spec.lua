@@ -225,6 +225,22 @@ T.describe('server/slots.lua', function()
         T.eq(1, #W.named(BUILT))
     end)
 
+    case('stationAt: optional type filter, coords in result, offline owner still found (H17)', function()
+        local W = newWorld()
+        W.db.plots[P1] = 'C1' -- C1 is not online: no player exists in the world
+        W.db.slots[P1 .. '|station_1'] = 1 -- workbench (6,4)
+        W.db.slots[P1 .. '|station_2'] = 1 -- campfire (6,-4)
+        W.boot()
+        local atFire = at(p1, 6.0, -3.5)
+        T.eq('campfire', W.ex.stationAt(atFire, 3.0).station_type, 'no type = nearest of any type')
+        local hit = W.ex.stationAt(atFire, 3.0, 'campfire')
+        T.eq('station_2', hit.slot_id); T.eq(P1, hit.plot_id)
+        T.eq(p1.center.x + 6.0, hit.coords.x); T.eq(p1.center.y - 4.0, hit.coords.y)
+        T.eq(nil, W.ex.stationAt(atFire, 3.0, 'workbench'), 'type miss')
+        T.eq('workbench', W.ex.stationAt(at(p1, 6.0, 4.0), 3.0, 'workbench').station_type)
+        T.eq(nil, W.ex.stationAt(atFire, 3.0, 'tanning_rack'))
+    end)
+
     case('ready gate: claims not loaded yet -> writes refused; failed load stays not ready and can retry', function()
         local W = newWorld()
         W.db.plots[P1] = 'C1'
