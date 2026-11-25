@@ -28,7 +28,7 @@ One in-game session, in this order (it groups sections so state carries over: ge
 | 16 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
 | 17 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
 | 18 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7; giver talk/accept now opens the fh_ui dialogue screen (reach steps need walking >5 m away) |
-| 19 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 40 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away) |
+| 19 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 50 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away); steps 25-29 trade post, trapper and heat HUD (need a trade post, a pelt, `fh_trade`/`fh_hunting`/`fh_heat` ensured) |
 
 Needs another person (table rows): 1 (B-access steps 4-5), 6 (death, two characters), 11 (Homestead second player), 12 (Town lots steps 5 and 7, second character), 16 (step 15 permission check as non-admin), 17 (`fh_not_owner` from a second character). Row 2 (Tutorial) needs a brand-new character slot, not a friend. Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
 
@@ -397,7 +397,7 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
     Expected: the screen shows `You have no pelts to sell here.` and a Close button; no ox_lib menu.
     RESULT:
 29. Raise heat as admin: server console `exports.fh_heat:set(<yourId>, "outlaws", 30)` (or the fh_core admin `fh_heat`). Then set it back with `exports.fh_heat:set(<yourId>, "outlaws", 0)`.
-    Expected: at 30 a `Heat` widget appears with the Outlaws row (tier and 30, plus a bar); the mouse is not captured and you can keep moving. At 0 the widget hides. Then run `grep -rn "lib.registerContext\|lib.showContext\|lib.inputDialog" server/resources/[fh]/fh_trade server/resources/[fh]/fh_hunting`: no matches.
+    Expected: at 30 a `Heat` widget appears (opened by fh_heat via `fh:ui:open`) with the `Mountain Gang` row (tier and 30, plus a bar); the mouse is not captured and you can keep moving. At 0 the widget hides. On switching character (unload) the widget clears. Then run `grep -rn "lib.registerContext\|lib.showContext\|lib.inputDialog" server/resources/[fh]/fh_trade server/resources/[fh]/fh_hunting`: no matches.
     RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
