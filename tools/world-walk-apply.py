@@ -64,12 +64,16 @@ def indent_of(line):
     return len(line) - len(line.lstrip(' \t'))
 
 
-def find_anchor(lines, pid):
+def find_anchors(lines, pid):
     rx = re.compile(r"\bid\s*=\s*'%s'" % re.escape(pid))
-    for i, l in enumerate(lines):
-        if rx.search(l):
-            return i
-    return None
+    return [i for i, l in enumerate(lines) if rx.search(l)]
+
+
+COMMENT_TAIL = re.compile(r'\s*--[^\'"]*$')  # trailing Lua comment (no quotes in it)
+
+
+def code_part(line):
+    return COMMENT_TAIL.sub('', line)
 
 
 COORD_ONE = {k: re.compile(r'(\b%s\s*=\s*)(-?\d+(?:\.\d+)?)' % k) for k in 'xyz'}
@@ -79,7 +83,7 @@ CENTER_T = re.compile(r'(\bcenter\s*=\s*\{)[^}]*(\})')
 
 
 def is_oneliner(line):
-    s = line.strip()
+    s = code_part(line).strip()
     return '{' in s and s.rstrip(',').endswith('}') and re.search(r'\bx\s*=', s) is not None
 
 
@@ -94,7 +98,10 @@ def patch_one(lines, i, coords, verified):
         if VERIFIED_RX.search(l):
             l = VERIFIED_RX.sub(lambda m: m.group(1) + 'true', l, count=1)
         else:
-            l = re.sub(r'\s*\}(,?)\s*$', lambda m: ', verified = true }' + m.group(1), l, count=1)
+            tail = COMMENT_TAIL.search(l)
+            body, comment = (l[:tail.start()], l[tail.start():]) if tail else (l, '')
+            body = re.sub(r'\s*\}(,?)\s*$', lambda m: ', verified = true }' + m.group(1), body, count=1)
+            l = body + comment
     lines[i] = l
 
 
@@ -160,16 +167,15 @@ def apply_marks(files, marks):
                 rep['todo'].append('%s: bad, no usable coords — note: %s' % (pid, rec.get('note') or '(none)'))
                 continue
             coords = (rec['x'], rec['y'], rec['z'] if fnum(rec.get('z')) else None)
-        target = None
-        for p, ls in lines.items():
-            i = find_anchor(ls, pid)
-            if i is not None:
-                target = (p, i)
-                break
-        if not target:
+        hits = [(p, i) for p, ls in lines.items() for i in find_anchors(ls, pid)]
+        if not hits:
             rep['unknown'].append(pid)
             continue
-        p, i = target
+        if len(hits) > 1:
+            rep['todo'].append('%s: ambiguous id (%s) — not patched' % (
+                pid, ', '.join('%s:%d' % (os.path.basename(p), i + 1) for p, i in hits)))
+            continue
+        p, i = hits[0]
         ls = lines[p]
         if is_oneliner(ls[i]):
             patch_one(ls, i, coords, True)

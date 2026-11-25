@@ -128,5 +128,35 @@ class WalkApply(unittest.TestCase):
                 self.assertEqual(wwa.main(['--walk', w, '--file', os.path.join(d, 'none.lua')]), 2)
 
 
+class Review(unittest.TestCase):
+    def test_dry_run_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            r, w = os.path.join(d, 'r.lua'), os.path.join(d, 'w.json')
+            rw(r, REGIONS); rw(w, json.dumps([m('valentine', 'ok')]))
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(wwa.main(['--walk', w, '--file', r]), 0)
+            self.assertEqual(rw(r), REGIONS)
+            self.assertIn('dry run', out.getvalue())
+            self.assertIn('+++', out.getvalue())
+
+    def test_zone_camp_bad_with_coords_is_todo(self):
+        zones = "camps = {\n    heartlands_t1_01 = {\n        id = 'heartlands_t1_01',\n        territory = 'heartlands_t1_camp',\n        verified = false,\n    },\n}\n"
+        _, r, h, out = run([m('heartlands_t1_01', 'bad', x=1, y=2, z=3)], home=zones)
+        self.assertEqual(h, sq(zones))
+        self.assertIn('TODO    heartlands_t1_01', out)
+
+    def test_duplicate_anchor_is_todo_and_untouched(self):
+        dup = REGIONS + "regions.posts = {\n    valentine = { id = 'valentine', x = 1, y = 2, z = 3 },\n}\n"
+        _, r, h, out = run([m('valentine', 'ok')], regions=dup)
+        self.assertEqual(r, sq(dup))
+        self.assertRegex(out, r'TODO    valentine: ambiguous id \(regions.lua:\d+, regions.lua:\d+\)')
+
+    def test_oneliner_with_trailing_comment(self):
+        reg = "towns = {\n    { id = 'a', x = 1.0, y = 2.0, z = 3.0 }, -- approx\n    { id = 'b', x = 1.0, y = 2.0, z = 3.0, verified = false }, -- tbd\n}\n"
+        _, r, _, _ = run([m('a', 'ok'), m('b', 'bad', x=5, y=6)], regions=reg)
+        self.assertIn("{ id = 'a', x = 1.0, y = 2.0, z = 3.0, verified = true }, -- approx", r)
+        self.assertIn("{ id = 'b', x = 5.0, y = 6.0, z = 3.0, verified = true }, -- tbd", r)
+
+
 if __name__ == '__main__':
     unittest.main()
