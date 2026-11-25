@@ -1,3 +1,6 @@
 # G5 "load-all manifests" known findings — one per line: kind|resource|file|msg-substring|reason
 # A finding is "known" (does not fail the gate) when kind+resource+file match and msg-substring (if any)
 # appears in the message. `*` is not a wildcard; entries are exact. Keep a reason for every entry.
+load_error|rsg-target|[rsg]/rsg-target/client/client.lua|'then' expected near '?'|vendored rsg-target uses CfxLua safe-navigation `?.` (valid in FXServer, not stock Lua 5.4); gate cannot parse it
+load_error|rsg-character|[rsg]/rsg-character/shared/functions.lua|unexpected symbol near '?'|vendored rsg-character uses CfxLua `?.` (valid in FXServer); gate cannot parse it
+load_error|rsg-character|[rsg]/rsg-character/client/functions.lua|'then' expected near '?'|vendored rsg-character uses CfxLua `?.` (valid in FXServer); gate cannot parse it

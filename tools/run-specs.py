@@ -3,6 +3,7 @@
 
   python tools/run-specs.py                 run every spec/*_spec.lua (fresh Lua state each)
   python tools/run-specs.py spec/x_spec.lua run the named specs
+  python tools/run-specs.py --load-manifests  G5 gate alone: load every ensured resource's manifest scripts like FXServer
   python tools/run-specs.py --contracts   run tools/check-contracts.py (cross-resource exports/events/items lint)
   python tools/run-specs.py --syntax DIR..  load() (compile only, no execution) every .lua under DIR
 
@@ -104,4 +105,14 @@ if __name__ == '__main__':
     if args and args[0] == '--contracts':  # static cross-resource lint (tools/check-contracts.py); not part of the default run
         import subprocess
         sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, 'tools', 'check-contracts.py')] + args[1:]))
-    sys.exit(run_specs(args))
+    if args and args[0] == '--load-manifests':  # G5 gate alone (tools/load_manifests.py)
+        import subprocess
+        sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, 'tools', 'load_manifests.py')]))
+    code = run_specs(args)
+    sys.stdout.flush()
+    if not args:  # default run: also the G5 load-all-manifests gate + its JT-bug self-test
+        import subprocess
+        for script in ('load_manifests.py', 'test_load_manifests.py'):
+            r = subprocess.call([sys.executable, os.path.join(ROOT, 'tools', script)])
+            code = code or r
+    sys.exit(code)

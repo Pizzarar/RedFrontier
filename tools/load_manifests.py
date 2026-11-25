@@ -152,6 +152,8 @@ def expand_entry(entry, res_dir):
         m = re.match(r'^@([^/\\]+)/(.+)$', entry)
         if not m:
             return []
+        if m.group(1) in SYSTEM_RESOURCES:
+            return []  # provided by the env as stubs (`lib`, `MySQL`); the real files use CfxLua syntax
         tdir = resolve_resource(m.group(1))
         if tdir is None:
             return [{'path': None, 'display': entry}]
@@ -245,15 +247,18 @@ def to_lua(v):
     raise TypeError('cannot serialize %r to Lua' % (v,))
 
 
-def run():
-    lua_mod = _get_lua_mod()
-    plan = build_plan(lua_mod)
-
+def run_plan(lua_mod, plan):
+    """Load a plan in a fresh Lua state; return the raw result dict (findings + counts)."""
     lua = lua_mod.LuaRuntime(unpack_returned_tuples=True)
     with open(os.path.join(ROOT, 'tools', 'load_manifests.lua'), 'r', encoding='utf-8') as fh:
         lua.execute(fh.read())
     lua.execute('RF_PLAN = ' + to_lua(plan))
-    result = json.loads(lua.globals().load_manifests.run_from_global())
+    return json.loads(lua.globals().load_manifests.run_from_global())
+
+
+def run():
+    lua_mod = _get_lua_mod()
+    result = run_plan(lua_mod, build_plan(lua_mod))
 
     known = load_known(KNOWN_PATH)
     findings = result.get('findings', [])

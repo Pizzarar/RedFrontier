@@ -288,6 +288,24 @@ function M.run(plan)
             vector2 = function(x, y) return { x = x, y = y } end,
             vector4 = function(x, y, z, w) return { x = x, y = y, z = z, w = w } end,
             source = -1,
+            print = function() end, -- resources log at load; keep the gate output clean
+            lib = stub(),
+            MySQL = stub(),
+            joaat = function(str)
+                local h = 0
+                str = tostring(str):lower()
+                for i = 1, #str do
+                    h = (h + str:byte(i)) & 0xFFFFFFFF
+                    h = (h + (h << 10)) & 0xFFFFFFFF
+                    h = (h ~ (h >> 6)) & 0xFFFFFFFF
+                end
+                h = (h + (h << 3)) & 0xFFFFFFFF
+                h = (h ~ (h >> 11)) & 0xFFFFFFFF
+                h = (h + (h << 15)) & 0xFFFFFFFF
+                return h
+            end,
+            GetHashKey = function(s) return 0 end,
+            GetResourcePath = function(name) return '/srv/resources/[x]/' .. tostring(name) end,
         }, { __index = function(_, k)
             local v = real_G[k]
             if v ~= nil then return v end
