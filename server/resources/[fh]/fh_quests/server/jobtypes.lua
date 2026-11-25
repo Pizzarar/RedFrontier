@@ -136,6 +136,7 @@ end)
 -- TODO(quests-04 L0): exports.fh_hunting:chainState(citizenid, chain_id) does not exist yet (@hunting L0).
 -- Until L0 lands, this returns nil so the offer is shown. Once L0 lands, the GetResourceState + pcall + callable
 -- check picks it up automatically and returns { reason = 'legendary_done' } when chainState == 'complete'.
+-- chainState is nil | step 1..4 (1 rumour, 2 track, 3 carcass, 4 spawned) | 'complete'; only 'complete' locks.
 local function legendaryLockedFor(offer, src)
     if GetResourceState('fh_hunting') ~= 'started' then return nil end
     local h = exports.fh_hunting
@@ -147,6 +148,13 @@ local function legendaryLockedFor(offer, src)
         huntingStarted = function() return true end,
         chainState = function(cid, chain_id) return h:chainState(cid, chain_id) end,
     })
+end
+
+-- Accept guard: lockedFor is display-only, so refuse here too (stale board / offer not yet hidden by L0).
+-- Absent export or error -> allow, same as lockedFor.
+local function legendaryAccept(src, offer)
+    if legendaryLockedFor(offer, src) then return false, 'fh_legendary_done' end
+    return true
 end
 
 local function hooks(job_type, extra)
@@ -168,7 +176,7 @@ CreateThread(function()
         survey = hooks('survey', FhQuestsWatch.jobHooks('survey')), -- reach-watcher (server/watch.lua)
         escort = hooks('escort', FhQuestsWatch.escortHooks()),       -- reach-watcher escort section
         rescue = hooks('rescue', FhQuestsWatch.rescueHooks()),       -- reach-watcher rescue section
-        legendary = hooks('legendary', { lockedFor = legendaryLockedFor }),
+        legendary = hooks('legendary', { lockedFor = legendaryLockedFor, accept = legendaryAccept }),
     }
     for _, name in ipairs(JT.TYPES) do
         local ok, err = exports.fh_quests:registerJobType(name, defs[name])

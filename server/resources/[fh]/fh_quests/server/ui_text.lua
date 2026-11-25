@@ -15,6 +15,7 @@ M.TEXT = {
     fh_quest_done = 'You already finished that one.',
     fh_reward_pending = 'Collect your last reward first.',
     fh_accept_refused = 'The client turned you down.',
+    fh_legendary_done = 'You have already brought that legend down.',
     fh_accept_failed = 'Could not take that job.',
     fh_bounty_spawn_failed = 'The target could not be found. Try again later.',
     fh_db = 'Could not save that. Try again.',

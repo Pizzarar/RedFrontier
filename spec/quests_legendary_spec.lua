@@ -177,7 +177,7 @@ describe('quests legendary: lockedFor (pure + server/jobtypes.lua wiring)', func
             citizenidOf = base.citizenidOf, huntingStarted = base.huntingStarted,
             chainState = function() return nil end,
         }))
-        for step = 1, 3 do
+        for step = 1, 4 do
             eq(nil, JT.legendaryLockedFor(offer, 1, {
                 citizenidOf = base.citizenidOf, huntingStarted = base.huntingStarted,
                 chainState = function() return step end,
@@ -271,6 +271,27 @@ describe('quests legendary: lockedFor (pure + server/jobtypes.lua wiring)', func
             -- 5. fh_hunting started + chainState throws -> nil
             huntingExports.chainState = function() error('No such export chainState in resource fh_hunting') end
             eq(nil, legHooks.lockedFor(offer, 1))
+
+            -- accept guard (hooks.accept)
+            assert(type(legHooks.accept) == 'function', 'legendary accept hook missing')
+            local function acc() return legHooks.accept(1, offer) end
+            huntingExports.chainState = function() return 'complete' end
+            local a1, a2 = acc()
+            eq(false, a1); eq('fh_legendary_done', a2)
+            for step = 1, 4 do
+                huntingExports.chainState = function() return step end
+                eq(true, (acc()))
+            end
+            huntingExports.chainState = function() return nil end
+            eq(true, (acc()))
+            huntingExports.chainState = function() error('boom') end
+            eq(true, (acc()))
+            huntingExports.chainState = nil
+            eq(true, (acc()))
+            huntingExports.chainState = function() return 'complete' end
+            huntingState = 'stopped'
+            eq(true, (acc()))
+            huntingState = 'started'
         end)
 
         for _, k in ipairs(keys) do _G[k] = saved[k] end
