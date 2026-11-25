@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T13:37:11.410Z",
+  "updatedAt": "2026-11-25T16:39:43.143Z",
   "units": [
     {
       "id": "B5",
@@ -328,10 +328,10 @@
     },
     {
       "id": "M2-nit",
-      "goal": "rsg-core moneyitems.lua:60-68 removeItems removes cent stacks one RemoveItem per slot; >=100 cents split over 2+ slots (DB load/SetInventory path) triggers ConvertCoins mid-loop -> first slot's cents lost on a false return. Use one RemoveItem(name, amount) across stacks. Plus cosmetic HUD OnMoneyChange flicker on multi-step moves (player.lua:356-364). M2 review lows, tierA",
+      "goal": "atomic cent-stack removal + single HUD event 58f27b2 -> tierA Review Gemini rn-e29f1504c265",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running"
     },
     {
       "id": "P1",
@@ -342,10 +342,11 @@
     },
     {
       "id": "P2",
-      "goal": "use handlers; FAIL 1/0/2 fixed 43fb820 -> tierA re-review Gemini rn-a0e563850200",
+      "goal": "use handlers; logout-window fix 9736781 -> tierA re-review #2 Gemini rn-60178a39a163",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done",
+      "commit": "a686aaf"
     },
     {
       "id": "P3",
@@ -378,14 +379,21 @@
     },
     {
       "id": "CHEST-REACH",
-      "goal": "canReach vertical 20->10m ff567ae (+cargo/homestead/gunsmith mirrors) -> Review Gemini rn-f1f8f3b1ead4",
+      "goal": "DECLINED: 10m refuted by Gemini FAIL 1/1/1 ff567ae (fh_zones camp stashes use unverified z-hints, groundZAt not clamped by snapZ; 10m gives 0 headroom). Keep 20m. Root fix = verified camp coords + snapZ clamp; branch core-reach unmerged",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done"
     },
     {
       "id": "P5-nit",
       "goal": "fh_log audit.log: size cap/rotation + buffered timer flush instead of sync io per event (P5 review lows, fh_log/server/main.lua:34-48)",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "P2-nit",
+      "goal": "fh_core useables.lua:78-87,205-210 unloadCid/unloadSeq never cleared after playerDropped (no settle like fh_economy main.lua:403-410); clear once playerOf(src) no longer holds cid, don't reset seq while clipBusy (P2 review low)",
       "files": [],
       "doneCheck": "",
       "status": "todo"

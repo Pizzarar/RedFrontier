@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor4
-- Workers: 2
+- Workers: 1
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -71,3 +71,4 @@
 - 11-25 core-08 P1 PASS: vendored rsg-weapons @385aa98 + rsg-ammo @02b8484 (byte-identical to upstream, reviewer-diffed), ensured after fh_inventory; weapons draw, ammo boxes load (unverified in game). Gemini PASS 0/0/1 efcd608; low -> P1-wear.
 - 11-25 core-08 P3 PASS: 29 placeholder icons copied from existing pngs (d9b7746), Gemini PASS 0/0/0. venv 122/2224/0. P2 use handlers in fix (FAIL 3/0/3).
 - 11-25 core-08 P5 PASS: fh_log provides rsg-log (console + server/logs/audit.log, sanitized, server-only event) + rsg-weapons WeaponComponents=false; 2561926, Sonnet PASS 0/0/2 (lows -> P5-nit). venv 130/2322/0.
+- 11-25 core-08 P2 PASS: first-play use handlers (bandage/tonics/money clips, useable=false for handlerless loot). Clips remove-first under per-player lock, cid captured pre-consume, logout-window fail-closed, give-back only to same cid else credit. a686aaf, Gemini tierA FAIL 3/0/3 -> FAIL 1/0/2 -> FAIL 1/0/0 -> PASS 0/0/1 (low -> P2-nit). venv 133/2422/0. CHEST-REACH declined (10m refuted: unverified fh_zones camp z-hints).
