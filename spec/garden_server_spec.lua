@@ -467,7 +467,7 @@ T.describe('/fh_harvest', function()
     case('commands: /fh_plant, /fh_harvest and /fh_garden reply with the outcome', function()
         local W = world()
         local said = {}
-        W.env.TriggerClientEvent = function(_, _, payload) said[#said + 1] = payload.args[2] end
+        W.env.TriggerClientEvent = function(ev, _, payload) if ev == 'chat:addMessage' then said[#said + 1] = payload.args[2] end end
         W.commands.fh_plant(1, { seed = 'seedcarrot' })
         T.eq('fh_plant: planted seedcarrot in bed 1 (ready in 2h 00m)', said[1])
         W.commands.fh_garden(1, {})

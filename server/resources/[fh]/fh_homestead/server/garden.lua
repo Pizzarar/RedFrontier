@@ -434,6 +434,7 @@ lib.addCommand('fh_plant', { help = 'Plant a seed in a free bed of your claim ga
     function(src, args)
         local ok, res, detail = G.plant(src, args and args.seed)
         if not ok then return reply(src, 'fh_plant: ' .. describe(res, detail)) end
+        TriggerClientEvent('fh:anim:play', src, 'plant')
         local def = garden.cropForSeed(args.seed)
         reply(src, ('fh_plant: planted %s in bed %d (ready in %s)'):format(args.seed, res, mins(def and def.growthSeconds)))
     end)
@@ -443,6 +444,7 @@ lib.addCommand('fh_harvest', { help = 'Harvest a ready bed of your claim garden 
     function(src, args)
         local ok, res, detail = G.harvest(src, args and args.bed)
         if not ok then return reply(src, 'fh_harvest: ' .. describe(res, detail)) end
+        TriggerClientEvent('fh:anim:play', src, 'harvest')
         reply(src, ('fh_harvest: bed %d gave %d %s (%s)'):format(res.bed, res.amount, res.item,
             res.to == 'bag' and 'backpack' or 'plot chest 1: backpack full'))
     end)

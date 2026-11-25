@@ -191,7 +191,7 @@ return function(T, cfg)
                 if W.fail.eventThrows == name then error('handler of ' .. name .. ' errored') end
                 W.events[#W.events + 1] = { name = name, data = data }
             end,
-            TriggerClientEvent = function(_, target, payload) W.client[#W.client + 1] = { target = target, msg = payload.args[2] } end,
+            TriggerClientEvent = function(ev, target, payload) if ev == 'chat:addMessage' then W.client[#W.client + 1] = { target = target, msg = payload.args[2] } end end,
             exports = setmetatable({}, { __call = function(_, name, fn) W.ex[name] = fn end,
                 __index = function(_, res) return X[res] or {} end }),
             IsPlayerAceAllowed = function(src) return W.admins[src] == true end,

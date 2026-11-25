@@ -730,6 +730,7 @@ RegisterNetEvent('fh:homestead:open_chest', function(payload)
     if not chestBuilt(plot, n) then return reply(src, 'chest: fh_chest_not_built') end
     ok, why = exports.fh_core:open(src, { type = 'chest', id = rules.chestStashId(plot.id, n) })
     if not ok then reply(src, 'chest: ' .. tostring(why)) end
+    if ok then TriggerClientEvent('fh:anim:play', src, 'chest_open') end
 end)
 
 -- Client asks which chests to draw; props are cosmetic, so sending every configured chest is fine.

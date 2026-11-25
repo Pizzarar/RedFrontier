@@ -398,6 +398,7 @@ end)
 local function onUse(src)
     if type(src) ~= 'number' then return end
     local ok, why = T.load(src, tcfg().item)
+    if ok then TriggerClientEvent('fh:anim:play', src, 'trough') end
     local msg = ok and 'The feed trough is loaded.' or ('Could not load the trough: ' .. tostring(why))
     pcall(TriggerClientEvent, 'chat:addMessage', src, { args = { 'fh', msg } })
 end
