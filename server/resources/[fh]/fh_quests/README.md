@@ -253,10 +253,15 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 - **`hunt_request`:** `animal` is required: fh_hunting's `pelt_sold` always carries it (Q0b), so a pelt of another
   animal, or a payload without `animal`, never credits the job. The offer key is region-scoped,
   `hunt_<region_id>_<animal>_<N>star` (idea-902; quest id `job:hunt_request:hunt_heartlands_wolf_2star`), so two
-  regions may offer the same animal/stars: each is its own job with its own cooldown and ledger reason. Matching is
-  unchanged (the sale's region is not checked), so one qualifying sale credits every hunt job the player holds that it
-  matches, as two overlapping offers in one region (`deer_1star` / `deer_2star`) always did. Rows saved under the old
-  key `<animal>_<N>star` are re-keyed on load (Persistence, "Legacy job ids").
+  regions offering the same animal/stars could never share a quest id, cooldown or ledger reason. Matching is NOT
+  region-scoped: fh_hunting has one trapper (heartlands, `fh_hunting/config.lua:36-42`) and every `pelt_sold` carries
+  its region, so a region match would make every other region's hunt jobs uncompletable. One qualifying sale therefore
+  credits every hunt job the player holds that it matches (as `deer_1star` / `deer_2star` in one region always did).
+  **Content rule:** each (animal, stars) pair appears in at most one region's `hunt` data, so a sale can never
+  complete the same hunt in several regions at once (guard: `quests_content` "each hunt (animal, stars) pair appears
+  in at most one region"; remove it when fh_hunting has per-region trappers and hunt matching is region-scoped,
+  idea-902 follow-up). Rows saved under the old key `<animal>_<N>star` are re-keyed on load (Persistence, "Legacy job
+  ids"); their stored `where` stays unscoped.
 - **`camp_clear`:** credit comes from the `participants` list (core idea-614, landed): fh_zones sends the citizenids
   of the players within `activationRadius` when the camp clears (an empty table when there are none), and each of them
   is credited. An empty list credits nobody.

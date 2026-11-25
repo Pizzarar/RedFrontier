@@ -75,6 +75,40 @@ describe('quests content: keys and coverage', function()
             end
         end
     end)
+    -- Content guard (idea-902): pelt_sold matching is not region-scoped (fh_hunting has one trapper, heartlands,
+    -- fh_hunting/config.lua:36-42), so one sale credits every held hunt job it matches. Keep each (animal, stars)
+    -- pair in at most one region so a sale cannot complete the same hunt in several regions at once.
+    -- Remove when fh_hunting has per-region trappers and hunt matching is region-scoped (idea-902 follow-up).
+    it('each hunt (animal, stars) pair appears in at most one region', function()
+        local function dupes(data)
+            local seen, out = {}, {}
+            local ids = {}
+            for id in pairs(data) do ids[#ids + 1] = id end
+            table.sort(ids)
+            for _, id in ipairs(ids) do
+                for _, h in ipairs(data[id].hunt or {}) do
+                    local pair = ('%s/%s'):format(tostring(h[1]), tostring(h[2]))
+                    if seen[pair] and seen[pair] ~= id then
+                        out[#out + 1] = pair .. ' in ' .. seen[pair] .. ' and ' .. id
+                    end
+                    seen[pair] = seen[pair] or id
+                end
+            end
+            return out
+        end
+        -- JT.DATA holds every data/regions/*.lua (one file per FhRegions id, loaded by the jobtypes spec loader)
+        local files = 0
+        for id in pairs(regions.regions) do
+            local f = io.open(fh .. 'fh_quests/data/regions/' .. id .. '.lua', 'r')
+            if f then f:close(); files = files + 1; assert(JT.DATA[id], id .. ' data file not loaded') end
+        end
+        local loaded = 0
+        for _ in pairs(JT.DATA) do loaded = loaded + 1 end
+        eq(files, loaded, 'every data/regions file checked')
+        same({}, dupes(JT.DATA))
+        -- the guard itself catches a shared pair
+        eq(1, #dupes({ a = { hunt = { { 'elk', 3, 1 } } }, b = { hunt = { { 'elk', 3, 2 }, { 'elk', 2, 1 } } } }))
+    end)
     it('every region (enabled or not) builds one offer per data entry, for every job type', function()
         for id, d in pairs(JT.DATA) do
             for _, jt in ipairs(JT.TYPES) do
