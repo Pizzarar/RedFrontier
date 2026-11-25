@@ -147,6 +147,7 @@ case('admin command is fh_rep_region (ACE command.fh_rep_region): no clash with 
     local prog, src = commands('fh_progression/server/main.lua')
     T.same({ 'fh_rep_region' }, prog)
     assert(src:find("IsPlayerAceAllowed(source, 'command.fh_rep_region')", 1, true), 'ACE name')
+    assert(src:find('; rep %s, tier %s', 1, true) and src:find('store.getTier(p.target, p.region_id)', 1, true), 'ok message reports rep and tier')
     -- every command name across these resources is unique (FXServer keeps whichever registers last)
     local seen = {}
     for _, rel in ipairs({ 'fh_economy/server/main.lua', 'fh_progression/server/main.lua', 'fh_fence/server/main.lua',

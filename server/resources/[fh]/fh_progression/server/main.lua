@@ -61,6 +61,9 @@ RegisterCommand('fh_rep_region', function(source, args)
         return exports.fh_economy:rep(p.target, p.region_id, p.delta, 'console_test')
     end)
     if not called then return say('fh_rep_region: economy export failed: ' .. tostring(ok)) end
-    say(ok and ('fh_rep_region: ok (%s %+d for %d)'):format(p.region_id, p.delta, p.target)
-        or 'fh_rep_region: ' .. tostring(rerr))
+    if not ok then return say('fh_rep_region: ' .. tostring(rerr)) end
+    -- Report the resulting rep/tier so the console tester can read the tier (the console runs commands, not Lua).
+    local read, rep, tier = pcall(function() return store.getRep(p.target, p.region_id), store.getTier(p.target, p.region_id) end)
+    local tail = read and ('; rep %s, tier %s'):format(tostring(rep), tostring(tier)) or ''
+    say(('fh_rep_region: ok (%s %+d for %d%s)'):format(p.region_id, p.delta, p.target, tail))
 end, true)
