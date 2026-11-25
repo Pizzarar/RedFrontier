@@ -110,13 +110,13 @@ function M.buy(cfg, rules, deps, locks, src, tierArg)
     if not cid then return false, post end
     local release = lock(locks, src, cid)
     if not release then return false, 'fh_busy' end
-    local ok, a, b = pcall(deps.buy, src, tier.key, post.region)
+    local ok, a, b, c = pcall(deps.buy, src, tier.key, post.region)
     release()
     if not ok then
         deps.log('ERROR wagon post buy: ' .. tostring(a))
         return false, 'fh_buy_error'
     end
-    return a == true, b
+    return a == true, b, c -- c = buyWagon's detail (e.g. 'refunded' with fh_already_owned)
 end
 
 ---Menu rows for the post screen. -> { post, live, tiers = { { key, label, price, owned, locked, reason } } } | nil, err

@@ -130,6 +130,13 @@ case('buy: passes the POST region (not a client one) and refuses away from a pos
     T.eq('fh_bad_tier', select(2, P.buy(CFG, R, E.deps, {}, 7, 'x')))
 end)
 
+case('buy: passes buyWagon detail through (refunded on fh_already_owned)', function()
+    local E = mk()
+    E.deps.buy = function() return false, 'fh_already_owned', 'refunded' end
+    local ok, err, detail = P.buy(CFG, R, E.deps, {}, 7, 't1')
+    T.eq(false, ok); T.eq('fh_already_owned', err); T.eq('refunded', detail)
+end)
+
 case('menu: price, owned, locked and live state', function()
     local E = mk({ owned = { t1 = true }, locked = true, live = { id = 'CID1:t1', tier = 't1' } })
     local m = assert(P.menu(CFG, R, E.deps, 7))

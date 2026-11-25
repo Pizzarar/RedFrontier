@@ -78,7 +78,7 @@ RegisterNetEvent('fh:cargo:menu', function(data)
         { title = 'Buy a wagon', menu = 'fh_cargo_buy', icon = 'coins' },
         { title = 'Stow my wagon', icon = 'warehouse', disabled = data.live == nil, onSelect = function() act('stow') end },
     }
-    for _, c in ipairs(call) do c.disabled = data.live ~= nil; table.insert(opts, 1, c) end
+    for i, c in ipairs(call) do c.disabled = data.live ~= nil; table.insert(opts, i, c) end -- keeps t1,t2,t3 order above Buy/Stow
     lib.registerContext({ id = 'fh_cargo_buy', title = 'Buy a wagon', menu = 'fh_cargo_post', options = buy })
     lib.registerContext({ id = 'fh_cargo_post', title = tostring(data.post and data.post.label or 'Wagons'), options = opts })
     lib.showContext('fh_cargo_post')
