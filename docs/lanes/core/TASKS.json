@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T17:12:52.291Z",
+  "updatedAt": "2026-11-25T17:25:12.129Z",
   "units": [
     {
       "id": "B5",
@@ -387,24 +387,24 @@
     },
     {
       "id": "P5-nit",
-      "goal": "fh_log audit.log: size cap/rotation + buffered timer flush instead of sync io per event (P5 review lows, fh_log/server/main.lua:34-48)",
+      "goal": "fixed in core-09 N1 df718fa",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "P2-nit",
-      "goal": "fh_core useables.lua:78-87,205-210 unloadCid/unloadSeq never cleared after playerDropped (no settle like fh_economy main.lua:403-410); clear once playerOf(src) no longer holds cid, don't reset seq while clipBusy (P2 review low)",
+      "goal": "fixed in core-09 N1 df718fa",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "M2-nit2",
-      "goal": "rsg-core moneyitems.lua:219-221 applying[cid] boolean -> depth counter (re-entrant Add/RemoveMoney via SetPlayerData/log listeners would re-enable mid-op HUD syncs); M2-nit review low",
+      "goal": "fixed in core-09 N1 df718fa",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "N1",
@@ -424,10 +424,10 @@
     },
     {
       "id": "R1-nit",
-      "goal": "spec/ground_snap_spec.lua static scan matches only literal groundZAt( calls (aliases/function values invisible); plotcheck exemption keyed on string literal; wagon headroom margin at +10m snap (12.5/13.5) — confirm in CHEST-COORDS owner test. R1 review lows",
+      "goal": "5f770d2 on core-nits2, Review Sonnet rn-7e7dc49eaf92 PASS 0/0/2; awaiting slot",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running"
     },
     {
       "id": "CHEST-COORDS",
@@ -438,10 +438,10 @@
     },
     {
       "id": "W1-nit",
-      "goal": "doc drift: fh_zones/config.lua:30 comment says info.condition; fh_core/README.md:43-44 documents info.condition; spec/items_spec.lua:80-83 lacks quality-precedence assert (W1 review lows)",
+      "goal": "5f770d2 on core-nits2, Review Sonnet rn-7e7dc49eaf92 PASS 0/0/2; awaiting slot",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "running"
     }
   ]
 }
