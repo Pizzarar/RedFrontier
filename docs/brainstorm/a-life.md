@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: A-Life
-- Lead: Ali1 Lead · a-life camp sim
-- Workers: 0
+- Lead: ★ AL2
+- Workers: 3
 
 ## Done when
 - v1 camp-ownership sim merged: clearing a camp flips it to law, outlaws retake it over time, flips move fh_trade shortages and fh_heat. Verified by the owner in-game (OWNER-TESTS).
@@ -20,11 +20,14 @@
 - Primitives checked: the fh_zones events and state machine, fh_heat `addSource`/`camp_clear`, fh_trade `setShortage`, FhRegions, fh_core requestSpawn. No new vs command.
 - @world confirmed (world-01, Wor1 rn-cb1d438f267f): faction ids stay stable (raiders = swamp gang, outlaws = mountain gang, rhodes_law = alias of lawmen); `kind` law/outlaw/neutral is being added; region/territory/camp shapes are unchanged; ambush nodes are optional in their block C; lootByFaction 8x3 is a @world Open item; camps sit at least 200 m from claims and towns. Relayed to Ali1.
 - world-01 A2: lawmen will be listed in every region's factions, and gangs only in their own areas. Flip target = the first `kind == 'law'` faction in regions[r].factions; if there is none, log and skip. Relayed to Ali1.
+- @world world-03 block H (Wor1): regions[r].ambush = {id,x,y,z,label,verified=false}, 2-3 per region × 15 regions, on roads, at least 200 m from towns and claims. A-Life keys nodes by id (fallback `<region>:ambush:<i>`) and drops or returns squads whose node is gone. Relayed to Ali1.
 - Hub: TOWN LOTS are never raid targets; WILDERNESS CLAIMS are raid-exposed (a v2 A-Life hook).
 
 ## Open
-- v2: road ambush nodes; wilderness-claim raids (needs a homestead claim-class API); generated contracts (camp clear, bounty, escort, rescue) via fh_quests; owner-coloured blips (fh_ui places.lua is static); the 8x3 per-faction loot tables (@world data).
+- a-life-04 candidates: escort/rescue contracts; owner-coloured blips; 8x3 loot (@world). Inbox: idea-898/899/900, 807.
 
 ## In flight
-- a-life-01 MERGED + pushed c1eed21. Follow-ups on main and pushed: idea-803 e7a2783 (no law heat inside your own town lot, via homestead lawSafeAt) and idea-805 53770c3 (review minors, factionLabel broadcasts); 82/1510/0. Lane idle. Waiting on the owner's in-game check, then the owner picks a v2 item from Open.
-- a-life-02 B1 rules on a-life-b1 (61de786), W1 dropped: @world H ships regions[].ambush.
+- a-life-01 MERGED + pushed c1eed21 (+ follow-ups idea-803 e7a2783, idea-805 53770c3; 82/1510/0). The owner's in-game check is pending (OWNER-TESTS "A-life: camp ownership").
+- a-life-02 (`docs/plans/a-life-02-roads-raids.md`): outlaw squads on road ambush nodes that materialise on foot near players, kills weaken retakes, law reinforce squads as data, `alife_contract` board jobs. Handed to Ali1, now AL2 rn-700965813307 after a lead handoff; 2026-11-24 per Red3 ("use the quota"). W1 dropped by AL2: relies on @world world-03 H for regions[].ambush; with no nodes, ambush is a no-op. B1 MERGED+pushed 4937d4f (99/1833/0). B2 7261650 + B3 5077d49 being joined on a-life-b23 (rn-21134fee7048); squad_wiped payload fixed as {squad_id,node_id,region_id,faction,participants=citizenids} (matches camp_cleared, fh_zones/server/main.lua:154). b23 joined c9aef99 (100/1852/0), Gemini PASS 0/0/1 c9aef99; B4 PASS d5301ac. B2+B3+B4 on a-life-b4 047aed9 (main merged in, 105/1947/0), slot asked of Red4. Inert in-game until @world world-i (regions[].ambush) merges. Follow-ups queued idea-898 (2D vs 3D range), 899 (squad heat, with 807), 900.
+- a-life-02 MERGED + pushed (047aed9 on origin). Inert until @world world-i regions[].ambush merges.
+- a-life-03 (`docs/plans/a-life-03-claim-raids.md`): online-only raids on wilderness claims (town lots never), warning first, fight at home or lose 2 stacks from chest 1 to the camp stash; C0 = @homestead plotInfo extension. Handed to the lead 2026-11-25.
