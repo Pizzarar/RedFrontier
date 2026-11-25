@@ -18,11 +18,16 @@ pay/charge/rep); a contract change is a request to @core, never an edit in fh_co
 - `[fh]/fh_heat`: per-character per-faction heat 0-100 (persisted), sources, lay-low decay, thresholds, bounty payoff
   (fh_economy charge, refund on post-charge failure), roadblocks; night ambush + mounted chase gated.
 - roads-02 (M7 slice): rep gates on wagon tiers and T2 freight via `exports.fh_progression:canUnlock`.
+- roads-04 (wagon ownership): owned wagons table `fh_wagons` (R16), `buyWagon` export charged via fh_economy (refund on
+  failure, owed alert never silent), trade-post wagon menu `/wagonpost` with buy / call / stow (R17, one live wagon
+  per player, proximity via `exports.fh_trade:nearestPost`), farm supplies carrot / potato / corn at $3 in fh_trade
+  supplies (R18). `/fh_wagon` stays the admin dev bypass.
 
 ## Owned migrations
 - `server/migrations/0008_fh_heat.sql` (fh_heat)
 - `server/migrations/0013_fh_trade.sql` (fh_trade price state)
 - `server/migrations/0014_fh_trade_contracts.sql` (freight contracts)
+- `server/migrations/0021_fh_wagons.sql` (fh_wagons, owned wagons; renumber at merge to main max+1)
 New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9a9ed6c did).
 
 ## Locked export contracts (README per resource is the source of truth)
@@ -40,6 +45,10 @@ New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9
   (exactly once); fh_trade never pays freight. Hooks never call fh_quests start/abandon/acceptOffer/talk; abandon
   also undoes a failed accept (cargo out via fh_core removeItem, contract row dropped). Events (one table):
   `{ src?, citizenid, key, quest_id, from_region, to_region, item, qty, reward, reason? }`.
+- `exports.fh_cargo:buyWagon(src, tier, region_id) -> ok, err[, detail]`: buys a wagon tier, charged once at the post's
+  region; t2/t3 gated by `canUnlock`; `fh_already_owned` refunds. `exports.fh_trade:nearestPost(src) -> post|nil`:
+  the trade post the player stands in (radius + region gate); fh_cargo's post menu depends on it softly (not started =
+  `fh_not_at_post`). Client entry `/wagonpost`; events `fh:cargo:wagon_bought`, `fh:cargo:wagon_buy_owed`.
 - Other exports (spawnWagon, getWagon, quote, getShortages, setShortage, previewSell, listGoods, heat get/set/add/
   addSource/getAll/level/payoff) are documented in each README and may grow; signatures above may not change
   without the consumer lane's sign-off.
@@ -75,6 +84,12 @@ New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9
   - R15: OWNER-TESTS `## Roads` steps added for destinations to Saint Denis and Blackwater (noting unverified destination
     posts from FhRegions `verified = false`), regional tier gate, T3 contracts with t3 wagon, and kill switches.
   - Venv specs green (`~/.venvs/rf/bin/python tools/run-specs.py`); `vs log decision "roads-03 playtest-ready <hash>"`.
+- roads-04 (wagon ownership):
+  - R16: `fh_wagons` migration 0021 (renumber at merge) + `buyWagon` (specs `cargo_buy_spec`).
+  - R17: `/wagonpost` buy / call / stow, `nearestPost` in fh_trade, one live wagon rule, stow reach (specs).
+  - R18: carrot / potato / corn at $3 in fh_trade supplies.
+  - R19: OWNER-TESTS `## Roads` steps 36-48 as a non-admin player; this SPEC + TASKS. Venv specs green;
+    `vs log decision "roads-04 playtest-ready <hash>"`.
 
 ## Dependencies / requests
 - @progression R8r: add `wagon_t3 = { region_id = 'heartlands', min_tier = 3 }` to fh_progression config. Until it

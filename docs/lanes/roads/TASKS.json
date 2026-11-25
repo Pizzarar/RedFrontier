@@ -196,6 +196,49 @@
       "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
       "status": "in_progress",
       "branch": "roads-r15"
+    },
+    {
+      "id": "R16",
+      "goal": "roads-04: owned wagons fh_wagons migration 0021 + buyWagon export",
+      "files": [
+        "server/resources/[fh]"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r16",
+      "sha": "a1c96e3"
+    },
+    {
+      "id": "R17",
+      "goal": "roads-04: wagon post menu buy/call/stow + fh_trade nearestPost",
+      "files": [
+        "server/resources/[fh]"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r17",
+      "sha": "54a1b88"
+    },
+    {
+      "id": "R18",
+      "goal": "roads-04: carrot/potato/corn $3 farm supplies in fh_trade",
+      "files": [
+        "server/resources/[fh]"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r18",
+      "sha": "012e6ef"
+    },
+    {
+      "id": "R19",
+      "goal": "roads-04: OWNER-TESTS steps 36-48 + SPEC/TASKS update",
+      "files": [
+        "server/resources/[fh]"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "in_progress",
+      "branch": "roads-r19"
     }
   ]
 }

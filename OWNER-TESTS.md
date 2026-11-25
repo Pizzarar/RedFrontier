@@ -1331,6 +1331,49 @@ Prereqs (all must be merged before this card is meaningful):
    Expected: `[T2]` and `[T3]` offers reappear on the quest boards and can be accepted normally.
    RESULT:
 
+### roads-04: owned wagons + farm supplies
+
+Run as a NON-admin player (no `/fh_wagon`). Money = your cash. Prices: t1 $150, t2 $600, t3 $1800 (`fh_cargo` `Config.Prices`). Menu command: `/wagonpost` (ox_lib menu; the server reads your position, nothing positional comes from the client). Rep state coming in: after step 34 heartlands rep is 400 (tier 3) (33 restored it to 100, 34 added 300; step 35 does not touch rep). Step 36 sets it back to a clean tier 1 first.
+36. Prepare a clean tier 1 for the rep-gate steps. From the server console: `fh_rep_region <yourId> heartlands -400` (delta: rep 400 -> 0 = tier 1). Stand at the Valentine trade post, note your cash, run `/wagonpost`.
+   Expected: menu titled with the post label, options: Buy a wagon, Stow my wagon (disabled, no wagon out). No Call rows yet (nothing owned).
+   RESULT:
+37. Buy t1. Menu -> Buy a wagon -> Cart ($150).
+   Expected: notify "Wagon bought."; cash drops by exactly $150; one `fh_ledger` charge row `wagon_buy`; the menu now shows `Call Cart` and Cart as `(owned)`.
+   RESULT:
+38. Call t1 and load cargo. Menu -> Call Cart.
+   Expected: "Wagon on its way."; a cart spawns ahead of you (wait for it to arrive; acting early says "Your wagon is still arriving."). Put an item in it (load cargo from your backpack as in the M4 steps).
+   RESULT:
+39. Drive off, come back, Stow. Drive the cart away and back into the post area, run `/wagonpost`, Stow my wagon.
+   Expected: "Wagon stowed. Cargo kept."; the cart entity despawns.
+   RESULT:
+40. Cargo survives. `/wagonpost` -> Call Cart again.
+   Expected: the cart returns carrying the same cargo from step 38 (stash id `fh:wagon:<citizenid>:t1` is deterministic).
+   RESULT:
+41. Buy again. Stow, then `/wagonpost` -> Buy a wagon: the Cart row is disabled ("Owned"). Also force it from the console client with `TriggerServerEvent('fh:cargo:menu_action', {action='buy', tier='t1'})`.
+   Expected: "You already own that wagon."; cash unchanged (or charged then refunded, with a `wagon_buy_refund` credit row, if two buys raced). No second row.
+   RESULT:
+42. Stow far from the post. Call the cart, drive it more than ~10 m beyond the post radius, walk back to the post (or stay at the post), `/wagonpost` -> Stow my wagon.
+   Expected: "Your wagon is too far from the post." The wagon stays out, cargo untouched.
+   RESULT:
+43. Away from any post. Leave every trade post (200+ m), run `/wagonpost`.
+   Expected: no menu; error "Stand at a trade post first." (`fh_not_at_post`). The same applies to a forced `fh:cargo:menu_action`.
+   RESULT:
+44. t2 refused at tier 1. At the Valentine post with heartlands rep 0 (tier 1) open the menu -> Buy a wagon -> Wagon (t2).
+   Expected: row shows "Locked: ..." and is disabled; a forced buy returns "You have not earned that wagon yet." (`fh_locked`); cash unchanged, no charge row. Rep before: 0 = tier 1.
+   RESULT:
+45. t2 allowed at tier 2. From the server console: `fh_rep_region <yourId> heartlands 100` (delta: rep 0 -> 100 = tier 2). Menu -> Buy a wagon -> Wagon ($600; make sure you have the cash).
+   Expected: "Wagon bought."; cash drops $600; `Call Wagon` appears. Rep after: 100 = tier 2.
+   RESULT:
+46. One live wagon rule. With the cart from step 40 still out, menu -> Call Wagon (t2). (The Call rows are greyed out while a wagon is live, so force it if needed: `TriggerServerEvent('fh:cargo:menu_action', {action='call', tier='t2'})`.)
+   Expected: refused "You already have a wagon out. Stow it first." (`fh_wagon_live`, detail t1). Nothing replaces the cart and no cargo is lost. Stow the cart, then Call Wagon: the t2 wagon spawns (it also still passes the `wagon_t2` rep gate).
+   RESULT:
+47. Farm supplies. At a post run `/tradebuy carrot 2`, `/tradebuy potato 2`, `/tradebuy corn 2` (or the `/tradepost` screen).
+   Expected: each buy costs $3 per unit ($6 per command), the items land in the backpack (one `trade_buy:<item>` charge row each). No sell price for them anywhere.
+   RESULT:
+48. Restore rep. From the server console: `fh_rep_region <yourId> heartlands 300` (delta: rep 100 -> 400 = tier 3, the state the card was in after step 34), or leave it at 100 if you are done.
+   Expected: rep matches your choice. Stow any wagon you left out.
+   RESULT:
+
 ## A-life: camp ownership (fh_alife, fh_zones)
 
 A-life camp ownership (plan a-life-01): a cleared camp flips to the region's law faction, which stops it waking, changes
