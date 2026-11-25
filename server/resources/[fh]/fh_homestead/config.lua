@@ -79,6 +79,19 @@ FhHomesteadConfig = {
     -- (best-valued first) count per wall tier.
     trophyComfortCap = 20,
     trophyMaxByWallTier = { [1] = 6 },
+    -- H18/H19: garden crops and defaults (the 'garden' build slot is added in H19).
+    -- Seeds (rsg-core/shared/items.lua:185-191) map to harvested veg items (items.lua:89, 141, 149).
+    -- Per-crop growthSeconds / yield are optional overrides over the garden defaults.
+    garden = {
+        beds = 3,
+        growthSeconds = 7200,
+        yield = 3,
+        crops = {
+            seedcarrot = { item = 'carrot' },
+            seedpotato = { item = 'potato' },
+            seedcorn   = { item = 'corn' },
+        },
+    },
     -- H2: build materials, registered with exports.fh_core:registerItems from fh_homestead ONLY (full §4.1 defs).
     -- Materials are taken from the plot's main chest (fh:chest:<plot>:1) when a slot is built. Weights in grams.
     buildItems = {
