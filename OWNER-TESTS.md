@@ -617,14 +617,23 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    Also: fh_quests starts with no ox_lib or script errors in the server console (ox_lib dependency removed).
    RESULT:
 2. Board. Run `/jobs` (it works anywhere; the board spot/prop is at about -297, 795, 118).
-   The board region is picked automatically from where you stand (`/jobs` uses the nearest enabled board spot in `fh_quests/client/board.lua`; there is no region selector). Enabled regions today: heartlands, scarlett_meadows, bayou_nwa, great_plains (`FhRegions.isEnabled`); only heartlands and scarlett_meadows have a board spot (Rhodes board at about 1288, -1278, 77, unverified) and only heartlands has job templates, so the Rhodes board answers with an empty list (no offers) and bayou_nwa/great_plains have no board and no offers. Standing anywhere else, `/jobs` falls back to the nearest enabled spot. The Cormier and Ashby family steps (12b/12c) are covered below, not here.
+   The board region is picked automatically from where you stand (`/jobs` uses the nearest enabled board spot in `fh_quests/client/board.lua`; there is no region selector). Enabled regions today: heartlands, scarlett_meadows, bayou_nwa, great_plains (`FhRegions.isEnabled`; `enabled = true` at `fh_core/shared/regions.lua:43,61,78,194`). Each has a board spot (`fh_quests/shared/board_spots.lua:6-17`: Valentine about -297, 795, 118; Rhodes about 1288, -1278, 77; near Saint Denis about 2695, -1448, 45; near Blackwater about -859, -1338, 44; all but Valentine TODO-verify-in-game, `board_spots.lua:10,12`) and job templates (`fh_quests/data/regions/<region>.lua`: hunt, camps, bounties, supply, surveys, escorts, rescues), so each enabled board offers 3-5 jobs of its own region. Disabled regions' spots are skipped (`board_spots.lua:67-73`). Standing anywhere else, `/jobs` falls back to the nearest enabled spot. The Cormier and Ashby family steps (12b/12c) are covered below, not here.
    Expected: 3-5 Heartlands offers (pelt requests, "Clear out: Heartlands outlaw camp", wanted NPCs), each with a reward and an Accept button.
    Accept a hunt offer: its row shows `Accepted` instead of the button and an inline notice confirms. Abandon it in `/journal`: click
    Abandon, then click the `Confirm abandon?` button a second time; the job leaves the journal and its offer is selectable on the board again.
    RESULT:
-3. hunt_request. Take a pelt offer from step 2 and note its title (animal and stars, e.g. 2-star wolf). First sell a pelt of
-   another animal with enough stars at the trapper (e.g. a deer pelt for a wolf request): the job stays in My active jobs and
-   no `quest:` row is paid. Then sell a pelt of that animal and quality (or better).
+3. hunt_request. Take a pelt offer from step 2 and note its title (animal and stars, e.g. 2-star wolf). A hunt job counts only a pelt
+   sold at a trapper in the board's own region (idea-902b: `where.region_id`, `fh_quests/shared/jobtypes/hunt_request.lua:38`;
+   fh_hunting emits the selling trapper's region, `fh_hunting/shared/sell.lua:218-221`). Trappers (one per region, fh_hunting data):
+   Heartlands "Trapper" at -299, 792, 118.2 (`fh_hunting/data/legendaries/heartlands.lua:16`); "Scarlett Meadows Trapper" at
+   1265, -1305, 77 (`scarlett_meadows.lua:15`); "Bayou Nwa Trapper" at 2175, -1120, 25 (`bayou_nwa.lua:15`); "Great Plains Trapper"
+   at -865, -1335, 44 (`great_plains.lua:15`). The three non-Heartlands coords are TODO-verify-in-game (marked so by @hunting in
+   those files); a trapper in a disabled region refuses with `The trapper here is not buying yet.` (`fh_region_closed`, `sell.lua:23`).
+   For a Heartlands job: first sell a pelt of another animal with enough stars at the Heartlands trapper (e.g. a deer pelt for a
+   wolf request): the job stays in My active jobs and no `quest:` row is paid. Then sell a matching pelt (animal and quality or
+   better) at the Scarlett Meadows Trapper: the trapper pays the pelt price, but the job stays in My active jobs and no `quest:`
+   row is paid (wrong region; if that trapper cannot be found at the unverified coords, mark this half `SKIP` and report the
+   coords). Then sell a matching pelt at the Heartlands trapper.
    Expected: the job leaves My active jobs and pays its money once (+1 rep); the newest `fh_ledger` pay row has reason
    `quest:job:hunt_request:hunt_<region>_<animal>_<stars>star` (e.g. `quest:job:hunt_request:hunt_heartlands_wolf_2star`).
    A job accepted before idea-902 and finished after it keeps its old reason (`quest:job:hunt_request:wolf_2star`). Sell a second matching pelt: no
@@ -760,7 +769,7 @@ Reward scaling by offer min_tier (1.0x at tier 1, 1.5x at tier 2, 2.25x at tier 
     - For "Wanted: Harlan Voss": ride to Harlan Voss (about 510, 260, 92; `heartlands.lua:19`) and eliminate him. Payout is $66 (floor(44 * 1.5 + 0.5) = $66, base was $44) and +5 rep (floor(3 * 1.5 + 0.5) = 5, base was 3 rep), ledger reason `quest:job:bounty:bounty_harlan_voss`.
     - (Or for "Clear out: Dakota South camp": clear camp `heartlands_t2_01` — stash at vector3(600.0, 200.0, 90.0), peds around 595..606, 195..204, 90.0 per `fh_zones/config.lua:112-135` — from inside its activationRadius of 45.0 m. Payout is $78 (floor(52 * 1.5 + 0.5) = $78, base was $52) and +6 rep (floor(4 * 1.5 + 0.5) = 6, base was 4 rep), ledger reason `quest:job:camp_clear:camp_heartlands_t2_01`.)
     - (Or for "Supply run: 3x trade_whiskey": sell 3 trade_whiskey at valentine_post; `heartlands.lua:25`. Payout is $39 (floor(26 * 1.5 + 0.5) = $39, base was $26) and +3 rep (floor(2 * 1.5 + 0.5) = 3, base was 2 rep), ledger reason `quest:job:supply_run:supply_valentine_post_trade_whiskey`.)
-    - (Or for "Pelt wanted: 3-star elk": sell a 3-star elk pelt; `heartlands.lua:7`. Payout is $63 (floor(42 * 1.5 + 0.5) = $63, base was $42) and +2 rep (floor(1 * 1.5 + 0.5) = 2, base was 1 rep), ledger reason `quest:job:hunt_request:hunt_heartlands_elk_3star`.)
+    - (Or for "Pelt wanted: 3-star elk": sell a 3-star elk pelt at the Heartlands trapper (-299, 792, 118.2, `fh_hunting/data/legendaries/heartlands.lua:16`; a sale at another region's trapper does not count); `heartlands.lua:7`. Payout is $63 (floor(42 * 1.5 + 0.5) = $63, base was $42) and +2 rep (floor(1 * 1.5 + 0.5) = 2, base was 1 rep), ledger reason `quest:job:hunt_request:hunt_heartlands_elk_3star`.)
     In all cases, payment occurs exactly once via `fh_economy`, scaled by 1.5x. Even if the player's rep subsequently drops or increases while the job is active, the payout remains 1.5x because scaled rewards are frozen in `progress.job` at accept.
     RESULT:
 
@@ -770,22 +779,26 @@ keys it `job:hunt_request:hunt_<region>_<animal>_<N>star` and re-keys an old row
 load (`server/main.lua:338`), so a relog is enough (a server restart also works). On a server already on the new build,
 plant an old row by hand with the SQL below (DevPC DB is MariaDB 11.4, `tools/setup-server.ps1:8`; columns from
 `server/migrations/0007_quest_state.sql`). `<cid>` = your citizenid (`players` table). Use the "Pelt wanted: 2-star wolf"
-offer: heartlands, $16 and +1 rep, tier 1, so no scaling (`data/regions/heartlands.lua:6`, `shared/jobtypes/hunt_request.lua:31,36`).
+offer: heartlands, $16 and +1 rep, tier 1, so no scaling (`data/regions/heartlands.lua:6`, `shared/jobtypes/hunt_request.lua:31,39`).
 If it is not on the board this hour, wait for the next rotation (step 19).
 
-Plant SQL (disconnect first; it turns your new-format wolf job back into the pre-idea-902 form, id and snapshot key):
-`UPDATE fh_quest_state SET quest_id = 'job:hunt_request:wolf_2star', progress = JSON_SET(progress, '$.job.key', 'wolf_2star') WHERE citizenid = '<cid>' AND quest_id = 'job:hunt_request:hunt_heartlands_wolf_2star';` -> 1 row.
+Plant SQL (disconnect first; it turns your new-format wolf job back into the pre-idea-902 form: id, snapshot key, and the
+unscoped match a pre-idea-902b job stored, i.e. no `where.region_id`):
+`UPDATE fh_quest_state SET quest_id = 'job:hunt_request:wolf_2star', progress = JSON_REMOVE(JSON_SET(progress, '$.job.key', 'wolf_2star'), '$.job.where.region_id') WHERE citizenid = '<cid>' AND quest_id = 'job:hunt_request:hunt_heartlands_wolf_2star';` -> 1 row.
 Check SQL (run after the plant, and again after you rejoin):
-`SELECT quest_id, status, cooldown_until, JSON_VALUE(progress, '$.job.key') AS job_key, JSON_VALUE(progress, '$.job.legacy_key') AS legacy_key FROM fh_quest_state WHERE citizenid = '<cid>' AND quest_id LIKE 'job:hunt_request:%';`
+`SELECT quest_id, status, cooldown_until, JSON_VALUE(progress, '$.job.key') AS job_key, JSON_VALUE(progress, '$.job.legacy_key') AS legacy_key, JSON_VALUE(progress, '$.job.where.region_id.eq') AS where_region FROM fh_quest_state WHERE citizenid = '<cid>' AND quest_id LIKE 'job:hunt_request:%';`
+A re-keyed legacy job keeps its stored (unscoped) match, so it counts a matching pelt sold at any open trapper; only a fresh accept
+is region-scoped.
 
 21. Legacy active job. Accept "Pelt wanted: 2-star wolf" and disconnect. Run the plant SQL; the check SQL shows
-    `job:hunt_request:wolf_2star`, `active`, `job_key` = `wolf_2star`, `legacy_key` = NULL. Rejoin.
+    `job:hunt_request:wolf_2star`, `active`, `job_key` = `wolf_2star`, `legacy_key` = NULL, `where_region` = NULL. Rejoin.
     Expected: one console line `[fh_quests] legacy row <cid>/job:hunt_request:wolf_2star re-keyed to job:hunt_request:hunt_heartlands_wolf_2star`
     (`server/main.lua:159`) and no `legacy re-key ... failed` or `legacy row ... kept` line (`:140`, `:144`, `:154`). The check SQL now
-    shows only `job:hunt_request:hunt_heartlands_wolf_2star`, `active`, `job_key` = `hunt_heartlands_wolf_2star`, `legacy_key` = `wolf_2star`
+    shows only `job:hunt_request:hunt_heartlands_wolf_2star`, `active`, `job_key` = `hunt_heartlands_wolf_2star`, `legacy_key` = `wolf_2star`,
+    `where_region` = NULL (still unscoped)
     (the old row is gone: one transaction writes the new row and deletes the old, `server/main.lua:149-152`). `/journal` still lists
     "Pelt wanted: 2-star wolf", and if the offer is on `/jobs` its row shows `Accepted` (`server/main.lua:286`). Sell a wolf pelt of 2+
-    stars at the trapper.
+    stars at the Heartlands trapper (-299, 792, 118.2, `fh_hunting/data/legendaries/heartlands.lua:16`).
     Expected: the job completes and pays $16 and +1 rep once. The newest `fh_ledger` rows for you are `pay` 16 and `rep` 1, both with
     the OLD reason `quest:job:hunt_request:wolf_2star` (a re-keyed job keeps its old ledger reason until it is accepted again:
     `shared/jobs.lua:115`, `:196`). Sell a second matching pelt: no second payment, no second `quest:` row.
@@ -795,7 +808,9 @@ Check SQL (run after the plant, and again after you rejoin):
     Expected: the same `re-keyed to` console line as step 21; the check SQL shows the new id, `done`, the same `cooldown_until`.
     With the wolf 2-star offer on `/jobs`, click Accept: refused with `You took that job recently. Try another.`
     (`fh_quest_cooldown`, `shared/engine.lua:252`, `server/ui_text.lua:14`). After `cooldown_until` has passed, Accept works and the
-    next completion pays under the new reason `quest:job:hunt_request:hunt_heartlands_wolf_2star` (the check SQL shows `legacy_key` = NULL).
+    next completion (a 2+ star wolf pelt sold at the Heartlands trapper, -299, 792, 118.2, `fh_hunting/data/legendaries/heartlands.lua:16`)
+    pays under the new reason `quest:job:hunt_request:hunt_heartlands_wolf_2star`; after that accept the check SQL shows `legacy_key` = NULL and
+    `where_region` = `heartlands` (a fresh accept is region-scoped, so a wolf pelt sold at another region's trapper does not count).
     RESULT:
 
 Known limits (not failures):
