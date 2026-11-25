@@ -15,10 +15,11 @@ M.screens = {
     dialogue    = 'quests',    -- giver dialogue: pages + quest offer (@quests lane)
     station     = 'homestead', -- station menus (L1 stations; L5 crafting may take over later)
     fence       = 'fence',     -- fence shop (fh_fence owns it)
+    survival    = 'survival',  -- survival needs HUD (passive, fh_survival state; idea-854)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
-M.passive = { buffs = true, heat = true, bags = true }
+M.passive = { buffs = true, heat = true, bags = true, survival = true }
 
 M.limits = {
     actionPattern = '^[a-z_]+$', -- Lua has no {n,m}; length 1..maxAction is checked separately

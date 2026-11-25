@@ -21,6 +21,11 @@ html, body { margin: 0; background: transparent; font: 16px/1.45 Georgia, 'Times
   border: 2px solid var(--edge); box-shadow: 2px 2px 0 rgba(0,0,0,.4); pointer-events: none; }
 .hud-buffs { top: 16px; }
 .hud-bags { bottom: 16px; }
+/* Survival needs (passive HUD, idea-854): right column, directly below the buff card. Buffs cap at 8 rows
+   (M.maxBuffs), so the buff card ends ~236px from the top (16px top + ~26px title + 8*22.5px rows + ~10px padding
+   + 4px border); 252px clears it with a little margin. Clear of the bags card (bottom-right), the left heat card
+   and rsg-chat. */
+.hud-survival { top: 252px; }
 .hud-title { margin: 0; padding: 3px 10px; font-size: 14px; color: #fff8e8; text-shadow: 0 1px 0 #000;
   background: linear-gradient(100deg, var(--sepia-a), var(--sepia-b), var(--sepia-a)); background-size: 300% 100%;
   animation: drift 40s ease-in-out infinite alternate; }

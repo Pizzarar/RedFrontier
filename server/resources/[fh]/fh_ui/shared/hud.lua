@@ -114,6 +114,29 @@ function M.view(rows, now)
     return out
 end
 
+-- fh:survival:state payload -> survival widget data: { level = 0..3 (clamped), rows = { { id, label } } }. One
+-- short label per missing need, in the server's fixed order; unknown keys and unknown need ids are ignored. The
+-- active needs (well_fed, hydrated, rested, clean, warm) are buffs and already show in the buff HUD, so this widget
+-- only lists what is MISSING. The NUI renders a "Sluggish N/3" header when level > 0 and hides the widget when
+-- level == 0 and rows is empty.
+M.needLabel = { food = 'Hungry', water = 'Thirsty', rest = 'Tired', clean = 'Dirty', warmth = 'Cold' }
+
+function M.survivalRows(payload)
+    local out = { level = 0, rows = {} }
+    if type(payload) ~= 'table' then return out end
+    if finite(payload.level) then
+        out.level = math.max(0, math.min(3, math.floor(payload.level)))
+    end
+    if type(payload.missing) == 'table' then
+        for _, id in ipairs(payload.missing) do
+            if type(id) == 'string' and M.needLabel[id] then
+                out.rows[#out.rows + 1] = { id = id, label = M.needLabel[id] }
+            end
+        end
+    end
+    return out
+end
+
 if GetCurrentResourceName then
     FhUiHud = M
 else

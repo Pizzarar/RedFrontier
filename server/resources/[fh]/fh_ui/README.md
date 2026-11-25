@@ -13,7 +13,7 @@ authority**: it renders what a lane sends and relays validated player actions ba
 Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = {...} })`.
 
 ## Focus rules
-- Passive HUD widgets (`FhUiRelay.passive`: `buffs`, `heat`, `bags`) never take focus. Every other screen is interactive and
+- Passive HUD widgets (`FhUiRelay.passive`: `buffs`, `heat`, `bags`, `survival`) never take focus. Every other screen is interactive and
   takes `SetNuiFocus(true, true)`.
 - Esc or the `close` NUI callback closes interactive screens and releases focus. Esc (every interactive screen it
   closes) and a named close both relay action `close` to the owning lane (`fh:<lane>:ui_close`, payload `{}`).
@@ -38,6 +38,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `dialogue` | `quests` | interactive |
 | `station` | `homestead` | interactive |
 | `fence` | `fence` | interactive |
+| `survival` | `survival` | passive (idea-854) |
 
 Action must match `^[a-z_]{1,32}$`. Payload must be a table of plain data (strings, finite numbers, booleans, nested
 tables with string/number keys), <= 2048 bytes estimated, depth <= 4. Rate limit: token bucket per player, 5/s, burst 10.
@@ -87,6 +88,14 @@ Fed by `fh:death:bags` plus the `fh:death:bags` callback fetch at start. `open/u
 ### heat (passive)
 `open/update` data `{ factions = { { id, label, level (0-100), tier } }, lay_low = { active, seconds_left? } }`. Producer (future
 `fh_heat`) re-sends via `fh:ui:update` on `fh:heat:changed`. No actions.
+
+### survival (passive HUD, idea-854)
+Fed by fh_ui's own client listener on `fh:survival:state` (no lane code calls `fh:ui:open` for it; fh_survival emits
+`{ level = 0..3, missing = { 'food', 'water', 'rest', 'clean', 'warmth' } }`). `open/update` data
+`{ level = 0..3, rows = { { id, label } } }`: `level` is the sluggish level (clamped 0..3), `rows` lists only MISSING
+needs in the server's fixed order with short labels (`Hungry`, `Thirsty`, `Tired`, `Dirty`, `Cold`). The NUI shows a
+`Sluggish N/3` header when `level > 0` and hides the widget when `level == 0` and `rows` is empty. Active needs are
+buffs and already show in the buff widget, so they are not duplicated here. No actions. Never takes focus.
 
 ### insurance (dialog, owner `death`)
 `open` data `{ title, fee, delay_minutes, target_chest, note? }`. Actions: `confirm` `{}` (button or Enter), `cancel` `{}`; Esc relays `close`.
