@@ -87,7 +87,9 @@ function M.scaleByTier(rewards, tier, multipliers)
     return out
 end
 
-function M.reason(def) return 'quest:' .. def.id end
+---Ledger reason of a def's reward: 'quest:<id>', or 'quest:<reason_id>' for a job accepted under a pre-rename key
+---(jobs.def sets reason_id from progress.job.legacy_key) so a crash-recovery lookup finds its fh_ledger rows.
+function M.reason(def) return 'quest:' .. (def.reason_id or def.id) end
 
 ---Ordered reward parts of a def.
 ---@return table parts  { { key, kind = 'pay'|'rep'|'item', amount?, delta?, region_id?, name?, info? }... }

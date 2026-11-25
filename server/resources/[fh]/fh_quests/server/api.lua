@@ -103,7 +103,7 @@ local function registerQuest(def)
     if type(def.id) == 'string' and def.id:sub(1, #Jobs.PREFIX) == Jobs.PREFIX then return false, 'fh_reserved_id' end
     local ok, err = E.validate(def, { regions = regions() })
     if not ok then return false, err end
-    def.job_type = nil -- only job defs (jobs.def) carry it
+    def.job_type, def.reason_id = nil, nil -- only job defs (jobs.def) carry them
     Q.defs[def.id] = def
     return true
 end
@@ -147,6 +147,10 @@ end
 
 local function abandon(src, quest_id)
     return withPlayer(src, function(cid, states)
+        -- A journal synced before a legacy row was re-keyed on load still sends the old id (jobs.migratedId).
+        if type(quest_id) == 'string' and not states[quest_id] then
+            quest_id = Jobs.migratedId(states, quest_id, regions()) or quest_id
+        end
         local st = type(quest_id) == 'string' and states[quest_id] or nil
         local def = st and Q.defOf(quest_id, st)
         if not def or st.status ~= 'active' then return false, 'fh_not_active' end

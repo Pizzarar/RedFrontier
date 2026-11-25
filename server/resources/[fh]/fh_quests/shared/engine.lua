@@ -229,7 +229,8 @@ end
 local function rewardEffect(def, state)
     local r = def.rewards or {}
     return effect('reward', def, state, {
-        reason = 'quest:' .. def.id, region_id = def.region_id, money = r.money, rep = r.rep, items = r.items,
+        reason = 'quest:' .. (def.reason_id or def.id), region_id = def.region_id,
+        money = r.money, rep = r.rep, items = r.items,
     })
 end
 

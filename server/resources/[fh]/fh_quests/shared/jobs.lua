@@ -110,6 +110,9 @@ function M.def(snap, opts)
     local def = {
         id = M.questId(snap.job_type, snap.key), kind = 'job', title = snap.title, region_id = snap.region_id,
         job_type = snap.job_type,
+        -- A job accepted under a pre-rename key keeps that id as its ledger reason (rewards.reason) until it is
+        -- accepted again: an in-flight payout is reconciled against fh_ledger rows written under the old reason.
+        reason_id = type(snap.legacy_key) == 'string' and M.questId(snap.job_type, snap.legacy_key) or nil,
         ['repeat'] = { cooldown_min = snap.cooldown_min or M.DEFAULT_COOLDOWN_MIN },
         steps = { { on = on, where = snap.where, count = snap.count, text = snap.text or snap.title } },
         rewards = snap.rewards,
@@ -117,6 +120,93 @@ function M.def(snap, opts)
     local ok, err = engine().validate(def, { regions = (opts or {}).regions, events = events })
     if not ok then return nil, err end
     return def
+end
+
+-- ---------------------------------------------------------------- legacy key migration (idea-902)
+-- hunt_request keys were '<animal>_<N>star' (not region-scoped) until idea-902; they are now
+-- 'hunt_<region_id>_<animal>_<N>star' (shared/jobtypes/hunt_request.lua). A row saved under the old id is re-keyed
+-- when it is loaded (server/main.lua Q.load persists the result: UPSERT the new row + DELETE the old one in one
+-- transaction). The region comes from the row's own accepted-offer snapshot (progress.job.region_id: the board the
+-- offer was accepted on), so an old key that several regions build can never be mis-assigned. Only a row without a
+-- usable snapshot falls back to opts.regionOf(old key) (current data, unique keys only); no region = row untouched.
+M.LEGACY_PATTERN = { hunt_request = '^[a-z0-9_]+_%d+star$' }
+
+local function isNewKey(job_type, key, regions)
+    if job_type ~= 'hunt_request' then return false end
+    if not regions then return key:sub(1, 5) == 'hunt_' end
+    for id in pairs(regions) do
+        local prefix = 'hunt_' .. id .. '_'
+        if key:sub(1, #prefix) == prefix then return true end
+    end
+    return false
+end
+
+---Is quest_id a pre-idea-902 job id? Returns job_type, old key.
+---@param regions table|nil  { [region_id] = ... } (FhRegions.regions); a key 'hunt_<known region>_...' is new
+function M.legacyId(quest_id, regions)
+    local jt, key = M.parseId(quest_id)
+    local pat = jt and M.LEGACY_PATTERN[jt]
+    if not pat or not key:match(pat) or isNewKey(jt, key, regions) then return nil end
+    return jt, key
+end
+
+---The current key of a legacy key in region_id.
+function M.migrateKey(job_type, region_id, old_key)
+    if job_type == 'hunt_request' then return 'hunt_' .. region_id .. '_' .. old_key end
+    return nil
+end
+
+local function deepCopy(v, depth)
+    depth = depth or 0
+    if type(v) ~= 'table' or depth > 8 then return v end
+    local out = {}
+    for k, x in pairs(v) do out[k] = deepCopy(x, depth + 1) end
+    return out
+end
+
+---Re-key one loaded state.
+---opts = { regions = FhRegions.regions, regionOf = function(job_type, old_key) -> region|nil }.
+---Returns nil when the state is not a legacy row; nil, err when it is but cannot be re-keyed (left as is);
+---else a NEW state (quest_id, progress.job.key re-keyed, progress.job.legacy_key = old key; status, step, counts,
+---completions, cooldown_until and every reward marker carried over unchanged).
+---@return table|nil state, string|nil err
+function M.migrateLegacy(state, opts)
+    opts = opts or {}
+    if type(state) ~= 'table' then return nil end
+    local jt, oldKey = M.legacyId(state.quest_id, opts.regions)
+    if not jt then return nil end
+    local snap = type(state.progress) == 'table' and state.progress.job or nil
+    local region_id = nil
+    if type(snap) == 'table' and snap.job_type == jt and snap.key == oldKey
+        and type(snap.region_id) == 'string' and snap.region_id ~= '' then
+        region_id = snap.region_id
+    else
+        snap = nil
+        if type(opts.regionOf) == 'function' then region_id = opts.regionOf(jt, oldKey) end
+        if type(region_id) ~= 'string' or region_id == '' then return nil, 'fh_legacy_region_unknown' end
+    end
+    if opts.regions and not opts.regions[region_id] then return nil, 'fh_legacy_bad_region' end
+    local newKey = M.migrateKey(jt, region_id, oldKey)
+    local newId = newKey and M.questId(jt, newKey)
+    if not newId or #newId > engine().LIMITS.idLen then return nil, 'fh_legacy_id_too_long' end
+    local s = deepCopy(state)
+    s.quest_id = newId
+    if snap then
+        s.progress.job.key = newKey
+        s.progress.job.legacy_key = oldKey
+    end
+    return s
+end
+
+---The state id a client-sent legacy quest id now lives under (a journal synced before the re-key), or nil.
+function M.migratedId(states, quest_id, regions)
+    local jt, oldKey = M.legacyId(quest_id, regions)
+    if not jt then return nil end
+    for qid, st in pairs(states or {}) do
+        local snap = type(st) == 'table' and type(st.progress) == 'table' and st.progress.job or nil
+        if type(snap) == 'table' and snap.job_type == jt and snap.legacy_key == oldKey then return qid end
+    end
+    return nil
 end
 
 if GetCurrentResourceName then

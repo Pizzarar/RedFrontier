@@ -594,7 +594,8 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
    another animal with enough stars at the trapper (e.g. a deer pelt for a wolf request): the job stays in My active jobs and
    no `quest:` row is paid. Then sell a pelt of that animal and quality (or better).
    Expected: the job leaves My active jobs and pays its money once (+1 rep); the newest `fh_ledger` pay row has reason
-   `quest:job:hunt_request:<animal>_<stars>star` (e.g. `quest:job:hunt_request:wolf_2star`). Sell a second matching pelt: no
+   `quest:job:hunt_request:hunt_<region>_<animal>_<stars>star` (e.g. `quest:job:hunt_request:hunt_heartlands_wolf_2star`).
+   A job accepted before idea-902 and finished after it keeps its old reason (`quest:job:hunt_request:wolf_2star`). Sell a second matching pelt: no
    second payment and no second `quest:` row (no double reward).
    RESULT:
 4. bounty. Find a "Wanted: ..." offer, accept it and ride to the wanted NPC (Silas Crow about -128, 826, 117; Mabel Teague about
@@ -727,7 +728,7 @@ Reward scaling by offer min_tier (1.0x at tier 1, 1.5x at tier 2, 2.25x at tier 
     - For "Wanted: Harlan Voss": ride to Harlan Voss (about 510, 260, 92; `heartlands.lua:19`) and eliminate him. Payout is $66 (floor(44 * 1.5 + 0.5) = $66, base was $44) and +5 rep (floor(3 * 1.5 + 0.5) = 5, base was 3 rep), ledger reason `quest:job:bounty:bounty_harlan_voss`.
     - (Or for "Clear out: Dakota South camp": clear camp `heartlands_t2_01` — stash at vector3(600.0, 200.0, 90.0), peds around 595..606, 195..204, 90.0 per `fh_zones/config.lua:112-135` — from inside its activationRadius of 45.0 m. Payout is $78 (floor(52 * 1.5 + 0.5) = $78, base was $52) and +6 rep (floor(4 * 1.5 + 0.5) = 6, base was 4 rep), ledger reason `quest:job:camp_clear:camp_heartlands_t2_01`.)
     - (Or for "Supply run: 3x trade_whiskey": sell 3 trade_whiskey at valentine_post; `heartlands.lua:25`. Payout is $39 (floor(26 * 1.5 + 0.5) = $39, base was $26) and +3 rep (floor(2 * 1.5 + 0.5) = 3, base was 2 rep), ledger reason `quest:job:supply_run:supply_valentine_post_trade_whiskey`.)
-    - (Or for "Pelt wanted: 3-star elk": sell a 3-star elk pelt; `heartlands.lua:7`. Payout is $63 (floor(42 * 1.5 + 0.5) = $63, base was $42) and +2 rep (floor(1 * 1.5 + 0.5) = 2, base was 1 rep), ledger reason `quest:job:hunt_request:elk_3star`.)
+    - (Or for "Pelt wanted: 3-star elk": sell a 3-star elk pelt; `heartlands.lua:7`. Payout is $63 (floor(42 * 1.5 + 0.5) = $63, base was $42) and +2 rep (floor(1 * 1.5 + 0.5) = 2, base was 1 rep), ledger reason `quest:job:hunt_request:hunt_heartlands_elk_3star`.)
     In all cases, payment occurs exactly once via `fh_economy`, scaled by 1.5x. Even if the player's rep subsequently drops or increases while the job is active, the payout remains 1.5x because scaled rewards are frozen in `progress.job` at accept.
     RESULT:
 

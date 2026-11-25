@@ -251,7 +251,12 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 | `bounty` | `fh:quests:bounty_down` (a type event, local server only) | the watched wanted NPC dies; completes the job | `name`, `model`, `coords`, `heading` |
 
 - **`hunt_request`:** `animal` is required: fh_hunting's `pelt_sold` always carries it (Q0b), so a pelt of another
-  animal, or a payload without `animal`, never credits the job.
+  animal, or a payload without `animal`, never credits the job. The offer key is region-scoped,
+  `hunt_<region_id>_<animal>_<N>star` (idea-902; quest id `job:hunt_request:hunt_heartlands_wolf_2star`), so two
+  regions may offer the same animal/stars: each is its own job with its own cooldown and ledger reason. Matching is
+  unchanged (the sale's region is not checked), so one qualifying sale credits every hunt job the player holds that it
+  matches, as two overlapping offers in one region (`deer_1star` / `deer_2star`) always did. Rows saved under the old
+  key `<animal>_<N>star` are re-keyed on load (Persistence, "Legacy job ids").
 - **`camp_clear`:** credit comes from the `participants` list (core idea-614, landed): fh_zones sends the citizenids
   of the players within `activationRadius` when the camp clears (an empty table when there are none), and each of them
   is credited. An empty list credits nobody.
@@ -454,7 +459,7 @@ table argument:
     "expires_at": 1795654800,
     "offers": [
       {
-        "id": "heartlands:498792:hunt_request:wolf_2",
+        "id": "heartlands:498792:hunt_request:hunt_heartlands_wolf_2star",
         "job_type": "hunt_request",
         "title": "Two-star wolf pelt",
         "text": "Sell a 2-star or better wolf pelt.",
@@ -516,6 +521,17 @@ Storage notes:
   unknown `status`, or an empty `citizenid` / `quest_id`, is skipped and logged; unreadable `progress` JSON loads
   as empty progress.
 - Every write is an UPSERT on (`citizenid`, `quest_id`); only a successful write updates the server's cache.
+- **Legacy job ids (idea-902).** `hunt_request` keys were `<animal>_<N>star` (not region-scoped) before idea-902. No
+  SQL migration: `Q.load` re-keys such a row (`jobs.migrateLegacy`) before anything else reads it, and persists the
+  move as one transaction (UPSERT `job:hunt_request:hunt_<region>_<old key>` + DELETE the old row). Status, step,
+  counts, completions, `cooldown_until` and every reward marker carry over, so an active job stays completable, a
+  cooldown keeps blocking the live offer and an owed reward is paid once. The region is the row's own accepted-offer
+  snapshot (`progress.job.region_id`, the board it was accepted on); only a row without one falls back to the current
+  data, and only for an old key exactly one region builds. A row whose region is unknown, or whose new id already
+  exists, is left as is and logged. A failed transaction fails the load (`fh_db`) instead of running with both ids.
+  The re-keyed snapshot keeps `legacy_key`: until that job is accepted again its ledger reason stays
+  `quest:job:hunt_request:<old key>` (an in-flight payout is reconciled against rows written under that reason), and
+  `abandon` accepts the old id from a journal synced before the re-key.
 
 ## Rewards (exactly once)
 
@@ -574,7 +590,8 @@ Storage notes:
   `snapshot` (the `fh:quests:sync` payload).
 
 Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests_rewards`, `quests_store`,
-`quests_journal`, `quests_jobs`, `quests_jobtypes`, `quests_tiers`. `server/main.lua` and `server/api.lua` are thin I/O glue over these.
+`quests_journal`, `quests_jobs`, `quests_jobtypes`, `quests_tiers`, `quests_hunt_rekey` (idea-902 keys + legacy re-key, incl. the
+server load path). `server/main.lua` and `server/api.lua` are thin I/O glue over these.
 
 ## In-game test card
 

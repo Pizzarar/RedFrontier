@@ -107,8 +107,58 @@ function Q.load(cid)
         local st, err = S.fromRow(row, json.decode)
         if st then states[st.quest_id] = st else Q.log('skipping row %s/%s: %s', cid, tostring(row.quest_id), err) end
     end
+    if not Q.migrateLegacy(cid, states) then return nil, 'fh_db' end
     Q.cache[cid] = states
     return states
+end
+
+-- Legacy job ids (idea-902: hunt_request keys were not region-scoped). Re-keyed here, on every load, before any
+-- engine / payout / sync sees the rows; see shared/jobs.lua migrateLegacy for the rules.
+Q.DELETE_ROW = 'DELETE FROM fh_quest_state WHERE citizenid = ? AND quest_id = ?'
+
+local legacyIndex = nil -- old hunt key -> region_id | false (current data; fallback for rows without a snapshot)
+local function legacyRegionOf(job_type, old_key)
+    if job_type ~= 'hunt_request' then return nil end
+    local JT = FhQuestsJobTypes
+    if not legacyIndex and type(JT) == 'table' and type(JT.legacyHuntRegions) == 'function' then
+        legacyIndex = JT.legacyHuntRegions()
+    end
+    return legacyIndex and legacyIndex[old_key] or nil
+end
+
+---Re-key every legacy row of states (in place) and persist each one: UPSERT the new row and DELETE the old one in a
+---single transaction, so the DB never holds both or neither. Fails closed: a failed write returns false and the
+---caller refuses the load (fh_db) rather than run a session where the old row and a new accept could coexist.
+---A legacy row whose new id is already present, or whose region cannot be found, is left as is and logged.
+---Call under Q.locked.
+---@return boolean ok
+function Q.migrateLegacy(cid, states)
+    local moves = {}
+    for qid, st in pairs(states) do
+        local after, err = Jobs.migrateLegacy(st, { regions = FhRegions.regions, regionOf = legacyRegionOf })
+        if after and states[after.quest_id] then
+            Q.log('^3legacy row %s/%s kept: %s already exists^7', cid, qid, after.quest_id)
+        elseif after then
+            moves[#moves + 1] = { from = qid, to = after }
+        elseif err then
+            Q.log('^3legacy row %s/%s kept: %s^7', cid, qid, err)
+        end
+    end
+    table.sort(moves, function(a, b) return a.from < b.from end)
+    for _, m in ipairs(moves) do
+        local ok, committed = pcall(MySQL.transaction.await, {
+            { query = S.UPSERT, values = S.params(m.to, json.encode) },
+            { query = Q.DELETE_ROW, values = { cid, m.from } },
+        })
+        if not ok or not committed then
+            Q.log('^1legacy re-key %s/%s -> %s failed: %s^7', cid, m.from, m.to.quest_id, tostring(committed))
+            return false
+        end
+        states[m.from] = nil
+        states[m.to.quest_id] = m.to
+        Q.log('legacy row %s/%s re-keyed to %s', cid, m.from, m.to.quest_id)
+    end
+    return true
 end
 
 ---Persist one state (UPSERT). Only a successful write updates the cache.
