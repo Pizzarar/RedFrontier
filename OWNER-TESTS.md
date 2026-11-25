@@ -1159,7 +1159,7 @@ Prereqs (all must be merged before this card is meaningful):
    Expected: both refused `fh_wagon: tier_too_low`. `/fh_wagon t1` still spawns a cart. (R8: t2/t3 gate on fh_progression `canUnlock('wagon_t2'|'wagon_t3')`, heartlands tier 2 / tier 3.) Rep stays 0 = tier 1.
    RESULT:
 26. T2 offers + tier 1 accept. From the server console: `fh_trade_shortage scarlett_meadows trade_salt 0.5`, then open the quest board at the heartlands (Valentine) post.
-   Expected: a `[T2] Freight: 15x Salt Sack to scarlett_meadows` offer lists after the T1 offers (`Freight: 10x Salt Sack to scarlett_meadows`); route heartlands -> scarlett_meadows (~2405 m), no `allowSameRegion` needed. Every `[T2]` offer is `locked = true` (shown to everyone; the real gate is at accept). Still at rep 0 = tier 1, accepting the `[T2]` offer is refused `fh_locked` (T2 gate = fh_progression `canUnlock('contracts_t2')`, heartlands tier 2). Rep stays 0 = tier 1.
+   Expected: a `[T2] Freight: 15x Salt Sack to scarlett_meadows` offer lists after the T1 offers (`Freight: 10x Salt Sack to scarlett_meadows`); route heartlands -> scarlett_meadows (~2405 m), no `allowSameRegion` needed. Every `[T2]` offer is `locked = true` (shown to everyone; the real gate is at accept). Still at rep 0 = tier 1, accepting the `[T2]` offer is refused `fh_locked` (T2 gate = regional `getTier(src, origin region) >= 2`, heartlands tier 2). Rep stays 0 = tier 1.
    RESULT:
 27. Raise heartlands rep to tier 2. From the server console: `fh_rep_region <yourId> heartlands 100` (a delta, not an absolute set — fh_progression admin command, `server/main.lua`; rep 0 -> 100 = tier 2).
    Expected: `/fh_wagon t2` now spawns; `/fh_wagon t3` still `fh_wagon: tier_too_low`. Rep now 100 = tier 2.
@@ -1175,6 +1175,34 @@ Prereqs (all must be merged before this card is meaningful):
    RESULT:
 31. fh_progression stopped (fail closed). `stop fh_progression`.
    Expected: `/fh_wagon t2` and `/fh_wagon t3` -> `fh_wagon: fh_locked`; accepting a `[T2]` offer -> `fh_locked`. `/fh_wagon t1` still spawns and a T1 offer still accepts. `ensure fh_progression` to restore. (Rep is 100 = tier 2, but with fh_progression down every gated spawn/accept fails closed.)
+   RESULT:
+
+### M7: regional freight network + T3 contracts (roads-03)
+
+32. Regional freight destinations to Saint Denis and Blackwater. Destinations resolve dynamically from `fh_trade` posts via `FhRegions.posts` (`FhPlaceResolver.resolvePosts`).
+   Destination posts have unverified positions to eyeball, from FhRegions `verified = false`: `saint_denis_post` (bayou_nwa, (2700.0, -1430.0, 45.0)), `blackwater_post` (great_plains, (-865.0, -1350.0, 44.0)), as well as `valentine_post` (heartlands, (-176.0, 630.0, 114.0)) and `rhodes_post` (scarlett_meadows, (1288.0, -1278.0, 77.0)).
+   From Valentine or Rhodes console: `fh_trade_shortage bayou_nwa trade_salt 0.5` and `fh_trade_shortage great_plains trade_salt 0.5`, then open the quest board.
+   Expected: freight offers appear with destinations to Saint Denis (`to_region = 'bayou_nwa'`) and Blackwater (`to_region = 'great_plains'`) based on shortage and route distance. Stand beside your wagon (`/fh_wagon t1` or `/fh_wagon t2`) and accept: cargo loads into the wagon. Haul to the destination trade post delivery radius (`freight.destinationRadius` = 40 m): wagon cargo is removed and the contract completes (`fh:trade:contract_delivered`).
+   RESULT:
+33. Per-region tier gate. Admin set rep so `bayou_nwa` is tier 2 while `heartlands` stays tier 1.
+   From the server console: `fh_rep_region <yourId> bayou_nwa 100` (delta: rep 0 -> 100 = tier 2), leaving heartlands at rep 0 = tier 1.
+   Go to the Saint Denis trade post (`bayou_nwa`), stand beside your t2 wagon (`/fh_wagon t2`) and accept a `[T2]` contract originating from Bayou Nwa. Then travel to the Valentine trade post (`heartlands`) and attempt to accept a `[T2]` contract originating from Heartlands.
+   Expected: Bayou Nwa `[T2]` contract accepts successfully (`getTier(src, 'bayou_nwa') >= 2`). Heartlands `[T2]` contract is refused `fh_locked` (`getTier(src, 'heartlands') < 2`). Confirms the contract tier gate checks rep in the offer's origin region (`from_region`).
+   RESULT:
+34. T3 contract: wagon tier fit and origin tier gate. T3 contracts are configured under `freight.t3` with `minWagonTier 3`, distance-scaled deadline, and gate `getTier >= 3`.
+   At origin region rep tier 2 (e.g. heartlands rep 100), attempt to accept a `[T3]` contract.
+   Expected: refused `fh_locked` (`getTier(src, origin region) < 3`).
+   Raise origin rep to tier 3: `fh_rep_region <yourId> heartlands 300` (delta: rep 100 -> 400 = tier 3).
+   Stand beside a t2 wagon (`/fh_wagon t2`) and attempt to accept the `[T3]` contract.
+   Expected: refused `fh_freight_wagon_too_small` (`minWagonTier 3` required).
+   Spawn a t3 wagon (`/fh_wagon t3`), stand beside it and accept the `[T3]` contract.
+   Expected: accepted successfully. Cargo loads into the t3 wagon; pay scales with the T3 pay multiple.
+   RESULT:
+35. Kill switch (`freight.t2.enabled` / `freight.t3.enabled`).
+   In `server/resources/[fh]/fh_trade/config.lua`, set `freight.t2.enabled = false` and `freight.t3.enabled = false` (or any non-true value), then run `restart fh_trade`. Open the quest board at any trade post.
+   Expected: all `[T2]` and `[T3]` offers are hidden from the board (only T1 offers generate and list). Any previously-listed T2/T3 offer attempted to be accepted is refused immediately with `fh_freight_tier_disabled` (before acquiring the accept lock or calling fh_progression).
+   Restore `freight.t2.enabled = true` and `freight.t3.enabled = true` in config and run `restart fh_trade`.
+   Expected: `[T2]` and `[T3]` offers reappear on the quest boards and can be accepted normally.
    RESULT:
 
 ## A-life: camp ownership (fh_alife, fh_zones)

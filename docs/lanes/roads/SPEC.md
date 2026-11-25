@@ -56,13 +56,25 @@ New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9
     T1 always allowed; fail closed (`fh_locked`) when fh_progression is not started or canUnlock throws; reason
     shown to the player; specs cover allowed / tier_too_low / not started / throws.
   - R9: freight offers carry `tier`; T2 templates (larger qty, longer route, higher pay, distance-scaled deadline);
-    `accept` gates T2 on `canUnlock(src, 'contracts_t2')` and checks the wagon tier fits qty; gated offers listed
-    with `locked = true`; T1 always available; specs.
+    `accept` gates T2 on regional `getTier(src, origin_region) >= 2` with lane-local kill switch (`freight.t2.enabled`)
+    and checks the wagon tier fits qty; gated offers listed with `locked = true`; T1 always available; specs.
   - R10: this SPEC.md + TASKS.json seeded.
   - R11: OWNER-TESTS `## Roads` has the rep-gate steps (admin set rep → tier 2 → t2 wagon + T2 contract unlock;
     tier 1 refused).
   - `git grep canUnlock` shows fh_cargo + fh_trade consumers; venv specs green
     (`~/.venvs/rf/bin/python tools/run-specs.py`); `vs log decision "roads-02 playtest-ready <hash>"`.
+- roads-03 (regional freight network + T3 contracts):
+  - R12: destinations resolved dynamically from `FhRegions.posts` via `FhPlaceResolver.resolvePosts` (with
+    `freight.overrides` and `freight.exclude`), connecting enabled post regions (incl. `bayou_nwa` and `great_plains`)
+    with route distance >= minDistance; missing coordinates skipped without throwing.
+  - R13: freight tier gate = regional `getTier(src, origin_region)` (T2 >= 2, T3 >= 3) with lane-local kill switches
+    (`freight.t2.enabled`, `freight.t3.enabled`); wagon tiers still use `canUnlock('wagon_t2'|'wagon_t3')`; fail
+    closed (`fh_locked` / `fh_freight_tier_disabled`).
+  - R14: T3 freight templates and config (`freight.t3`: `minWagonTier 3`, distance-scaled deadline, pay multiple,
+    bounded by specs); `accept` verifies wagon tier fits and checks `minWagonTier 3`.
+  - R15: OWNER-TESTS `## Roads` steps added for destinations to Saint Denis and Blackwater (noting unverified destination
+    posts from FhRegions `verified = false`), regional tier gate, T3 contracts with t3 wagon, and kill switches.
+  - Venv specs green (`~/.venvs/rf/bin/python tools/run-specs.py`); `vs log decision "roads-03 playtest-ready <hash>"`.
 
 ## Dependencies / requests
 - @progression R8r: add `wagon_t3 = { region_id = 'heartlands', min_tier = 3 }` to fh_progression config. Until it

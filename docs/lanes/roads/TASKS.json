@@ -149,6 +149,53 @@
       "doneCheck": "",
       "status": "done",
       "sha": "c2f20d2"
+    },
+    {
+      "id": "R12",
+      "goal": "roads-03: resolve freight destinations dynamically from FhRegions.posts, support bayou_nwa and great_plains",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "spec"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r12",
+      "sha": "1fc1aa6"
+    },
+    {
+      "id": "R13",
+      "goal": "roads-03: freight tier gate = regional getTier alone + lane-local kill switch (freight.t2.enabled)",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "spec"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "branch": "roads-r13",
+      "sha": "f77511f"
+    },
+    {
+      "id": "R14",
+      "goal": "roads-03: T3 freight: freight.t3 config, minWagonTier 3, gate getTier >= 3, kill switch freight.t3.enabled",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "spec"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "in_progress",
+      "branch": "roads-r14"
+    },
+    {
+      "id": "R15",
+      "goal": "roads-03: OWNER-TESTS ## Roads card steps (Saint Denis/Blackwater, regional tier gate, T3 wagon, kill switch) + SPEC/TASKS update",
+      "files": [
+        "OWNER-TESTS.md",
+        "docs/lanes/roads/SPEC.md",
+        "docs/lanes/roads/TASKS.json"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "in_progress",
+      "branch": "roads-r15"
     }
   ]
 }
