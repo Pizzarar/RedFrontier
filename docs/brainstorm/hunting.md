@@ -25,6 +25,7 @@
 - When S4 spk_pelt returns GO, consider flipping `PeltQualitySource` to `native`.
 
 ## In flight
+- 2026-11-25 Hun2: H8 raw_meat on skin (idea-853+914) PASS: 541ec96 Sonnet PASS 0/0/2; dc76eaa Gemini PASS 0/0/2; 1e623f6 Gemini PASS 0/0/0. Awaiting slot.
 - 2026-11-25 Hun2: idea-950 spec+README minors PASS 0/0/0 a2e9983 (rn-23dbc2909f62; first pass FAIL 0/1/0 fixed). Lint minors re-checked after rf-gate-lint.
 - 2026-11-25 Hun2: hunting-02 MERGED to main 2383bce (13 commits, range-diff =, venv 127/2272/0, contracts 0, no mig). Plan complete; follow-up idea-950 (spec/README minors; lint minors after rf-gate-lint).
 - 2026-11-25 Hun2: hunting-02 (idea-840) ALL BLOCKS PASS on hunting-l4: L1 PASS 0/0/0 6f550b5 (rn-9351184139d8); B2-B5 PASS 0/0/2 126db80 (rn-197ed50326c3); contracts item+label def rule PASS 0/0/3 669eff1 (rn-d63685c6fd15). Minors queued as follow-up. Awaiting slot.
