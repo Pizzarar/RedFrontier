@@ -18,15 +18,6 @@ local LOCK_TRY = { wait = function() Wait(0) end, clock = GetGameTimer } -- poll
 
 local function log(msg) print(('^3[fh_hands] %s^7'):format(msg)) end
 
-local function registerFeed()
-    local called, ok, err = pcall(function()
-        return exports.fh_core:registerItems({
-            [cfg.feed.item] = { label = 'Feed', weight = 500, size_class = 'bulky', stackable = true, value_base = 2 },
-        })
-    end)
-    if not called or not ok then log(('feed item register failed: %s'):format(tostring(called and err or ok))) end
-end
-
 local function citizenOf(src)
     local P = exports['rsg-core']:GetPlayer(src)
     return P and P.PlayerData and P.PlayerData.citizenid or nil
@@ -78,7 +69,21 @@ local function runTask(kind, ctx)
 end
 
 -- ---------------------------------------------------------------- tasks: feed_topup, lumber_topup
--- Workaround: chest feed until a lane owns troughs; follow-up trough task.
+-- feed_topup tops up the owner's homestead trough via fh_homestead's getTrough / feedTrough exports
+-- (feedbags are implicit; fh_hands never writes the trough stash directly).
+local troughIo = {
+    getTrough = function(citizenid)
+        local ok, info, why = pcall(function() return exports.fh_homestead:getTrough(citizenid) end)
+        if not ok then return nil, 'trough_unavailable' end
+        return info, why
+    end,
+    feedTrough = function(citizenid, n)
+        local ok, added, why = pcall(function() return exports.fh_homestead:feedTrough(citizenid, n) end)
+        if not ok then return nil, 'trough_unavailable' end
+        return added, why
+    end,
+}
+
 -- The chest ref is rebuilt from fh_homestead's getPlot export; the stash id format must match
 -- fh_homestead chestStashId ('fh:chest:<plot>:1').
 local function homesteadChest(citizenid)
@@ -92,9 +97,9 @@ local chestIo = {
     addItem = function(ref, item, amount) return exports.fh_core:addItem(ref, item, amount) end,
 }
 
--- Both tasks run only on a paid tick (runOwner); cap/perTick come from cfg.feed / cfg.lumber.
+-- Both tasks run only on a paid tick (runOwner); perTick/cap come from cfg.feed / cfg.lumber.
 registerTask('feed_topup', function(ctx)
-    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.feed, chestIo)
+    return logic.troughTopup(ctx.citizenid, cfg.feed, troughIo)
 end)
 
 -- G3 woodcutter: tops up fh_homestead's 'lumber' (registered there; fh_hands only adds it to the plot chest).
@@ -179,11 +184,6 @@ end
 AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) forget(tonumber(src)) end)
 AddEventHandler('playerDropped', function() forget(tonumber(source)) end)
 
--- fh_core keeps runtime-registered items in memory: re-register feed when it restarts.
-AddEventHandler('onResourceStart', function(res)
-    if res == 'fh_core' and ready then registerFeed() end
-end)
-
 CreateThread(function()
     -- Idempotent, same DDL as server/migrations/0009_hands.sql (belt and braces for a DB that skipped the migration).
     local okDDL, err = pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_hands` (
@@ -197,7 +197,6 @@ CreateThread(function()
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci]])
     if not okDDL then log(('CREATE TABLE failed (relying on migration 0009): %s'):format(tostring(err))) end
     ready = true
-    registerFeed() -- fh_core item registry: we own 'feed'
     -- Resource (re)start: load everyone already online.
     for _, id in ipairs(GetPlayers()) do
         local src = tonumber(id)

@@ -15,9 +15,11 @@ case('bad configs are refused', function()
     T.eq('bad_pollSeconds', select(2, logic.validateConfig(with('pollSeconds', -5))))
     T.eq('bad_regionId', select(2, logic.validateConfig(with('regionId', ''))))
     T.eq('bad_unlockId', select(2, logic.validateConfig(with('unlockId', nil))))
-    T.eq('bad_feed', select(2, logic.validateConfig(with('feed', { item = 'feed', cap = 40, perTick = 0 }))))
-    T.eq('bad_feed', select(2, logic.validateConfig(with('feed', { cap = 40, perTick = 10 }))))
+    T.eq('bad_feed', select(2, logic.validateConfig(with('feed', { perTick = 0 }))))
+    T.eq('bad_feed', select(2, logic.validateConfig(with('feed', { perTick = 3, cap = -1 }))))
+    T.eq('bad_feed', select(2, logic.validateConfig(with('feed', { cap = 10 }))))
     T.eq('bad_feed', select(2, logic.validateConfig(with('feed', nil))))
+    assert(logic.validateConfig(with('feed', { perTick = 3, cap = 8 })) == true)
     T.eq('bad_hand_x', select(2, logic.validateConfig(with('hands', { x = { wage = 5, task = '' } }))))
     assert(logic.validateConfig(with('maxCatchupTicks', 0)) == false)
     assert(logic.validateConfig(with('quitAfterUnpaid', 1.5)) == false)
@@ -544,12 +546,32 @@ local function chest(start)
     return C
 end
 local REF = { type = 'chest', id = 'fh:chest:plot1:1' }
--- runTask as main.lua wires it: task kind -> chestTopup with that task's config block
-local function taskFn(C)
+-- Fake trough wired through logic.troughTopup, matching main.lua's feed_topup wiring.
+local function trough(start, capacity)
+    local TR = { count = start or 0, capacity = capacity or 10, calls = { get = 0, feed = 0 }, adds = {} }
+    TR.io = {
+        getTrough = function()
+            y(); TR.calls.get = TR.calls.get + 1
+            return { plotId = 'plot1', count = TR.count, capacity = TR.capacity }
+        end,
+        feedTrough = function(_, n)
+            y(); TR.calls.feed = TR.calls.feed + 1
+            local room = TR.capacity - TR.count
+            if room < 1 then return nil, 'fh_trough_full' end
+            local add = math.min(n, room)
+            TR.count = TR.count + add
+            TR.adds[#TR.adds + 1] = add
+            return add
+        end,
+    }
+    return TR
+end
+-- runTask as main.lua wires it: feed_topup -> troughTopup, lumber_topup -> chestTopup
+local function taskFn(C, TR)
     return function(task)
-        local spec = ({ feed_topup = cfg.feed, lumber_topup = cfg.lumber })[task]
-        if not spec then return false, 'no_task' end
-        return logic.chestTopup(REF, spec, C.io)
+        if task == 'feed_topup' then return logic.troughTopup('CID1', cfg.feed, TR.io) end
+        if task == 'lumber_topup' then return logic.chestTopup(REF, cfg.lumber, C.io) end
+        return false, 'no_task'
     end
 end
 
@@ -602,12 +624,12 @@ end)
 case('G3 an unpaid woodcutter tick does no work (no task, no lumber), and the strike is persisted', function()
     for _, why in ipairs({ 'fh_insufficient_funds', 'removemoney_refused' }) do
         local W = world({ woodcutter = { last_tick = 0 }, ranch_hand = { last_tick = 0 } }, cfg)
-        local C = chest({})
-        W.taskFn = taskFn(C)
+        local C, TR = chest({}), trough(0, 10)
+        W.taskFn = taskFn(C, TR)
         W.script = { { false, why }, { false, why } } -- ranch_hand sorts first, then woodcutter
         local e = W.load()
         logic.runOwner(e, cfg, IV, W.io(e))
-        T.eq(0, #W.charges); T.eq(0, W.tasks); T.eq(0, #C.adds); T.eq(0, C.count('lumber')); T.eq(0, C.count('feed'))
+        T.eq(0, #W.charges); T.eq(0, W.tasks); T.eq(0, #C.adds); T.eq(0, C.count('lumber')); T.eq(0, TR.count)
         T.eq(1, W.db.woodcutter.unpaid); T.eq('idle', W.db.woodcutter.status); T.eq(2, W.count('fh:hands:unpaid'))
     end
     -- skip / retry outcomes do no work either
@@ -624,8 +646,8 @@ end)
 
 case('G3 two hands bill two wages per tick, each claimed and charged once, even with poll + login + poll racing', function()
     local W = world({ ranch_hand = { last_tick = 0 }, woodcutter = { last_tick = 0 } }, cfg)
-    local C = chest({})
-    W.taskFn = taskFn(C)
+    local C, TR = chest({}), trough(0, 10)
+    W.taskFn = taskFn(C, TR)
     local now, S = 3 * IV, sched()
     local function poll()
         logic.withLock(W.locks, 'CID1', W.lockOpts(nil), function()
@@ -646,7 +668,7 @@ case('G3 two hands bill two wages per tick, each claimed and charged once, even 
     T.eq(6, #W.charges)
     T.eq(3 * cfg.hands.ranch_hand.wage, by['wage:ranch_hand']); T.eq(3 * cfg.hands.woodcutter.wage, by['wage:woodcutter'])
     T.eq(now, W.db.ranch_hand.last_tick); T.eq(now, W.db.woodcutter.last_tick)
-    T.eq(6, W.tasks); T.eq(3 * cfg.lumber.perTick, C.count('lumber')); T.eq(3 * cfg.feed.perTick, C.count('feed'))
+    T.eq(6, W.tasks); T.eq(3 * cfg.lumber.perTick, C.count('lumber')); T.eq(math.min(10, 3 * cfg.feed.perTick), TR.count)
     -- a later poll at the same time bills nothing more
     local e = W.load(); logic.runOwner(e, cfg, now, W.io(e)); T.eq(6, #W.charges)
 end)
@@ -698,7 +720,7 @@ case('G3 hire gate: first hand needs hire_hand; second needs hire_hand_2 too (fa
     T.same({ false, 'locked' }, { logic.hireGate({ woodcutter = two.woodcutter }, cfg, unlocks({ hire_hand = true })) })
 end)
 
-case('G3 main.lua: hire goes through hireGate under withOwner; both top-up tasks are registered via chestTopup', function()
+case('G3 main.lua: hire goes through hireGate under withOwner; feed_topup uses troughTopup and lumber_topup uses chestTopup', function()
     local fh = assert(io.open(here .. '../server/resources/[fh]/fh_hands/server/main.lua', 'rb'))
     local src = fh:read('a'); fh:close()
     local hireBody = src:match('local function hire%(src, kind%)(.-)\nend\n')
@@ -707,8 +729,189 @@ case('G3 main.lua: hire goes through hireGate under withOwner; both top-up tasks
     assert(hireBody:find('logic.hireGate(e.list, cfg,', 1, true), 'hire uses hireGate')
     assert(not hireBody:find('cfg.unlockId', 1, true), 'no second, ungated path')
     assert(src:find("registerTask('lumber_topup', function(ctx)\n    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.lumber, chestIo)", 1, true))
-    assert(src:find("registerTask('feed_topup', function(ctx)\n    return logic.chestTopup(homesteadChest(ctx.citizenid), cfg.feed, chestIo)", 1, true))
-    assert(not src:find("[cfg.lumber.item]", 1, true), 'fh_hands never registers lumber (fh_homestead owns it)')
+    assert(src:find("registerTask('feed_topup', function(ctx)\n    return logic.troughTopup(ctx.citizenid, cfg.feed, troughIo)", 1, true))
+    assert(not src:find('[cfg.lumber.item]', 1, true), 'fh_hands never registers lumber (fh_homestead owns it)')
+    assert(not src:find('Workaround', 1, true), 'chest-feed workaround comment removed')
+end)
+
+-- ---------------------------------------------------------------- idea-1034: feed_topup via fh_homestead trough exports
+-- Stubs FXServer globals + exports.fh_homestead and loads the real server/main.lua so troughIo, pcall, and task
+-- registration are exercised end-to-end (no direct trough stash writes).
+local function loadHandsServer(homesteadEx, opts)
+    opts = opts or {}
+    local now0 = os.time()
+    local S = { events = {}, logs = {}, cmds = {}, ex = {}, threads = {}, chestCalls = {},
+        db = opts.db or { ranch_hand = { hand_kind = 'ranch_hand', last_tick = now0, unpaid = 0, status = 'working' } },
+        players = opts.players or { [1] = 'CID1' } }
+    local env = setmetatable({
+        FhHandsConfig = cfg,
+        FhHandsLogic = logic,
+        FhHandsCharge = { charge = function() return true end },
+        MySQL = {
+            query = { await = function(sql)
+                if sql:find('^CREATE TABLE') then return {} end
+                if sql:find('^SELECT hand_kind') then
+                    local rows = {}
+                    for _, r in pairs(S.db) do rows[#rows + 1] = r end
+                    return rows
+                end
+                error('unmocked query: ' .. sql)
+            end },
+            update = { await = function(sql, p)
+                if sql:find('^UPDATE fh_hands SET last_tick') then
+                    local r = S.db[p[3]]
+                    if r and r.last_tick == p[4] then r.last_tick = p[1]; return 1 end
+                    return 0
+                elseif sql:find('^UPDATE fh_hands SET unpaid') then
+                    local r = S.db[p[5]]
+                    if r and r.last_tick == p[6] then r.unpaid, r.status = p[1], p[2]; return 1 end
+                    return 0
+                elseif sql:find('^DELETE FROM fh_hands') then
+                    S.db[p[2]] = nil; return 1
+                end
+                error('unmocked update: ' .. sql)
+            end },
+        },
+        exports = setmetatable({
+            ['rsg-core'] = { GetPlayer = function(_, src)
+                local cid = S.players[src]
+                return cid and { PlayerData = { citizenid = cid } } or nil
+            end },
+            fh_homestead = homesteadEx,
+            fh_core = {
+                snapshot = function(_, ref) S.chestCalls[#S.chestCalls + 1] = { op = 'snapshot', ref = ref }; return {} end,
+                addItem = function(_, ref, item, n) S.chestCalls[#S.chestCalls + 1] = { op = 'addItem', ref = ref, item = item, n = n }; return true end,
+            },
+            fh_progression = { canUnlock = function() return true end },
+        }, { __call = function(_, name, fn) S.ex[name] = fn end }),
+        CreateThread = function(fn) S.threads[#S.threads + 1] = fn end,
+        AddEventHandler = function() end,
+        TriggerEvent = function(name, p) S.events[#S.events + 1] = { name = name, p = p } end,
+        TriggerClientEvent = function() end,
+        RegisterCommand = function(name, fn) S.cmds[name] = fn end,
+        IsPlayerAceAllowed = function() return true end,
+        GetPlayers = function() return {} end,
+        GetGameTimer = function() return 0 end,
+        Wait = function() end,
+        print = function(m) S.logs[#S.logs + 1] = tostring(m) end,
+    }, { __index = _G })
+    local chunk = assert(loadfile(here .. '../server/resources/[fh]/fh_hands/server/main.lua', 't', env))
+    chunk()
+    -- Run only the init thread (second CreateThread: sets ready = true; first is the infinite poll loop).
+    S.threads[2]()
+    function S.tick() S.cmds.fh_hand_tick(0, { '1' }) end
+    function S.taskFailed()
+        local out = {}
+        for _, ev in ipairs(S.events) do if ev.name == 'fh:hands:task_failed' then out[#out + 1] = ev.p end end
+        return out
+    end
+    return S
+end
+
+case('troughTopup: tops up to capacity and honours perTick cap (stubbed exports.fh_homestead)', function()
+    local count, cap, calls = 0, 10, {}
+    local S = loadHandsServer({
+        getTrough = function(_, cid)
+            T.eq('CID1', cid)
+            return { plotId = 'heartlands_01', count = count, capacity = cap }
+        end,
+        feedTrough = function(_, cid, n)
+            T.eq('CID1', cid)
+            calls[#calls + 1] = n
+            local add = math.min(n, cap - count)
+            count = count + add
+            return add
+        end,
+    })
+    -- With perTick = 3 and capacity = 10: ticks request 3, 3, 3, 1 -> full (10), then 5th tick makes no feedTrough call.
+    for _ = 1, 5 do S.tick() end
+    T.eq(10, count)
+    T.same({ 3, 3, 3, 1 }, calls)
+    T.eq(0, #S.taskFailed())
+    T.eq(0, #S.chestCalls) -- never touches fh_core containers directly
+end)
+
+case('troughTopup: full trough -> no feedTrough call, ok no-op; race fh_trough_full -> ok no-op', function()
+    local feedCalls = 0
+    local S = loadHandsServer({
+        getTrough = function() return { plotId = 'heartlands_01', count = 10, capacity = 10 } end,
+        feedTrough = function() feedCalls = feedCalls + 1; return 1 end,
+    })
+    S.tick()
+    T.eq(0, feedCalls)
+    T.eq(0, #S.taskFailed())
+    -- Race: getTrough saw room, feedTrough returned fh_trough_full -> still ok no-op
+    local ok, added = logic.troughTopup('CID1', cfg.feed, {
+        getTrough = function() return { plotId = 'heartlands_01', count = 9, capacity = 10 } end,
+        feedTrough = function() return nil, 'fh_trough_full' end,
+    })
+    T.eq(true, ok); T.eq(0, added)
+end)
+
+case('troughTopup: no trough, not ready, and busy -> soft fail (task_failed emitted, no crash)', function()
+    for _, why in ipairs({ 'fh_no_trough', 'fh_not_ready', 'fh_trough_check_failed' }) do
+        local feedCalls = 0
+        local S = loadHandsServer({
+            getTrough = function() return nil, why end,
+            feedTrough = function() feedCalls = feedCalls + 1; return 1 end,
+        })
+        S.tick()
+        T.eq(0, feedCalls)
+        local fails = S.taskFailed()
+        T.eq(1, #fails); T.eq('feed_topup', fails[1].task); T.eq(why, fails[1].reason)
+    end
+    -- busy on feedTrough
+    local S = loadHandsServer({
+        getTrough = function() return { plotId = 'heartlands_01', count = 2, capacity = 10 } end,
+        feedTrough = function() return nil, 'fh_trough_busy' end,
+    })
+    S.tick()
+    local fails = S.taskFailed()
+    T.eq(1, #fails); T.eq('feed_topup', fails[1].task); T.eq('fh_trough_busy', fails[1].reason)
+end)
+
+case('troughTopup: throwing export or stopped fh_homestead -> soft fail, no crash', function()
+    -- getTrough throws
+    local S1 = loadHandsServer({
+        getTrough = function() error('homestead crashed') end,
+        feedTrough = function() return 1 end,
+    })
+    S1.tick()
+    local f1 = S1.taskFailed()
+    T.eq(1, #f1); T.eq('trough_unavailable', f1[1].reason)
+    -- feedTrough throws
+    local S2 = loadHandsServer({
+        getTrough = function() return { plotId = 'heartlands_01', count = 0, capacity = 10 } end,
+        feedTrough = function() error('feedTrough boom') end,
+    })
+    S2.tick()
+    local f2 = S2.taskFailed()
+    T.eq(1, #f2); T.eq('trough_unavailable', f2[1].reason)
+    -- fh_homestead resource stopped (exports.fh_homestead == nil)
+    local S3 = loadHandsServer(nil)
+    S3.tick()
+    local f3 = S3.taskFailed()
+    T.eq(1, #f3); T.eq('trough_unavailable', f3[1].reason)
+end)
+
+case('troughTopup: optional spec.cap lowers the cap below trough capacity', function()
+    local calls = {}
+    local ok, added = logic.troughTopup('CID1', { perTick = 5, cap = 6 }, {
+        getTrough = function() return { plotId = 'p1', count = 4, capacity = 10 } end,
+        feedTrough = function(_, n) calls[#calls + 1] = n; return n end,
+    })
+    T.eq(true, ok); T.eq(2, added); T.same({ 2 }, calls)
+end)
+
+case('lumber_topup still tops up the plot chest via fh_homestead:getPlot + fh_core', function()
+    local S = loadHandsServer({
+        getPlot = function(_, cid) T.eq('CID1', cid); return 'heartlands_01' end,
+    }, { db = { woodcutter = { hand_kind = 'woodcutter', last_tick = os.time(), unpaid = 0, status = 'working' } } })
+    S.tick()
+    T.eq(0, #S.taskFailed())
+    T.eq(2, #S.chestCalls)
+    T.eq('snapshot', S.chestCalls[1].op); T.eq('fh:chest:heartlands_01:1', S.chestCalls[1].ref.id)
+    T.eq('addItem', S.chestCalls[2].op); T.eq('lumber', S.chestCalls[2].item); T.eq(cfg.lumber.perTick, S.chestCalls[2].n)
 end)
 
 T.finish()

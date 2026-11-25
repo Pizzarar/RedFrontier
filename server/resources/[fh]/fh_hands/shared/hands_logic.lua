@@ -224,7 +224,7 @@ function M.countItem(items, name)
     return total
 end
 
----One chest top-up step (the feed_topup / lumber_topup tasks). spec = { item, cap, perTick } (cfg.feed / cfg.lumber).
+---One chest top-up step (the lumber_topup task). spec = { item, cap, perTick } (cfg.lumber).
 ---io = { snapshot(ref) -> items|nil, why ; addItem(ref, item, amount) -> ok, err } (fh_core exports; may yield).
 ---@return boolean ok, number|string amountAddedOrErr
 function M.chestTopup(ref, spec, io)
@@ -236,6 +236,27 @@ function M.chestTopup(ref, spec, io)
     local added, err = io.addItem(ref, spec.item, amount)
     if not added then return false, err end
     return true, amount
+end
+
+---One trough top-up step (the feed_topup task). spec = { perTick, cap? } (cfg.feed).
+---io = { getTrough(citizenid) -> { plotId, count, capacity }|nil, why ; feedTrough(citizenid, n) -> added|nil, why }.
+---Items are implicit (fh_homestead:feedTrough adds feedbags). Full trough is an ok no-op (true, 0); missing/unready/
+---busy trough or throwing export is a soft task failure (false, reason).
+---@return boolean ok, number|string amountAddedOrErr
+function M.troughTopup(citizenid, spec, io)
+    if not isStr(citizenid) then return false, 'fh_no_trough' end
+    local okGet, info, why = pcall(io.getTrough, citizenid)
+    if not okGet then return false, 'trough_unavailable' end
+    if type(info) ~= 'table' then return false, type(why) == 'string' and why or 'fh_no_trough' end
+    if not (isNum(info.count) and isNum(info.capacity)) then return false, 'fh_trough_check_failed' end
+    local cap = spec.cap and math.min(spec.cap, info.capacity) or info.capacity
+    local amount = M.topupAmount(info.count, cap, spec.perTick)
+    if amount == 0 then return true, 0 end
+    local okFeed, added, fwhy = pcall(io.feedTrough, citizenid, amount)
+    if not okFeed then return false, 'trough_unavailable' end
+    if isNum(added) and added > 0 then return true, added end
+    if fwhy == 'fh_trough_full' then return true, 0 end
+    return false, type(fwhy) == 'string' and fwhy or 'fh_trough_failed'
 end
 
 ---Unlock ids a new hire needs, given the hands already employed (list = entry.list, known kinds only): always
@@ -307,11 +328,12 @@ function M.validateConfig(cfg)
             if not isStr(cfg.extraHandUnlocks[slot]) then return false, 'bad_extraHandUnlocks' end
         end
     end
-    for _, key in ipairs({ 'feed', 'lumber' }) do
-        local f = cfg[key]
-        if type(f) ~= 'table' or not isStr(f.item) or not (isInt(f.cap) and f.cap >= 0)
-            or not (isInt(f.perTick) and f.perTick >= 1) then return false, 'bad_' .. key end
-    end
+    local f = cfg.feed
+    if type(f) ~= 'table' or not (isInt(f.perTick) and f.perTick >= 1)
+        or (f.cap ~= nil and not (isInt(f.cap) and f.cap >= 0)) then return false, 'bad_feed' end
+    local l = cfg.lumber
+    if type(l) ~= 'table' or not isStr(l.item) or not (isInt(l.cap) and l.cap >= 0)
+        or not (isInt(l.perTick) and l.perTick >= 1) then return false, 'bad_lumber' end
     return true
 end
 

@@ -17,9 +17,9 @@ FhHandsConfig = {
         woodcutter = { label = 'Woodcutter', wage = 6, task = 'lumber_topup' },
     },
     feed = {
-        item = 'feed',            -- registered through fh_core registerItems (we own it)
-        cap = 40,                 -- hand tops the chest up to this many feed
-        perTick = 10,             -- at most this much added per working tick
+        -- Ranch hand tops up the plot trough via fh_homestead:feedTrough (item is implicit: feedbag).
+        -- Capped by the trough's own capacity (getTrough().capacity); optional `cap` lowers it further.
+        perTick = 3,              -- at most this many feedbags added per working tick
     },
     lumber = {
         item = 'lumber',          -- registered by fh_homestead (buildItems); fh_hands never registers it

@@ -11,14 +11,16 @@ State lives in `fh_hands` (migration `0009_hands`, PK `(citizenid, hand_kind)`: 
 - `exports.fh_hands:registerTask(kind, fn)` -> `ok, err`; `fn(ctx) -> ok, info`, `ctx = { src, citizenid, hand_kind }`.
 
 ## Hands and tasks (`config.lua`, `FhHandsConfig`)
-| kind | wage / tick | task | adds to plot chest `fh:chest:<plot>:1` |
+| kind | wage / tick | task | target |
 |---|---|---|---|
-| `ranch_hand` | `hands.ranch_hand.wage` | `feed_topup` | `feed` up to `feed.cap`, at most `feed.perTick` per paid tick |
-| `woodcutter` | `hands.woodcutter.wage` | `lumber_topup` | `lumber` up to `lumber.cap`, at most `lumber.perTick` per paid tick |
+| `ranch_hand` | `hands.ranch_hand.wage` | `feed_topup` | plot trough via `fh_homestead:feedTrough` (feedbags up to trough capacity, at most `feed.perTick` per paid tick) |
+| `woodcutter` | `hands.woodcutter.wage` | `lumber_topup` | plot chest `fh:chest:<plot>:1` (`lumber` up to `lumber.cap`, at most `lumber.perTick` per paid tick) |
 
 All hands share `tickSeconds` (one wage per interval), `maxCatchupTicks` (offline catch-up cap) and `quitAfterUnpaid`.
-`feed` is registered by fh_hands (fh_core `registerItems`); `lumber` is fh_homestead's build item and is never
-registered here. Both tasks share `FhHandsLogic.chestTopup`: never past the cap, never reduce a chest the owner filled
+`feed_topup` uses `FhHandsLogic.troughTopup` over `fh_homestead`'s `getTrough` / `feedTrough` exports (feedbags are
+implicit; `fh_hands` never writes the trough stash directly): a full trough is an ok no-op, while a missing, unready,
+or busy trough (or stopped `fh_homestead`) is a soft task failure. `lumber` is `fh_homestead`'s build item (never
+registered here) and stays on `FhHandsLogic.chestTopup`: never past the cap, never reduce a chest the owner filled
 above it.
 
 ## Hire gate
