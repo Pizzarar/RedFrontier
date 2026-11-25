@@ -79,7 +79,7 @@ case('locked offers keep min_tier / reason; plain offers have no locked', functi
     assert(d.offers[1].locked == nil)
     T.eq(2, d.offers[2].locked.min_tier)
     assert(d.offers[3].locked and d.offers[3].locked.min_tier == nil)
-    T.eq('Not yet.', d.offers[3].locked.reason)
+    T.eq('Not yet.', d.offers[3].locked.reason) -- adapter keeps reason as data; the screen only shows mapped labels
     T.eq(3, d.offers[4].locked.min_tier)
     local ok, errs = F.validate('jobs', d)
     assert(ok, table.concat(errs or {}, ';'))
@@ -92,4 +92,17 @@ case('jobs fixture carries a tier-locked offer; quests ships showLockedOffers = 
     local f = assert(loadfile(here .. '../server/resources/[fh]/fh_quests/config.lua', 't', setmetatable(env, { __index = _G })))
     f()
     T.eq(true, env.FhQuestsConfig.showLockedOffers)
+end)
+case('jobs fixture has a freight_disabled reason-only lock and a tier+reason lock; both validate', function()
+    local dis, gate
+    for _, o in ipairs(F.fixtures.jobs.offers) do
+        if o.locked and o.locked.reason == 'freight_disabled' then dis = o end
+        if o.locked and o.locked.reason == 'freight_gate' then gate = o end
+    end
+    assert(dis and dis.locked.min_tier == nil and gate and gate.locked.min_tier == 2)
+    local d = V.jobs(snap({ dis, gate }), 100)
+    T.eq('freight_disabled', d.offers[1].locked.reason)
+    T.eq(2, d.offers[2].locked.min_tier)
+    local ok, errs = F.validate('jobs', F.fixtures.jobs)
+    assert(ok, table.concat(errs or {}, ';'))
 end)

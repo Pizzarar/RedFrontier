@@ -1,4 +1,4 @@
-// jobs board: data { region_id, expires_at, expired?, notice?, notice_kind?, offers: [{id,job_type,title,text,rewards,accepted, locked?: {min_tier?, reason?}}] }.
+// jobs board: data { region_id, expires_at, expired?, notice?, notice_kind?, offers: [{id,job_type,title,text,rewards,accepted, locked?: {min_tier?, reason?: 'freight_gate'|'freight_disabled'|other}}] }.
 // An update without `offers` only changes the inline notice. Actions: accept { id }, close {}. No autofocus; Enter does nothing.
 FH_UI.register('jobs', {
   last: null,
@@ -38,9 +38,13 @@ FH_UI.register('jobs', {
   close: function (el) { this.last = null; FH_DOM.clear(el); },
 });
 
+// locked.reason is data: only mapped labels are shown, an unknown reason is never echoed. freight_disabled wins over min_tier.
+const LOCK_REASON = { freight_disabled: 'Not available yet' };
 function lockText(l) {
-  if (l && Number(l.min_tier) > 0) return 'Needs tier ' + l.min_tier;
-  return (l && typeof l.reason === 'string' && l.reason) || 'Locked';
+  l = l || {};
+  if (typeof l.reason === 'string' && Object.prototype.hasOwnProperty.call(LOCK_REASON, l.reason)) return LOCK_REASON[l.reason];
+  if (Number(l.min_tier) > 0) return 'Needs tier ' + l.min_tier;
+  return 'Locked';
 }
 
 function rewardText(r) {

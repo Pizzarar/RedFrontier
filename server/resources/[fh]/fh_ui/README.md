@@ -111,7 +111,7 @@ Lane revalidates fee and chest ownership.
 Jobs board, the real `fh_quests` board (README "Client sync: fh:quests:sync").
 `open/update` data `{ region_id, expires_at, expired?, notice?, notice_kind?, offers = { { id, job_type, title, text, rewards = { money?, rep = { region_id, delta }?, items = { { name, amount } }? }, accepted, locked? = { min_tier?, reason? } } } }`.
 `job_type` is data (freight, hunt_request, bounty ...), never switched on. An `update` without `offers` only changes the inline
-`notice` (`notice_kind` `ok|error`); the board stays. `expired` boards show no offers. Accepted offers show "Accepted" and no button. A `locked` offer renders greyed (`.row.card.disabled`) with "Needs tier N" (or the `reason` / "Locked" when `min_tier` is absent, e.g. a hook-only lock) and no button at all; the server still refuses `fh_offer_locked`.
+`notice` (`notice_kind` `ok|error`); the board stays. `expired` boards show no offers. Accepted offers show "Accepted" and no button. A `locked` offer renders greyed (`.row.card.disabled`) and no button at all: `reason = 'freight_disabled'` shows "Not available yet", else "Needs tier N" when `min_tier` is set, else "Locked". `reason` is data only (mapped labels via textContent; unknown reasons are never echoed, e.g. `freight_gate` just keeps "Needs tier N"); the server still refuses `fh_offer_locked`.
 Actions: `accept` `{ id }` (relays `fh:quests:ui_accept`; the lane answers with a `notice` update), `close` `{}`. No autofocus, Enter does nothing.
 The client adapter (`client/adapter.lua` + `shared/quests_view.lua`) turns each `fh:quests:sync` into an `update` while the screen is open.
 

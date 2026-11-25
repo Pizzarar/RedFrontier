@@ -28,7 +28,10 @@ M.fixtures = {
               text = 'Take down the lookout.', rewards = { money = 150, rep = { region_id = 'heartlands', delta = 5 } },
               accepted = true },
             { id = 'heartlands:1:bounty:ridge_boss', job_type = 'bounty', title = 'Ridge Gang boss',
-              text = 'A seasoned hand only.', rewards = { money = 300 }, accepted = false, locked = { min_tier = 2 } },
+              text = 'A seasoned hand only.', rewards = { money = 300 }, accepted = false, locked = { min_tier = 2, reason = 'freight_gate' } },
+            { id = 'heartlands:1:freight:rail_run', job_type = 'freight', title = 'Rail freight run',
+              text = 'Freight is not running yet.', rewards = { money = 80 }, accepted = false,
+              locked = { reason = 'freight_disabled' } },
         },
     },
     journal = {
