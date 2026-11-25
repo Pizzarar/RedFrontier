@@ -6,10 +6,15 @@
 -- region with no legendary yet (a stub, ignored). An entry that fails validation is ignored with a warning. Files are
 -- only looked up for FhRegions ids, so a file for an unknown region is never loaded.
 --
+-- Validation includes the plain animal rows (shared/plain_animals.lua, loaded before this file): an id that is a plain
+-- animal key, a pelt_/trophy_ item a plain row owns, or a species_model with no plain row is rejected here, so the
+-- registry holds only entries every consumer (chain.lua, trophies.lua, animals.lua, client/main.lua) can serve.
+--
 -- Entry shape (all coordinates UNVERIFIED in game until someone stands on the spot):
---   id             string  ^[a-z][a-z0-9_]*$, <= 40 chars. Also the chain_id (fh_hunting_chains) and the animal key.
+--   id             string  ^[a-z][a-z0-9_]*$, <= 40 chars. Also the chain_id (fh_hunting_chains) and the animal key;
+--                          never a plain animal key.
 --   label          string  display name ("Legendary Bear"); sell rows and item text use it.
---   species_model  string  base ped model (must have a plain row in animals.lua; the legendary shares it).
+--   species_model  string  base ped model (must have a plain row in plain_animals.lua; the legendary shares it).
 --   outfit         integer >= 0, optional (default 0)   outfit preset. Not applied yet (no fh_core spawn field).
 --   scale          number  > 0, optional (default 1.0)  ped scale.   Not applied yet (no fh_core spawn field).
 --   pelt   { item = 'pelt_<id>', label, value (> 0, 2-star base before multipliers), weight (> 0), image }
@@ -29,6 +34,14 @@ local function str(v) return type(v) == 'string' and v ~= '' end
 
 local function regionsMod() return FhRegions or require('regions') end
 
+-- The plain animal rows (shared/plain_animals.lua): the FXServer global, else the spec-side singleton.
+local function plainAnimals()
+    if FhHuntingPlainAnimals then return FhHuntingPlainAnimals end
+    local dir = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+    return package.loaded.fh_hunting_plain_animals or dofile(dir .. 'plain_animals.lua')
+end
+M.plainAnimals = plainAnimals
+
 ---Enabled gate (FhRegions.isEnabled): read live on every call, so flipping a region's `enabled` needs no code change.
 function M.isEnabled(regionId) return regionsMod().isEnabled(regionId) end
 
@@ -42,14 +55,22 @@ local function coords(v, withHeading)
     return out
 end
 
----Validate one raw data-file entry for `regionId`. Returns a fresh normalised entry (the raw table is not kept).
+---Validate one raw data-file entry for `regionId` against the plain rows (`plain`, default shared/plain_animals.lua).
+---Returns a fresh normalised entry (the raw table is not kept).
 ---@return table|nil entry, string|nil err
-function M.validate(raw, regionId)
+function M.validate(raw, regionId, plain)
+    plain = plain or plainAnimals()
     if type(raw) ~= 'table' then return nil, 'entry is not a table' end
     local id = raw.id
     if type(id) ~= 'string' or #id > 40 or not id:match('^[a-z][a-z0-9_]*$') then return nil, 'bad id' end
+    if plain.byKey[id] then return nil, 'id ' .. id .. ' collides with a plain animal' end
+    if plain.byItem['pelt_' .. id] or plain.byItem['trophy_' .. id] then
+        return nil, 'id ' .. id .. ' collides with a plain animal item'
+    end
     if not str(raw.label) then return nil, 'bad label' end
     if not str(raw.species_model) then return nil, 'bad species_model' end
+    local model = raw.species_model:lower()
+    if not plain.byModel[model] then return nil, 'species_model ' .. model .. ' has no plain animal row' end
     local outfit = raw.outfit == nil and 0 or raw.outfit
     if math.type(outfit) ~= 'integer' or outfit < 0 then return nil, 'bad outfit' end
     local scale = raw.scale == nil and 1.0 or raw.scale
@@ -96,7 +117,7 @@ function M.validate(raw, regionId)
     if not sc then return nil, 'bad spawn coords' end
 
     return {
-        id = id, chain_id = id, region_id = regionId, label = raw.label, species_model = raw.species_model:lower(),
+        id = id, chain_id = id, region_id = regionId, label = raw.label, species_model = model,
         outfit = outfit, scale = scale,
         pelt = { item = p.item, label = p.label, value = p.value, weight = p.weight, image = p.image },
         trophy = { item = t.item, label = t.label, comfort = t.comfort, image = t.image, weight = t.weight,
@@ -128,14 +149,15 @@ function Registry:active()
 end
 
 ---Build a registry from { [region_id] = raw entry | nil } over `regionIds` (sorted order is the registry order).
----Invalid and duplicate entries are skipped and listed in reg.warnings.
-function M.build(rawByRegion, regionIds)
+---Invalid, plain-colliding (see M.validate; `plain` defaults to shared/plain_animals.lua) and duplicate entries are
+---skipped and listed in reg.warnings.
+function M.build(rawByRegion, regionIds, plain)
     local reg = setmetatable({ list = {}, byId = {}, byRegion = {}, warnings = {}, isEnabled = M.isEnabled },
         Registry)
     for _, rid in ipairs(regionIds) do
         local raw = rawByRegion[rid]
         if raw ~= nil then
-            local e, err = M.validate(raw, rid)
+            local e, err = M.validate(raw, rid, plain)
             if not e then
                 reg.warnings[#reg.warnings + 1] = rid .. ': ' .. err
             elseif reg.byId[e.id] then

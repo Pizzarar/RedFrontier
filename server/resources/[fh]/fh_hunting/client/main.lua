@@ -233,7 +233,9 @@ for _, e in ipairs(active) do
     else
         FH.thread(function()
             local c = e.rumour.coords
-            local point = lib.points.new({ coords = vec3(c.x, c.y, c.z), distance = tp.PromptDistance })
+            -- the server's rumour range check (shared/chain.lua) reads e.rumour.range first
+            local point = lib.points.new({ coords = vec3(c.x, c.y, c.z),
+                distance = e.rumour.range or tp.PromptDistance })
             chainPoints[#chainPoints + 1] = point
             function point:onEnter() point:render() end
             function point:onExit() hideText() end

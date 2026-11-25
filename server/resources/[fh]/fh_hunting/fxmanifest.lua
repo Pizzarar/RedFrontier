@@ -10,6 +10,7 @@ shared_scripts {
     '@ox_lib/init.lua',
     '@fh_core/shared/regions.lua', -- FhRegions global (region ids + the isEnabled gate)
     'config.lua',
+    'shared/plain_animals.lua',    -- FhHuntingPlainAnimals: the plain rows the loader validates against
     'shared/legendaries.lua',      -- FhHuntingLegendaries: reads data/legendaries/<region_id>.lua (LoadResourceFile)
     'shared/animals.lua',          -- derives the legendary pelt rows from it
     'shared/quality.lua',

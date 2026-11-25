@@ -1,38 +1,32 @@
 -- fh_hunting animal table (spec L8). Pure Lua. One pelt item per animal; stars live in the item's info, not the id.
 -- size_class: 'bulky' = saddlebag OK (small / medium game); 'cargo' = wagon or chest only (big game, every legendary).
--- model: the ped model name. UNVERIFIED in game: confirm each against the natives probe before H2 ships.
--- image: reuses the rsg-inventory images where one matches, else a generic pelt image.
+-- The plain rows live in shared/plain_animals.lua (the legendary loader validates against the same table).
 -- Legendary rows are derived from data/legendaries/<region_id>.lua (shared/legendaries.lua, plan hunting-02): one per
--- valid entry, enabled region or not (the items must exist before a region is switched on).
+-- registry entry, enabled region or not (the items must exist before a region is switched on).
 local M = {}
+
+local DIR = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
 
 -- The legendary registry: the FXServer global, else the spec-side singleton (shared/legendaries.lua).
 local function legendaries()
     if FhHuntingLegendaries then return FhHuntingLegendaries end
-    local dir = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
-    return package.loaded.fh_hunting_legendaries or dofile(dir .. 'legendaries.lua')
+    return package.loaded.fh_hunting_legendaries or dofile(DIR .. 'legendaries.lua')
+end
+
+-- The plain rows: the FXServer global, else the spec-side singleton (shared/plain_animals.lua).
+local function plainAnimals()
+    if FhHuntingPlainAnimals then return FhHuntingPlainAnimals end
+    return package.loaded.fh_hunting_plain_animals or dofile(DIR .. 'plain_animals.lua')
 end
 
 M.legendaryBearPelt = 'pelt_legendary_bear'
 M.legendaryBearTrophy = 'trophy_legendary_bear'
 
--- Order is the display order. value = base price of a 2-star pelt, before the star / legendary multipliers.
-M.list = {
-    { key = 'rabbit',   label = 'Rabbit',   model = 'a_c_rabbit_01',     pelt = 'pelt_rabbit',   size_class = 'bulky', value = 3,  weight = 300,   image = 'resource_pelt_rabbit.png' },
-    { key = 'fox',      label = 'Fox',      model = 'a_c_fox_01',        pelt = 'pelt_fox',      size_class = 'bulky', value = 8,  weight = 600,   image = 'resource_pelt_fox.png' },
-    { key = 'coyote',   label = 'Coyote',   model = 'a_c_coyote_01',     pelt = 'pelt_coyote',   size_class = 'bulky', value = 8,  weight = 800,   image = 'resource_pelt_coyote.png' },
-    { key = 'deer',     label = 'Deer',     model = 'a_c_deer_01',       pelt = 'pelt_deer',     size_class = 'bulky', value = 14, weight = 2500,  image = 'good_pelt.png' },
-    { key = 'boar',     label = 'Boar',     model = 'a_c_boar_01',       pelt = 'pelt_boar',     size_class = 'bulky', value = 12, weight = 2500,  image = 'good_pelt.png' },
-    { key = 'wolf',     label = 'Wolf',     model = 'a_c_wolf',          pelt = 'pelt_wolf',     size_class = 'bulky', value = 20, weight = 2000,  image = 'resource_pelt_wolf.png' },
-    { key = 'bear',     label = 'Bear',     model = 'a_c_bear_01',       pelt = 'pelt_bear',     size_class = 'cargo', value = 45, weight = 20000, image = 'perfect_pelt.png' },
-    { key = 'bison',    label = 'Bison',    model = 'a_c_buffalo_01',    pelt = 'pelt_bison',    size_class = 'cargo', value = 40, weight = 25000, image = 'perfect_pelt.png' },
-    { key = 'elk',      label = 'Elk',      model = 'a_c_elk_01',        pelt = 'pelt_elk',      size_class = 'cargo', value = 38, weight = 18000, image = 'perfect_pelt.png' },
-    { key = 'moose',    label = 'Moose',    model = 'a_c_moose_01',      pelt = 'pelt_moose',    size_class = 'cargo', value = 50, weight = 25000, image = 'perfect_pelt.png' },
-    { key = 'alligator', label = 'Alligator', model = 'a_c_alligator_01', pelt = 'pelt_alligator', size_class = 'cargo', value = 55, weight = 20000, image = 'perfect_pelt.png' },
-}
-
-M.byKey, M.byPelt, M.byLegendary, M.warnings = {}, {}, {}, {}
-for _, a in ipairs(M.list) do
+-- Order is the display order: the plain rows (copied list; the row tables are shared and never mutated), then the
+-- legendaries in registry order.
+M.list, M.byKey, M.byPelt, M.byLegendary, M.warnings = {}, {}, {}, {}, {}
+for _, a in ipairs(plainAnimals().list) do
+    M.list[#M.list + 1] = a
     M.byKey[a.key] = a
     M.byPelt[a.pelt] = a
 end
@@ -44,8 +38,9 @@ function M.legendaryRow(e)
         trophy = e.trophy.item, region_id = e.region_id, peltLabel = e.pelt.label, trophyDef = e.trophy }
 end
 
--- Legendary rows, after the plain ones (display order = registry order). An id or item that collides with an existing
--- row is skipped with a warning (spec/hunting_legendaries_spec.lua keeps the data free of collisions).
+-- Legendary rows, after the plain ones (display order = registry order). The loader already rejects entries that
+-- collide with a plain row or have no plain species row, so this guard only fires if a registry bypassed that check;
+-- it is printed at resource start like the loader's warnings.
 for _, e in ipairs(legendaries().list) do
     local row = M.legendaryRow(e)
     if M.byKey[row.key] or M.byPelt[row.pelt] or M.byPelt[row.trophy] then
@@ -124,6 +119,7 @@ function M.itemDefs()
 end
 
 if GetCurrentResourceName then
+    for _, w in ipairs(M.warnings) do print('^3[fh_hunting] animals: ' .. w .. '^7') end
     FhHuntingAnimals = M
 else
     return M
