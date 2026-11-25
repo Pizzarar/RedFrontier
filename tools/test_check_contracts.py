@@ -162,6 +162,13 @@ class T(unittest.TestCase):
         write(self.root, 'resources/[rsg]/rsg-core/fxmanifest.lua', MANIFEST % "provide 'rsg-multijob'\n")
         self.assertEqual(findings(t, 'event-target'), [])
 
+    def test_event_target_disabled_config_flag(self):
+        t = tree(self.root, "", cli_a="    if Config.Opt then\n        TriggerServerEvent('rsg-opt:server:x')\n    end\n",
+                 cfg_items="Config = {}\nConfig.Opt = false\n")
+        self.assertEqual(findings(t, 'event-target'), [])
+        write(self.root, 'resources/[fh]/fh_b/config.lua', "Config = {}\nConfig.Opt = true\n")
+        self.assertEqual([f[1] for f in findings(t, 'event-target')], ['rsg-opt:server:x'])
+
     # ---- G1a: useable=true items need a use handler ----
     def test_useable_item_without_handler(self):
         t = tree(self.root, "", cfg_items="loot = { { name = 'bandage', chance = 1 } }\n")

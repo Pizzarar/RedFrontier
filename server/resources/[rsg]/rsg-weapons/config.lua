@@ -1,7 +1,7 @@
 Config = {}
 
 Config.Debug = false
-Config.WeaponComponents = true -- sync components with rsg-weaponcomp when equipping / breaking weapons
+Config.WeaponComponents = false -- local edit (core-08 P5): rsg-weaponcomp is not vendored
 
 Config.SaveEquippedWeapons = true -- re-equip weapons and knives on login
 

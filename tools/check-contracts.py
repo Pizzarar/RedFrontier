@@ -312,19 +312,48 @@ def run(root, cfg_path):
         for m in re.finditer(r"\b([A-Za-z_]\w*)\s*=\s*\{", t):
             for v in EVENTVAL.finditer(braced(t, t.find('{', m.start()))):
                 table_events[rn][m.group(1)].add(v.group(1))
+    CFG_ASSIGN = re.compile(r'\b(Config\.[A-Za-z_]\w*)\s*=(?!=)\s*(\S+)')
+    cfg_vals = defaultdict(lambda: defaultdict(set))
+    for (rn, rel), t in texts.items():
+        for m in CFG_ASSIGN.finditer(t):
+            cfg_vals[rn][m.group(1)].add(m.group(2).rstrip(',;'))
+    false_flags = {rn: {k for k, vs in flags.items() if vs == {'false'}} for rn, flags in cfg_vals.items()}
+
+    def blank_disabled_if(t, flags):
+        if not flags:
+            return t
+        pat = re.compile(r'^([ \t]*)if[ \t]+(' + '|'.join(re.escape(f) for f in sorted(flags)) + r')[ \t]+then\b', re.M)
+        out, pos = [], 0
+        for m in pat.finditer(t):
+            if m.start() < pos:
+                continue
+            out.append(t[pos:m.start()])
+            eol = t.find('\n', m.end())
+            line_rest = t[m.end():eol if eol >= 0 else len(t)]
+            if re.search(r'\bend\b', line_rest):
+                stop = eol if eol >= 0 else len(t)
+            else:
+                end_m = re.compile(r'^%s(?:else|elseif|end)\b' % re.escape(m.group(1)), re.M).search(t, m.end())
+                stop = end_m.start() if end_m else len(t)
+            out.append(re.sub(r'[^\n]', ' ', t[m.start():stop]))
+            pos = stop
+        out.append(t[pos:])
+        return ''.join(out)
+
     any_senders = defaultdict(list)   # event name -> [(kind, need, loc)]
     any_listeners = defaultdict(set)  # event name -> set(sides)
     for (rn, rel), t in sorted(texts.items()):
         sides = resources[rn].files[rel]
-        for m in SEND_ANY.finditer(t):
+        t_send = blank_disabled_if(t, false_flags.get(rn))
+        for m in SEND_ANY.finditer(t_send):
             any_senders[m.group(3)].append(
                 (m.group(1), {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(m.group(1), {'client'}),
-                 '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))
-        for m in MAP_SEND.finditer(t):
+                 '%s/%s:%d' % (rn, rel, lineno(t_send, m.start()))))
+        for m in MAP_SEND.finditer(t_send):
             for name in table_events[rn].get(m.group(2), ()):
                 any_senders[name].append(
                     (m.group(1), {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(m.group(1), {'client'}),
-                     '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))
+                     '%s/%s:%d' % (rn, rel, lineno(t_send, m.start()))))
         for m in LISTEN_ANY.finditer(t):
             for s in sides:
                 any_listeners[m.group(3)].add(s)
