@@ -5,19 +5,23 @@
 ## Who's here
 - Brainstorm: Progression
 - Lead: Progression lead · P1-P4 resume
-- Workers: 0
+- Workers: 1
 
 ## Done when
 - Spec M7 slice: rep tier gate (`canUnlock`), roving fence on schedule with rare parts + treasure leads, one hired hand on a timer. Specs green, Gemini PASS, merged local main, OWNER-TESTS progression section, `decision progression playtest-ready <hash>` logged.
 
 ## Decided
-- Plan: docs/brainstorm/plans/progression-01-l9.md (P0 core request → P1 fh_progression → P2 fh_fence ∥ P3 fh_hands → P4 tests).
+- Plan 01 (docs/brainstorm/plans/progression-01-l9.md) DONE: P1-P4+P1b on local main 7c66833, playtest-ready logged; @ui fence screen d726418.
+- Plan 02 docs/brainstorm/plans/progression-02-ladder.md handed to lead rn-5dc775ae6f22 (2026-11-24): G1 tiers for all quest-enabled regions + t3 unlocks incl. roads R8r wagon_t3 (first) → G2 treasure-lead dig payoff (new leads.lua, no trade.lua while prog-fw) ∥ G3 woodcutter hand → G4 docs/tests. Woodcutter replaces spec stablehand/cook (no horse/food owners).
 - Overlord rules: vs worktree units; merge only after PASS + rebase + run-specs green; one lane merges at a time; tests in OWNER-TESTS.md progression section (not README); no push; log playtest-ready.
 - idea-600 delivered: core B7 on local main 334642c (getRep, charge, removeItem). P1b swaps shim to getRep; P2/P3 debits use charge (retry on fh_charge_busy) + removeItem. Sent to lead rn-5dc775ae6f22.
 - Reuse fh_spike_gated for fence NPC spawn. Fence shop = ox_lib menu stopgap, @ui screen follow-up (idea-601).
 - Hand's first task = chest feed top-up (troughs unowned).
 
 ## Open
+- G4 fold-in: drop contracts_t3 (no consumer; quests-03 uses getTier per region), keep contracts_t2 (roads R9 T2 freight). Sent to lead.
+- Stablehand/cook hands: need a horse-care / cooked-food owner.
+- idea-850 (@roads wagon gate) superseded by roads-02; roads can close it.
 - Trough task for fh_hands once a lane owns troughs. (2026-11-23: still unowned, only an rsg-core item def. Out of the M7 slice; keep parked.)
 - (orig ask) L9 fh_fence + fh_hands + rep-tier unlocks on top of @core's fh_economy ledger: regional rep tiers, roving fence on a schedule (stops, not real driving), rare parts/treasure leads, hired hands as timers automating upkeep. Insurance stays with @core fh_death. Spec: docs/FRONTIER_HOMESTEAD_SPEC.md. Owner: build everything autonomously, Aub tests only at the end. Use @core §4 APIs only (fh_core containers, fh_buffs, fh_economy, regions, events); contract changes = request to @core. Anything waiting on in-game spike results goes behind one config flag. Pure-Lua specs (tools/run-specs.py) + in-game test card in README. No push.
 

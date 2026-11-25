@@ -10,6 +10,7 @@ return function(T, cfg)
     local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
     local dir = here .. '../../server/resources/[fh]/fh_homestead/'
     local PR = dofile(dir .. 'shared/plot_rules.lua')
+    local BR = dofile(dir .. 'shared/build_rules.lua')
     local fh = assert(io.open(dir .. 'server/main.lua', 'rb'))
     local MAIN_SRC = fh:read('a')
     fh:close()
@@ -18,7 +19,8 @@ return function(T, cfg)
         opts = opts or {}
         local W = { db = { plots = {}, chests = {} }, events = {}, threads = {}, ex = {}, client = {}, commands = {},
             players = { [1] = 'A', [2] = 'B' }, offline = {}, admins = {}, peds = {}, hold = {}, fail = {}, logs = {},
-            cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {} }
+            cash = { A = 1000, B = 1000 }, rep = {}, unknown = {}, charges = {}, credits = {}, reps = {}, chargeBusy = {},
+            stash = {}, registered = {}, snapshots = {}, clears = {}, net = {}, opens = {}, hands = {}, handCalls = {} }
         for _, r in ipairs(rows or {}) do W.db.plots[r.plot_id] = { citizenid = r.citizenid, class = r.class } end
         local function await(tag)
             local h = W.hold[tag]
@@ -130,19 +132,58 @@ return function(T, cfg)
         }
         local X = {
             ['rsg-core'] = { GetCoreObject = function() return core end },
-            fh_core = { registerContainer = function()
-                if W.fail.registerThrows then error('fh_core gone') end
-                if W.fail.register then return false, 'nope' end
-                return true
-            end },
+            -- H13 stashes: W.stash[id] = { [slot] = { name, amount } }; W.registered[id] = registered with fh_core.
+            -- snapshot of an id fh_inventory never saw = fh_unknown_container. W.fail.snapshot = <reason> (or 'throw'),
+            -- W.fail.clear = <reason> (or 'throw', or 'noop': reports ok but leaves the items), W.onSnapshot(id) runs
+            -- before each read (a spec can add items there, as a pane open before the lock would).
+            fh_core = {
+                registerContainer = function(_, ref)
+                    if W.fail.registerThrows then error('fh_core gone') end
+                    if W.fail.register then return false, 'nope' end
+                    W.registered[ref.id] = true
+                    return true
+                end,
+                snapshot = function(_, ref)
+                    W.snapshots[#W.snapshots + 1] = ref.id
+                    if W.onSnapshot then W.onSnapshot(ref.id) end
+                    if W.fail.snapshot == 'throw' then error('fh_inventory gone') end
+                    if W.fail.snapshot then return nil, W.fail.snapshot end
+                    if not W.registered[ref.id] then return nil, 'fh_unknown_container' end
+                    local out = {}
+                    for slot, it in pairs(W.stash[ref.id] or {}) do out[slot] = { name = it.name, amount = it.amount } end
+                    return out
+                end,
+                open = function(_, src, ref) -- records the open; reach is fh_core's job, not tested here
+                    W.opens[#W.opens + 1] = { src = src, id = ref.id }
+                    return true
+                end,
+                clearContainer = function(_, ref)
+                    W.clears[#W.clears + 1] = ref.id
+                    if W.fail.clear == 'throw' then error('fh_inventory gone') end
+                    if W.fail.clear == 'noop' then return true end
+                    if W.fail.clear then return false, W.fail.clear end
+                    if not W.registered[ref.id] then return false, 'fh_unknown_container' end
+                    W.stash[ref.id] = {}
+                    return true
+                end,
+            },
             fh_economy = economy,
+            -- H13b: getHands(src) -> W.hands[src] or {}; W.fail.hands = 'throw'; W.X.fh_hands = nil = resource missing
+            fh_hands = { getHands = function(_, src)
+                W.handCalls[#W.handCalls + 1] = src
+                if W.fail.hands == 'throw' then error('fh_hands errored') end
+                return W.hands[src] or {}
+            end },
         }
+        W.X = X
         W.env = setmetatable({
-            FhHomesteadConfig = cfg, FhPlotRules = PR, FhBuildRules = { safeRadius = function(p) return p.radius end, safeRadiusFor = function(p) return p.radius end },
+            FhHomesteadConfig = cfg, FhPlotRules = PR, FhBuildRules = setmetatable({ safeRadius = function(p) return p.radius end,
+                safeRadiusFor = function(p) return p.radius end }, { __index = BR }),
             FhRegions = opts.isEnabled and { isEnabled = opts.isEnabled } or nil,
+            FhHomesteadSlots = opts.slots, -- H13: { isReady, getTiers } stub (extra chests' built tiers)
             MySQL = { query = { await = db }, update = { await = db }, insert = { await = db } },
             CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
-            AddEventHandler = function() end, RegisterNetEvent = function() end,
+            AddEventHandler = function() end, RegisterNetEvent = function(name, fn) W.net[name] = fn end,
             TriggerEvent = function(name, data)
                 if W.fail.eventThrows == name then error('handler of ' .. name .. ' errored') end
                 W.events[#W.events + 1] = { name = name, data = data }
@@ -162,6 +203,13 @@ return function(T, cfg)
         W.at = function(src, plotId) W.peds[src] = cfg.plots[plotId].center end
         W.claimAt = function(src, plotId, class) W.at(src, plotId); return W.ex.claim(src, class) end
         W.buyAt = function(src, plotId) W.at(src, plotId); return W.ex.buyLot(src) end
+        -- client -> server net event as player src (handlers read the `source` global)
+        W.netEvent = function(name, src, payload)
+            W.env.source = src
+            local r = table.pack(W.net[name](payload))
+            W.env.source = nil
+            return table.unpack(r, 1, r.n)
+        end
         W.repOf = function(cid, region) return (W.rep[cid] or {})[region] or 0 end
         W.start = function(fn)
             local h = { co = coroutine.create(fn) }

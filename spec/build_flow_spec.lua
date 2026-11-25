@@ -116,6 +116,7 @@ local function newWorld(wcfg)
             W.db.slots[k] = nil
             return 1
         elseif sql:find('^DELETE FROM fh_plots') then
+            await('delete_plot')
             if W.db.plots[p[1]] ~= p[2] then return 0 end
             W.db.plots[p[1]] = nil
             for k in pairs(W.db.slots) do if k:sub(1, #p[1] + 1) == p[1] .. '|' then W.db.slots[k] = nil end end
@@ -144,6 +145,20 @@ local function newWorld(wcfg)
             registerItems = function(_, defs)
                 W.calls.registerItems = W.calls.registerItems + 1
                 for n in pairs(defs) do W.registeredItems[n] = true end
+                return true
+            end,
+            -- H13: unclaim reads (and on force empties) the plot stashes; W.chest[id] = { item = count }
+            snapshot = function(_, ref)
+                local s = stash(ref)
+                if not (W.containers[s] or W.chest[s]) then return nil, 'fh_unknown_container' end
+                local out, slot = {}, 0
+                for item, n in pairs(W.chest[s] or {}) do
+                    if n > 0 then slot = slot + 1; out[slot] = { name = item, amount = n } end
+                end
+                return out
+            end,
+            clearContainer = function(_, ref)
+                W.chest[stash(ref)] = {}
                 return true
             end,
             removeItem = function(_, ref, item, n)
@@ -254,7 +269,8 @@ local function newWorld(wcfg)
     end
     W.finish = function(h) while not h.done do W.step(h) end return table.unpack(h.res, 1, h.res.n) end
     W.build = function(src, slot) return W.B.build(src, slot) end
-    W.unclaim = function(plotId) return W.ex.unclaim(0, plotId) end
+    -- admin force (H13): these specs leave build materials in the chests; force logs + empties them, then releases
+    W.unclaim = function(plotId) return W.ex.unclaim(0, plotId, true) end
     W.named = function(name)
         local out = {}
         for _, e in ipairs(W.events) do if e.name == name then out[#out + 1] = e.args end end
@@ -433,39 +449,37 @@ T.describe('server/build.lua', function()
         assert(W.finish(h2))
         T.eq(1, W.slots.getTiers(P1).fence)
     end)
-    case('unclaim while materials are being taken: no build, items back, no charge', function()
-        local W = world({ cabin = 1 })
-        local before = snapshot(W)
-        W.hold.removeItem = true -- suspend after the first removeItem (lumber) succeeded
-        local h = W.start(function() return W.build(1, 'cabin') end)
-        assert(W.unclaim(P1))
-        local ok, why = W.finish(h)
-        assert(ok == false and why == 'fh_no_plot', tostring(why))
-        T.same(before, snapshot(W)) -- refunded into the chest it came from
-        T.eq(0, W.calls.charge); T.eq(1, W.calls.addItem)
-        T.eq(nil, W.db.slots[P1 .. '|cabin'])
+    -- H13: a build holds the plot's chests (FhHomesteadClaims.beginChestWrite) from before its first removeItem until its
+    -- lock is released, so an unclaim (owner or admin force) can never run mid-build and let a refund land in the next
+    -- owner's chest. Replaces the H2 "unclaim mid-build -> refund into the released chest" cases.
+    case('unclaim (even admin force) mid-build is refused fh_chest_busy in every phase; the build completes', function()
+        for _, tag in ipairs({ 'removeItem', 'charged', 'slot_write' }) do
+            local W = world()
+            W.hold[tag] = true
+            local h = W.start(function() return W.build(1, 'cabin') end)
+            assert(not h.done, tag .. ': build suspended')
+            T.same({ false, 'fh_chest_busy' }, { W.unclaim(P1) }, tag .. ': admin force refused')
+            T.same({ false, 'fh_chest_busy' }, { W.ex.unclaim(0, P1) }, tag .. ': admin refused')
+            T.eq('A', W.db.plots[P1], tag .. ': row kept')
+            local ok, tier = W.finish(h)
+            assert(ok == true and tier == 1, tag .. ': ' .. tostring(tier))
+            T.eq(850, W.cash.A); T.eq(80, W.chest1().lumber); T.eq(0, W.calls.addItem, tag .. ': nothing refunded')
+            -- hold released with the build lock: the leftovers now block a plain unclaim, force clears them
+            T.same({ false, 'fh_chests_not_empty' }, { W.ex.unclaim(0, P1) }, tag)
+            T.same({ true, P1 }, { W.unclaim(P1) }, tag)
+            T.eq(nil, next(W.chest1()), tag .. ': chest emptied')
+        end
     end)
-    case('unclaim + re-claim by the same character mid-charge: no build, money and items back', function()
+    case('a build is refused fh_claim_busy while an unclaim of the plot is in flight; nothing taken', function()
         local W = world()
-        W.hold.charged = true -- money already taken
-        local h = W.start(function() return W.build(1, 'cabin') end)
-        T.eq(850, W.cash.A)
-        assert(W.unclaim(P1))
-        assert(W.ex.claim(1)) -- A stands in the plot and claims it again
-        local ok, why = W.finish(h)
-        assert(ok == false and why == 'fh_no_plot', tostring(why))
-        T.eq(1000, W.cash.A); T.eq(100, W.chest1().lumber)
-        T.eq(nil, W.db.slots[P1 .. '|cabin']); T.eq(nil, W.slots.getTiers(P1).cabin)
-        T.eq(0, #W.named('fh:homestead:slot_changed'))
-    end)
-    case('unclaim during the slot write: setTier refuses, full refund', function()
-        local W = world()
-        W.hold.slot_write = true
-        local h = W.start(function() return W.build(1, 'cabin') end)
-        assert(W.unclaim(P1))
-        local ok, why = W.finish(h)
-        assert(ok == false and why == 'fh_plot_free', tostring(why))
-        T.eq(1000, W.cash.A); T.eq(100, W.chest1().lumber); T.eq(nil, W.db.slots[P1 .. '|cabin'])
+        W.chest1().lumber, W.chest1().nails = nil, nil -- empty chests: the owner's own unclaim goes through
+        W.hold.delete_plot = true
+        local h = W.start(function() return W.ex.unclaim(1, P1) end)
+        assert(not h.done, 'unclaim suspended in its DELETE')
+        T.same({ false, 'fh_claim_busy' }, { W.build(1, 'cabin') })
+        T.eq(0, W.calls.removeItem); T.eq(0, W.calls.charge)
+        T.same({ true, P1 }, { W.finish(h) })
+        T.eq('fh_no_plot', select(2, W.build(1, 'cabin')))
     end)
     case('not ready: refused fh_not_ready, nothing taken', function()
         local W = newWorld()

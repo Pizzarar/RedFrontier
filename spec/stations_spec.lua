@@ -78,6 +78,7 @@ end)
 -- the review describes); W.execOnResume = true runs it only when resumed instead.
 -- ---------------------------------------------------------------------------------------------------------------
 local PR = dofile(dir .. 'shared/plot_rules.lua')
+local BR = dofile(dir .. 'shared/build_rules.lua')
 local function readSrc(p) local fh = assert(io.open(p, 'rb')); local s = fh:read('a'); fh:close(); return s end
 local MAIN_SRC, SLOTS_SRC = readSrc(dir .. 'server/main.lua'), readSrc(dir .. 'server/slots.lua')
 
@@ -150,9 +151,11 @@ local function newWorld(config)
         __index = function(_, res) return setmetatable({}, { __index = function(_, fn) return function()
             if fn == 'GetCoreObject' then return core end
             if fn == 'registerContainer' then return true end
+            if fn == 'snapshot' then return {} end -- H13: unclaim reads every plot stash (empty here)
+            if fn == 'clearContainer' then return true end
         end end }) end })
     W.env = setmetatable({
-        FhHomesteadConfig = config or FhHomesteadConfig, FhPlotRules = PR, FhStations = S,
+        FhHomesteadConfig = config or FhHomesteadConfig, FhPlotRules = PR, FhStations = S, FhBuildRules = BR,
         MySQL = { query = { await = await }, update = { await = await }, insert = { await = await } },
         CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
         AddEventHandler = function(name, fn) W.handlers[name] = W.handlers[name] or {}; table.insert(W.handlers[name], fn) end,

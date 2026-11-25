@@ -11,17 +11,20 @@ shared_scripts {
     '@fh_core/shared/regions.lua', -- FhRegions global (fh_core must be started first)
     'config.lua',
     'shared/fence_logic.lua',
+    'shared/leads_logic.lua',
 }
 
 server_scripts {
     'server/charge.lua',
     'server/trade.lua',
     'server/main.lua',
+    'server/leads.lua',
 }
 
 client_scripts {
     '@fh_core/client/safe.lua',
     'client/main.lua',
+    'client/leads.lua',
 }
 
 dependencies { 'fh_core', 'fh_inventory', 'fh_economy', 'fh_progression', 'ox_lib' }

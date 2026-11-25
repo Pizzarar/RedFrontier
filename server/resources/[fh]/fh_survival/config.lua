@@ -53,4 +53,7 @@ FhSurvivalConfig = {
     -- Native hash (number) for the dead-eye recharge multiplier, signature (player, float). nil = dead-eye part skipped until a hash is confirmed.
     SluggishDeadeyeHash = nil,
     SluggishNotifyCooldownMs = 60000, -- min gap between repeated notify lines
+    -- == F2 owned homestead campfire heat (server/homestead_heat.lua) ==
+    HomesteadHeatRadius = 8.0,       -- heat radius for a player's own homestead campfire (matches the seeded fires)
+    HomesteadHeatSyncSeconds = 15,   -- re-sync owned campfire heat sources this often per online player
 }

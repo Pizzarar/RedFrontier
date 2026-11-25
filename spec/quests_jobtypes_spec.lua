@@ -18,7 +18,7 @@ local ME, OTHER = 'ABC123', 'XYZ999'
 local REGION = 'heartlands'
 
 local function events()
-    local set = { [JT.BOUNTY_EVENT] = true }
+    local set = { [JT.BOUNTY_EVENT] = true, ['fh:quests:point_reached'] = true }
     for _, name in ipairs(E.INTAKE) do set[name] = true end
     return set
 end

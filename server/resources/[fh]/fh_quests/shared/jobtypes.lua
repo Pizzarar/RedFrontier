@@ -1,4 +1,4 @@
--- fh_quests built-in job types (Q3): hunt_request, camp_clear, bounty. Pure Lua, no natives.
+-- fh_quests built-in job types (Q3): hunt_request, camp_clear, bounty; survey (quests-02 C2). Pure Lua, no natives.
 -- This is the data + the decisions. server/jobtypes.lua registers them through the same registerJobType export
 -- every other lane uses, and does the bounty I/O (spawn, death watch). Region templates live in M.DATA.
 --
@@ -9,7 +9,7 @@ local M = {}
 
 local function match() return FhQuestsMatch or require('match') end
 
-M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run' }
+M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run', 'survey' }
 M.BOUNTY_EVENT = 'fh:quests:bounty_down' -- local server event fired by the bounty death watcher: { citizenid, offer_key, region_id }
 M.BOUNTY_TAG_PREFIX = 'fh_quests:bounty:'
 
@@ -18,9 +18,11 @@ M.BOUNTY_TAG_PREFIX = 'fh_quests:bounty:'
 -- loads both right after this file; outside it (specs) this file loads them itself (bottom).
 M.DATA = {}     -- region_id -> { hunt = {...}, camps = {...}, bounties = {...} }
 M.BUILDERS = {} -- job_type -> function(region_id, data) -> offer list
+M.VERDICTS = {} -- job_type -> function(eventName, payload, state, snap) -> verdict|nil (types with their own rule)
 
 function M.registerRegion(region_id, data) M.DATA[region_id] = data end
 function M.registerBuilder(job_type, build) M.BUILDERS[job_type] = build end
+function M.registerVerdict(job_type, decide) M.VERDICTS[job_type] = decide end
 
 ---Offer rewards shape shared by the builders.
 function M.rewards(region_id, money, rep)
@@ -39,12 +41,13 @@ function M.bountyTag(region_id, key) return M.BOUNTY_TAG_PREFIX .. region_id .. 
 
 ---The bounty offer of a region by offer key (the spawn setup is not stored in the job snapshot, so a re-arm after a
 ---restart or a relog rebuilds it from the template). nil when the template is gone.
-function M.bountyOffer(region_id, key)
-    for _, o in ipairs(M.offers('bounty', region_id)) do
+function M.offerByKey(job_type, region_id, key)
+    for _, o in ipairs(M.offers(job_type, region_id)) do
         if o.key == key then return o end
     end
     return nil
 end
+function M.bountyOffer(region_id, key) return M.offerByKey('bounty', region_id, key) end
 
 ---Watched bounties whose ped is dead, as a sorted snapshot list. Taken before anything yields, so the caller can
 ---fire events and mutate `watch` afterwards without invalidating a traversal. isDead(w) -> boolean (may throw: that
@@ -80,12 +83,14 @@ end
 ---state.citizenid (payload.citizenid or a listed participant) and are not quota echoes.
 ---  hunt_request / camp_clear: the offer's own event + where predicates, one progress per matching event.
 ---    camp_clear credit therefore comes from payload.participants (core idea-614) and from nothing else.
+---  survey (and other M.VERDICTS types): their own registered rule (shared/jobtypes/<type>.lua).
 ---  bounty: only the bounty watcher's event, naming the acceptor as payload.citizenid and this offer's key.
 ---    participants are ignored: nobody but the acceptor is paid.
 ---@return string|nil verdict
 function M.verdict(job_type, eventName, payload, state)
     local snap = snapOf(job_type, state)
     if not snap or type(payload) ~= 'table' then return nil end
+    if M.VERDICTS[job_type] then return M.VERDICTS[job_type](eventName, payload, state, snap) end
     if job_type == 'bounty' then
         if eventName ~= M.BOUNTY_EVENT then return nil end
         if payload.citizenid ~= state.citizenid or payload.offer_key ~= snap.key then return nil end
@@ -99,9 +104,9 @@ end
 if GetCurrentResourceName then
     FhQuestsJobTypes = M
 else
-    -- Specs: load what the manifest loads in-game. The per-type files read this module as the FhQuestsJobTypes
-    -- global (not via the `...` chunk arg, which is a number under FXServer); the C0 `... or` files still take it
-    -- as the chunk argument below.
+    -- Specs: load what the manifest loads in-game. The global is set first: some files read FhQuestsJobTypes
+    -- directly (supply_run, survey); the rest take the chunk argument passed below, guarded by
+    -- `type((...)) == 'table'` because under FXServer `...` is a number and they fall back to the global.
     FhQuestsJobTypes = M
     local dir = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
     for _, job_type in ipairs(M.TYPES) do assert(loadfile(dir .. 'jobtypes/' .. job_type .. '.lua'))(M) end

@@ -35,6 +35,7 @@ The emitting lane owns the name and documents it in its README.
 | `fh:homestead:lot_bought` | fh_homestead | `{ src, citizenid, plot_id, region_id, price }`: a town lot bought with `/fh_buylot` / `buyLot` (after `claimed`); `price` = dollars charged |
 | `fh:homestead:open_chest` | fh_homestead (client -> server request) | `{ plot_id }` (string); server revalidates owner + reach, `src` from `source` |
 | `fh:homestead:unclaimed` | fh_homestead | `{ src, citizenid, plot_id }` (citizenid = former owner; src 0 = console) |
+| `fh:homestead:spilled` | fh_homestead | `{ src, citizenid, plot_id, reason, stashes = { { stash_id, items = { { item, count } } } } }`: plot chest items destroyed on unclaim (H13); `reason` = `force unclaim` (admin) or `ITEM LOST: added during unclaim` (final sweep); only stashes whose clear was read back empty |
 | `fh:spawn:create` | fh_core (server -> chosen client) | `{ requestId, kind, model, modelHash, coords = {x,y,z}, heading, token }`; client creates a networked entity |
 | `fh:spawn:created` | fh_core (client -> server) | `{ requestId, token, netId }`; netId must be a positive integer; adopted only if `source` is the chosen spawner, `token` is current, the entity exists, is network-owned by `source`, is held by no other request, is not a player ped, model matches, within `AdoptMaxDistance` |
 | `fh:spawn:failed` | fh_core (client -> server) | `{ requestId, token, reason }` (reason truncated to 64); counts only from the current spawner + token; retries |

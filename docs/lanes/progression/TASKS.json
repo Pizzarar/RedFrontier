@@ -1,6 +1,6 @@
 {
   "laneId": "progression",
-  "updatedAt": "2026-11-23T23:16:01.056Z",
+  "updatedAt": "2026-11-25T00:01:36.664Z",
   "units": [
     {
       "id": "prog-p1b",
@@ -16,7 +16,16 @@
       "goal": "ACCEPTED LOW residual (trade.lua:8-11): a fh_core call landing >=120s late can write into a newer trade's stash. core declined timeouts (idea-721: late write still lands). Fix path if ever needed: fence-side per-trade stash id or generation token checked on settle. Reopen on a real 'reclaimed a stale trade lock' log hit in playtest.",
       "files": [],
       "doneCheck": "",
-      "status": "done"
+      "status": "done",
+      "branch": "prog-fw",
+      "commit": "43bd36a"
+    },
+    {
+      "id": "prog-g2b",
+      "goal": "G2b: treasure lead exact coords are client-visible (Prg28 lows): fh_fence config.lua is a shared_script exposing stock leads coords+hint; FhFenceLogic.leadInfo (trade.lua:236) writes target xyz onto the item info. Move lead coords to server-only config, store an opaque lead id on the item, resolve server-side in leads.lua. trade.lua now free (prog-fw merged). Tier A (touches trade.lua).",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }

@@ -178,3 +178,33 @@ FH.on('onResourceStop', function(res)
     for plotId in pairs(slotSets) do clearPlot(plotId) end
     lib.hideTextUI()
 end)
+
+-- ---------------------------------------------------------------- H16: /fh_plotcheck probe (admin report)
+-- The server (server/plotcheck.lua) sends the plots to check; this client reuses world-01 D's FhSnap.groundZAt (read-only,
+-- one probe per plot, no second probe) plus a water-height read, and reports back with the same token. No natives are
+-- called for a plot that is not in the list, and a native that is missing is reported as "unknown", never an error.
+local function waterAt(x, y, z)
+    if type(GetWaterHeight) ~= 'function' then return false, nil end -- native name unverified in RedM
+    local ok, found, h = pcall(GetWaterHeight, x + 0.0, y + 0.0, z + 0.0)
+    if not ok then return false, nil end
+    if found and type(h) == 'number' then return true, h end
+    return true, nil
+end
+
+local plotcheckToken -- newest probe run wins: a re-run after a server timeout stops the older loop instead of stacking a second one
+FH.onNet('fh:homestead:plotcheck:probe', function(token, list)
+    if type(list) ~= 'table' then return end
+    plotcheckToken = token
+    local results = {}
+    for _, p in ipairs(list) do
+        if plotcheckToken ~= token then return end -- superseded (the server already dropped this token)
+        if type(p) == 'table' and type(p.id) == 'string' and type(p.x) == 'number' and type(p.y) == 'number' and type(p.z) == 'number' then
+            local gz, found = FhSnap.groundZAt('plotcheck:' .. p.id, p.x, p.y, p.z, FhGroundSnap.probeAboveFor(p))
+            local known, wz = waterAt(p.x, p.y, found and gz or p.z)
+            results[#results + 1] = { id = p.id, groundZ = gz, found = found == true, waterKnown = known, waterZ = wz }
+        end
+    end
+    if plotcheckToken ~= token then return end
+    plotcheckToken = nil
+    TriggerServerEvent('fh:homestead:plotcheck:result', token, results)
+end)
