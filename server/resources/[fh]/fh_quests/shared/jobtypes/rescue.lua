@@ -96,13 +96,15 @@ function JT.rescueOnCampCleared(watch, p)
 end
 
 ---Position that counts for a rescue entry (the core tick tests it against the captive's spawn point).
----holder = the holder's ped coords, captive = the captive's live coords (nil when unknown: the spawn point is used).
----Locked (camp not cleared since arm) or lost: nil. Otherwise the spawn point when the holder is within
----RESCUE_RADIUS of the captive (so a captive that was knocked a few metres still counts), else nil.
+---holder = the holder's ped coords, captive = the captive's live coords (the server passes nil when the entity does
+---not exist or is dead). Locked (camp not cleared since arm), lost, spawn failed or no live captive: nil, so a
+---captive that failed to spawn or despawned can never be freed (the lost check fails it instead). Otherwise the
+---spawn point when the holder is within RESCUE_RADIUS of the live captive, else nil.
 function JT.rescuePos(e, holder, captive)
-    if not e.cleared or e.lost or type(e.points) ~= 'table' or not e.points[1] then return nil end
+    if not e.cleared or e.lost or e.spawnFailed or type(e.points) ~= 'table' or not e.points[1] then return nil end
+    if holder == nil or captive == nil then return nil end
     local at = e.points[1]
-    if holder and WR.within(holder, captive or at, JT.RESCUE_RADIUS) then return at end
+    if WR.within(holder, captive, JT.RESCUE_RADIUS) then return at end
     return nil
 end
 

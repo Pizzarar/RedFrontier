@@ -71,9 +71,14 @@ local function cleared(offer, participants, camp)
     return { camp_id = camp or offer.camp, region_id = REGION, loot = {}, participants = participants }
 end
 
--- One reach-watcher tick for `watch` with the holder at `holder` (captive at its spawn point).
+-- One reach-watcher tick for `watch` with the holder at `holder` (live captive at its spawn point unless given;
+-- pass false for "no live captive", as server posOf does when the entity is missing or dead).
 local function tickAt(watch, holder, captive)
-    return WR.tick(watch, function(e) return JT.rescuePos(e, holder, captive) end)
+    return WR.tick(watch, function(e)
+        local c = captive
+        if c == nil then c = e.points[1] elseif c == false then c = nil end
+        return JT.rescuePos(e, holder, c)
+    end)
 end
 
 local function st(status, count) return { status = status, progress = { count = count } } end
@@ -194,8 +199,8 @@ describe('quests rescue: clear, then reach', function()
         local e = entryFor(o)
         JT.rescueOnCampCleared({ a = e }, cleared(o, { OTHER, ME }))
         eq(true, e.cleared)
-        eq(nil, JT.rescuePos(e, { x = c.x + JT.RESCUE_RADIUS + 1, y = c.y }))
-        same(c, JT.rescuePos(e, { x = c.x + 3, y = c.y - 2 }))
+        eq(nil, JT.rescuePos(e, { x = c.x + JT.RESCUE_RADIUS + 1, y = c.y }, c))
+        same(c, JT.rescuePos(e, { x = c.x + 3, y = c.y - 2 }, c))
         -- the captive was knocked 30 m away: the holder must reach it, not its spawn point
         local moved = { x = c.x + 30, y = c.y }
         eq(nil, JT.rescuePos(e, c, moved))
@@ -248,7 +253,7 @@ describe('quests rescue: clear, then reach', function()
         local e = entryFor(o)
         JT.rescueOnCampCleared({ a = e }, cleared(o, { ME }))
         e.lost = true
-        eq(nil, JT.rescuePos(e, o.coords))
+        eq(nil, JT.rescuePos(e, o.coords, o.coords))
         eq(0, #tickAt({ a = e }, o.coords))
         e.cleared = false
         same({}, JT.rescueOnCampCleared({ a = e }, cleared(o, { ME }))) -- lost: not re-unlocked
@@ -256,6 +261,42 @@ describe('quests rescue: clear, then reach', function()
 end)
 
 describe('quests rescue: captive lost (escort rule)', function()
+    it('a captive whose spawn failed can never be freed, even unlocked and reached; the lost check fails it', function()
+        local o = rescueOffer()
+        local e = entryFor(o)
+        JT.rescueOnCampCleared({ a = e }, cleared(o, { ME }))
+        e.spawnFailed = true
+        eq(nil, JT.rescuePos(e, o.coords, o.coords))
+        eq(0, #tickAt({ a = e }, o.coords))
+        eq(0, #tickAt({ a = e }, o.coords, false))
+        local lost = JT.rescueCollectLost({ a = e }, function() return { spawn = { state = 'pending' }, failed = true } end)
+        eq(1, #lost); eq(true, e.lost)
+    end)
+    it('a despawned captive within the lost grace cannot be freed, then fails', function()
+        local o = rescueOffer()
+        local e = entryFor(o)
+        JT.rescueOnCampCleared({ a = e }, cleared(o, { ME }))
+        local watch = { a = e }
+        local missing = function() return { spawn = ADOPTED, exists = false } end
+        -- reach ticks run before the lost check: with no live captive (posOf passes nil) nothing is freed
+        for _ = 1, JT.ESCORT_LOST_TICKS - 1 do
+            eq(0, #tickAt(watch, o.coords, false))
+            eq(0, #JT.rescueCollectLost(watch, missing)) -- grace: wait
+        end
+        eq(0, #tickAt(watch, o.coords, false))
+        eq(nil, JT.rescuePos(e, o.coords, nil))
+        local lost = JT.rescueCollectLost(watch, missing)
+        eq(1, #lost); eq(true, e.lost)
+        eq(false, WR.finished(e))
+        local def, s = accepted(o)
+        eq('failed', feed(def, s, JT.CAPTIVE_LOST, JT.rescuePayload(e)).status)
+    end)
+    it('server posOf reads no captive spot fallback: missing / dead entity or spawnFailed -> nil', function()
+        local src = read(ROOT .. 'fh_quests/server/watch.lua')
+        local section = src:sub((src:find('-- ================================================================ rescue', 1, true)))
+        assert(section:find('if not e.cleared or e.spawnFailed then return nil end', 1, true))
+        assert(section:find('if not ent or GetEntityHealth(ent) <= 0 then return nil end', 1, true))
+    end)
     it('dead or despawned before freed: lost -> the fail event, reported again until the row leaves active', function()
         local o = rescueOffer()
         local watch = { a = entryFor(o, ME, 1), b = entryFor(o, OTHER, 2) }

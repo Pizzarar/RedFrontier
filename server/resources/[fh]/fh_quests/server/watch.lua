@@ -332,14 +332,10 @@ do
     end
 
     kind.posOf = function(e)
-        if not e.cleared then return nil end -- locked: no ped read at all
-        local captive = nil
+        if not e.cleared or e.spawnFailed then return nil end -- locked / spawn failed: no ped read at all
         local ent = entityOf(e.netId)
-        if ent then
-            if GetEntityHealth(ent) <= 0 then return nil end
-            captive = GetEntityCoords(ent)
-        end
-        return JT.rescuePos(e, playerPos(e), captive)
+        if not ent or GetEntityHealth(ent) <= 0 then return nil end -- no live captive: never freed (lost check)
+        return JT.rescuePos(e, playerPos(e), GetEntityCoords(ent))
     end
 
     -- fh_zones camp clears (local server event; a client source is dropped, as the intake does).
