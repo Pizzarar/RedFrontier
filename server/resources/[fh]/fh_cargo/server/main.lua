@@ -249,13 +249,13 @@ local function nearestWagon(src, coords, range)
 end
 
 -- ---------------------------------------------------------------- R16: owned wagons + buy (roads-04)
--- fh_wagons (server/migrations/0021_fh_wagons.sql): one row per owned tier, PK (citizenid, tier). The buy flow is the
+-- fh_wagons (server/migrations/0022_fh_wagons.sql): one row per owned tier, PK (citizenid, tier). The buy flow is the
 -- pure FhCargoBuy.buy (server/wagon_buy.lua, specced in spec/cargo_buy_spec.lua); this only supplies its deps.
 -- Natives used: none beyond citizenidOf (rsg-core). DB: oxmysql MySQL.query.await / MySQL.update.await.
 local buyLocks = {}
 
 CreateThread(function()
-    -- Idempotent, same DDL as server/migrations/0021_fh_wagons.sql (belt and braces for a DB that skipped the migration;
+    -- Idempotent, same DDL as server/migrations/0022_fh_wagons.sql (belt and braces for a DB that skipped the migration;
     -- until the table exists every buy fails closed at the ownership read, fh_db_error, before any charge).
     local ok, err = pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_wagons` (
       `citizenid` varchar(50) NOT NULL,

@@ -96,7 +96,7 @@ Only `cargo` items move (spec §4.1). Cargo cannot live in a backpack, so loadin
 Players own wagon tiers they bought; `/fh_wagon` stays the admin dev bypass (no ownership check, no charge). Calling and
 stowing an owned wagon at a trade post is R17.
 
-**Table** `fh_wagons` (`server/migrations/0021_fh_wagons.sql`; number may change at merge): `citizenid`, `tier`
+**Table** `fh_wagons` (`server/migrations/0022_fh_wagons.sql`; number may change at merge): `citizenid`, `tier`
 (`t1`/`t2`/`t3`), `bought_at`; PRIMARY KEY (`citizenid`, `tier`) = one row per owned tier.
 
 **`buyWagon(src, tier, region_id)`** (flow in `server/wagon_buy.lua`, pure, specced in `spec/cargo_buy_spec.lua`):

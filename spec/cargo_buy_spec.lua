@@ -547,7 +547,7 @@ end)
 
 case('migration and the startup DDL define the same fh_wagons table (PK citizenid, tier)', function()
     local function norm(x) return (x:gsub('%-%-[^\n]*', ''):gsub('%s+', ' '):gsub(';', ''):match('CREATE TABLE.-COLLATE=utf8mb4_general_ci')) end
-    local fh = assert(io.open(here .. '../server/migrations/0021_fh_wagons.sql', 'rb')); local mig = fh:read('a'); fh:close()
+    local fh = assert(io.open(here .. '../server/migrations/0022_fh_wagons.sql', 'rb')); local mig = fh:read('a'); fh:close()
     fh = assert(io.open(CARGO .. 'server/main.lua', 'rb')); local main = fh:read('a'); fh:close()
     local m = norm(mig)
     assert(m and m:find('PRIMARY KEY %(`citizenid`, `tier`%)'), 'migration PK')

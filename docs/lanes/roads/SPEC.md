@@ -27,7 +27,7 @@ pay/charge/rep); a contract change is a request to @core, never an edit in fh_co
 - `server/migrations/0008_fh_heat.sql` (fh_heat)
 - `server/migrations/0013_fh_trade.sql` (fh_trade price state)
 - `server/migrations/0014_fh_trade_contracts.sql` (freight contracts)
-- `server/migrations/0021_fh_wagons.sql` (fh_wagons, owned wagons; renumber at merge to main max+1)
+- `server/migrations/0022_fh_wagons.sql` (fh_wagons, owned wagons)
 New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9a9ed6c did).
 
 ## Locked export contracts (README per resource is the source of truth)
@@ -85,7 +85,7 @@ New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9
     posts from FhRegions `verified = false`), regional tier gate, T3 contracts with t3 wagon, and kill switches.
   - Venv specs green (`~/.venvs/rf/bin/python tools/run-specs.py`); `vs log decision "roads-03 playtest-ready <hash>"`.
 - roads-04 (wagon ownership):
-  - R16: `fh_wagons` migration 0021 (renumber at merge) + `buyWagon` (specs `cargo_buy_spec`).
+  - R16: `fh_wagons` migration 0022 + `buyWagon` (specs `cargo_buy_spec`).
   - R17: `/wagonpost` buy / call / stow, `nearestPost` in fh_trade, one live wagon rule, stow reach (specs).
   - R18: carrot / potato / corn at $3 in fh_trade supplies.
   - R19: OWNER-TESTS `## Roads` steps 36-48 as a non-admin player; this SPEC + TASKS. Venv specs green;
