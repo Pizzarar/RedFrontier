@@ -1181,13 +1181,16 @@ Prereqs (all must be merged before this card is meaningful):
 
 32. Regional freight destinations to Saint Denis and Blackwater. Destinations resolve dynamically from `fh_trade` posts via `FhRegions.posts` (`FhPlaceResolver.resolvePosts`).
    Destination posts have unverified positions to eyeball, from FhRegions `verified = false`: `saint_denis_post` (bayou_nwa, (2700.0, -1430.0, 45.0)), `blackwater_post` (great_plains, (-865.0, -1350.0, 44.0)), as well as `valentine_post` (heartlands, (-176.0, 630.0, 114.0)) and `rhodes_post` (scarlett_meadows, (1288.0, -1278.0, 77.0)).
-   From Valentine or Rhodes console: `fh_trade_shortage bayou_nwa trade_salt 0.5` and `fh_trade_shortage great_plains trade_salt 0.5`, then open the quest board.
+   From the server console: `fh_trade_shortage bayou_nwa trade_salt 0.5` and `fh_trade_shortage great_plains trade_salt 0.5`, then open the quest board at Valentine or Rhodes.
    Expected: freight offers appear with destinations to Saint Denis (`to_region = 'bayou_nwa'`) and Blackwater (`to_region = 'great_plains'`) based on shortage and route distance. Stand beside your wagon (`/fh_wagon t1` or `/fh_wagon t2`) and accept: cargo loads into the wagon. Haul to the destination trade post delivery radius (`freight.destinationRadius` = 40 m): wagon cargo is removed and the contract completes (`fh:trade:contract_delivered`).
    RESULT:
-33. Per-region tier gate. Admin set rep so `bayou_nwa` is tier 2 while `heartlands` stays tier 1.
-   From the server console: `fh_rep_region <yourId> bayou_nwa 100` (delta: rep 0 -> 100 = tier 2), leaving heartlands at rep 0 = tier 1.
-   Go to the Saint Denis trade post (`bayou_nwa`), stand beside your t2 wagon (`/fh_wagon t2`) and accept a `[T2]` contract originating from Bayou Nwa. Then travel to the Valentine trade post (`heartlands`) and attempt to accept a `[T2]` contract originating from Heartlands.
-   Expected: Bayou Nwa `[T2]` contract accepts successfully (`getTier(src, 'bayou_nwa') >= 2`). Heartlands `[T2]` contract is refused `fh_locked` (`getTier(src, 'heartlands') < 2`). Confirms the contract tier gate checks rep in the offer's origin region (`from_region`).
+33. Per-region tier gate. Spawn the t2 wagon `/fh_wagon t2` while heartlands is still tier 2 (rep 100).
+   From the server console, drop heartlands rep and raise bayou_nwa: `fh_rep_region <yourId> heartlands -100` (delta: rep 100 -> 0 = tier 1; the live wagon stays, per step 30) and `fh_rep_region <yourId> bayou_nwa 100` (delta: rep 0 -> 100 = tier 2).
+   At the Valentine post (heartlands) with the wagon beside you, attempt to accept a heartlands-origin `[T2]` contract.
+   Expected: refused `fh_locked` (`getTier(src, 'heartlands') < 2`).
+   Take the wagon to the Saint Denis post (bayou_nwa; admin teleport ok) and accept a bayou_nwa-origin `[T2]` contract.
+   Expected: accepted successfully (`getTier(src, 'bayou_nwa') >= 2`). Confirms the contract tier gate checks rep in the offer's origin region (`from_region`).
+   From the server console, restore heartlands rep: `fh_rep_region <yourId> heartlands 100` (delta: rep 0 -> 100 = tier 2) so heartlands rep is back to 100 = tier 2.
    RESULT:
 34. T3 contract: wagon tier fit and origin tier gate. T3 contracts are configured under `freight.t3` with `minWagonTier 3`, distance-scaled deadline, and gate `getTier >= 3`.
    At origin region rep tier 2 (e.g. heartlands rep 100), attempt to accept a `[T3]` contract.
