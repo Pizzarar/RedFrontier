@@ -31,6 +31,7 @@ local M = {}
 
 M.DIR = 'data/legendaries/'
 M.DEFAULT_ID = 'legendary_bear' -- the Legendary Bear (heartlands): calls without a legendary id mean this one
+M.FALLBACK_TRAPPER_REGION = 'heartlands' -- may omit `trapper` (shared/sell.lua falls back to config Trapper)
 M.MARKER_IDS = { [2] = 'track', [3] = 'carcass' } -- default marker id per clue step
 
 local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
@@ -173,7 +174,26 @@ function M.build(rawByRegion, regionIds, plain)
         local raw = rawByRegion[rid]
         if raw ~= nil then
             local e, err = M.validate(raw, rid, plain)
-            if not e then
+            -- A missing/malformed trapper: an error (entry dropped) for an enabled region, a warning for a disabled
+            -- one (entry kept without a trapper). Heartlands may omit it (config Trapper fallback).
+            local issue = (not e and err and err:match('^bad trapper') and err)
+                or (e and e.trapper == nil and rid ~= M.FALLBACK_TRAPPER_REGION and 'missing trapper') or nil
+            local dropped = false
+            if issue and M.isEnabled(rid) then
+                reg.warnings[#reg.warnings + 1] = rid .. ': error: ' .. issue .. ' (region enabled; entry dropped)'
+                dropped = true
+            elseif issue then
+                reg.warnings[#reg.warnings + 1] = rid .. ': ' .. issue
+                if not e then
+                    local copy = {}
+                    for k, v in pairs(raw) do copy[k] = v end
+                    copy.trapper = nil
+                    e, err = M.validate(copy, rid, plain)
+                end
+            end
+            if dropped then
+                -- already reported
+            elseif not e then
                 reg.warnings[#reg.warnings + 1] = rid .. ': ' .. err
             elseif reg.byId[e.id] then
                 reg.warnings[#reg.warnings + 1] = rid .. ': duplicate id ' .. e.id

@@ -25,7 +25,7 @@ function M.source(legendaryId)
 end
 
 function M.new(deps)
-    local warned = {} -- [coat id] = true once logged
+    local warned = {} -- [coat id .. '|' .. refusal code] = true once logged
     local C = {}
 
     ---Grant both coats for one legendary. Never throws. Returns the number of calls made (0 = fh_tailor unavailable).
@@ -62,6 +62,22 @@ function M.new(deps)
             if C.grantFor(citizenid, lid) > 0 then done[#done + 1] = lid end
         end
         return done
+    end
+
+    ---Login backfill: `query()` returns the character's completed chain rows ({ chain_id = ... }); `known[chain_id]` gates
+    ---which are legendaries. A query failure logs citizenid + error and grants nothing. Returns the ids granted for.
+    function C.backfillFromQuery(citizenid, query, known)
+        local ok, rows = pcall(query)
+        if not ok or type(rows) ~= 'table' then
+            deps.log(('coat backfill query failed for %s: %s'):format(tostring(citizenid), tostring(rows)))
+            return {}
+        end
+        local ids = {}
+        for _, r in ipairs(rows) do
+            if type(r.chain_id) == 'string' and known[r.chain_id] then ids[#ids + 1] = r.chain_id end
+        end
+        if #ids == 0 then return {} end
+        return C.backfill(citizenid, ids)
     end
 
     return C

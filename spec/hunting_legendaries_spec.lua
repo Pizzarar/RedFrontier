@@ -23,6 +23,7 @@ local function raw(id, x0, y0, over)
         id = id, label = 'Test ' .. id, species_model = 'a_c_wolf', outfit = 0, scale = 1.2,
         pelt = { item = 'pelt_' .. id, label = 'Test Pelt', value = 50, weight = 20000, image = 'perfect_pelt.png' },
         trophy = { item = 'trophy_' .. id, label = 'Test Trophy', comfort = 25 },
+        trapper = { label = 'Test Trapper', coords = { x = x0, y = y0, z = 10.0 } },
         rumour = { coords = { x = x0, y = y0, z = 10.0 }, price = 30, label = 'Ask about it' },
         markers = {
             [2] = { label = 'Prints', coords = { x = x0 + 50, y = y0, z = 10.0 } },

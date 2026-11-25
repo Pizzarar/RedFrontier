@@ -13,7 +13,6 @@ FhHuntingWagon = dofile(base .. 'shared/wagon.lua')
 local S = dofile(base .. 'shared/sell.lua')
 local L = dofile(base .. 'shared/legendaries.lua')
 local Chain = dofile(base .. 'shared/chain.lua')
-local regions = require('regions')
 
 local SRC, CID = 7, 'CID123'
 local BAG = { type = 'saddlebag', id = 'fh:saddle:' .. CID }
@@ -79,6 +78,33 @@ describe('hunting trappers: data + loader', function()
         end
         local e = L.validate(with(nil), SCARLETT)
         assert(e and e.trapper == nil)
+    end)
+    it('build: missing/malformed trapper warns for a disabled region, errors (drops the entry) for an enabled one', function()
+        local raw = dofile(base .. 'data/legendaries/' .. SCARLETT .. '.lua')
+        local function with(tr) local r = {}; for k, v in pairs(raw) do r[k] = v end; r.trapper = tr; return r end
+        local real = L.isEnabled
+        local function run(enabled, tr)
+            L.isEnabled = function() return enabled end
+            local reg = L.build({ [SCARLETT] = with(tr) }, { SCARLETT })
+            L.isEnabled = real
+            return reg
+        end
+        local build = run
+        for _, tr in ipairs({ 'x', { label = 'T' }, { label = 'T', coords = { x = 0, y = 0 } } }) do
+            local d = build(false, tr)
+            assert(d.byRegion[SCARLETT] and d.byRegion[SCARLETT].trapper == nil, 'disabled keeps entry')
+            assert(d.warnings[1] and d.warnings[1]:match('bad trapper') and not d.warnings[1]:match('error'), tostring(d.warnings[1]))
+            local en = build(true, tr)
+            eq(nil, en.byRegion[SCARLETT])
+            assert(en.warnings[1]:match('error: bad trapper'), tostring(en.warnings[1]))
+        end
+        local d = build(false, nil)
+        assert(d.byRegion[SCARLETT] and d.warnings[1]:match('missing trapper') and not d.warnings[1]:match('error'))
+        local en = build(true, nil)
+        eq(nil, en.byRegion[SCARLETT])
+        assert(en.warnings[1]:match('error: missing trapper'))
+        local ok = build(true, raw.trapper)
+        assert(ok.byRegion[SCARLETT] and #ok.warnings == 0)
     end)
     it('S.trappers lists every registry trapper and falls back to config for heartlands', function()
         local list = S.trappers(cfg, L)

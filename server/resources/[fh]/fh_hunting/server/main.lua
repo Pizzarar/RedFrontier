@@ -436,14 +436,9 @@ end)
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     local cid = type(Player) == 'table' and type(Player.PlayerData) == 'table' and Player.PlayerData.citizenid
     if type(cid) ~= 'string' or cid == '' or not coats.available() then return end
-    local okq, rows = pcall(MySQL.query.await,
-        'SELECT chain_id FROM fh_hunting_chains WHERE citizenid = ? AND completed = 1', { cid })
-    if not okq or type(rows) ~= 'table' then return end
-    local ids = {}
-    for _, r in ipairs(rows) do
-        if type(r.chain_id) == 'string' and legendaries.byId[r.chain_id] then ids[#ids + 1] = r.chain_id end
-    end
-    if #ids > 0 then coats.backfill(cid, ids) end
+    coats.backfillFromQuery(cid, function()
+        return MySQL.query.await('SELECT chain_id FROM fh_hunting_chains WHERE citizenid = ? AND completed = 1', { cid })
+    end, legendaries.byId)
 end)
 
 AddEventHandler('playerDropped', function()
