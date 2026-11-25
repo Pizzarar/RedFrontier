@@ -18,6 +18,7 @@ type) build against now. Every export and event lives here; anything not listed 
 | Built-in job types `hunt_request`, `camp_clear`, `bounty`; `/jobs` jobs board and `/journal` on the fh_ui screens (the ox_lib fallback menu is removed) | Q3 | **built**, pure parts specced; in-game unverified |
 | 3 family questlines (data files, giver NPCs, fh_ui `dialogue` screen) | Q4 | **built**, defs and walk-throughs specced; in-game unverified |
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
+| Content-ladder job types `supply_run`, `survey`, `escort`, `rescue` + reach-watcher | quests-02 C1-C4 | **built**; heartlands data only; in-game unverified |
 
 The server side is in (`server/main.lua`: state cache, per-character lock, persistence, payouts, sync;
 `server/api.lua`: exports and event intake). It is not `ensure`d yet (Q5 adds it). It needs the `fh_quest_state`
@@ -270,6 +271,62 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
   offer is taken by someone else, the job stays open and can be abandoned.
 - **Limitations:** watchers are in memory (re-armed as above). A ped that fh_core cannot spawn leaves the job open until
   relog or abandon.
+
+### Content-ladder job types (quests-02 C1-C4)
+
+Same registration path and region gate as above (`server/jobtypes.lua` registers all seven; builders in
+`shared/jobtypes/<type>.lua`, verdicts decided there through `JT.registerVerdict`, read by `JT.verdict` in
+`shared/jobtypes.lua`). `FhQuestsJobTypes` (and `FhQuestsWatchRules`) are read as **globals** in these files, never
+from the chunk argument `...`: under FXServer `...` is a number, not nil.
+
+| Type | Offer `on` | Advances / ends when | DATA key in `data/regions/<id>.lua` |
+|---|---|---|---|
+| `supply_run` | `fh:trade:sold`, `where = { post = { eq }, item = { eq }, amount = { min } }` | the holder sells at least `amount` of `item` at that fh_trade `post` in ONE sale; completes (count 1) | `supply = { { post, item, amount, money, rep }, ... }` |
+| `survey` | `fh:quests:point_reached` (count = number of points) | the reach-watcher reports the holder at a point; each valid point counts one; completes at the last | `surveys = { { key, name, points = { {x,y,z}... }, ordered = true (default), money, rep }, ... }` |
+| `escort` | `fh:quests:escort_arrived` | the escortee reaches `destination` -> complete; `fh:quests:escort_lost` (escortee dead or despawned) -> **fail** | `escorts = { { key, name, model, start = {x,y,z}, heading, destination = {x,y,z}, money, rep }, ... }` |
+| `rescue` | `fh:quests:captive_freed` | the holder is within 10 m of the live captive AFTER the linked camp was cleared with the holder in `participants` -> complete; `fh:quests:captive_lost` (captive dead or despawned) -> **fail** | `rescues = { { key, name, camp = '<fh_zones camp id>', model, coords = {x,y,z}, heading, money, rep }, ... }` |
+
+- **`supply_run`:** `fh:trade:sold` payload is `{ src, region, post, item, amount, total }` (fh_trade
+  `server/main.lua:144`); the intake resolves `src` to the citizenid. The key is `region` (not `region_id`). `post`
+  and `item` must match exactly; `amount` is the single sale's quantity, so two smaller sales never add up. Offer key
+  `supply_<post>_<item>`.
+- **`survey`:** ordered by default (point `count + 1` only; `ordered = false` accepts any unvisited point). Radius
+  is 25 m horizontal (`WR.DEFAULT_RADIUS`), checked server-side on a 3 s tick (`WR.TICK_MS`) against the holder's
+  ped coords; a point out of order never counts. Offer key `survey_<key>`.
+- **`escort`:** on accept the escortee ped spawns at `start` (fh_core `requestSpawn`, tag
+  `fh_quests:escort:<region>:<key>:<cid>`) and the client tasks it to follow the holder (`client/escort.lua`,
+  `fh:quests:escort_follow` / `escort_stop`). Arrival = the escortee's position (not the holder's) within the
+  watcher radius of `destination`. Lost = dead, spawn request failed/gone, or entity missing 2 checks in a row.
+  Offer key `escort_<key>`.
+- **`rescue`:** on accept the captive spawns at `coords` (tag `fh_quests:rescue:<region>:<key>:<cid>`). A local
+  `fh:zones:camp_cleared { camp_id, ... participants }` for the offer's `camp` unlocks the job only if the holder is
+  listed and the job was already accepted (armed). Reaching the captive before the unlock does nothing and is not
+  remembered; the unlock is in memory, so after a relog or restart a fresh clear is needed. Lost rule is escort's.
+  Offer key `rescue_<key>`.
+- **Quest-owned events** (`fh:quests:point_reached`, `escort_arrived`, `escort_lost`, `captive_freed`,
+  `captive_lost`) are LOCAL server events (`TriggerEvent`), payload `{ citizenid, offer_key, region_id }`
+  (`point_reached` adds `point`). Each verdict checks that `citizenid`, `offer_key` and `region_id` match the held
+  job, so only the holder's own job moves.
+- **Region gate:** unchanged: a region that is not enabled has no offers for any type (`FhRegions.isEnabled`, see
+  Server exports). Today only `data/regions/heartlands.lua` has `supply`/`surveys`/`escorts`/`rescues`; every
+  coordinate, model and camp id there is TODO-verify-in-game.
+
+#### Reach-watcher hook (for future "be somewhere" types)
+
+`server/watch.lua` runs one coarse tick (`WR.TICK_MS`) over every held watched job and emits the kind's event when
+a target is reached. A new type needs no edit to the rules:
+
+1. `FhQuestsWatchRules.registerKind(job_type, def)` (`shared/watch_rules.lua`): `points(offer)` (required, the
+   targets), optional `ordered`, `radius`, `event`, `payload(entry, point)`, and server-only `posOf(entry)` (whose
+   position counts, default the holder's ped), `onArm(entry, offer)` (extra setup, e.g. spawn an NPC; return
+   `ok, err`) and `onDisarm(entry, why)`.
+2. Register hooks with `FhQuestsWatch.jobHooks(job_type)` (`W.jobHooks`, `server/watch.lua`): returns
+   `{ accept, abandon, events }` (arm on accept, disarm on abandon, the kind's event added to the intake); merge it
+   into the type's `registerJobType` hooks (as `survey` does; `escortHooks()` / `rescueHooks()` add their lost event).
+3. Register a verdict with `FhQuestsJobTypes.registerVerdict(job_type, fn)` and an offer builder with `registerBuilder`.
+
+Active watched jobs are re-armed from the template plus the persisted progress count on character load and on
+fh_quests restart.
 
 **Rotation.** Each region's board holds 3-5 offers, picked by `board.rotate` from the offers of every registered
 type (types are interleaved, so every type is on the board while templates last), re-picked every 60 minutes

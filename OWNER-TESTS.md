@@ -613,6 +613,34 @@ the `fh_ledger` table on the DevPC DB, newest row for your citizenid. A step tha
     needed changing.
     RESULT:
 
+Content-ladder job types (quests-02 C1-C4). Only `heartlands` has data for them today (one offer each), so run these in
+the Heartlands board (`/jobs` near -297, 795, 118). Offers rotate (3-5 per hour): if the one you want is not on the board,
+wait for the next rotation (step 8) or restart inside a different hour. All coords/models are TODO-verify-in-game (report
+corrected values, not failures). Ledger reason is `quest:job:<type>:<offer key>`.
+
+15. supply_run. Accept "Supply run: 2x trade_cloth" (sell 2 trade_cloth at the valentine_post trade post). First sell 1 trade_cloth
+    there, then 2 of another item (or 2 trade_cloth at a different post).
+    Expected: neither counts, the job stays active (one sale of 1 does not add up; wrong item/post never counts). Then sell 2+ `trade_cloth`
+    at valentine_post in one sale: the job completes, $10 and +1 rep once, reason `quest:job:supply_run:supply_valentine_post_trade_cloth`.
+    RESULT:
+16. survey. Accept "Survey: Ridge markers" and ride to its 3 points in order: -260, 760, 116 then -330, 700, 118 then -410, 650, 121
+    (25 m radius; TODO-verify-in-game).
+    Expected: progress goes 1/3, 2/3, 3/3 (checked about every 3 s); at the last the job completes, $24 and +2 rep once, reason
+    `quest:job:survey:survey_ridge_markers`. Failure path: on a fresh accept ride to point 3 first: nothing counts until point 1 is reached.
+    RESULT:
+17. escort. Accept "Escort: Doc Hollis". Doc spawns near -175, 627, 114 and follows you; lead him to -360, 795, 116 (TODO-verify-in-game).
+    Expected: arrival completes the job, $28 and +2 rep once, reason `quest:job:escort:escort_doc_hollis`; he lingers a few seconds then despawns.
+    Failure path: repeat on a fresh accept (next rotation) and kill Doc (or let him die): the job fails (leaves My active jobs, no payment,
+    no `quest:` ledger row). If the follow task never moves him (natives unverified), report that and `SKIP` the arrival half.
+    RESULT:
+18. rescue. Accept "Rescue: Ada Brennan". She is held near -143, 851, 117 (beside the Heartlands camp `heartlands_t1_01`, TODO-verify-in-game).
+    First walk up to her BEFORE clearing the camp (if you can without dying): nothing happens, she stays tied and the job stays active.
+    Then clear the camp while standing inside it (you must be in `participants`), walk within 10 m of her.
+    Expected: the job completes, $34 and +3 rep once, reason `quest:job:rescue:rescue_ada_brennan`; she despawns a few seconds later.
+    Failure paths: a camp clear you were not inside for (or one that happened before you accepted) does not unlock her; if she is killed
+    before you free her the job fails with no payment. After a relog the unlock is gone: a fresh clear is needed.
+    RESULT:
+
 Known limits (not failures):
 - Item rewards stay owed: fh_core refuses `backpack`/`equipped` item adds (idea-643), so a quest with `items` keeps
   `reward_pending`, pays money/rep once, retries on each load, and a repeatable with items cannot be taken again
