@@ -11,7 +11,7 @@
 - H1–H5 of docs/brainstorm/plans/hunting-01-l8.md merged to local main with reviewer PASS + run-specs green, a `## Hunting` section in OWNER-TESTS.md, and `decision hunting playtest-ready <hash>` logged.
 
 ## Decided
-- Plan: docs/brainstorm/plans/hunting-01-l8.md (2026-11-22). Quality flag `Config.PeltQualitySource='roll'` (default; S4 untested) | `'native'`. Small/medium game = bulky pelts, big game + legendary = cargo (wagon within ~8 m, else the skin is refused). One Legendary Bear, 3-clue chain in one region (Buddy lean, R13). Trophies: `exports.fh_hunting:getTrophyComfort(itemId) -> number|nil`; Homestead owns placement and reads the export; Hunting fires no trophy events (agreed with Homestead Buddy rn-e71c3e2fc82c, 2026-11-22).
+- Latest plan: docs/brainstorm/plans/hunting-02-legendaries.md (idea-840, 2026-11-24; 15 legendaries, 1 per region, data-driven, isEnabled gate, no migration). Plan 01: docs/brainstorm/plans/hunting-01-l8.md (2026-11-22). Quality flag `Config.PeltQualitySource='roll'` (default; S4 untested) | `'native'`. Small/medium game = bulky pelts, big game + legendary = cargo (wagon within ~8 m, else the skin is refused). One Legendary Bear, 3-clue chain in one region (Buddy lean, R13). Trophies: `exports.fh_hunting:getTrophyComfort(itemId) -> number|nil`; Homestead owns placement and reads the export; Hunting fires no trophy events (agreed with Homestead Buddy rn-e71c3e2fc82c, 2026-11-22).
 - Events for @quests/@guide (hub, 2026-11-22): pelt_skinned (H2), pelt_sold (H3), clue_found/legendary_spawned/chain_complete (H4), all `fh:hunting:*` with citizenid. Payloads are in plan Decided.
 - pelt_sold payload = {citizenid,item_id,animal,size_class,quality,price,region_id} (@quests Q0b, accepted; Quests Buddy rn-f56f69815ec9, Guide Buddy rn-8111c1048653 informed).
 - H2 deviations accepted: own Skin prompt (vanilla not hooked), bulky → saddlebag (backpack pocket-only), pelt_skinned carries src. Head/vital always 3★; body 10% 1★.
@@ -25,6 +25,8 @@
 - When S4 spk_pelt returns GO, consider flipping `PeltQualitySource` to `native`.
 
 ## In flight
+- 2026-11-25 Hun2: hunting-02 (idea-840) ALL BLOCKS PASS on hunting-l4: L1 PASS 0/0/0 6f550b5 (rn-9351184139d8); B2-B5 PASS 0/0/2 126db80 (rn-197ed50326c3); contracts item+label def rule PASS 0/0/3 669eff1 (rn-d63685c6fd15). Minors queued as follow-up. Awaiting slot.
+- 2026-11-24 idea-840 plan docs/brainstorm/plans/hunting-02-legendaries.md handed to Hun2 rn-bc5251cf4622: B1 generalize (High) -> B2||B3||B4 batches -> B5 docs. hunting-01 done (H1-H7, main 5c70876).
 - 2026-11-23 Hun2: H7 MERGED to main 2c84742 (fc5dee4+2c84742; Gemini PASS 0/0/0 cc030aa; range-diff '!' OWNER-TESTS placement only, code '='; venv 64/1285/0, no mig). idea-616(1) closed. Lane plan complete; open: tune trophy comfort 25 + trapper coords with owner/homestead.
 - 2026-11-23 Hun2: H6 MERGED to main 3ba2783 (ab49b50+3ba2783, range-diff '=' vs reviewed 3a97873, venv 57/1164/0, no migration). H7 despawn(requestOfNetId) on hunting-h7 cc030aa, in Gemini review rn-452bd87f8fa2.
 - 2026-11-23 MERGED to main (slot, main 0fb8dc6 base): H2 43742a4, H3 ec31845, H5 f7b8eb8, H4 855ef3f (migration renumbered 0010). venv specs 49/962/0. H6 (core B7 charge/removeItem, hunting-h6) awaits re-review -> next slot; despawn(requestOfNetId) wiring -> next slot.
