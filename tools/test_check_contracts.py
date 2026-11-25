@@ -82,6 +82,28 @@ class T(unittest.TestCase):
         t = tree(self.root, "", cfg_items="items = { gun_parts = { label = 'Gun Parts', weight = 1 } }\nloot = { { name = 'gun_parts', chance = 1 } }\n")
         self.assertEqual(findings(t, 'items'), [])
 
+    def test_table_item_with_label_defines_item(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[fh]/fh_b/data/items.lua', "return {\n  pelt = { item = 'p1', label = 'P' },\n}\n")
+        self.assertEqual(findings(t, 'items'), [])
+
+    def test_multiline_table_label_before_item_defines_item(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[fh]/fh_b/data/items.lua',
+              "return {\n  trophy = {\n    label = 'Trophy',\n    comfort = 10,\n    item = 't1',\n  },\n}\n")
+        self.assertEqual(findings(t, 'items'), [])
+
+    def test_plain_item_reference_without_label_is_finding(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[fh]/fh_b/data/loot.lua', "return { { item = 'nope', amount = 1 } }\n")
+        self.assertEqual([f[1] for f in findings(t, 'items')], ['nope'])
+
+    def test_nested_table_label_does_not_define_outer_item(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[fh]/fh_b/data/nested.lua',
+              "return {\n  row = {\n    item = 'outer_only',\n    meta = { label = 'Inner Label' },\n  },\n}\n")
+        self.assertEqual([f[1] for f in findings(t, 'items')], ['outer_only'])
+
     def test_allowlist_and_stale_warning(self):
         t = tree(self.root, "exports.fh_a:nope()\n")
         al = os.path.join(self.root, 'allow.txt')

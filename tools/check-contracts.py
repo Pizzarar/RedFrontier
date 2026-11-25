@@ -25,9 +25,11 @@ Rules
            table field (quest/hook consumers). Dynamic names (`'fh:' .. x`) are not seen.
   items    item names in loot/shop/recipe style config rows: `{ name = 'x', chance|amount|... }` rows (a `name=`
            field accompanied by chance/amount/count/price on the same line) and `item = 'x'` / `item='x'` fields in
-           any [fh] config.lua or data/*.lua. Must be defined: rsg-core shared/items.lua entries, or any [fh] table
+           any [fh] config.lua or data/*.lua. Must be defined: rsg-core shared/items.lua entries, any [fh] table
            entry shaped `key = { label = ...` (item definitions: fh_core Items, resource `items = {}`, registerItems
-           batches). Item names built dynamically are not seen. Weapons are expected in rsg items too.
+           batches), or any table literal containing both `item = '<x>'` and `label =` at the same brace depth (in
+           either order, single- or multi-line). Item names built dynamically are not seen. Weapons are expected in
+           rsg items too.
   Documented events: a sender with no listener is fine when the event name appears in a *.md in the emitting resource
   (published bus events); `fh:<res>:ui_<action>` handlers count as sent by the fh_ui relay (fh:ui:action).
   Dynamic export loops `for k, fn in pairs(T) do exports([prefix ..] k, fn) end` export (with the prefix) every `function T.X`/`T.X =` found in files of
@@ -250,6 +252,37 @@ def run(root, cfg_path):
         findings.append(('events', name, locs[0], 'handler for %r has no sender' % name))
 
     # ---- rule 3: items
+    NAMEROW = re.compile(r"\{\s*name\s*=\s*['\"]([\w-]+)['\"]\s*,[^\n}]*\b(?:chance|amount|count|price|qty|weight)\b")
+    ITEMFLD = re.compile(r"(?<![\w.])item\s*=\s*['\"]([\w-]+)['\"]")
+    LABELFLD = re.compile(r"(?<![\w.])label\s*=(?!=)")
+
+    def table_item_defs(t):
+        out, stack, i, n = set(), [], 0, len(t)
+        while i < n:
+            c = t[i]
+            if c in '\'"':
+                j = i + 1
+                while j < n and t[j] != c and t[j] != '\n':
+                    j += 2 if t[j] == '\\' else 1
+                if stack:
+                    stack[-1].append(t[i:j + 1])
+                i = j + 1
+                continue
+            if c == '{':
+                if stack:
+                    stack[-1].append(' ')
+                stack.append([])
+            elif c == '}':
+                if stack:
+                    body = ''.join(stack.pop())
+                    if LABELFLD.search(body):
+                        for m in ITEMFLD.finditer(body):
+                            out.add(m.group(1))
+            elif stack:
+                stack[-1].append(c)
+            i += 1
+        return out
+
     defined = set()
     for r in resources.values():
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
@@ -259,6 +292,7 @@ def run(root, cfg_path):
             for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*name\s*=\s*['\"](\w+)['\"]", t):
                 if (m.group(1) or m.group(2)) == m.group(3):
                     defined.add(m.group(3))
+            defined.update(table_item_defs(t))
     dyn = set()   # `[a.b.c] = { label = ...` registers whatever `c` holds inside a table `b = { ... }` in config
     for r in resources.values():
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
@@ -274,8 +308,6 @@ def run(root, cfg_path):
                         depth += {'{': 1, '}': -1}.get(t[i], 0); i += 1
                     for v in re.finditer(r"\b%s\s*=\s*['\"]([\w-]+)['\"]" % re.escape(fld), t[m.end():i]):
                         defined.add(v.group(1))
-    NAMEROW = re.compile(r"\{\s*name\s*=\s*['\"]([\w-]+)['\"]\s*,[^\n}]*\b(?:chance|amount|count|price|qty|weight)\b")
-    ITEMFLD = re.compile(r"(?<![\w.])item\s*=\s*['\"]([\w-]+)['\"]")
     for rn in sorted(fh_names):
         r = resources[rn]
         g = glob.escape(r.path)
