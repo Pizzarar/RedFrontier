@@ -274,14 +274,15 @@ end
 ---@return table|nil state, table effectsOrErr  on refusal: nil, err
 function M.start(def, stateByQuest, citizenid, now)
     if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'fh_bad_citizenid' end
-    local ok, err = M.canStart(def, stateByQuest, now)
+    local t = nowOf(now)
+    local ok, err = M.canStart(def, stateByQuest, t)
     if not ok then return nil, err end
     local prev = (stateByQuest or {})[def.id]
     local state = {
         citizenid = citizenid, quest_id = def.id, status = 'active', step = 1,
         progress = { count = 0, completions = prev and (prev.progress or {}).completions or 0,
-            step_id = M.stepIdOf(def, 1), accepted_at = nowOf(now) },
-        cooldown_until = prev and prev.cooldown_until or nil, updated_at = nowOf(now),
+            step_id = M.stepIdOf(def, 1), accepted_at = t },
+        cooldown_until = prev and prev.cooldown_until or nil, updated_at = t,
     }
     return state, { effect('started', def, state) }
 end

@@ -133,10 +133,9 @@ AddEventHandler('onResourceStop', function(res)
 end)
 
 -- ---------------------------------------------------------------- registration
--- TODO(quests-04 L0): exports.fh_hunting:chainState(citizenid, chain_id) does not exist yet (@hunting L0).
--- Until L0 lands, this returns nil so the offer is shown. Once L0 lands, the GetResourceState + pcall + callable
--- check picks it up automatically and returns { reason = 'legendary_done' } when chainState == 'complete'.
--- chainState is nil | step 1..4 (1 rumour, 2 track, 3 carcass, 4 spawned) | 'complete'; only 'complete' locks.
+-- Per-player lock for legendary commissions via fh_hunting/server/chain_export.lua:
+-- exports.fh_hunting:chainState(citizenid, chain_id) -> nil | step 1..4 (1 rumour, 2 track, 3 carcass, 4 spawned) | 'complete'.
+-- Only 'complete' locks with { reason = 'legendary_done' }; returns nil if fh_hunting is stopped or the export errors.
 local function legendaryLockedFor(offer, src)
     if GetResourceState('fh_hunting') ~= 'started' then return nil end
     local h = exports.fh_hunting
@@ -150,7 +149,7 @@ local function legendaryLockedFor(offer, src)
     })
 end
 
--- Accept guard: lockedFor is display-only, so refuse here too (stale board / offer not yet hidden by L0).
+-- Accept guard: lockedFor is display-only, so refuse here too (e.g. stale board or showLockedOffers).
 -- Absent export or error -> allow, same as lockedFor.
 local function legendaryAccept(src, offer)
     if legendaryLockedFor(offer, src) then return false, 'fh_legendary_done' end

@@ -20,6 +20,7 @@ type) build against now. Every export and event lives here; anything not listed 
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
 | Content-ladder job types `supply_run`, `survey`, `escort`, `rescue` + reach-watcher | quests-02 C1-C4 | **built**; heartlands data only; in-game unverified |
 | Contract tiers (tier gating, scaling, ladder content) | quests-03 T1-T4 | **built**; heartlands, scarlett_meadows, bayou_nwa, great_plains |
+| Legendary commissions (`legendary` job type, all 15 regions) + one-pelt-one-job (idea-1017) | quests-04 L1-L3 | **built**, pure parts specced; in-game unverified |
 
 The server side is in (`server/main.lua`: state cache, per-character lock, persistence, payouts, sync;
 `server/api.lua`: exports and event intake). It is not `ensure`d yet (Q5 adds it). It needs the `fh_quest_state`
@@ -94,7 +95,7 @@ advances anything.
 | `fh:zones:camp_cleared` | @core (fh_zones) | `{ camp_id, region_id, loot, participants }`: `participants` = citizenids of the players within `activationRadius` at clear (empty table if none, or if the lookup failed) |
 | `fh:hunting:pelt_skinned` | @hunting (H2) | `{ citizenid, item_id, animal, quality, size_class }` |
 | `fh:hunting:pelt_sold` | @hunting (H3) | `{ citizenid, item_id, animal, size_class, quality, price, region_id }` |
-| `fh:hunting:chain_complete` | @hunting (H4) | `{ citizenid, chain_id }` |
+| `fh:hunting:chain_complete` | @hunting (H4) | `{ citizenid, chain_id, region_id, legendary }` |
 | `fh:homestead:claimed` | @homestead | `{ src, citizenid, plot_id, region_id }` |
 | `fh:economy:paid`, `fh:economy:rep_changed` | fh_economy | see `fh_core/docs/events.md` (reasons `quest:*` are ignored so a reward never advances a quest) |
 | `fh:death:dropped`, `fh:death:recovered`, `fh:death:expired` | fh_death | see `fh_core/docs/events.md` |
@@ -309,7 +310,7 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 
 ### Content-ladder job types (quests-02 C1-C4)
 
-Same registration path and region gate as above (`server/jobtypes.lua` registers all seven; builders in
+Same registration path and region gate as above (`server/jobtypes.lua` registers all eight; builders in
 `shared/jobtypes/<type>.lua`, verdicts decided there through `JT.registerVerdict`, read by `JT.verdict` in
 `shared/jobtypes.lua`). `FhQuestsJobTypes` (and `FhQuestsWatchRules`) are read as **globals** in these files, never
 from the chunk argument `...`: under FXServer `...` is a number, not nil.
@@ -320,6 +321,7 @@ from the chunk argument `...`: under FXServer `...` is a number, not nil.
 | `survey` | `fh:quests:point_reached` (count = number of points) | the reach-watcher reports the holder at a point; each valid point counts one; completes at the last | `surveys = { { key, name, points = { {x,y,z}... }, ordered = true (default), money, rep }, ... }` |
 | `escort` | `fh:quests:escort_arrived` | the escortee reaches `destination` -> complete; `fh:quests:escort_lost` (escortee dead or despawned) -> **fail** | `escorts = { { key, name, model, start = {x,y,z}, heading, destination = {x,y,z}, money, rep }, ... }` |
 | `rescue` | `fh:quests:captive_freed` | the holder is within 10 m of the live captive AFTER the linked camp was cleared with the holder in `participants` -> complete; `fh:quests:captive_lost` (captive dead or despawned) -> **fail** | `rescues = { { key, name, camp = '<fh_zones camp id>', model, coords = {x,y,z}, heading, money, rep }, ... }` |
+| `legendary` | `fh:hunting:chain_complete`, `where = { chain_id = { eq }, region_id = { eq } }` | the holder finishes that region's legendary hunt chain (`chain_id`, `region_id`); one-shot per character | `legendaries = { { chain_id, legendary, money, rep, min_tier = 3 }, ... }` |
 
 - **`supply_run`:** `fh:trade:sold` payload is `{ src, region, post, item, amount, total }` (fh_trade
   `server/main.lua:144`); the intake resolves `src` to the citizenid. The key is `region` (not `region_id`). `post`
@@ -338,6 +340,15 @@ from the chunk argument `...`: under FXServer `...` is a number, not nil.
   listed and the job was already accepted (armed). Reaching the captive before the unlock does nothing and is not
   remembered; the unlock is in memory, so after a relog or restart a fresh clear is needed. Lost rule is escort's.
   Offer key `rescue_<key>`.
+- **`legendary` (quests-04):** one-shot tier-3 regional legendary hunt commission (`shared/jobtypes/legendary.lua`).
+  Data shape in all 15 `data/regions/<id>.lua` files: `legendaries = { { chain_id, legendary, money, rep, min_tier = 3 } }`
+  (disabled regions remain hidden by the enabled-region gate). Offer key is `chain_id` (quest id
+  `job:legendary:<chain_id>`). Step listens on `fh:hunting:chain_complete` with
+  `where = { chain_id = { eq = chain_id }, region_id = { eq = region_id } }`. Pay is base `$60` / `+5 rep`, scaled
+  `×2.25` at tier 3 (`$135` / `+11 rep`). Once `exports.fh_hunting:chainState(citizenid, chain_id) == 'complete'`
+  (`fh_hunting/server/chain_export.lua`), `lockedFor` returns `{ reason = 'legendary_done' }` (hiding the offer, or
+  showing it greyed when `FhQuestsConfig.showLockedOffers` is on) and `hooks.accept` refuses with `fh_legendary_done`
+  (`server/ui_text.lua`: `"You have already brought that legend down."`).
 - **Quest-owned events** (`fh:quests:point_reached`, `escort_arrived`, `escort_lost`, `captive_freed`,
   `captive_lost`) are LOCAL server events (`TriggerEvent`), payload `{ citizenid, offer_key, region_id }`
   (`point_reached` adds `point`). Each verdict checks that `citizenid`, `offer_key` and `region_id` match the held
@@ -620,10 +631,11 @@ Storage notes:
   `snapshot(job_type, offer, region_id, hasHook)`, `def(snapshot, opts)`, `normalize(v)`, `DEFAULT_COOLDOWN_MIN`.
 - `FhQuestsJobTypes` (`jobtypes.lua`): `TYPES`, `DATA`, `offers(job_type, region_id)`, `verdict(job_type, eventName, payload, state)`,
   `bountyTag(region_id, key)`, `BOUNTY_EVENT`.
-- `FhQuestsIntake` (`intake.lua`): `accepts(name, extraEvents)`, `srcToResolve(payload)`, `targets(payload, cid)`,
-  `payloadFor(payload, cid)`, `feed(defs, states, eventName, payload, now, hookFor)`, `emits(effects)`,
-  `dialogue(def, before, after)`, `offers(defs, states, npc_id, now)`,
-  `fresh(defs, states, change, eventName, payload, now, hookFor)` (drops or recomputes a stale change at commit time).
+- `FhQuestsIntake` (`intake.lua`): `ONE_JOB_EVENTS`, `acceptOrder(states)`, `accepts(name, extraEvents)`,
+  `srcToResolve(payload)`, `targets(payload, cid)`, `payloadFor(payload, cid)`,
+  `feed(defs, states, eventName, payload, now, hookFor)`, `emits(effects)`, `dialogue(def, before, after)`,
+  `offers(defs, states, npc_id, now)`, `fresh(defs, states, change, eventName, payload, now, hookFor)` (drops or
+  recomputes a stale change at commit time).
 - `FhQuestsRewards` (`rewards.lua`): the exactly-once payout protocol, `run(def, state, io)` with the I/O injected,
   `scaleByTier(rewards, tier, multipliers)`, `tierMultiplier(tier, multipliers)`.
 - `FhQuestsStore` (`store.lua`): `SELECT`, `UPSERT`, `params(state, encode)`, `fromRow(row, decode)`.
@@ -631,8 +643,9 @@ Storage notes:
   `snapshot` (the `fh:quests:sync` payload).
 
 Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests_rewards`, `quests_store`,
-`quests_journal`, `quests_jobs`, `quests_jobtypes`, `quests_tiers`, `quests_hunt_rekey` (idea-902 keys + legacy re-key, incl. the
-server load path). `server/main.lua` and `server/api.lua` are thin I/O glue over these.
+`quests_journal`, `quests_jobs`, `quests_jobtypes`, `quests_tiers`, `quests_one_job`, `quests_legendary`,
+`quests_hunt_rekey` (idea-902 keys + legacy re-key, incl. the server load path). `server/main.lua` and
+`server/api.lua` are thin I/O glue over these.
 
 ## In-game test card
 

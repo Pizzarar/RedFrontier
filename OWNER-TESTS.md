@@ -841,6 +841,43 @@ is region-scoped.
     `where_region` = `heartlands` (a fresh accept is region-scoped, so a wolf pelt sold at another region's trapper does not count).
     RESULT:
 
+Legendary commissions and one-pelt-one-job (quests-04, idea-1017).
+
+23. Legendary commission (tier 3) and payout. Use a character that has NOT finished `legendary_bear` yet and raise Heartlands rep
+    to tier 3 (400 rep) in the server console: `fh_rep_region <yourId> heartlands 400` (if already at tier 2 from step 19, add `300`).
+    Open `/jobs` near Valentine (-297, 795, 118; if `"Legendary commission: Legendary Bear"` is not in the current 3-5 offer rotation,
+    wait for the next 60-min epoch or set `M.DEFAULTS.min = 25, max = 25` in `server/resources/[fh]/fh_quests/shared/board.lua:12`).
+    Expected: `"Legendary commission: Legendary Bear"` (`job:legendary:legendary_bear`, `min_tier = 3`; `fh_quests/data/regions/heartlands.lua:51`,
+    `fh_quests/shared/jobtypes/legendary.lua:30-40`) appears on the board with an active Accept button. Accept it; it appears in `/journal`.
+    Now complete the Heartlands Legendary Bear chain (`fh_hunting/data/legendaries/heartlands.lua:16-28`, coords TODO-verify-in-game):
+    buy the rumour (`Ask about the legendary bear`, $25) at the Heartlands Trapper (-299, 792, 118.2), inspect the Bear tracks (-260, 800, 116)
+    and Mauled carcass (-215, 812, 115), then kill and skin the Legendary Bear at -170, 820, 114 (`fh:hunting:chain_complete` fires with
+    `chain_id = 'legendary_bear'`, `region_id = 'heartlands'`).
+    Expected: the commission completes and pays once at tier-3 scaling (2.25x of base $60 / +5 rep): **$135** and **+11 rep** (`heartlands`),
+    ledger reason `quest:job:legendary:legendary_bear`.
+    RESULT:
+24. Legendary commission lock after completion. Immediately after step 23 (once `fh_hunting_chains` has `completed = 1` for
+    `legendary_bear`, so `exports.fh_hunting:chainState(citizenid, 'legendary_bear') == 'complete'`, `fh_hunting/server/chain_export.lua:3-12`),
+    re-open `/jobs` near Valentine (-297, 795, 118).
+    Expected: `"Legendary commission: Legendary Bear"` is greyed with no Accept button when `FhQuestsConfig.showLockedOffers = true`
+    (default in `fh_quests/config.lua:5`) or hidden when `showLockedOffers = false` (`fh_quests/server/jobtypes.lua:140-151`,
+    `fh_quests/shared/jobtypes/legendary.lua:56-67`). Attempting to accept it anyway (e.g. from a stale board open before completion, or via
+    `acceptOffer` in `fh_quests/server/api.lua:192-226`) hits `legendaryAccept` (`fh_quests/server/jobtypes.lua:155-158`) and is refused with
+    error code `fh_legendary_done` and notice verbatim from `fh_quests/server/ui_text.lua:18`: `"You have already brought that legend down."`
+    RESULT:
+25. One pelt, one job (idea-1017). On `/jobs` near Valentine (-297, 795, 118), accept two matching Heartlands pelt requests for the same
+    animal (`fh_quests/data/regions/heartlands.lua:6`): accept `"Pelt wanted: 2-star deer"` (`job:hunt_request:hunt_heartlands_deer_2star`,
+    $10, +1 rep) FIRST, wait at least 1 second (so `progress.accepted_at` differs, `fh_quests/shared/intake.lua:67-91`), then accept
+    `"Pelt wanted: 1-star deer"` (`job:hunt_request:hunt_heartlands_deer_1star`, $6, +1 rep) SECOND. (If both are not in the current 3-5
+    rotation, set `M.DEFAULTS.min = 25, max = 25` in `shared/board.lua:12` or use any other two matching pelt offers, e.g. 2-star and 3-star wolf.)
+    Sell ONE 2-star (or 3-star) deer pelt at the Heartlands Trapper (-299, 792, 118.2, `fh_hunting/data/legendaries/heartlands.lua:16`).
+    Expected: ONLY the older accepted order (`"Pelt wanted: 2-star deer"`) completes and pays ($10, +1 rep, ledger reason
+    `quest:job:hunt_request:hunt_heartlands_deer_2star`), even though `hunt_heartlands_deer_1star` sorts earlier alphabetically;
+    `"Pelt wanted: 1-star deer"` stays active in `/journal`.
+    Sell a SECOND deer pelt (1-star or better) at the Heartlands Trapper.
+    Expected: `"Pelt wanted: 1-star deer"` now completes and pays ($6, +1 rep, ledger reason `quest:job:hunt_request:hunt_heartlands_deer_1star`).
+    RESULT:
+
 Known limits (not failures):
 - Item rewards stay owed: fh_core refuses `backpack`/`equipped` item adds (idea-643), so a quest with `items` keeps
   `reward_pending`, pays money/rep once, retries on each load, and a repeatable with items cannot be taken again

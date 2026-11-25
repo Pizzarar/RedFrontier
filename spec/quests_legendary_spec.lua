@@ -297,6 +297,72 @@ describe('quests legendary: lockedFor (pure + server/jobtypes.lua wiring)', func
         for _, k in ipairs(keys) do _G[k] = saved[k] end
         assert(ok, err)
     end)
+
+    it('Jobs.callable and legendaryLockedFor/accept handle FXServer __call table export proxy stubs', function()
+        local saved = {}
+        local keys = {
+            'FhQuestsJobTypes', 'FhQuestsJobs', 'FhQuestsServer', 'FhQuestsWatch', 'exports',
+            'GetResourceState', 'GetCurrentResourceName', 'CreateThread', 'Wait', 'AddEventHandler', 'GetPlayers',
+        }
+        for _, k in ipairs(keys) do saved[k] = _G[k] end
+
+        local registered = {}
+        local proxyVal = 'complete'
+        local proxyStub = setmetatable({}, {
+            __call = function(_, _self, cid, chain_id)
+                if cid == ME and chain_id == 'legendary_bear' then return proxyVal end
+                return nil
+            end,
+        })
+        local threads = {}
+
+        local ok, err = pcall(function()
+            eq(true, Jobs.callable(proxyStub), 'Jobs.callable accepts __call table stub')
+            eq(false, Jobs.callable({}), 'Jobs.callable rejects plain table')
+            eq(false, Jobs.callable(nil), 'Jobs.callable rejects nil')
+
+            _G.FhQuestsJobTypes = JT
+            _G.FhQuestsJobs = Jobs
+            _G.FhQuestsServer = {
+                citizenidOf = function(src) return src == 1 and ME or nil end,
+                srcOf = {},
+                log = function() end,
+            }
+            _G.FhQuestsWatch = {
+                jobHooks = function() return {} end,
+                escortHooks = function() return {} end,
+                rescueHooks = function() return {} end,
+                rearmAll = function() end,
+            }
+            _G.GetCurrentResourceName = function() return 'fh_quests' end
+            _G.GetResourceState = function() return 'started' end
+            _G.CreateThread = function(fn) threads[#threads + 1] = fn end
+            _G.Wait = function() end
+            _G.AddEventHandler = function() end
+            _G.GetPlayers = function() return {} end
+            _G.exports = {
+                fh_quests = {
+                    registerJobType = function(_, name, h) registered[name] = h; return true end,
+                },
+                fh_hunting = { chainState = proxyStub },
+            }
+
+            dofile(QROOT .. 'server/jobtypes.lua')
+            threads[2]()
+
+            local legHooks = assert(registered.legendary, 'legendary job type not registered')
+            same({ reason = 'legendary_done' }, legHooks.lockedFor(offer, 1))
+            local p1, p2 = legHooks.accept(1, offer)
+            eq(false, p1); eq('fh_legendary_done', p2)
+
+            proxyVal = 3
+            eq(nil, legHooks.lockedFor(offer, 1))
+            eq(true, (legHooks.accept(1, offer)))
+        end)
+
+        for _, k in ipairs(keys) do _G[k] = saved[k] end
+        assert(ok, err)
+    end)
 end)
 
 T.finish()

@@ -43,14 +43,14 @@ JT.registerBuilder('legendary', function(region_id, d)
     return out
 end)
 
--- TODO(quests-04 L0): @hunting L0 adds exports.fh_hunting:chainState(citizenid, chain_id) -> nil | step(1..4: rumour, track, carcass, spawned) | 'complete'.
--- Until L0 lands, chainState is absent and lockedFor returns nil (offer shown). Once L0 lands, this guard picks it up
--- automatically and hides completed chains with { reason = 'legendary_done' } with no quests change needed.
+-- Per-player lock backed by fh_hunting/server/chain_export.lua:
+-- exports.fh_hunting:chainState(citizenid, chain_id) -> nil | step(1..4: rumour, track, carcass, spawned) | 'complete'.
+-- Returns { reason = 'legendary_done' } only when chainState == 'complete'; returns nil when fh_hunting is stopped or errors.
 ---Pure per-player lock check for a legendary commission offer.
 ---deps = {
 ---  citizenidOf = function(src) -> citizenid|nil,
 ---  huntingStarted = function() -> boolean,
----  chainState = function(cid, chain_id) -> nil | number (1..4) | 'complete' (optional; nil when L0 not landed),
+---  chainState = function(cid, chain_id) -> nil | number (1..4) | 'complete' (optional; nil when fh_hunting is stopped/absent),
 ---}
 ---@return table|nil lock  { reason = 'legendary_done' } when complete, else nil
 function JT.legendaryLockedFor(offer, src, deps)
