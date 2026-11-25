@@ -279,6 +279,30 @@ function Q.tierOf(src, region_id)
     return math.floor(tier)
 end
 
+---Per-player display lock from a job type's optional hooks.lockedFor(offer, src). nil = unlocked (hook absent,
+---returned nil/false). A table result is a lock { reason?, min_tier? }; any other truthy result is a bare lock.
+---A hook that throws is logged and the offer counts as locked (never unlocked). Display only: acceptOffer's own
+---gates stay authoritative.
+function Q.hookLock(o, src)
+    local jt = Q.jobTypes[o.job_type]
+    local fn = jt and jt.hooks and jt.hooks.lockedFor
+    if fn == nil then return nil end
+    local copy = {}
+    for k, v in pairs(o.offer or {}) do copy[k] = v end
+    local ok, res = pcall(fn, copy, src)
+    if not ok then
+        Q.log('job type %s lockedFor(%s) failed: %s', tostring(o.job_type), tostring(o.id), tostring(res))
+        return { reason = 'fh_lock_error' }
+    end
+    if not res then return nil end
+    local lock = {}
+    if type(res) == 'table' then
+        if type(res.reason) == 'string' then lock.reason = res.reason end
+        if type(res.min_tier) == 'number' and res.min_tier == res.min_tier then lock.min_tier = res.min_tier end
+    end
+    return lock
+end
+
 function Q.boardView(region_id, states, now, src)
     local board = Q.boardFor(region_id, now)
     local accepted = {}
@@ -291,28 +315,25 @@ function Q.boardView(region_id, states, now, src)
         return tiers[r]
     end
     local showLocked = FhQuestsConfig and FhQuestsConfig.showLockedOffers == true
-    if showLocked then
-        local locked = {}
-        for _, o in ipairs(board.offers) do
-            local minTier = B.offerMinTier(o)
-            if minTier > tierFor(Q.offerRegionOf(o, region_id)) then locked[o.id] = minTier end
-        end
-        return J.boardView(region_id, board.epoch, board.expires_at, board.offers, accepted, Jobs.questId, locked)
-    end
-    local uniform = true
+    -- Per-player lock of one offer (tier lock + optional lockedFor hook); the shared board.offers are never touched.
+    local locked, visible = {}, {}
     for _, o in ipairs(board.offers) do
-        if Q.offerRegionOf(o, region_id) ~= region_id then uniform = false; break end
-    end
-    local visible
-    if uniform then
-        visible = B.visible(board.offers, tierFor(region_id))
-    else
-        visible = {}
-        for _, o in ipairs(board.offers) do
-            if #B.visible({ o }, tierFor(Q.offerRegionOf(o, region_id))) == 1 then visible[#visible + 1] = o end
+        local minTier = B.offerMinTier(o)
+        local lock = nil
+        if minTier > tierFor(Q.offerRegionOf(o, region_id)) then lock = { min_tier = minTier } end
+        local hl = Q.hookLock(o, src)
+        if hl then
+            lock = lock or {}
+            if lock.min_tier == nil then lock.min_tier = hl.min_tier end
+            lock.reason = hl.reason
+        end
+        if lock then
+            if showLocked then locked[o.id] = lock; visible[#visible + 1] = o end
+        else
+            visible[#visible + 1] = o
         end
     end
-    return J.boardView(region_id, board.epoch, board.expires_at, visible, accepted, Jobs.questId)
+    return J.boardView(region_id, board.epoch, board.expires_at, visible, accepted, Jobs.questId, showLocked and locked or nil)
 end
 
 ---Send the full fh:quests:sync snapshot to a character's client (if online).

@@ -536,4 +536,91 @@ describe('quests tiers: T2 reward scaling frozen in job snapshot at accept', fun
     end)
 end)
 
+describe('quests lockedFor: optional per-player display lock hook (idea-873)', function()
+    local function reg(S, hook, name)
+        local ok, err = S.exports.registerJobType(name or 'lock_test', {
+            offers = function(region_id)
+                return {
+                    { key = region_id .. '_lk', title = 'LK', on = 'fh:zones:camp_cleared', region_id = region_id,
+                      rewards = { money = 5 }, min_tier = 1 },
+                    { key = region_id .. '_lk2', title = 'LK2', on = 'fh:zones:camp_cleared', region_id = region_id,
+                      rewards = { money = 5 }, min_tier = 2 },
+                }
+            end,
+            lockedFor = hook,
+        })
+        assert(ok, tostring(err))
+    end
+    local function byKey(view)
+        local out = {}
+        for _, o in ipairs(view.offers) do out[o.id:match('([^:]+)$')] = o end
+        return out
+    end
+    local function only1(offer, src)
+        if src == 1 and offer.key == 'heartlands_lk' then return { reason = 'need_contracts_t2' } end
+        return nil
+    end
+
+    it('rejects a non-callable lockedFor at registration', function()
+        local S = bootServer({})
+        local ok, err = S.exports.registerJobType('bad_lock', { offers = function() return {} end, lockedFor = 5 })
+        eq(false, ok); eq('fh_bad_hook:lockedFor', err)
+    end)
+
+    it('locks or unlocks per player (flag on shows locked + reason; flag off hides the offer)', function()
+        local S = bootServer({ showLockedOffers = true, tiers = { [1] = { heartlands = 3 }, [2] = { heartlands = 3 } } })
+        reg(S, only1)
+        local a, b = byKey(assert(S.exports.getBoard(1, 'heartlands'))), byKey(assert(S.exports.getBoard(2, 'heartlands')))
+        same({ reason = 'need_contracts_t2' }, a.heartlands_lk.locked)
+        eq(nil, b.heartlands_lk.locked)
+        eq(nil, a.heartlands_lk2.locked)
+
+        local Soff = bootServer({ showLockedOffers = false, tiers = { [1] = { heartlands = 3 }, [2] = { heartlands = 3 } } })
+        reg(Soff, only1)
+        eq(nil, byKey(assert(Soff.exports.getBoard(1, 'heartlands'))).heartlands_lk)
+        eq(true, byKey(assert(Soff.exports.getBoard(2, 'heartlands'))).heartlands_lk ~= nil)
+    end)
+
+    it('absent hook leaves behaviour unchanged', function()
+        local S = bootServer({ showLockedOffers = true, tiers = { [1] = { heartlands = 1 } } })
+        reg(S, nil)
+        local v = byKey(assert(S.exports.getBoard(1, 'heartlands')))
+        eq(nil, v.heartlands_lk.locked)
+        same({ min_tier = 2 }, v.heartlands_lk2.locked)
+    end)
+
+    it('a throwing hook shows the offer locked (flag on) and hides it (flag off); never unlocked', function()
+        local S = bootServer({ showLockedOffers = true, tiers = { [1] = { heartlands = 3 } } })
+        reg(S, function() error('boom') end)
+        local v = byKey(assert(S.exports.getBoard(1, 'heartlands')))
+        same({ reason = 'fh_lock_error' }, v.heartlands_lk.locked)
+        local Soff = bootServer({ showLockedOffers = false, tiers = { [1] = { heartlands = 3 } } })
+        reg(Soff, function() error('boom') end)
+        eq(nil, byKey(assert(Soff.exports.getBoard(1, 'heartlands'))).heartlands_lk)
+    end)
+
+    it('combines with the tier lock: tier min_tier kept, hook reason added, hook-only lock needs no tier', function()
+        local S = bootServer({ showLockedOffers = true, tiers = { [1] = { heartlands = 1 } } })
+        reg(S, function(offer) return { reason = 'r_' .. offer.key } end)
+        local v = byKey(assert(S.exports.getBoard(1, 'heartlands')))
+        same({ min_tier = 2, reason = 'r_heartlands_lk2' }, v.heartlands_lk2.locked)
+        same({ reason = 'r_heartlands_lk' }, v.heartlands_lk.locked)
+        eq(nil, v.heartlands_t1.locked, 'other job types unaffected')
+        -- accept stays authoritative: the tier gate still answers fh_offer_locked
+        local ok, err = S.exports.acceptOffer(1, S.offerId('heartlands', 'heartlands_lk2'))
+        eq(false, ok); eq('fh_offer_locked', err)
+    end)
+
+    it('board cache is shared: the hook never mutates the cached offers and both players see one board', function()
+        local seen
+        local S = bootServer({ showLockedOffers = true, tiers = { [1] = { heartlands = 3 }, [2] = { heartlands = 3 } } })
+        reg(S, function(offer) offer.title = 'MUTATED'; seen = true; return nil end)
+        local before = S.Q.boardFor('heartlands', CLOCK)
+        assert(S.exports.getBoard(1, 'heartlands')); assert(S.exports.getBoard(2, 'heartlands'))
+        eq(true, seen)
+        eq(before, S.Q.boardFor('heartlands', CLOCK), 'same cached board table')
+        for _, o in ipairs(before.offers) do eq(true, o.offer.title ~= 'MUTATED') end
+    end)
+end)
+
 T.finish()

@@ -14,7 +14,7 @@ local function engine() return FhQuestsEngine or require('engine') end
 M.NAME_PATTERN = '^[a-z0-9_]+$'
 M.PREFIX = 'job:'
 M.DEFAULT_COOLDOWN_MIN = 60 -- one board rotation: the same offer cannot be farmed inside its epoch
-M.HOOKS = { offers = true, accept = true, onEvent = true, abandon = true }
+M.HOOKS = { offers = true, accept = true, onEvent = true, abandon = true, lockedFor = true }
 
 -- Cross-resource function refs arrive as tables with __call (msgpack funcref), not as Lua functions.
 local function callable(f)

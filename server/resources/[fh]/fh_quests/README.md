@@ -188,6 +188,14 @@ Internal codes that only reach the server log: `fh_bad_row`, `fh_bad_row_citizen
   still pay exactly once. Without it the engine matches the offer's `on` / `where` / `count` itself.
 - `abandon(src, state)` (optional): clean up when the player abandons (also called if the accept could not be
   saved, to undo `accept`'s setup).
+- `lockedFor(offer, src) -> nil | false | { reason?, min_tier? }` (optional): display-only per-player lock, asked
+  once per offer when one player's board view is built (`Q.boardView`, next to the `min_tier` tier filter; the
+  shared per-region board cache and rotation are untouched). `offer` is a copy of the table `offers` returned. `nil` /
+  `false` = unlocked; a table (or any other truthy value) = locked. It combines with `min_tier`: either lock locks,
+  and a hook `reason` rides along. Like tier-locked offers, hook-locked offers are hidden from the board unless
+  `FhQuestsConfig.showLockedOffers` is on, then they are listed with `locked = { min_tier?, reason? }`. A hook that
+  throws is logged and the offer counts as locked (`reason = 'fh_lock_error'`), never unlocked. This never gates
+  anything: `acceptOffer` still runs its own checks and the `accept` hook.
 - optional `events = { 'fh:roads:delivered', ... }`: extra intake events for this job type (`fh:*`, not
   `fh:quests:talked`).
 
