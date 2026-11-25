@@ -62,12 +62,12 @@ local function onUse(src, item)
         local outcome = I.consumeOutcome(removedOk, applied)
         if outcome == 'blocked' then
             print(('[fh_survival] RemoveItem %s failed for %s; nothing granted'):format(item.name, tostring(src)))
-            notify(src, 'You cannot eat right now.')
+            notify(src, I.refuseMessage(eff.buff_id))
             return
         elseif outcome == 'refund' then
             local rok, added = pcall(function() return inv:AddItem(src, item.name, 1, nil, live.info, 'survival refund') end)
             if not (rok and added) then print(('[fh_survival] refund of %s to %s FAILED'):format(item.name, tostring(src))) end
-            notify(src, 'You cannot eat right now.')
+            notify(src, I.refuseMessage(eff.buff_id))
             return
         end
         notify(src, eff.buff_id == 'hydrated' and 'You feel refreshed.' or 'You feel fed.')

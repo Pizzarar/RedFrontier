@@ -77,6 +77,12 @@ case('consume outcome: a failed remove grants no buff, a refused buff refunds', 
     assert(I.consumeOutcome(true, true) == 'granted')
 end)
 
+case('refusal message follows the buff: drinks say drink, food says eat', function()
+    assert(I.refuseMessage('hydrated') == 'You cannot drink right now.')
+    assert(I.refuseMessage('well_fed') == 'You cannot eat right now.')
+    assert(I.refuseMessage(nil) == 'You cannot eat right now.', 'unknown buff defaults to eat')
+end)
+
 case('canteen charges: use', function()
     assert(I.charges(nil, 5) == 5 and I.charges({}, 5) == 5, 'fresh canteen is full')
     local ok, info = I.useCanteen({ charges = 3, note = 'x' }, 5)

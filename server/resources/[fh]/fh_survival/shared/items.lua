@@ -103,6 +103,12 @@ function I.consumeOutcome(removed, applied)
     return 'granted'
 end
 
+---Refusal text for a blocked or refunded food/drink use. Drinks (the `hydrated` buff: coffee, water) say drink,
+---everything else says eat, matching the success-message branch in server/actions.lua.
+function I.refuseMessage(buffId)
+    return buffId == 'hydrated' and 'You cannot drink right now.' or 'You cannot eat right now.'
+end
+
 local function validMax(max)
     if max == nil then return DEFAULT_MAX end
     if isNum(max) and max == math.floor(max) and max >= 1 then return max end

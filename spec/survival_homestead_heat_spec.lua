@@ -52,6 +52,17 @@ case('malformed stations are skipped', function()
     assert(#adds == 0 and #removes == 0)
 end)
 
+case('duplicated station input emits a single add', function()
+    local adds, removes = H.reconcile(true, {}, { camp, camp }, 8.0)
+    assert(#adds == 1 and adds[1].id == 'hs:p1:s2', 'one add for a duplicated station')
+    assert(#removes == 0)
+end)
+
+case('duplicated already-owned station stays stable', function()
+    local adds, removes = H.reconcile(true, { ['hs:p1:s2'] = true }, { camp, camp }, 8.0)
+    assert(#adds == 0 and #removes == 0)
+end)
+
 case('nil owned and nil stations are safe', function()
     local adds, removes = H.reconcile(true, nil, nil, 8.0)
     assert(#adds == 0 and #removes == 0)

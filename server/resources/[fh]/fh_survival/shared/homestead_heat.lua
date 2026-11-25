@@ -45,14 +45,14 @@ function H.reconcile(started, owned, stations, radius)
         for _, s in ipairs(H.campfires(stations)) do
             local id = H.sourceId(s)
             if id then
-                wanted[id] = true
-                if not owned[id] then
+                if not (owned[id] or wanted[id]) then
                     adds[#adds + 1] = {
                         id = id,
                         coords = { x = s.coords.x, y = s.coords.y, z = s.coords.z },
                         radius = radius,
                     }
                 end
+                wanted[id] = true
             end
         end
     end
