@@ -1,6 +1,6 @@
 {
   "laneId": "ui",
-  "updatedAt": "2026-11-25T18:48:14.781Z",
+  "updatedAt": "2026-11-25T20:05:51.624Z",
   "units": [
     {
       "id": "ui-saddlebag-pane",
@@ -10,6 +10,13 @@
       "status": "done",
       "branch": "ui-tailor-t4d",
       "commit": "56e66b7"
+    },
+    {
+      "id": "ui-i2-lows",
+      "goal": "I2 lows: spec getTrappers export + fh:ui:trappers callback; clear stale trapper blips when fh_hunting stops; dedupe fetchTrappers helper",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
