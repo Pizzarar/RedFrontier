@@ -40,6 +40,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `fence` | `fence` | interactive |
 | `survival` | `survival` | passive (idea-854) |
 | `tradepost` | `trade` | interactive |
+| `fieldguide` | `tutorial` | interactive |
 
 Action must match `^[a-z_]{1,32}$`. Payload must be a table of plain data (strings, finite numbers, booleans, nested
 tables with string/number keys), <= 2048 bytes estimated, depth <= 4. Rate limit: token bucket per player, 5/s, burst 10.
@@ -154,6 +155,18 @@ chat fallback, and answers each with `fh:ui:update` `{ screen = 'tradepost', dat
 
 ### Dev demo (fixtures)
 `/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost>` opens that screen with `shared/fixtures.lua` data for the caller;
+### fieldguide (owner `tutorial`)
+Read-only help pages (idea-849); the @guide lane owns the content (future `fh_tutorial/shared/field_guide.lua`) and the
+`/guide` command. `open/update` data `{ entries = { { id, title, lines = { "3-5 short lines" }, controls = { "E: open
+stash", ... }, wiki_path = "docs/wiki/systems/x.md" } }, selected? = "<entry id>" }`. A left list of entry titles; the
+right pane shows the selected entry (default `selected`, else the first): `lines` as paragraphs, `controls` as a small key
+list, and a muted `Wiki: <wiki_path>` footer as plain text (not a link). Clicking a title switches the pane client-side,
+no round trip. Empty entries show "The field guide is empty.". Actions: `close` `{}` (Close button or Esc); no other
+actions. The content is static and read-only, so the producer may open it client-locally with
+`TriggerEvent('fh:ui:open', { screen = 'fieldguide', data = ... })`.
+
+### Dev demo (fixtures)
+`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|fieldguide>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
 

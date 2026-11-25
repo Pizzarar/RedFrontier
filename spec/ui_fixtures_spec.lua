@@ -5,7 +5,7 @@ local case = T.it
 local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_ui/shared/fixtures.lua')
 
-local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade' }
+local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial' }
 local passive = { heat = true }
 
 case('every fixture validates against its schema', function()
@@ -48,6 +48,22 @@ case('dialogue fixture has pages and an offer; start/close relay to quests', fun
     assert(R.validate({ screen = 'dialogue', action = 'close', payload = {} }))
     T.eq('fh:quests:ui_start', R.eventName('quests', 'start'))
     T.same({ action = 'open', screen = 'dialogue' }, F.parseDemo({ 'dialogue' }))
+end)
+case('fieldguide fixture has 3 entries and only relays close to tutorial', function()
+    local g = F.fixtures.fieldguide
+    assert(#g.entries == 3)
+    for _, e in ipairs(g.entries) do
+        assert(type(e.id) == 'string' and type(e.title) == 'string', 'id/title')
+        assert(type(e.lines) == 'table' and #e.lines >= 1, 'lines')
+        assert(type(e.controls) == 'table' and #e.controls >= 1, 'controls')
+        assert(type(e.wiki_path) == 'string', 'wiki_path')
+    end
+    assert(F.validate('fieldguide', g))
+    T.eq('tutorial', R.screens.fieldguide)
+    assert(not R.passive.fieldguide)
+    assert(R.validate({ screen = 'fieldguide', action = 'close', payload = {} }))
+    T.eq('fh:tutorial:ui_close', R.eventName('tutorial', 'close'))
+    T.same({ action = 'open', screen = 'fieldguide' }, F.parseDemo({ 'fieldguide' }))
 end)
 case('parseDemo', function()
     T.same({ action = 'open', screen = 'fence' }, F.parseDemo({ 'Fence' }))

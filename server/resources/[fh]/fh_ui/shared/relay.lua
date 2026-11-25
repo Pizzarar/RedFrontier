@@ -17,6 +17,7 @@ M.screens = {
     fence       = 'fence',     -- fence shop (fh_fence owns it)
     survival    = 'survival',  -- survival needs HUD (passive, fh_survival state; idea-854)
     tradepost   = 'trade',     -- trade post (fh_trade owns it)
+    fieldguide  = 'tutorial',  -- field guide help pages (read-only, @guide lane owns content)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.

@@ -80,6 +80,22 @@ M.fixtures = {
         max_sell = 100,
         max_buy = 100,
     },
+    fieldguide = {
+        entries = {
+            { id = 'survival', title = 'Survival & Needs',
+              lines = { 'Eat, drink and rest to keep your cores up.', 'Cold saps health; stand by a fire to warm up.', 'Sleep in a bedroll or homestead cot to recover.' },
+              controls = { 'E: open stash', 'Tab: open satchel', 'F: interact' },
+              wiki_path = 'docs/wiki/systems/survival.md' },
+            { id = 'inventory', title = 'Carrying & Stash',
+              lines = { 'Your satchel holds what you carry.', 'Heavy loads slow you down and tire you faster.', 'Stash extras in a homestead chest to keep moving.' },
+              controls = { 'Tab: open satchel', 'E: open stash' },
+              wiki_path = 'docs/wiki/systems/fh_inventory.md' },
+            { id = 'hunting', title = 'Hunting & Pelts',
+              lines = { 'Clean kills keep pelts worth more.', 'Two-star or better pelts sell well.', 'Skin the animal before it cools.' },
+              controls = { 'Hold R: track', 'LMB: shoot', 'E: skin' },
+              wiki_path = 'docs/wiki/systems/fh_hunting.md' },
+        },
+    },
 }
 
 -- Tiny schema: field -> type, with '?' suffix for optional. 'table[]' / '<name>[]' nested lists via {list=schema}.
@@ -121,6 +137,10 @@ S.tradepost = {
     supplies = { list = { item = 'string', label = 'string', price = 'number' } },
     max_sell = 'number', max_buy = 'number',
     notice = 'string?', notice_kind = 'string?',
+}
+S.fieldguide = {
+    selected = 'string?',
+    entries = { list = { id = 'string', title = 'string', lines = 'table', controls = 'table', wiki_path = 'string' } },
 }
 M.schemas = S
 
