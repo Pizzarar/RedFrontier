@@ -71,6 +71,7 @@ local function onUse(src, item)
             return
         end
         notify(src, eff.buff_id == 'hydrated' and 'You feel refreshed.' or 'You feel fed.')
+        TriggerClientEvent('fh:anim:play', src, eff.buff_id == 'hydrated' and 'drink' or 'eat')
     else -- canteen
         local ok, res = I.useCanteen(live.info, cfg.CanteenMax)
         if not ok then notify(src, res == 'empty' and 'The canteen is empty. Refill it at water.' or 'The canteen is damaged.') return end
@@ -87,6 +88,7 @@ local function onUse(src, item)
             return
         end
         notify(src, ('You drink. %d charges left.'):format(res.charges))
+        TriggerClientEvent('fh:anim:play', src, 'drink')
     end
 end
 
@@ -142,7 +144,10 @@ RegisterNetEvent('fh:survival:refill', function(clientInWater)
     local ok, res = I.refillCanteen(live.info, cfg.CanteenMax)
     if not ok then notify(src, res == 'full' and 'The canteen is already full.' or 'The canteen is damaged.') return end
     local pok, saved = pcall(function() return exports['rsg-inventory']:SetItemInfo(src, live.slot, res) end)
-    if pok and saved then notify(src, 'You refill the canteen.') end
+    if pok and saved then
+        notify(src, 'You refill the canteen.')
+        TriggerClientEvent('fh:anim:play', src, 'refill')
+    end
 end)
 
 RegisterNetEvent('fh:survival:wash', function(clientInWater)
@@ -154,6 +159,7 @@ RegisterNetEvent('fh:survival:wash', function(clientInWater)
     if applyBuff(src, 'clean', 1.0, DUR.clean) then
         lastWash[src] = t -- cooldown starts only on a successful wash
         notify(src, 'You wash off the grime.')
+        TriggerClientEvent('fh:anim:play', src, 'wash')
     end
 end)
 
