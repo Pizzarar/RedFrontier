@@ -25,9 +25,9 @@ FhHuntingConfig = {
     -- H8: raw_meat (rsg-core item, pocket size_class) granted alongside a skinned pelt.
     -- Keyed by animal size_class (pocket = small, bulky = medium, cargo = big/legendary).
     MeatItem = 'raw_meat',
-    MeatSizeClass = 'pocket',
+    MeatSizeClass = 'pocket', -- fallback; spec/hunting_skin_spec.lua pins it equal to fh_core's resolved class for MeatItem
     MeatPerSize = {
-        pocket = 1,
+        pocket = 1, -- no current animal is pocket-class; kept for future small game
         bulky  = 2,
         cargo  = 3,
     },

@@ -447,4 +447,12 @@ describe('hunting skin: H7 ends the fh_core spawn lifecycle', function()
     end)
 end)
 
+describe('H8 meat size class', function()
+    it('MeatSizeClass equals the size class fh_core resolves for MeatItem', function()
+        local Items = require('items') -- fh_core/shared/items.lua
+        local def = assert(Items.resolve(cfg.MeatItem, { label = 'Raw Meat', weight = 0 })) -- rsg raw_meat carries no size_class
+        eq(def.size_class, cfg.MeatSizeClass)
+    end)
+end)
+
 T.finish()
