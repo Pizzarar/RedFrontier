@@ -40,12 +40,14 @@
 - S7 spk_outfit for Progression idea-891: plan spikes-03-outfit.md, client-only, re-apply on rsg ApplySkin; named S7 (their 'S1'). Handed to lead rn-3095b3717f66 2026-11-25.
 
 ## Open
+- S7 RESULT from Aub (template in spk_outfit/README.md:56).
 - S6 RESULT from Aub (herb model index + blip sprite).
 - Does Aub have a 2nd RedM account? (adds true 2-client S1 check)
 
 ## In flight
+- PASS spk_anim S8 (A0 of animations-01): merged main 017fa4d, Gemini PASS 0/0/0 0d52b89 (2M+1L fixed), G5 0 unknown, contracts 0, pd 0. Next: S8 card to Aub; RESULT -> Ani1 rn-61a8094e7415 + Buddy rn-1c6e44138333.
 - PASS spk_outfit S7 O1-O3 (plan spikes-03-outfit complete): merged main ff 23e32fe, fresh-Gemini PASS 0/0/1, G5 0 unknown, contracts 0 findings. Next: S7 card to Aub; RESULT -> Progression Buddy rn-515b14f1fb08 + Pro2, natives -> Core.
-- S7 O1 PASS 9a93a05 on spikes-outfit (Gemini build, 4 files [spikes]/); O2 Gemini review PASS 0/0/1 (L1 nit skipped); rebased 23e32fe on main 95177a0, slot requested Red4 -> O3 merge (lead rn-3095b3717f66). RESULT goes to Progression rn-515b14f1fb08 + Pro2.
+- S7 spk_outfit MERGED main 23e32fe (+brief c2fc277), PASS 0/0/1. Card relayed to Aub 2026-11-25. RESULT -> Progression rn-515b14f1fb08 + Pro2, natives -> Core.
 - spk_herb MERGED main 1680b5b (+brief d492bfe), Gemini PASS 0/0/0. S6 card relayed to Aub 2026-11-25. On GO: inbox @crafting (model+sprite), natives to Core.
 - PARKED forge freeze 2026-11-23: no unit running; spikes in main (4d11954), cards held for keyed boot; worktree spikes-probes clean. Resume = relay TEST-CARDS.md to Aub after Cor2 boot ping.
 - PASS S1-S5 build+review: spikes/probes 4d11954 (on core/b1-boot ee8eef5), Gemini PASS-WITH-NITS, 3 fixed, 2 nits skipped; Core lead merges to main; in-game RESULTs pending Aub.
