@@ -72,6 +72,20 @@ end
 
 local clipBusy = {} -- [src] = true while a clip is in flight (pay yields; one clip at a time per player)
 
+-- Unload window, mirroring fh_economy's unloadTracker (fh_economy/server/main.lua:17-36; it exports nothing for this).
+-- rsg-core's Logout fires OnPlayerUnload, SAVES, then Wait(200)s with Players[src] still set: anything removed from or
+-- given to that in-memory character after the save is lost, and a credit on top of a clip the DB still holds would dupe.
+-- unloadCid[src] = citizenid from the unload event until a character loads on the src again (or it settles after a drop);
+-- unloadSeq[src] counts marks so "an unload began while pay yielded" is visible even if the flag was cleared since.
+local unloadCid, unloadSeq = {}, {}
+local function markUnload(src, cid)
+    src = tonumber(src)
+    if not src or not cid then return end
+    unloadCid[src] = cid
+    unloadSeq[src] = (unloadSeq[src] or 0) + 1
+end
+local function unloadBlocks(src, cid) return unloadCid[src] ~= nil and unloadCid[src] == cid end
+
 local function giveBack(src, item)
     local ok, added = pcall(function() return inv():AddItem(src, item.name, 1, nil, item.info, 'fh_core clip give-back') end)
     return ok and added and true or false
@@ -104,6 +118,8 @@ local function clipInner(src, item, clip)
     local p = playerOf(src)
     local cid = p and p.PlayerData and p.PlayerData.citizenid
     if not cid then notify(src, "You can't use that right now.", 'error') return end
+    if unloadBlocks(src, cid) then notify(src, "You can't use that right now.", 'error') return end -- fail closed BEFORE consume
+    local seq0 = unloadSeq[src] or 0
     -- Remove first (synchronous, exact slot), verify, THEN pay: never pay without a confirmed removal, so the clip
     -- cannot be moved while pay yields and then also pay out.
     if not consume(src, item.name, item.slot, 'fh_core use') then
@@ -122,7 +138,9 @@ local function clipInner(src, item, clip)
     print(('[fh_core] useables: pay for %s refused for %s: %s'):format(item.name, tostring(src), tostring(why)))
     -- pay may have yielded: the same character must still be on this src before the clip goes back into its bag
     local now_p = playerOf(src)
+    -- (an unload that began during the yield counts as gone: the give-back would land in memory already saved)
     local same = now_p and now_p.PlayerData and now_p.PlayerData.citizenid == cid
+        and not unloadBlocks(src, cid) and (unloadSeq[src] or 0) == seq0
     if same and giveBack(src, item) then
         notify(src, "You can't use that right now.", 'error')
         return
@@ -172,7 +190,24 @@ local function register()
     end
 end
 
-AddEventHandler('playerDropped', function() lastUse[source] = nil clipBusy[source] = nil end)
+AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src)
+    local p = playerOf(tonumber(src))
+    markUnload(src, p and p.PlayerData and p.PlayerData.citizenid)
+end)
+AddEventHandler('RSGCore:Server:PlayerDropped', function(Player)
+    local pd = type(Player) == 'table' and Player.PlayerData
+    if type(pd) == 'table' then markUnload(pd.source, pd.citizenid) end
+end)
+AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
+    local pd = type(Player) == 'table' and Player.PlayerData
+    if type(pd) == 'table' and tonumber(pd.source) then unloadCid[tonumber(pd.source)] = nil end
+end)
+AddEventHandler('playerDropped', function()
+    local src = tonumber(source)
+    lastUse[src] = nil clipBusy[src] = nil
+    local p = src and playerOf(src)
+    if p and p.PlayerData then markUnload(src, p.PlayerData.citizenid) end
+end)
 
 AddEventHandler('onResourceStart', function(res)
     if res == GetCurrentResourceName() then

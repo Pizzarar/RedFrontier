@@ -175,6 +175,31 @@ case('money clip: character switch on the same src during pay -> credited to A, 
     assert(#w.notes == 0) -- B is not told anything about A's clip
 end)
 
+case('money clip: onUse inside the unload window fails closed before consume (no dupe)', function()
+    local w = boot({ bag = bagOf('money_clip', { amount = 9 }) })
+    w.handlers['RSGCore:Server:OnPlayerUnload'](1)
+    w.use(1, 'money_clip')
+    assert(#w.removed == 0 and #w.paid == 0 and #w.credited == 0 and (w.gaveBack or 0) == 0)
+    w.handlers['RSGCore:Server:PlayerLoaded']({ PlayerData = { source = 1, citizenid = 'CID1' } }) -- relogged
+    w.use(1, 'money_clip')
+    assert(#w.paid == 1)
+end)
+
+case('money clip: unload starting mid-pay -> no give-back into saved memory, cash credited to cid once', function()
+    local w = boot({ bag = bagOf('money_clip', { amount = 9 }), payFails = true })
+    w.use(1, 'money_clip') -- baseline: still same character -> gives back, no credit
+    assert(w.gaveBack == 1 and #w.credited == 0)
+    local w2 = boot({ bag = bagOf('money_clip', { amount = 9 }), payFails = true,
+        duringPay = function(ww) ww.handlers['RSGCore:Server:OnPlayerUnload'](1) end })
+    w2.use(1, 'money_clip')
+    assert((w2.gaveBack or 0) == 0 and #w2.credited == 1 and w2.credited[1].cid == 'CID1' and w2.credited[1].amount == 9)
+    -- blood clip: no fallback, no give-back, no credit
+    local w3 = boot({ bag = bagOf('blood_money_clip', { amount = 9 }) })
+    w3.handlers['RSGCore:Server:PlayerDropped']({ PlayerData = { source = 1, citizenid = 'CID1' } })
+    w3.use(1, 'blood_money_clip')
+    assert(#w3.removed == 0 and #w3.added == 0)
+end)
+
 case('money clip: no character before use fails closed, clip not removed', function()
     local w = boot({ bag = bagOf('money_clip'), cid = false })
     w.use(1, 'money_clip')
