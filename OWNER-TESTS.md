@@ -662,6 +662,25 @@ corrected values, not failures). Ledger reason is `quest:job:<type>:<offer key>`
     before you free her the job fails with no payment. After a relog the unlock is gone: a fresh clear is needed.
     RESULT:
 
+Contract tiers (quests-03 T1-T4). Tier 2 requires 100 rep in the region (`fh_rep_region <id> heartlands <delta>`), tier 3 requires 400.
+Reward scaling by offer min_tier (1.0x at tier 1, 1.5x at tier 2, 2.25x at tier 3, rounded half-up to whole dollars and integers).
+
+19. Contract tier gating and dynamic board refresh. Start with low rep (0 rep, tier 1 in `heartlands`). Open the jobs board (`/jobs`) near Valentine (-297, 795, 118).
+    Rotation and board sizing: by default the board rotates a pool of 3-5 offers (`M.DEFAULTS.min = 3, max = 5` in `server/resources/[fh]/fh_quests/shared/board.lua:12`, `server/main.lua:206`) chosen by seeded PRNG across 60-minute epochs (`shared/board.lua:35-38`, `server/main.lua:16, 197`). For deterministic testing of all templates at once, set `M.DEFAULTS.min = 25, max = 25` in `shared/board.lua:12`. Otherwise, under default 3-5 rotation, if a specific named template is not rolled in the current hour, re-open across the 60-minute boundary (`server/main.lua:330-338`) or test with whatever tier-1/tier-2 offers appear.
+    Expected: as a tier-1 player, the board lists only tier-1 offers (e.g. pelt requests like 2-star wolf, "Clear out: Heartlands outlaw camp", "Wanted: Silas Crow", "Wanted: Mabel Teague", "Supply run: 2x trade_cloth", etc.). No tier-2 offers appear (no "Wanted: Harlan Voss", no "Clear out: Dakota South camp", no "Pelt wanted: 3-star elk", no "Supply run: 3x trade_whiskey").
+    (Server-side check: if a tier-1 client attempts to accept a tier-2 offer id via the accept path `acceptOffer` in `server/api.lua:189-202`, the server refuses with error code `fh_offer_locked` and notice verbatim from `server/ui_text.lua:7`: "Your standing in this region is not high enough for that job.")
+    With the `/jobs` board kept open, raise reputation to tier 2 in the server console: `fh_rep_region <yourId> heartlands 100`.
+    Expected: console reports `fh_rep_region: ok (heartlands +100 for <yourId>; rep 100, tier 2)`. Server event `fh:progression:tier_changed` fires, triggering `fh:quests:board_changed` and pushing `fh:quests:sync` to your client (`server/api.lua:72-84`); the open board immediately refreshes to reveal tier-2 offers (e.g. "Wanted: Harlan Voss", "Clear out: Dakota South camp", "Pelt wanted: 3-star elk", "Supply run: 3x trade_whiskey") with active Accept buttons (or re-open `/jobs` if waiting on a rotation).
+    RESULT:
+20. Contract tier reward scaling (1.5x payout). From the refreshed board in step 19, accept a tier-2 contract, e.g. "Wanted: Harlan Voss" (min_tier 2, base $44, rep 3) or "Clear out: Dakota South camp" (camp `heartlands_t2_01`, min_tier 2, base $52, rep 4). (If neither is on the current 3-5 board, use another tier-2 contract on the board, wait for the next 60-min rotation epoch per `shared/board.lua:35-38`, or set `M.DEFAULTS.min = 25, max = 25` in `shared/board.lua:12`).
+    Expected: the job is accepted into `/journal`. Scaled rewards are frozen at accept into `progress.job` using the offer's min_tier (1.5x multiplier):
+    - For "Wanted: Harlan Voss": ride to Harlan Voss (about 510, 260, 92; `heartlands.lua:19`) and eliminate him. Payout is $66 (floor(44 * 1.5 + 0.5) = $66, base was $44) and +5 rep (floor(3 * 1.5 + 0.5) = 5, base was 3 rep), ledger reason `quest:job:bounty:bounty_harlan_voss`.
+    - (Or for "Clear out: Dakota South camp": clear camp `heartlands_t2_01` — stash at vector3(600.0, 200.0, 90.0), peds around 595..606, 195..204, 90.0 per `fh_zones/config.lua:112-135` — from inside its activationRadius of 45.0 m. Payout is $78 (floor(52 * 1.5 + 0.5) = $78, base was $52) and +6 rep (floor(4 * 1.5 + 0.5) = 6, base was 4 rep), ledger reason `quest:job:camp_clear:camp_heartlands_t2_01`.)
+    - (Or for "Supply run: 3x trade_whiskey": sell 3 trade_whiskey at valentine_post; `heartlands.lua:25`. Payout is $39 (floor(26 * 1.5 + 0.5) = $39, base was $26) and +3 rep (floor(2 * 1.5 + 0.5) = 3, base was 2 rep), ledger reason `quest:job:supply_run:supply_valentine_post_trade_whiskey`.)
+    - (Or for "Pelt wanted: 3-star elk": sell a 3-star elk pelt; `heartlands.lua:7`. Payout is $63 (floor(42 * 1.5 + 0.5) = $63, base was $42) and +2 rep (floor(1 * 1.5 + 0.5) = 2, base was 1 rep), ledger reason `quest:job:hunt_request:elk_3star`.)
+    In all cases, payment occurs exactly once via `fh_economy`, scaled by 1.5x. Even if the player's rep subsequently drops or increases while the job is active, the payout remains 1.5x because scaled rewards are frozen in `progress.job` at accept.
+    RESULT:
+
 Known limits (not failures):
 - Item rewards stay owed: fh_core refuses `backpack`/`equipped` item adds (idea-643), so a quest with `items` keeps
   `reward_pending`, pays money/rep once, retries on each load, and a repeatable with items cannot be taken again

@@ -19,6 +19,7 @@ type) build against now. Every export and event lives here; anything not listed 
 | 3 family questlines (data files, giver NPCs, fh_ui `dialogue` screen) | Q4 | **built**, defs and walk-throughs specced; in-game unverified |
 | OWNER-TESTS section, `ensure fh_quests` in server.cfg | Q5 | coming |
 | Content-ladder job types `supply_run`, `survey`, `escort`, `rescue` + reach-watcher | quests-02 C1-C4 | **built**; heartlands data only; in-game unverified |
+| Contract tiers (tier gating, scaling, ladder content) | quests-03 T1-T4 | **built**; heartlands, scarlett_meadows, bayou_nwa, great_plains |
 
 The server side is in (`server/main.lua`: state cache, per-character lock, persistence, payouts, sync;
 `server/api.lua`: exports and event intake). It is not `ensure`d yet (Q5 adds it). It needs the `fh_quest_state`
@@ -158,6 +159,7 @@ All player exports take `src` (player server id) and resolve the citizenid thems
 | `fh_unknown_quest` | `start` | no registered quest with that id |
 | `fh_quest_active`, `fh_quest_done`, `fh_quest_cooldown`, `fh_quest_prereq:<id>` | `start`, `acceptOffer` | already active; one-time quest already done; repeatable still cooling down; a prereq never completed |
 | `fh_reward_pending` | `start`, `acceptOffer` | the previous completion of this quest still owes part of its reward |
+| `fh_offer_locked` | `acceptOffer` | player's progression tier in the offer's region is below offer `min_tier` |
 | `fh_not_active` | `abandon` | the player has no active quest with that id |
 | `fh_bad_region` | `getBoard` | unknown region id (`FhRegions`) |
 | `fh_offer_gone` | `acceptOffer` | the offer id is not on the current board (rotated, unknown or disabled region, job type gone) |
@@ -201,6 +203,7 @@ Internal codes that only reach the server log: `fh_bad_row`, `fh_bad_row_citizen
 | `cooldown_min` | no | minutes before the same offer can be taken again after completion (default **60**, one board rotation; `0` allowed) |
 | `text` | no | step / board text (defaults to `title`) |
 | `rewards` | no | the reward shape of quest defs (`money`, `rep`, `items`) |
+| `min_tier` | no | minimum progression tier required to see or accept the offer; floors any number ≥1 with no upper cap (default `1`; content uses 1–3) |
 
 **Accepted jobs.** An accepted offer becomes a one-step repeatable quest with id `job:<name>:<offer key>`, kind
 `job`. Its snapshot (`job_type`, `key`, `region_id`, `title`, `text`, `on`, `where`, `count`, `rewards`,
@@ -339,6 +342,64 @@ screen (`server/ui.lua`). There is one board spot per region (Heartlands and Sca
 board for the **nearest** spot (`FhQuestsBoardSpots.regionFor`, no proximity check — it just picks the closest).
 The old ox_lib fallback menu and its lib callbacks are gone.
 
+## Tiers (quests-03)
+
+Repeatable contracts on the jobs board support tier progression aligned with regional reputation (`fh_progression`). Higher tiers unlock more challenging contracts with scaled payouts.
+
+### Offer `min_tier` and default
+
+Every offer template accepted by `registerJobType` / `JT.registerBuilder` supports an optional `min_tier` field:
+- Normalization: `JT.minTier(v)` (`shared/jobtypes.lua:33`) floors any number `≥ 1`; there is no upper cap in the schema. Content currently uses tiers 1–3.
+- Default: `1` when omitted or invalid in region data (`data/regions/<region_id>.lua`) or builder returns (normalized via `FhQuestsJobTypes.minTier`).
+- Tier 1 contracts are available to all players; tier 2 requires progression tier 2 (100 rep); tier 3 requires progression tier 3 (400 rep).
+
+### Progression tier gating
+
+Gating is evaluated strictly per region against the player's progression tier:
+- **`tierOf(src, region_id)`** (`server/main.lua`): Queries `exports.fh_progression:getTier(src, region_id)`. If `fh_progression` is not started, the player/region is missing, or `getTier` throws or returns non-number, it safely falls back to tier `1`.
+- **At the board** (`Q.boardView`): The server rotates offers per region deterministically, then filters the view using pure `FhQuestsBoard.visible(offers, playerTier)` (`shared/board.lua`). Offers where `offerMinTier(offer) > playerTier` are excluded from the client's board by default.
+- **At accept** (`acceptOffer` in `server/api.lua`): The server performs an authoritative check against the offer's region (`offerRegionOf(offer, region_id)`). If `offerMinTier(offer) > tierOf(src, region)`, accept is refused with error code **`fh_offer_locked`** (`server/ui_text.lua:7` maps this verbatim to "Your standing in this region is not high enough for that job."). The client never decides eligibility.
+- **Dynamic board refresh on tier crossing**: `server/api.lua` listens for `fh:progression:tier_changed` (`{ src, citizenid, region_id, old, new }`, ignored if client-sourced). When a player's tier changes in a region, the server fires `fh:quests:board_changed` for `(region_id, src)` and re-syncs the board snapshot (`fh:quests:sync`) to that player if they are currently viewing that region's board, updating the visible offers in real time.
+
+### `locked = { min_tier }` and `FhQuestsConfig.showLockedOffers`
+
+For development and UI preview:
+- `FhQuestsConfig.showLockedOffers` (`config.lua`, default `false`): When `false`, locked offers (`min_tier > playerTier`) are omitted from the board sync payload.
+- When set to `true`, locked offers remain in `board.offers` but have a `locked = { min_tier = N }` table attached (`FhQuestsJournal.boardView`). This allows UI work to display the contract greyed out or show "Requires Tier N" badges.
+- Even when previewed with `showLockedOffers = true`, server-side `acceptOffer` strictly enforces the tier gate and refuses locked contracts with `fh_offer_locked`.
+
+### Reward scaling by offer tier
+
+Reward scaling is implemented in pure module `FhQuestsRewards.scaleByTier(rewards, tier, multipliers)` (`shared/rewards.lua`):
+- **Offer tier, not player tier**: Payouts scale by the **OFFER's** `min_tier`, snapshotted at `acceptOffer`. A tier-3 player taking a tier-1 contract receives base tier-1 pay (1.0x); a tier-2 contract pays 1.5x; a tier-3 contract pays 2.25x.
+- **Config multipliers**: Defined in `FhQuestsConfig.tierRewardMultipliers` (`config.lua`):
+  ```lua
+  FhQuestsConfig.tierRewardMultipliers = {
+      [1] = 1.0,
+      [2] = 1.5,
+      [3] = 2.25,
+  }
+  ```
+  Unknown, nil, non-integer, or invalid tiers fall back to multiplier `1.0`.
+- **Rounding and types**: Scaled `money` and `rep.delta` are rounded half-up (`math.floor(val * mult + 0.5)`) to non-negative whole integers. This matches the engine's whole-number integer contract and `fh_economy` whole-dollar payouts. Items in `rewards.items` are copied unchanged without scaling.
+- **Frozen at accept**: Scaled rewards are frozen into `progress.job.rewards` in `fh_quest_state` at accept. Later progression tier changes or config multiplier edits do not alter running jobs, and payouts remain delivered strictly via `fh_economy`.
+
+### Tier 2 and Tier 3 content
+
+Four enabled regions have tier 2 and tier 3 content templates (`data/regions/<region_id>.lua`): `heartlands`, `scarlett_meadows`, `bayou_nwa`, and `great_plains`. Each enabled region provides at least one offer at tier 1, tier 2, and tier 3 across built-in job types:
+- **`heartlands`**:
+  - Tier 2 (`min_tier = 2`): `heartlands_t2_01` Dakota South camp ($52, rep 4 -> $78, +6 rep), Harlan Voss bounty ($44, rep 3 -> $66, +5 rep), 3-star elk hunt ($42, rep 1 -> $63, +2 rep), valentine_post whiskey supply run (3x trade_whiskey, $26, rep 2 -> $39, +3 rep).
+  - Tier 3 (`min_tier = 3`): Calvin Dredge bounty ($58, rep 4 -> $131, +9 rep), Nora Whitfield rescue at `heartlands_t2_01` ($46, rep 4 -> $104, +9 rep).
+- **`scarlett_meadows`**:
+  - Tier 2 (`min_tier = 2`): `scarlett_meadows_t2_01` Catfish Bottom camp ($52, rep 4 -> $78, +6 rep), Graham Lockett bounty ($44, rep 3 -> $66, +5 rep), 3-star boar hunt ($22, rep 1 -> $33, +2 rep), rhodes_post whiskey supply run (3x trade_whiskey, $28, rep 2 -> $42, +3 rep).
+  - Tier 3 (`min_tier = 3`): Celeste Kane bounty ($58, rep 4 -> $131, +9 rep), Otis Brent rescue at `scarlett_meadows_t2_01` ($46, rep 4 -> $104, +9 rep).
+- **`bayou_nwa`**:
+  - Tier 2 (`min_tier = 2`): `bayou_nwa_t2_01` Cypress Hollow camp ($52, rep 4 -> $78, +6 rep), Lucien Broussard bounty ($44, rep 3 -> $66, +5 rep), 3-star fox hunt ($18, rep 1 -> $27, +2 rep), saint_denis_post cloth supply run (5x trade_cloth, $24, rep 2 -> $36, +3 rep).
+  - Tier 3 (`min_tier = 3`): Sabine Fontenot bounty ($58, rep 4 -> $131, +9 rep), Celine Arceneaux rescue at `bayou_nwa_t2_01` ($46, rep 4 -> $104, +9 rep).
+- **`great_plains`**:
+  - Tier 2 (`min_tier = 2`): `great_plains_t2_01` Great Plains East camp ($52, rep 4 -> $78, +6 rep), Roland Stroud bounty ($44, rep 3 -> $66, +5 rep), 3-star coyote hunt ($20, rep 1 -> $30, +2 rep), blackwater_post whiskey supply run (3x trade_whiskey, $28, rep 2 -> $42, +3 rep).
+  - Tier 3 (`min_tier = 3`): Maren Keller bounty ($58, rep 4 -> $131, +9 rep), Tobias Renshaw rescue at `great_plains_t2_01` ($46, rep 4 -> $104, +9 rep).
+
 ## Emitted events (server, `TriggerEvent`, one table argument)
 
 | Event | Payload |
@@ -348,7 +409,7 @@ The old ox_lib fallback menu and its lib callbacks are gone.
 | `fh:quests:completed` | `{ citizenid, quest_id, kind, step }` |
 | `fh:quests:failed` | `{ citizenid, quest_id, kind, step }` |
 | `fh:quests:abandoned` | `{ citizenid, quest_id, kind, step }` |
-| `fh:quests:board_changed` | `{ region_id }` (the region's board rotated, an offer there was accepted, or a job type registered/dropped while the board was cached) |
+| `fh:quests:board_changed` | `{ region_id [, src] }` (the region's board rotated, an offer there was accepted, a player crossed a tier boundary, or a job type registered/dropped while the board was cached) |
 | `fh:quests:talked` | `{ src, citizenid, npc_id }` (after a successful `talk`; emitted only, not intake) |
 
 Events are emitted only after the new state was saved, in effect order (`started`/`step`/`completed`/...). The
@@ -495,7 +556,7 @@ Storage notes:
   quest_id, kind, step, ... }`; inputs are never mutated; an ignored event returns the same state and `{}`.
   `now` is injected (unix seconds or a function returning them).
 - `FhQuestsBoard` (`board.lua`): `rotate(region_id, epoch, offerLists, opts) -> offers`, `epoch(now, rotate_min)`,
-  `find(board, offer_id)`, `hash`, `rng`. Same (region, epoch, offers) always gives the same 3-5 offers, ids
+  `find(board, offer_id)`, `visible(offers, tier)`, `offerMinTier(offer)`, `hash`, `rng`. Same (region, epoch, offers) always gives the same 3-5 offers, ids
   `<region_id>:<epoch>:<job_type>:<key>`; job types are interleaved so one type cannot fill the board. Offers live
   in memory and are regenerated after a restart (same epoch -> same board).
 - `FhQuestsJobs` (`jobs.lua`): `validateType(name, hooks)`, `parseId`, `questId(job_type, key)`,
@@ -506,13 +567,14 @@ Storage notes:
   `payloadFor(payload, cid)`, `feed(defs, states, eventName, payload, now, hookFor)`, `emits(effects)`,
   `dialogue(def, before, after)`, `offers(defs, states, npc_id, now)`,
   `fresh(defs, states, change, eventName, payload, now, hookFor)` (drops or recomputes a stale change at commit time).
-- `FhQuestsRewards` (`rewards.lua`): the exactly-once payout protocol, `run(def, state, io)` with the I/O injected.
+- `FhQuestsRewards` (`rewards.lua`): the exactly-once payout protocol, `run(def, state, io)` with the I/O injected,
+  `scaleByTier(rewards, tier, multipliers)`, `tierMultiplier(tier, multipliers)`.
 - `FhQuestsStore` (`store.lua`): `SELECT`, `UPSERT`, `params(state, encode)`, `fromRow(row, decode)`.
 - `FhQuestsJournal` (`journal.lua`): `entry`, `shown`, `journal(defs, states, activeOnly)`, `boardView`,
   `snapshot` (the `fh:quests:sync` payload).
 
 Specs: `quests_match`, `quests_engine`, `quests_board`, `quests_intake`, `quests_rewards`, `quests_store`,
-`quests_journal`, `quests_jobs`, `quests_jobtypes`. `server/main.lua` and `server/api.lua` are thin I/O glue over these.
+`quests_journal`, `quests_jobs`, `quests_jobtypes`, `quests_tiers`. `server/main.lua` and `server/api.lua` are thin I/O glue over these.
 
 ## In-game test card
 
