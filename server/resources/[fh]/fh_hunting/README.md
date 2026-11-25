@@ -65,9 +65,10 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 ## Trapper (H3)
 
 A sell point at `Config.Trapper.coords` (M1 region `heartlands`). The client shows `[E] Sell pelts` within
-`PromptDistance`; E asks the server (`fh:hunting:sell_open`), which sends back the sellable pelts in the player's
-saddlebag and a nearby wagon with the prices it computed, shown on the fh_ui `trapper` screen. Picking one sends
-`fh:hunting:sell` `{ container = 'saddlebag'|'wagon', slot, item }`.
+`PromptDistance`; E asks the server (`fh:hunting:sell_open`), which opens the fh_ui `trapper` screen (`fh:ui:open`) with
+the sellable pelts in the player's saddlebag and a nearby wagon and the prices it computed. Picking one relays
+`fh:hunting:ui_sell` `{ src, screen = 'trapper', action = 'sell', payload = { container = 'saddlebag'|'wagon', slot, item } }`
+through `fh_ui`, and the server replies with `fh:ui:update` (fresh rows + inline notice).
 
 The server (`shared/sell.lua`, wired in `server/main.lua`) trusts none of it. It re-reads the player position (within
 `SellRange` of the trapper), the container (saddlebag, or a wagon from `fh_cargo:nearestWagon`), the item at that slot
@@ -158,7 +159,7 @@ Consumed (requests, client to server):
   `bone` is a name or number, the rest are quality hints. The server trusts none of it beyond those hints: it re-reads
   the carcass, state and distances, and rate-limits to one request per player per `SkinCooldownMs`.
 
-- `fh:hunting:sell_open` (no payload) and `fh:hunting:sell` `{ container, slot, item }` (H3, see Trapper). Server replies with `fh:hunting:sell_rows` (client event, display only).
+- `fh:hunting:sell_open` (no payload) (H3, see Trapper). Server replies with `fh:ui:open` for the `trapper` screen; sell actions arrive as server-local `fh:hunting:ui_sell` relayed by `fh_ui` and reply with `fh:ui:update`.
 
 - `fh:hunting:chain_status` (no payload) — the client asks for the current legendary-chain step; the server replies with `fh:hunting:chain_state` `{ step, spawned, completed, chains = { [legendary id] = { step, spawned, completed } } }` (client event, display only; the top-level fields are the bear's, `chains` covers every legendary in an enabled region).
 - `fh:hunting:chain_rumour` `{ legendary? }` — buy the rumour (clue 1). `legendary` is the legendary id; omitted means `legendary_bear`.
