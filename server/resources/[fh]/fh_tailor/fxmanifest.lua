@@ -18,6 +18,7 @@ server_scripts {
     'server/charge.lua',
     'server/tailor.lua',
     'server/main.lua',
+    'server/ui.lua', -- fh_ui tailor / wardrobe screens (T4a)
 }
 
 client_scripts {
@@ -28,6 +29,6 @@ client_scripts {
 dependencies { 'fh_core', 'fh_economy', 'fh_progression', 'ox_lib', 'oxmysql', 'rsg-core' }
 
 server_exports { 'buy', 'grant', 'equip', 'saveOutfit', 'wearSaved', 'getStock', 'getWardrobe', 'message',
-    'actBuy', 'actStock', 'actWardrobe', 'actEquip', 'actSave', 'actWear' }
+    'actBuy', 'actStock', 'actWardrobe', 'actEquip', 'actSave', 'actWear', 'openShop', 'openWardrobe' }
 
 client_exports { 'previewLook', 'revertLook' }

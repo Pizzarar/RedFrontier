@@ -5,7 +5,7 @@ local case = T.it
 local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_ui/shared/fixtures.lua')
 
-local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial', trapper = 'hunting' }
+local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial', trapper = 'hunting', tailor = 'tailor', wardrobe = 'tailor' }
 local passive = { heat = true }
 
 case('every fixture validates against its schema', function()
@@ -15,7 +15,7 @@ case('every fixture validates against its schema', function()
         local ok, errs = F.validate(screen, data)
         assert(ok, screen .. ': ' .. table.concat(errs or {}, '; '))
     end
-    T.eq(10, n)
+    T.eq(12, n)
 end)
 case('schema checker rejects bad data', function()
     local bad = { title = 'x', fee = 'free', delay_minutes = 1 }
@@ -95,3 +95,21 @@ case('parseDemo', function()
 end)
 
 T.finish()
+
+case('tailor/wardrobe fixtures: lane tailor, per-screen allowlists, negatives', function()
+    T.eq('tailor', R.screens.tailor); T.eq('tailor', R.screens.wardrobe)
+    assert(not R.passive.tailor and not R.passive.wardrobe)
+    assert(R.validate({ screen = 'tailor', action = 'buy', payload = { entry_id = 'x' } }))
+    assert(R.validate({ screen = 'tailor', action = 'close', payload = {} }))
+    for _, a in ipairs({ 'equip', 'save', 'wear', 'sell' }) do
+        assert(not R.validate({ screen = 'tailor', action = a, payload = {} }), 'tailor must reject ' .. a)
+    end
+    for _, a in ipairs({ 'equip', 'save', 'wear', 'close' }) do
+        assert(R.validate({ screen = 'wardrobe', action = a, payload = {} }), 'wardrobe must allow ' .. a)
+    end
+    assert(not R.validate({ screen = 'wardrobe', action = 'buy', payload = {} }), 'wardrobe must reject buy')
+    T.eq('fh:tailor:ui_buy', select(2, R.relay(R.newLimiter(), 7, { screen = 'tailor', action = 'buy', payload = {} }, 0)))
+    T.same({ action = 'open', screen = 'tailor' }, F.parseDemo({ 'tailor' }))
+    T.same({ action = 'open', screen = 'wardrobe' }, F.parseDemo({ 'wardrobe' }))
+    assert(F.fixtures.tailor.rows[1].owned and F.fixtures.tailor.rows[4].min_tier > F.fixtures.tailor.tier)
+end)

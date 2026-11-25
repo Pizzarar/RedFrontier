@@ -19,6 +19,8 @@ M.screens = {
     tradepost   = 'trade',     -- trade post (fh_trade owns it)
     fieldguide  = 'tutorial',  -- field guide help pages (read-only, @guide lane owns content)
     trapper     = 'hunting',   -- trapper sell screen (fh_hunting owns it)
+    tailor      = 'tailor',    -- tailor / general-store clothing catalog (fh_tailor owns it)
+    wardrobe    = 'tailor',    -- owned outfits, worn look, saved slots (fh_tailor owns it)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
@@ -30,6 +32,8 @@ M.passive = { buffs = true, heat = true, bags = true, survival = true }
 M.actions = {
     fieldguide = { close = true },
     trapper    = { sell = true, close = true },
+    tailor     = { buy = true, close = true },
+    wardrobe   = { equip = true, save = true, wear = true, close = true },
 }
 
 M.limits = {

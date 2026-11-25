@@ -140,3 +140,14 @@ For @ui's mirror screen. Local and cosmetic: nothing is saved or sent to the ser
 See the header of `server/tailor.lua`. In short: one operation per character at a time (buy never waits: `tailor_busy`);
 the ownership row is claimed before the charge, so a retry or a concurrent buy is never charged twice; any charge
 refusal removes that claim again; `fh_charge_busy` is retried with the character re-checked before each attempt.
+
+## fh_ui screens
+
+`server/ui.lua` serves the fh_ui `tailor` (catalog) and `wardrobe` screens. Server exports:
+`openShop(src, shopId)` and `openWardrobe(src)` fetch the data through `actStock` / `actWardrobe` and send `fh:ui:open`;
+a refusal shows `message(code)` in chat and does not open. The relayed events (`fh:tailor:ui_buy|equip|save|wear|close`,
+one table `{ src, screen, action, payload }`) call only the guarded exports `actBuy`, `actEquip`, `actSave`, `actWear`
+(range guard + debounce) and answer with `fh:ui:update` carrying fresh data and a `notice` (`message(code)` on refusal).
+The shop for `ui_buy` is the one `openShop` recorded for that player (cleared on close and on drop), never a client
+value; the client sends only `entry_id` / outfit ids / slot, and price, tier and owned are re-derived here.
+Screen contract: `fh_ui/README.md` (tailor, wardrobe).

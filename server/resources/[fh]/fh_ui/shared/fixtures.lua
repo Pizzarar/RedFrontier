@@ -104,6 +104,32 @@ M.fixtures = {
             { container = 'wagon', slot = 2, item = 'pelt_legendary_bear', label = 'Legendary bear pelt', stars = 3, legendary = true, price = 432 },
         },
     },
+    tailor = {
+        shop = { id = 'valentine_tailor', label = 'Valentine Tailor', region_id = 'heartlands', size = 2 },
+        tier = 1,
+        rows = {
+            { id = 'outfit_ranch_hand', label = 'Ranch hand outfit', kind = 'outfit', sex = 'male', price = 18, min_tier = 0, owned = true },
+            { id = 'outfit_town_dandy', label = 'Town dandy outfit', kind = 'outfit', sex = 'male', price = 45, min_tier = 1, owned = false },
+            { id = 'item_trail_hat', label = 'Trail hat', kind = 'item', sex = 'any', price = 9, min_tier = 1, owned = false },
+            { id = 'outfit_frontier_coat', label = 'Frontier long coat', kind = 'outfit', sex = 'male', price = 120, min_tier = 3, owned = false },
+        },
+    },
+    wardrobe = {
+        owned = {
+            { id = 'outfit_ranch_hand', label = 'Ranch hand outfit', kind = 'outfit', source = 'starter' },
+            { id = 'outfit_town_dandy', label = 'Town dandy outfit', kind = 'outfit', source = 'buy' },
+            { id = 'item_trail_hat', label = 'Trail hat', kind = 'item', source = 'buy' },
+            { id = 'item_work_gloves', label = 'Work gloves', kind = 'item', source = 'quests:hale_1' },
+        },
+        worn = { outfit = 'outfit_ranch_hand', items = { 'item_trail_hat' } },
+        saved = {
+            [1] = { label = 'Everyday', outfit = 'outfit_ranch_hand', items = { 'item_trail_hat' }, valid = true },
+            [3] = { label = 'Church', outfit = 'outfit_town_dandy', items = {}, valid = true },
+        },
+        fitted = false,
+        maxItems = 3,
+        maxSaved = 4,
+    },
 }
 
 -- Tiny schema: field -> type, with '?' suffix for optional. 'table[]' / '<name>[]' nested lists via {list=schema}.
@@ -155,6 +181,20 @@ S.trapper = {
     notice = 'string?', notice_kind = 'string?',
     rows = { list = { container = 'string', slot = 'number', item = 'string', label = 'string',
         stars = 'number', legendary = 'boolean', price = 'number' } },
+}
+S.tailor = {
+    notice = 'string?', notice_kind = 'string?',
+    shop = { obj = { id = 'string', label = 'string', region_id = 'string', size = 'number' } },
+    tier = 'number',
+    rows = { list = { id = 'string', label = 'string', kind = 'string', sex = 'string', price = 'number',
+        min_tier = 'number', owned = 'boolean' } },
+}
+S.wardrobe = {
+    notice = 'string?', notice_kind = 'string?',
+    owned = { list = { id = 'string', label = 'string', kind = 'string', source = 'string' } },
+    worn = 'table?', -- { outfit, items }; absent before the starter set is granted
+    saved = 'table', -- sparse { [slot] = { label, outfit, items, valid } }
+    fitted = 'boolean', maxItems = 'number', maxSaved = 'number',
 }
 M.schemas = S
 

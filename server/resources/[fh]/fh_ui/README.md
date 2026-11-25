@@ -41,6 +41,8 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `survival` | `survival` | passive (idea-854) |
 | `tradepost` | `trade` | interactive |
 | `fieldguide` | `tutorial` | interactive |
+| `tailor` | `tailor` | interactive |
+| `wardrobe` | `tailor` | interactive |
 | `trapper` | `hunting` | interactive |
 
 Action must match `^[a-z_]{1,32}$`. Payload must be a table of plain data (strings, finite numbers, booleans, nested
@@ -174,8 +176,22 @@ and price. fh_hunting lists its sellable pelts with `trapper.list`, opens the sc
 `fh:hunting:sell_open`, and answers `sell` actions as the server event `fh:hunting:ui_sell` -> `trapper.sell` -> a fresh
 `fh:ui:update` with the new rows and an inline `notice` (`ok` = "Sold ...", else the refusal text).
 
+### tailor (owner `tailor`)
+`open/update` data = fh_tailor `getStock`: `{ shop = { id, label, region_id, size }, tier, rows = { { id, label, kind, sex, price, min_tier, owned } }, notice?, notice_kind? }`.
+Header shows the shop label and the player's tier. Rows show label, kind, price; `owned` rows say Owned (Buy disabled);
+rows with `min_tier > tier` are greyed with "Needs tier N". A notice-only update keeps the rows. Actions: `buy` `{ entry_id }`
+(`fh:tailor:ui_buy`), `close` `{}`; any other action is rejected by the relay allowlist. The server re-derives price, tier,
+owned and the shop (from `openShop` state), never from the client.
+
+### wardrobe (owner `tailor`)
+`open/update` data = fh_tailor `getWardrobe`: `{ owned = { { id, label, kind, source } }, worn?, saved = { [slot] = { label, outfit, items, valid } }, fitted, maxItems, maxSaved, notice?, notice_kind? }`.
+Pick one owned outfit and up to `maxItems` items (client cap; the server decides), then Wear, or Save to a slot 1..`maxSaved`
+(optional name); a saved slot shows its look with Wear. `saved` may arrive as an array or a slot-keyed object. Actions:
+`equip` `{ outfit_id, item_ids }`, `save` `{ slot, label?, outfit_id, item_ids }`, `wear` `{ slot }`, `close` `{}`.
+fh_tailor opens both via `openShop` / `openWardrobe` and answers with `fh:ui:update` + `notice`.
+
 ### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost|fieldguide|trapper>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost|fieldguide|trapper|tailor|wardrobe>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
 
