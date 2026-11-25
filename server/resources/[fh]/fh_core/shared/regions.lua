@@ -165,7 +165,7 @@ regions.regions = {
         territories = { 'cumberland_forest_t1_camp', 'cumberland_forest_t1_camp_2', 'cumberland_forest_t2_camp' },
         ambush = {
             { id = 'cumberland_forest_amb_1', x = -850, y = 1000, z = 105, label = 'Forest stage road', verified = false },
-            { id = 'cumberland_forest_amb_2', x = -500, y = 1480, z = 130, label = 'North timber trail', verified = false },
+            { id = 'cumberland_forest_amb_2', x = -500, y = 1480, z = 130, label = 'Timberline trail', verified = false },
         },
     },
     big_valley = {
@@ -278,7 +278,7 @@ regions.regions = {
         factions = { 'lawmen', 'desert_gang' },
         territories = { 'rio_bravo_t1_camp', 'rio_bravo_t1_camp_2', 'rio_bravo_t2_camp' },
         ambush = {
-            { id = 'rio_bravo_amb_1', x = -1750, y = -2550, z = 55, label = 'River bench trail', verified = false },
+            { id = 'rio_bravo_amb_1', x = -1850, y = -3000, z = 55, label = 'River bench trail', verified = false },
             { id = 'rio_bravo_amb_2', x = -2450, y = -2700, z = 60, label = 'West mesa trail', verified = false },
         },
     },

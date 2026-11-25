@@ -148,6 +148,16 @@ case('ambush ids are globally unique and follow <region>_amb_N', function()
     end
 end)
 
+case('ambush labels are unique across all regions', function()
+    local seen = {}
+    for _, r in pairs(regions.regions) do
+        for _, a in ipairs(r.ambush) do
+            assert(not seen[a.label], a.label .. ' duplicated label (from ' .. a.id .. ')')
+            seen[a.label] = true
+        end
+    end
+end)
+
 case('every ambush node is >=200 m from every claim, town center and town lot', function()
     for _, r in pairs(regions.regions) do
         for _, a in ipairs(r.ambush) do
