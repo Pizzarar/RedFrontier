@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: UI
 - Lead: ★ UI3
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - fh_ui on local main with U1-U4 PASS, specs green, `## UI` card in OWNER-TESTS.md, `decision ui playtest-ready <hash>` logged.
@@ -30,3 +30,5 @@
 - idea-690 archived: satisfied by U2 buff HUD.
 - SPEC seeded: docs/lanes/ui/SPEC.md (Done-when checklist; tick as plans land).
 - PASS merged d19a22e: T3 heat HUD live (837390b) + idea-854 survival HUD (881aaaa). T1 held: contracts lint 2 findings (fh:trade:sell/buy handlers lost their sender) -> fix. T2+T4 wait on hunting-l1.
+- PASS merged 8ca4067: T1 tradepost (c51335e + contracts fix 59eb13f) + idea-849 fieldguide (5c7c850, 0c1028d). Guide lead + Roa3 pinged. Left: T2 trapper + T4 card after hunting-l1.
+- PASS merged d8f2103: T2 trapper re-port on hunting-02 (99b2057) + T4 owner card steps 25-29. Plan 4 ui-live-trade-heat COMPLETE.
