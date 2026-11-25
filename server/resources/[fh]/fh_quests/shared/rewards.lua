@@ -102,19 +102,20 @@ function M.outfitSource(def)
 end
 
 ---Grant the outfit part through fh_tailor. deps = { available = fn() -> bool, grant = fn(cid, id, source) -> ok, code }.
----Both sex variants are granted: fh_tailor refuses the one that does not fit the character with 'wrong_sex' (the
----expected result, ignored), and grant is idempotent and works offline, so no sex lookup is needed. Never throws.
----Success = at least one grant answered ok (granted | already_owned). Anything else is a refusal (retried on the next
----character load, the quest itself is already done).
+---Tries the configured sex variants in order (male, then female) and stops after the first ok (granted | already_owned),
+---so a sex='any' entry paired with a second id never grants both. fh_tailor refuses a non-matching variant with
+---'wrong_sex' (expected, ignored, falls through to the next id), and grant is idempotent and works offline, so no sex
+---lookup is needed. Never throws. Any non-ok outcome is a refusal (retried on the next character load; the quest itself
+---is already done).
 ---@return boolean called, boolean ok, string|nil err   (the rewards.run pay() triple)
 function M.grantOutfit(part, citizenid, deps)
     if not deps.available() then return true, false, 'fh_tailor_down' end
-    local ok, firstErr = false, nil
+    local firstErr = nil
     for _, id in ipairs({ part.male or false, part.female or false }) do
         if id then
             local called, a, b = pcall(deps.grant, citizenid, id, part.source)
             if called and a == true then
-                ok = true
+                return true, true
             elseif not called then
                 firstErr = firstErr or ('threw: ' .. tostring(a))
             elseif b ~= 'wrong_sex' then
@@ -122,7 +123,6 @@ function M.grantOutfit(part, citizenid, deps)
             end
         end
     end
-    if ok then return true, true end
     return true, false, firstErr or 'wrong_sex'
 end
 

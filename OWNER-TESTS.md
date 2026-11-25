@@ -1878,7 +1878,7 @@ warning). Town lots are never raided. Console lines start with `[fh_alife]`. Adm
 
 ## quests-04 · questline outfit reward (fh_quests + fh_tailor, idea-1005)
 Needs the fh_tailor catalog to contain `quest_<family>_male` / `quest_<family>_female` (earned_only; @progression owns
-the catalog, see README "Outfit rewards"). Until then the grant answers `unknown_entry` and the part stays owed.
+the catalog, see `fh_quests/README.md` `## Rewards (exactly once)`, "Outfit reward (idea-1005, ...)" bullet). Until then the grant answers `unknown_entry` and the part stays owed.
 1. Finish a family questline start to end (e.g. the Hale line in Heartlands). Expected: money and rep pay as before; the
    server console shows no `reward ... outfit: refused` line; `exports.fh_tailor:getWardrobe(src)` (or the Wardrobe pane)
    lists `quest_hale_<your sex>` with source `quests:hale`. TODO-verify

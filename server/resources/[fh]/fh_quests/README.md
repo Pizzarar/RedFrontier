@@ -560,8 +560,9 @@ Storage notes:
   stops the run; the rest stays owed and is retried on the next character load and before the next `start` /
   `acceptOffer` of that quest. Payouts only happen while the player is online.
 - Outfit reward (idea-1005, optional `rewards.outfit = { male = id, female = id }`, paid last as part `outfit`): calls
-  `exports.fh_tailor:grant(citizenid, id, 'quests:<family>')` for **both** ids. fh_tailor refuses the one that does not
-  fit the character with `wrong_sex` (expected, ignored), so fh_quests needs no sex lookup; the grant is idempotent and
+  `exports.fh_tailor:grant(citizenid, id, 'quests:<family>')` for the configured ids in order (male, then female),
+  stopping after the first `granted` / `already_owned`. fh_tailor refuses a non-matching variant with `wrong_sex`
+  (expected, ignored, falls through to the next id), so fh_quests needs no sex lookup; the grant is idempotent and
   works offline, so it does not wait for the player. Any one `granted` / `already_owned` pays the part. The source tag
   is `quests:` + the quest id minus a leading `family_`, cut to 32 chars. fh_tailor stopped or missing, `unknown_entry`
   (catalog not filled yet), a thrown export or any other refusal: the part is logged

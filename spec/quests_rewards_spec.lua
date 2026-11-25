@@ -394,6 +394,59 @@ describe('rewards: outfit part (idea-1005)', function()
         local out = R.scaleByTier({ money = 10, outfit = { male = 'a', female = 'b' } }, 2)
         same({ male = 'a', female = 'b' }, out.outfit)
     end)
+
+    it('grantOutfit short-circuits after the first granted or already_owned id (second id is never called)', function()
+        local part = { key = 'outfit', kind = 'outfit', male = 'quest_a_male', female = 'quest_a_female', source = 'quests:a' }
+        for _, code in ipairs({ 'granted', 'already_owned' }) do
+            local calls = {}
+            local called, ok, err = R.grantOutfit(part, CID, {
+                available = function() return true end,
+                grant = function(cid, id, src)
+                    calls[#calls + 1] = { cid = cid, id = id, src = src }
+                    return true, code
+                end,
+            })
+            eq(true, called); eq(true, ok); eq(nil, err)
+            eq(1, #calls, 'second id must not be called after ' .. code)
+            same({ cid = CID, id = 'quest_a_male', src = 'quests:a' }, calls[1])
+        end
+    end)
+
+    it('grantOutfit falls through on wrong_sex and grants the second id', function()
+        local part = { key = 'outfit', kind = 'outfit', male = 'quest_a_male', female = 'quest_a_female', source = 'quests:a' }
+        local calls = {}
+        local called, ok, err = R.grantOutfit(part, CID, {
+            available = function() return true end,
+            grant = function(_, id)
+                calls[#calls + 1] = id
+                if id == 'quest_a_male' then return false, 'wrong_sex' end
+                return true, 'granted'
+            end,
+        })
+        eq(true, called); eq(true, ok); eq(nil, err)
+        same({ 'quest_a_male', 'quest_a_female' }, calls)
+    end)
+
+    it('grantOutfit leaves the part owed on fh_tailor_down, unknown_entry, or thrown export', function()
+        local part = { key = 'outfit', kind = 'outfit', male = 'quest_a_male', female = 'quest_a_female', source = 'quests:a' }
+        local c1, ok1, e1 = R.grantOutfit(part, CID, {
+            available = function() return false end,
+            grant = function() error('should not be called') end,
+        })
+        eq(true, c1); eq(false, ok1); eq('fh_tailor_down', e1)
+
+        local c2, ok2, e2 = R.grantOutfit(part, CID, {
+            available = function() return true end,
+            grant = function() return false, 'unknown_entry' end,
+        })
+        eq(true, c2); eq(false, ok2); eq('unknown_entry', e2)
+
+        local c3, ok3, e3 = R.grantOutfit(part, CID, {
+            available = function() return true end,
+            grant = function() error('boom') end,
+        })
+        eq(true, c3); eq(false, ok3); assert(type(e3) == 'string' and e3:find('threw:', 1, true))
+    end)
 end)
 
 T.finish()

@@ -694,20 +694,30 @@ describe('quests outfit reward through fh_tailor (idea-1005)', function()
         return S.Q.cache[cid][DEF.id]
     end
 
-    it('grants both sex variants once, with the quests:<family> source; wrong_sex is the expected answer', function()
+    it('stops after the first granted id and falls through on wrong_sex, with the quests:<family> source', function()
         local calls = {}
         local S = bootServer({ tailor = { grant = function(_, cid, id, src)
             calls[#calls + 1] = { cid, id, src }
-            if id == 'quest_t_female' then return false, 'wrong_sex' end
             return true, 'granted'
         end } })
         local st = run(S, 'CID_A')
-        eq(2, #calls)
+        eq(1, #calls)
         same({ 'CID_A', 'quest_t_male', 'quests:test_outfit' }, calls[1])
-        same({ 'CID_A', 'quest_t_female', 'quests:test_outfit' }, calls[2])
         eq(false, S.env.FhQuestsRewards.pending(st))
         eq(1, #S.economyCalls, 'money paid before the outfit (DEF has money only)')
         eq('pay', S.economyCalls[1].kind)
+
+        local calls2 = {}
+        local S2 = bootServer({ tailor = { grant = function(_, cid, id, src)
+            calls2[#calls2 + 1] = { cid, id, src }
+            if id == 'quest_t_male' then return false, 'wrong_sex' end
+            return true, 'granted'
+        end } })
+        local st2 = run(S2, 'CID_A')
+        eq(2, #calls2)
+        same({ 'CID_A', 'quest_t_male', 'quests:test_outfit' }, calls2[1])
+        same({ 'CID_A', 'quest_t_female', 'quests:test_outfit' }, calls2[2])
+        eq(false, S2.env.FhQuestsRewards.pending(st2))
     end)
 
     it('fh_tailor stopped: refused, logged, everything else paid, retried on the next payout', function()
