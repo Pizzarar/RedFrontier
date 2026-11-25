@@ -6,7 +6,7 @@ local SERVER = here .. '../server/resources/[fh]/fh_core/server/useables.lua'
 
 local function boot(o)
     o = o or {}
-    local w = { events = {}, notes = {}, removed = {}, added = {}, credited = {}, paid = {}, charged = {}, useables = {}, handlers = {}, logs = {} }
+    local w = { cid = (o.cid == nil) and 'CID1' or o.cid, events = {}, notes = {}, removed = {}, added = {}, credited = {}, paid = {}, charged = {}, useables = {}, handlers = {}, logs = {} }
     local bag = o.bag or {}
     local env = setmetatable({}, { __index = _G })
     env.GetGameTimer = function() w.t = (w.t or 0) + 5000 return w.t end
@@ -25,11 +25,17 @@ local function boot(o)
                 if res == 'rsg-core' and fn == 'CreateUseableItem' then w.useables[a] = b return end
                 if res == 'rsg-core' and fn == 'GetCoreObject' then
                     return { Functions = { GetPlayer = function()
-                        return { PlayerData = { citizenid = 'CID1' }, Functions = { AddMoney = function(t, amt, why)
+                        if not w.cid then return nil end
+                        local P = { PlayerData = { citizenid = w.cid, money = { bloodmoney = 0 } } }
+                        P.Functions = { AddMoney = function(t, amt, why)
                             w.added[#w.added + 1] = { type = t, amount = amt, reason = why }
                             if o.addMoneyFalse then return false end
-                            w.order = (w.order or '') .. 'M' return true
-                        end } }
+                            P.PlayerData.money[t] = P.PlayerData.money[t] + amt
+                            w.order = (w.order or '') .. 'M'
+                            if o.addMoneyThrows then error('side effect blew up') end
+                            return true
+                        end }
+                        return P
                     end } }
                 end
                 if res == 'rsg-inventory' then
@@ -154,6 +160,31 @@ case('blood money clip: pays bloodmoney via AddMoney after removal; false path g
     local g = boot({ bag = bagOf('blood_money_clip', { amount = 20 }), addMoneyFalse = true })
     g.use(1, 'blood_money_clip')
     assert(g.gaveBack == 1 and #g.credited == 0)
+end)
+
+case('money clip: disconnect during pay -> no give-back to anyone, cash credited to the original cid', function()
+    local w = boot({ bag = bagOf('money_clip', { amount = 9 }), payFails = true, duringPay = function(ww) ww.cid = nil end })
+    w.use(1, 'money_clip')
+    assert((w.gaveBack or 0) == 0 and #w.credited == 1 and w.credited[1].cid == 'CID1' and w.credited[1].amount == 9)
+end)
+
+case('money clip: character switch on the same src during pay -> credited to A, nothing to B', function()
+    local w = boot({ bag = bagOf('money_clip', { amount = 9 }), payFails = true, duringPay = function(ww) ww.cid = 'CID2' end })
+    w.use(1, 'money_clip')
+    assert((w.gaveBack or 0) == 0 and #w.credited == 1 and w.credited[1].cid == 'CID1')
+    assert(#w.notes == 0) -- B is not told anything about A's clip
+end)
+
+case('money clip: no character before use fails closed, clip not removed', function()
+    local w = boot({ bag = bagOf('money_clip'), cid = false })
+    w.use(1, 'money_clip')
+    assert(#w.removed == 0 and #w.paid == 0 and #w.credited == 0)
+end)
+
+case('blood clip: AddMoney throwing after the balance moved counts as paid (no give-back)', function()
+    local w = boot({ bag = bagOf('blood_money_clip', { amount = 20 }), addMoneyThrows = true })
+    w.use(1, 'blood_money_clip')
+    assert((w.gaveBack or 0) == 0 and #w.added == 1 and w.notes[1]:find('20.00'))
 end)
 
 case('money clip: sub-half-cent amount is refused with a notify, clip stays', function()

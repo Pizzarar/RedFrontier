@@ -3,8 +3,9 @@
 -- Registered via rsg-core CreateUseableItem (pattern + re-register on rsg-core restart: fh_survival/server/actions.lua).
 -- Health / stamina are client natives: the server validates and consumes the item, THEN tells the client to apply the
 -- effect (fh:core:useable:restore). The client never names the item or the amount.
--- Money clips pay through fh_economy first and are consumed only after the payment succeeded (a failed consume is
--- charged back).
+-- Money clips are removed FIRST (exact slot, confirmed), under a per-player in-flight lock, and only then paid: cash through
+-- fh_economy:pay, blood money through rsg-core AddMoney('bloodmoney') with a balance check. A refused payment gives the
+-- clip back, but only to the same character (citizenid captured before the removal); otherwise cash clips are credited.
 
 local DEFAULTS = {
     -- hp = fraction of max health restored, stamina = fraction of max stamina restored
@@ -81,12 +82,28 @@ local function playerOf(src)
     return ok and p or nil
 end
 
+local function cents(x) return math.floor((tonumber(x) or 0) * 100 + 0.5) end
+
+-- AddMoney twin of fh_economy's addMoneyChecked (integer cents, never float compare): a false return is refused; a throw
+-- after the balance moved still counts as paid, else the clip would be given back on top of the money.
+local function addChecked(Player, moneyType, amount, reason)
+    local before = cents(Player.PlayerData.money and Player.PlayerData.money[moneyType])
+    local called, added = pcall(Player.Functions.AddMoney, moneyType, amount, reason)
+    if called then return added == true end
+    local after = cents(Player.PlayerData.money and Player.PlayerData.money[moneyType])
+    return after - before == cents(amount)
+end
+
 local function clipInner(src, item, clip)
     local amount = tonumber(item.info and item.info.amount)
     if not (amount and amount > 0) then amount = math.random(clip.min, clip.max) end
-    local cents = math.floor(amount * 100 + 0.5)
-    if cents <= 0 then notify(src, 'That clip is empty.', 'error') return end
-    amount = cents / 100 -- whole cents
+    local c = cents(amount)
+    if c <= 0 then notify(src, 'That clip is empty.', 'error') return end
+    amount = c / 100 -- whole cents
+    -- who is using it, captured BEFORE anything yields: fail closed without a character
+    local p = playerOf(src)
+    local cid = p and p.PlayerData and p.PlayerData.citizenid
+    if not cid then notify(src, "You can't use that right now.", 'error') return end
     -- Remove first (synchronous, exact slot), verify, THEN pay: never pay without a confirmed removal, so the clip
     -- cannot be moved while pay yields and then also pay out.
     if not consume(src, item.name, item.slot, 'fh_core use') then
@@ -96,28 +113,31 @@ local function clipInner(src, item, clip)
     local paid, why = false, nil
     if clip.moneyType then
         -- blood money is not ledgered cash: rsg-core AddMoney (false = items did not fit, balance restored)
-        local p = playerOf(src)
-        local ok, res = pcall(function() return p and p.Functions.AddMoney(clip.moneyType, amount, clip.reason) end)
-        paid, why = ok and res and true or false, 'addmoney_refused'
+        paid, why = addChecked(p, clip.moneyType, amount, clip.reason), 'addmoney_refused'
     else
         local ok, res, err = pcall(function() return exports.fh_economy:pay(src, amount, clip.reason) end)
         paid, why = ok and res and true or false, ok and err or res
     end
     if paid then notify(src, ('You find $%.2f in the clip.'):format(amount), 'success') return end
     print(('[fh_core] useables: pay for %s refused for %s: %s'):format(item.name, tostring(src), tostring(why)))
-    if giveBack(src, item) then
+    -- pay may have yielded: the same character must still be on this src before the clip goes back into its bag
+    local now_p = playerOf(src)
+    local same = now_p and now_p.PlayerData and now_p.PlayerData.citizenid == cid
+    if same and giveBack(src, item) then
         notify(src, "You can't use that right now.", 'error')
         return
     end
-    -- the clip will not go back (full bag): cash is credited instead (offline-safe, whole cents); blood money has no fallback
-    local p = playerOf(src)
-    local cid = p and p.PlayerData and p.PlayerData.citizenid
+    -- clip cannot go back (character gone/switched, or full bag): cash is credited to the ORIGINAL character (offline-safe,
+    -- whole cents); blood money has no fallback
     local cok, credited = false, false
-    if not clip.moneyType and cid then
+    if not clip.moneyType then
         cok, credited = pcall(function() return exports.fh_economy:credit(cid, amount, clip.reason .. '_giveback') end)
     end
-    print(('[fh_core] useables: give-back of %s to %s FAILED; credit %s'):format(item.name, tostring(src), (cok and credited) and 'ok' or 'not paid'))
-    notify(src, (cok and credited) and ('Your bag is full: $%.2f was paid instead.'):format(amount) or "You can't use that right now.", 'error')
+    print(('[fh_core] useables: give-back of %s to %s (%s) FAILED; credit %s'):format(
+        item.name, tostring(src), tostring(cid), (cok and credited) and 'ok' or 'not paid'))
+    if same then
+        notify(src, (cok and credited) and ('Your bag is full: $%.2f was paid instead.'):format(amount) or "You can't use that right now.", 'error')
+    end
 end
 
 local function onClip(src, item, clip)
