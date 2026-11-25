@@ -40,8 +40,8 @@ through `fh_core:registerItems` (again whenever `fh_core` restarts).
 
 | Size class | Items |
 |---|---|
-| bulky (saddlebag OK) | `pelt_rabbit`, `pelt_fox`, `pelt_coyote`, `pelt_deer`, `pelt_boar`, `pelt_wolf`, `trophy_legendary_<id>` (one per region in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`) |
-| cargo (wagon or chest only) | `pelt_bear`, `pelt_bison`, `pelt_elk`, `pelt_moose`, `pelt_alligator`, `pelt_legendary_<id>` (always 3 stars; one per region in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`) |
+| bulky (saddlebag OK) | `pelt_rabbit`, `pelt_fox`, `pelt_coyote`, `pelt_deer`, `pelt_boar`, `pelt_wolf`, `trophy_<id>` (e.g. `legendary_bear` -> `trophy_legendary_bear`; one per region in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`) |
+| cargo (wagon or chest only) | `pelt_bear`, `pelt_bison`, `pelt_elk`, `pelt_moose`, `pelt_alligator`, `pelt_<id>` (always 3 stars; e.g. `legendary_bear` -> `pelt_legendary_bear`; one per region in [Legendaries](#legendaries-hunting-02) / `data/legendaries/*.lua`) |
 
 Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect_pelt`, `legendary_bear_pelt`).
 
@@ -60,7 +60,7 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 - `getAnimal(model|hash, legendary)`: the animal table entry or nil.
 - `getPeltItem(model|hash, legendary)`: pelt item id or nil.
 - `price(peltItem, stars)`: payout amount or `nil, err`.
-- `getTrophyComfort(itemId)`: comfort number for any legendary trophy item (`trophy_legendary_<id>`, e.g. 25 from `data/legendaries/*.lua`; see [Legendaries](#legendaries-hunting-02)), nil for pelts, unknown ids and non-strings. Homestead places the trophy and reads this; Hunting fires no trophy events.
+- `getTrophyComfort(itemId)`: comfort number for any legendary trophy item (`trophy_<id>`, e.g. `legendary_bear` -> `trophy_legendary_bear`, 25 from `data/legendaries/*.lua`; see [Legendaries](#legendaries-hunting-02)), nil for pelts, unknown ids and non-strings. Homestead places the trophy and reads this; Hunting fires no trophy events.
 
 ## Trapper (H3)
 
