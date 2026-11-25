@@ -27,6 +27,7 @@ I.ITEMS = {
 -- registers their useable callback (CreateUseableItem); fh_core registerItems does NOT define them (see
 -- `isForeign`). Fractions on the jerky/biscuit/stew scale, justified per row:
 --   bread 0.35      = a plain bun, a snack like hardtack (rsg: "not very filling more of a snack")
+--   carrot 0.25      = a raw veg snack, lighter than bread
 --   canned_beans 0.6 = a staple legume/protein can, more filling than bread
 --   canned_apricots 0.4 = fruit in syrup, light
 --   canned_salmon 0.6  = protein-rich fish
@@ -42,6 +43,7 @@ I.USE = {
     fh_canteen     = { kind = 'canteen', buff = 'hydrated', magnitude = 1.0,  scale = 1.0 },
     -- rsg-core/loot food -> well_fed (consumed like food, remove 1)
     bread          = { kind = 'food',    buff = 'well_fed', magnitude = 1.0,  scale = 0.35 },
+    carrot         = { kind = 'food',    buff = 'well_fed', magnitude = 1.0,  scale = 0.25 },
     canned_beans   = { kind = 'food',    buff = 'well_fed', magnitude = 1.0,  scale = 0.6 },
     canned_apricots = { kind = 'food',   buff = 'well_fed', magnitude = 1.0,  scale = 0.4 },
     canned_salmon  = { kind = 'food',    buff = 'well_fed', magnitude = 1.0,  scale = 0.6 },

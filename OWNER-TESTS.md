@@ -1079,6 +1079,9 @@ drinks use the same consume path as the S3 items; fractions are of `Durations` (
 31. `/rest` cooldown (idea-948): run `/rest` at your homestead bed, then immediately run `/rest` again within `RestBedCooldownSeconds` (10 s). Wait out the cooldown and run `/rest` once more.
     Expected: the first `/rest` succeeds (`You rest and feel rested.`); the immediate repeat is refused with `Please wait N s before resting again.`; after 10 s `/rest` succeeds again.
     RESULT:
+32. Carrot (idea-1008): pick a carrot from the garden and use it from the inventory.
+    Expected: the carrot is consumed and `well_fed` appears at 1.0 for a small share (25%) of the `well_fed` duration, shorter than bread (35%).
+    RESULT:
 
 ## Roads
 

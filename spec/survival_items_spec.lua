@@ -33,7 +33,7 @@ end)
 
 case('food/drink map: rows are valid or skipped by registry existence', function()
     local names = {
-        bread = true, canned_beans = true, canned_apricots = true, canned_salmon = true,
+        bread = true, carrot = true, canned_beans = true, canned_apricots = true, canned_salmon = true,
         cooked_meat = true, stew = true, stew_veg = true, jerky_meat = true, coffee = true, water = true,
     }
     for name in pairs(names) do assert(I.isForeign(name), name .. ' should be foreign') end
@@ -52,14 +52,14 @@ case('food/drink fractions match the jerky/biscuit/stew scale', function()
     -- existing fh foods keep their shipped values
     assert(scale('fh_jerky') == 0.5 and scale('fh_biscuit') == 0.35 and scale('fh_stew') == 1.0)
     -- rsg-core food: bread/jerky_meat/cooked_meat sit at hardtack/jerky; stew is a full meal
-    assert(scale('bread') == 0.35 and scale('jerky_meat') == 0.5 and scale('cooked_meat') == 0.5)
+    assert(scale('carrot') == 0.25 and scale('bread') == 0.35 and scale('jerky_meat') == 0.5 and scale('cooked_meat') == 0.5)
     assert(scale('canned_beans') == 0.6 and scale('canned_salmon') == 0.6 and scale('canned_apricots') == 0.4)
     assert(scale('stew') == 1.0 and scale('stew_veg') == 0.85)
     -- drinks: water equals a canteen charge; coffee is a smaller cup
     assert(scale('water') == 1.0 and scale('coffee') == 0.6)
     -- target buffs: food -> well_fed, drinks -> hydrated, all consumed (remove 1)
     local d = N.DEFAULT_DURATIONS
-    for _, name in ipairs({ 'bread', 'canned_beans', 'canned_apricots', 'canned_salmon', 'cooked_meat', 'stew', 'stew_veg', 'jerky_meat' }) do
+    for _, name in ipairs({ 'bread', 'carrot', 'canned_beans', 'canned_apricots', 'canned_salmon', 'cooked_meat', 'stew', 'stew_veg', 'jerky_meat' }) do
         local e = I.effectOf(name, d)
         assert(e.kind == 'food' and e.buff_id == 'well_fed', name)
     end

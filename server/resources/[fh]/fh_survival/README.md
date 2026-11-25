@@ -40,6 +40,7 @@ again on `rsg-core` restart) and skips (one log line) any row whose item is not 
 | Item | Effect |
 |---|---|
 | `bread` | consumed, `well_fed` 1.0 for 35% |
+| `carrot` | consumed, `well_fed` 1.0 for 25% |
 | `canned_beans` / `canned_salmon` | consumed, `well_fed` 1.0 for 60% |
 | `canned_apricots` | consumed, `well_fed` 1.0 for 40% |
 | `cooked_meat` / `jerky_meat` | consumed, `well_fed` 1.0 for 50% |
