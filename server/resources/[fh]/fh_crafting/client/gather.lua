@@ -19,10 +19,12 @@ local function pick(patch)
     if busy then return end
     busy = true
     -- pcall: if the progress bar throws, `busy` must still reset or the patch stays locked forever.
+    pcall(function() exports.fh_anim:start('gather') end)
     local ok, done = pcall(lib.progressBar, {
         duration = GATHER_MS, label = 'Picking ' .. herbLabel(patch.herb) .. '...', canCancel = true,
         disable = { move = true, car = true, combat = true },
     })
+    pcall(function() exports.fh_anim:stop('gather') end)
     busy = false
     if ok and done then
         TriggerServerEvent('fh:crafting:gather', patch.id)

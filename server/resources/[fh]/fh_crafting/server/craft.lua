@@ -76,6 +76,7 @@ RegisterCommand('fh_craft', function(src, args)
     local ok, reason, info = FhCraft.craft(src, id)
     if ok then
         local r = recipes.get(id)
+        TriggerClientEvent('fh:anim:play', src, (r and r.station_type == 'cook') and 'cook' or 'craft')
         tell(src, ('Done: %s.'):format(r and r.label or id))
     elseif reason == 'missing_inputs' then
         local parts = {}
