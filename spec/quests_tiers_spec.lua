@@ -25,12 +25,24 @@ end
 
 describe('quests tiers: offer min_tier default and builders', function()
     it('every built-in builder sets min_tier = 1 when omitted in region data', function()
+        local FIELD = {
+            hunt_request = 'hunt', camp_clear = 'camps', bounty = 'bounties', supply_run = 'supply',
+            survey = 'surveys', escort = 'escorts', rescue = 'rescues',
+        }
+        local d = JT.DATA.heartlands
         for _, jt in ipairs(JT.TYPES) do
+            local raw = d[FIELD[jt]] or {}
             local list = JT.offers(jt, 'heartlands')
             assert(#list > 0, 'expected heartlands offers for ' .. jt)
-            for _, o in ipairs(list) do
-                eq(1, o.min_tier, jt .. ':' .. o.key .. ' default min_tier')
+            local omitted = 0
+            for i, o in ipairs(list) do
+                local src = raw[i]
+                if src and src.min_tier == nil and (jt ~= 'hunt_request' or src[4] == nil) then
+                    omitted = omitted + 1
+                    eq(1, o.min_tier, jt .. ':' .. o.key .. ' default min_tier')
+                end
             end
+            assert(omitted >= 1, 'expected at least one omitted min_tier entry in heartlands for ' .. jt)
         end
     end)
 

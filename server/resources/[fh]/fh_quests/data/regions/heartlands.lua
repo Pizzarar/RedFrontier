@@ -2,20 +2,27 @@
 local JT = (type((...)) == 'table' and (...)) or FhQuestsJobTypes -- chunk arg in specs (table), the global in FXServer (where ... is a number)
 
 JT.registerRegion('heartlands', {
-    hunt = { -- { animal, stars, money }: deliver an N-star pelt of that animal (sold at the fh_hunting buyer)
+    hunt = { -- { animal, stars, money [, min_tier = N] }: deliver an N-star pelt of that animal (sold at the fh_hunting buyer)
         { 'deer', 1, 6 }, { 'deer', 2, 10 }, { 'wolf', 2, 16 }, { 'wolf', 3, 24 }, { 'bear', 2, 34 }, { 'bear', 3, 50 },
+        { 'elk', 3, 42, min_tier = 2 },
     },
     camps = { -- fh_zones camp ids (fh_zones/config.lua)
         { id = 'heartlands_t1_01', label = 'Heartlands outlaw camp', money = 40, rep = 3 },
+        { id = 'heartlands_t2_01', label = 'Dakota South camp', money = 52, rep = 4, min_tier = 2 },
     },
     bounties = { -- wanted NPCs (model/coords TODO-verify-in-game)
         { key = 'silas_crow', name = 'Silas Crow', model = 'g_m_m_unibanditos_01',
             coords = { x = -128.0, y = 826.0, z = 117.0 }, heading = 140.0, money = 30, rep = 2 },
         { key = 'mabel_teague', name = 'Mabel Teague', model = 'g_m_m_unibanditos_01',
             coords = { x = -170.0, y = 860.0, z = 118.0 }, heading = 20.0, money = 36, rep = 2 },
+        { key = 'harlan_voss', name = 'Harlan Voss', model = 'g_m_m_unibanditos_01',
+            coords = { x = 510.0, y = 260.0, z = 92.0 }, heading = 210.0, money = 44, rep = 3, min_tier = 2 }, -- TODO-verify-in-game
+        { key = 'calvin_dredge', name = 'Calvin Dredge', model = 'g_m_m_unibanditos_01',
+            coords = { x = 690.0, y = 140.0, z = 88.0 }, heading = 35.0, money = 58, rep = 4, min_tier = 3 }, -- TODO-verify-in-game
     },
     supply = { -- { post, item, amount, money, rep }: sell `amount` (or more) of `item` at that fh_trade post
         { post = 'valentine_post', item = 'trade_cloth', amount = 2, money = 10, rep = 1 },
+        { post = 'valentine_post', item = 'trade_whiskey', amount = 3, money = 26, rep = 2, min_tier = 2 },
     },
     surveys = { -- ride-out surveys: reach every point (in order unless ordered = false). Coords TODO-verify-in-game
         { key = 'ridge_markers', name = 'Ridge markers', money = 24, rep = 2, ordered = true, points = {
@@ -34,6 +41,10 @@ JT.registerRegion('heartlands', {
         { key = 'ada_brennan', name = 'Ada Brennan', camp = 'heartlands_t1_01', model = 'a_f_m_valtownfolk_01',
             heading = 180.0, money = 34, rep = 3,
             coords = { x = -143.0, y = 851.0, z = 117.0 }, -- TODO-verify-in-game (beside the Heartland Bluffs camp)
+        },
+        { key = 'nora_whitfield', name = 'Nora Whitfield', camp = 'heartlands_t2_01', model = 'a_f_m_valtownfolk_01',
+            heading = 120.0, money = 46, rep = 4, min_tier = 3,
+            coords = { x = 605.0, y = 205.0, z = 90.0 }, -- TODO-verify-in-game (beside the Dakota South camp)
         },
     },
 })

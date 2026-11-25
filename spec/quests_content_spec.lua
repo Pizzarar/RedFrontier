@@ -143,6 +143,31 @@ describe('quests content: keys and coverage', function()
             end
         end
     end)
+    it('every enabled region offers at least one contract at each tier 1, 2, 3 (by min_tier)', function()
+        local enabledCount = 0
+        for id in pairs(JT.DATA) do
+            if regions.isEnabled(id) then
+                enabledCount = enabledCount + 1
+                local byTier = { [1] = 0, [2] = 0, [3] = 0 }
+                local hasT2Camp = false
+                for _, jt in ipairs(JT.TYPES) do
+                    for _, o in ipairs(JT.offers(jt, id)) do
+                        assert(o.min_tier == 1 or o.min_tier == 2 or o.min_tier == 3,
+                            id .. ' ' .. jt .. ':' .. o.key .. ' invalid min_tier ' .. tostring(o.min_tier))
+                        byTier[o.min_tier] = byTier[o.min_tier] + 1
+                        if jt == 'camp_clear' and o.min_tier >= 2 and type(o.camp_id) == 'string' and o.camp_id:find('_t2_', 1, true) then
+                            hasT2Camp = true
+                        end
+                    end
+                end
+                for tier = 1, 3 do
+                    assert(byTier[tier] >= 1, id .. ' has ' .. byTier[tier] .. ' tier-' .. tier .. ' offers (need >= 1)')
+                end
+                assert(hasT2Camp, id .. ' has no tier-2+ camp_clear on an existing _t2_ camp')
+            end
+        end
+        assert(enabledCount >= 4, 'expected at least 4 enabled regions, got ' .. enabledCount)
+    end)
     it('every region with data has a board spot (and every spot names a known region)', function()
         local spots = {}
         for _, s in ipairs(BS.spots) do

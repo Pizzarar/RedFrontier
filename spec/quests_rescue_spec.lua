@@ -390,7 +390,8 @@ describe('quests rescue: region gate', function()
         local before, flag = JT.DATA[DISABLED], regions.regions[DISABLED].enabled
         JT.registerRegion(DISABLED, { rescues = JT.DATA[REGION].rescues })
         local ok, err = pcall(function()
-            eq(1, #JT.offers('rescue', DISABLED))
+            local want = #JT.DATA[REGION].rescues
+            eq(want, #JT.offers('rescue', DISABLED))
             local types = { rescue = { hooks = { offers = function(r) return JT.offers('rescue', r) end } } }
             local n = 0
             for _, l in pairs(B.collect(DISABLED, types, regions.isEnabled)) do n = n + #l end
@@ -398,7 +399,7 @@ describe('quests rescue: region gate', function()
             regions.regions[DISABLED].enabled = true
             n = 0
             for _, l in pairs(B.collect(DISABLED, types, regions.isEnabled)) do n = n + #l end
-            eq(1, n)
+            eq(want, n)
         end)
         JT.registerRegion(DISABLED, before)
         regions.regions[DISABLED].enabled = flag
