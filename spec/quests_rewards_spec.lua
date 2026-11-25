@@ -274,4 +274,89 @@ describe('quests rewards: done status and cooldown_until', function()
     end)
 end)
 
+describe('quests rewards: scaleByTier (quests-03 T2)', function()
+    it('scales money and rep by default tier multipliers (t1 x1.0, t2 x1.5, t3 x2.25) and leaves items unchanged', function()
+        local base = {
+            money = 20,
+            rep = { region_id = 'heartlands', delta = 4 },
+            items = { { name = 'bread', amount = 2 } },
+        }
+        local t1 = R.scaleByTier(base, 1)
+        eq(20, t1.money); eq('integer', math.type(t1.money))
+        eq(4, t1.rep.delta); eq('integer', math.type(t1.rep.delta)); eq('heartlands', t1.rep.region_id)
+        same({ { name = 'bread', amount = 2 } }, t1.items)
+
+        local t2 = R.scaleByTier(base, 2)
+        eq(30, t2.money); eq('integer', math.type(t2.money))
+        eq(6, t2.rep.delta); eq('integer', math.type(t2.rep.delta)); eq('heartlands', t2.rep.region_id)
+        same({ { name = 'bread', amount = 2 } }, t2.items)
+
+        local t3 = R.scaleByTier(base, 3)
+        eq(45, t3.money); eq('integer', math.type(t3.money))
+        eq(9, t3.rep.delta); eq('integer', math.type(t3.rep.delta)); eq('heartlands', t3.rep.region_id)
+        same({ { name = 'bread', amount = 2 } }, t3.items)
+
+        -- Input table and nested tables are never mutated.
+        eq(20, base.money); eq(4, base.rep.delta); eq(2, base.items[1].amount)
+        assert(t2 ~= base and t2.rep ~= base.rep and t2.items ~= base.items and t2.items[1] ~= base.items[1])
+    end)
+
+    it('rounds money and rep half-up to whole integers (fh_quests engine integer contract)', function()
+        -- 25 * 1.5 = 37.5 -> 38; 3 * 1.5 = 4.5 -> 5
+        local r2 = R.scaleByTier({ money = 25, rep = { region_id = 'heartlands', delta = 3 } }, 2)
+        eq(38, r2.money); eq('integer', math.type(r2.money))
+        eq(5, r2.rep.delta); eq('integer', math.type(r2.rep.delta))
+
+        -- 10 * 2.25 = 22.5 -> 23; 5 * 2.25 = 11.25 -> 11
+        local r3 = R.scaleByTier({ money = 10, rep = { region_id = 'heartlands', delta = 5 } }, 3)
+        eq(23, r3.money); eq('integer', math.type(r3.money))
+        eq(11, r3.rep.delta); eq('integer', math.type(r3.rep.delta))
+    end)
+
+    it('falls back to x1.0 for unknown, nil, fractional, or invalid tiers', function()
+        local base = { money = 20, rep = { region_id = 'heartlands', delta = 4 } }
+        local outNil = R.scaleByTier(base, nil)
+        eq(20, outNil.money, 'money for tier nil')
+        eq(4, outNil.rep.delta, 'rep for tier nil')
+        for _, badTier in ipairs({ 0, -1, 4, 99, 2.5, '2', 0 / 0, math.huge }) do
+            local out = R.scaleByTier(base, badTier)
+            eq(20, out.money, 'money for tier ' .. tostring(badTier))
+            eq(4, out.rep.delta, 'rep for tier ' .. tostring(badTier))
+        end
+    end)
+
+    it('reads FhQuestsConfig.tierRewardMultipliers when present and accepts an explicit multipliers override', function()
+        local base = { money = 10, rep = { region_id = 'heartlands', delta = 2 } }
+        local prev = FhQuestsConfig
+        FhQuestsConfig = { tierRewardMultipliers = { [1] = 1.0, [2] = 2.0, [3] = 3.0 } }
+        local ok, err = pcall(function()
+            local r2 = R.scaleByTier(base, 2)
+            eq(20, r2.money); eq(4, r2.rep.delta)
+            -- Explicit override wins over config; negative config multiplier falls back to 1.0.
+            local rOv = R.scaleByTier(base, 2, { [2] = 1.5 })
+            eq(15, rOv.money); eq(3, rOv.rep.delta)
+            local rNeg = R.scaleByTier(base, 2, { [2] = -2.0 })
+            eq(10, rNeg.money); eq(2, rNeg.rep.delta)
+        end)
+        FhQuestsConfig = prev
+        assert(ok, err)
+    end)
+
+    it('handles bad inputs safely and never produces negative money or rep', function()
+        eq(nil, R.scaleByTier(nil, 2))
+        eq(nil, R.scaleByTier('not a table', 2))
+        same({}, R.scaleByTier({}, 2))
+
+        local neg = R.scaleByTier({ money = -10, rep = { region_id = 'heartlands', delta = -5 } }, 2)
+        eq(0, neg.money); eq('integer', math.type(neg.money))
+        eq(0, neg.rep.delta); eq('integer', math.type(neg.rep.delta))
+
+        local zero = R.scaleByTier({ money = 0 }, 3)
+        eq(0, zero.money); eq('integer', math.type(zero.money))
+
+        local nan = R.scaleByTier({ money = 0 / 0, rep = { region_id = 'heartlands', delta = math.huge } }, 2)
+        eq(0, nan.money); eq(0, nan.rep.delta)
+    end)
+end)
+
 T.finish()

@@ -26,6 +26,67 @@ M.LEDGER_SLACK_S = 5
 M.LEDGER_SQL = 'SELECT id FROM fh_ledger WHERE citizenid = ? AND kind = ? AND reason = ? AND amount = ? '
     .. 'AND region_id = ? AND created_at >= FROM_UNIXTIME(?) LIMIT 1'
 
+-- Default contract reward multipliers by tier (quests-03 T2). Config override lives in FhQuestsConfig.tierRewardMultipliers.
+M.DEFAULT_TIER_MULTIPLIERS = { [1] = 1.0, [2] = 1.5, [3] = 2.25 }
+
+local function isFinite(n)
+    return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge
+end
+
+---Multiplier for a contract tier (default t1 x1.0, t2 x1.5, t3 x2.25; unknown/nil/invalid -> 1.0).
+---Reads FhQuestsConfig.tierRewardMultipliers when `multipliers` is omitted.
+function M.tierMultiplier(tier, multipliers)
+    if not isFinite(tier) or tier ~= math.floor(tier) then return 1.0 end
+    local t = math.tointeger(tier)
+    local mults = type(multipliers) == 'table' and multipliers
+        or (type(FhQuestsConfig) == 'table' and type(FhQuestsConfig.tierRewardMultipliers) == 'table'
+            and FhQuestsConfig.tierRewardMultipliers)
+        or M.DEFAULT_TIER_MULTIPLIERS
+    local m = t and mults[t]
+    if isFinite(m) and m >= 0 then return m end
+    return 1.0
+end
+
+---Pure reward scaling by contract tier (quests-03 T2). Scales money and rep.delta (rounded half-up to whole
+---integers to match fh_quests' engine integer contract and whole-dollar payouts via fh_economy; never negative);
+---items are copied unchanged. Returns a new table (or nil when `rewards` is not a table) and never mutates input.
+function M.scaleByTier(rewards, tier, multipliers)
+    if type(rewards) ~= 'table' then return nil end
+    local mult = M.tierMultiplier(tier, multipliers)
+    local out = {}
+    if rewards.money ~= nil then
+        if isFinite(rewards.money) and rewards.money > 0 then
+            out.money = math.floor(rewards.money * mult + 0.5)
+        else
+            out.money = 0
+        end
+    end
+    if type(rewards.rep) == 'table' then
+        local rep = {}
+        for k, v in pairs(rewards.rep) do rep[k] = v end
+        if isFinite(rewards.rep.delta) and rewards.rep.delta > 0 then
+            rep.delta = math.floor(rewards.rep.delta * mult + 0.5)
+        else
+            rep.delta = 0
+        end
+        out.rep = rep
+    end
+    if type(rewards.items) == 'table' then
+        local items = {}
+        for i, it in ipairs(rewards.items) do
+            if type(it) == 'table' then
+                local c = {}
+                for k, v in pairs(it) do c[k] = v end
+                items[i] = c
+            else
+                items[i] = it
+            end
+        end
+        out.items = items
+    end
+    return out
+end
+
 function M.reason(def) return 'quest:' .. def.id end
 
 ---Ordered reward parts of a def.

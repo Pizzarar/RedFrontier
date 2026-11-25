@@ -157,6 +157,7 @@ local function bootServer(opts)
         canUnlockCalls = 0,
         events = {},                         -- local TriggerEvent calls
         clientEvents = {},                   -- TriggerClientEvent calls
+        economyCalls = {},                   -- fh_economy pay/rep calls
         handlers = {},                       -- eventName -> { fn, ... }
         exports = {},                        -- exported server fns
         acceptHookCalls = 0,
@@ -188,6 +189,20 @@ local function bootServer(opts)
             canUnlock = function()
                 S.canUnlockCalls = S.canUnlockCalls + 1
                 error('must not gate contracts on canUnlock')
+            end,
+        },
+        fh_economy = {
+            pay = function(_, src, amount, reason, region_id)
+                S.economyCalls[#S.economyCalls + 1] = {
+                    kind = 'pay', src = src, amount = amount, reason = reason, region_id = region_id,
+                }
+                return true
+            end,
+            rep = function(_, src, region_id, delta, reason)
+                S.economyCalls[#S.economyCalls + 1] = {
+                    kind = 'rep', src = src, region_id = region_id, delta = delta, reason = reason,
+                }
+                return true
             end,
         },
     }, {
@@ -274,11 +289,11 @@ local function bootServer(opts)
         offers = function(region_id)
             return {
                 { key = region_id .. '_t1', title = 'T1 ' .. region_id, on = 'fh:zones:camp_cleared',
-                  rewards = { money = 10 }, region_id = region_id, min_tier = 1 },
+                  rewards = { money = 10, rep = { region_id = region_id, delta = 2 } }, region_id = region_id, min_tier = 1 },
                 { key = region_id .. '_t2', title = 'T2 ' .. region_id, on = 'fh:zones:camp_cleared',
-                  rewards = { money = 25 }, region_id = region_id, min_tier = 2 },
+                  rewards = { money = 20, rep = { region_id = region_id, delta = 4 } }, region_id = region_id, min_tier = 2 },
                 { key = region_id .. '_t3', title = 'T3 ' .. region_id, on = 'fh:zones:camp_cleared',
-                  rewards = { money = 50 }, region_id = region_id, min_tier = 3 },
+                  rewards = { money = 40, rep = { region_id = region_id, delta = 6 } }, region_id = region_id, min_tier = 3 },
             }
         end,
         accept = function()
@@ -440,6 +455,72 @@ describe('quests tiers: server gating, per-region tier, fallback, dev flag, tier
         eq('bayou_nwa', S.events[1].payload.region_id)
         eq(1, S.events[1].payload.src)
         eq(0, #S.clientEvents)
+    end)
+end)
+
+describe('quests tiers: T2 reward scaling frozen in job snapshot at accept', function()
+    it('accept of a t2 offer stores x1.5 rewards in progress.job and pays x1.5 via fh_economy', function()
+        local S = bootServer({ tiers = { [1] = { heartlands = 2 } } })
+        local t2Id = S.offerId('heartlands', 'heartlands_t2')
+        local ok, err, qid = S.exports.acceptOffer(1, t2Id)
+        eq(true, ok, tostring(err))
+        local st = S.Q.cache['CID_A'][qid]
+        assert(st and st.progress and st.progress.job, 'job snapshot stored')
+        eq(30, st.progress.job.rewards.money, '20 * 1.5 = 30')
+        eq(6, st.progress.job.rewards.rep.delta, '4 * 1.5 = 6')
+
+        -- Complete the job and verify payout goes through fh_economy with the scaled values.
+        S.emit('fh:zones:camp_cleared', { citizenid = 'CID_A', region_id = 'heartlands' })
+        eq(2, #S.economyCalls)
+        eq('pay', S.economyCalls[1].kind); eq(30, S.economyCalls[1].amount); eq('quest:' .. qid, S.economyCalls[1].reason)
+        eq('rep', S.economyCalls[2].kind); eq(6, S.economyCalls[2].delta); eq('quest:' .. qid, S.economyCalls[2].reason)
+    end)
+
+    it('accept of a t1 offer by a t3 player leaves t1 rewards unchanged (scales by offer min_tier, not player tier)', function()
+        local S = bootServer({ tiers = { [1] = { heartlands = 3 } } })
+        local t1Id = S.offerId('heartlands', 'heartlands_t1')
+        local ok, err, qid = S.exports.acceptOffer(1, t1Id)
+        eq(true, ok, tostring(err))
+        local st = S.Q.cache['CID_A'][qid]
+        eq(10, st.progress.job.rewards.money)
+        eq(2, st.progress.job.rewards.rep.delta)
+
+        S.emit('fh:zones:camp_cleared', { citizenid = 'CID_A', region_id = 'heartlands' })
+        eq(2, #S.economyCalls)
+        eq(10, S.economyCalls[1].amount)
+        eq(2, S.economyCalls[2].delta)
+    end)
+
+    it('a later player tier change or config multiplier change does not alter a running job payout', function()
+        local S = bootServer({ tiers = { [1] = { heartlands = 2 } } })
+        local t2Id = S.offerId('heartlands', 'heartlands_t2')
+        local ok, err, qid = S.exports.acceptOffer(1, t2Id)
+        eq(true, ok, tostring(err))
+
+        -- Mutate both player tier and config multipliers after accept, and drop memoized defs to force rebuild from snapshot.
+        S.tiers[1].heartlands = 3
+        S.env.FhQuestsConfig.tierRewardMultipliers[2] = 5.0
+        S.Q.resetJobDefs()
+
+        S.emit('fh:zones:camp_cleared', { citizenid = 'CID_A', region_id = 'heartlands' })
+        eq(2, #S.economyCalls)
+        eq('pay', S.economyCalls[1].kind); eq(30, S.economyCalls[1].amount)
+        eq('rep', S.economyCalls[2].kind); eq(6, S.economyCalls[2].delta)
+    end)
+
+    it('accept of a t3 offer stores x2.25 rewards and does not mutate the shared board offer', function()
+        local S = bootServer({ tiers = { [1] = { heartlands = 3 } } })
+        local t3Id = S.offerId('heartlands', 'heartlands_t3')
+        local ok, err, qid = S.exports.acceptOffer(1, t3Id)
+        eq(true, ok, tostring(err))
+        local st = S.Q.cache['CID_A'][qid]
+        eq(90, st.progress.job.rewards.money, '40 * 2.25 = 90')
+        eq(14, st.progress.job.rewards.rep.delta, '6 * 2.25 = 13.5 -> 14')
+
+        -- Shared board offer retains its unscaled base rewards.
+        local boardOffer = S.env.FhQuestsBoard.find(S.Q.boardFor('heartlands', CLOCK).offers, t3Id)
+        eq(40, boardOffer.offer.rewards.money)
+        eq(6, boardOffer.offer.rewards.rep.delta)
     end)
 end)
 

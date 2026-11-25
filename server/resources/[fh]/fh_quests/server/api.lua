@@ -194,11 +194,14 @@ local function acceptOffer(src, offer_id)
         local jt = offer and Q.jobTypes[offer.job_type]
         if not jt then return false, 'fh_offer_gone' end
         -- Server-side tier re-check against the offer's own region (client never decides eligibility).
-        if B.offerMinTier(offer) > Q.tierOf(src, Q.offerRegionOf(offer, region_id)) then
+        local minTier = B.offerMinTier(offer)
+        if minTier > Q.tierOf(src, Q.offerRegionOf(offer, region_id)) then
             return false, 'fh_offer_locked'
         end
         local snap, err = Jobs.snapshot(offer.job_type, offer.offer, region_id, jt.hooks.onEvent ~= nil)
         if not snap then return false, err end
+        -- Scale rewards once at accept by the contract's tier (min_tier) and freeze them in the job snapshot.
+        snap.rewards = R.scaleByTier(snap.rewards, minTier)
         local def
         def, err = Jobs.def(snap, { regions = regions(), events = Q.eventSet() })
         if not def then return false, err end
