@@ -1,4 +1,4 @@
-# Spike test cards (S1 → S6), owner: Aub
+# Spike test cards (S1 → S7), owner: Aub
 
 Checkout: `<repo-root>` (the same one you start the server from with `tools/start-server.ps1`). The spikes live in `server/resources/[spikes]/`. They are **not** in server.cfg, so you start each one by hand.
 How: in the **server console window** type `ensure spk_<name>`. In game, press T and type the `/spk_...` command. Console output shows in the server window, and client output shows in F8.
@@ -39,3 +39,9 @@ Each card takes 5 minutes or less. When you're done, open `server/resources/[spi
 - Test: run `/spk_herb props` — 6 candidate herb models spawn in a line 2m apart ~4m in front of you; read the `[n] <model>` lines (a model RedM doesn't know prints `FAIL`). Run `/spk_herb blip` — a blip cycles 4 candidate plant sprites every 3s, printing which one is showing. Finish with `/spk_herb clear`.
 - GO: name the herb model (index) and the blip sprite that looked right.
 - RESULT: `spk_herb/README.md` last line.
+
+## S7 · spk_outfit (outfit presets + layers)
+- Start: `ensure spk_outfit` (needs one male and one female rsg character; make a second character if needed).
+- Test: on each character, apply 5+ presets (`/spk_outfit 0`, `/spk_outfit next` / `prev`) and compare face/hair/body against `/spk_outfit reset`. Turn `/spk_outfit auto on`, then test respawn (die or `/kill`) and relog: watch for `re-applied <n> after ApplySkin` and check whether face/body survive and whether it flickers. Over 2 good presets, test each layer slot (`/spk_outfit layer hat 1`, `bandana 1`, `gloves 1`, `coat 1`, plus `2`/`3` if needed) and `/spk_outfit layer clear` to see which sit cleanly without clipping. Finish with `/spk_outfit auto off` and `/spk_outfit reset`.
+- GO: list good preset indices per sex, whether face/hair/body survive preset + respawn/relog auto re-apply, and which layer slots sit cleanly without clipping.
+- RESULT: `spk_outfit/README.md` last line (`male good: [..] / female good: [..] / face kept Y/N / auto after respawn Y/N / after relog Y/N / layers clean: ...`).
