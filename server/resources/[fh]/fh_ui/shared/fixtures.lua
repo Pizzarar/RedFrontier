@@ -27,6 +27,8 @@ M.fixtures = {
             { id = 'heartlands:1:bounty:hollis', job_type = 'bounty', title = 'Hollis Gang lookout',
               text = 'Take down the lookout.', rewards = { money = 150, rep = { region_id = 'heartlands', delta = 5 } },
               accepted = true },
+            { id = 'heartlands:1:bounty:ridge_boss', job_type = 'bounty', title = 'Ridge Gang boss',
+              text = 'A seasoned hand only.', rewards = { money = 300 }, accepted = false, locked = { min_tier = 2 } },
         },
     },
     journal = {
@@ -142,7 +144,7 @@ S.insurance = { title = 'string', fee = 'number', delay_minutes = 'number', targ
 local item = { list = { item = 'string', qty = 'number' } }
 S.jobs = {
     region_id = 'string', expires_at = 'number', expired = 'boolean?', notice = 'string?',
-    offers = { list = { id = 'string', job_type = 'string', title = 'string', text = 'string?', accepted = 'boolean',
+    offers = { list = { id = 'string', job_type = 'string', title = 'string', text = 'string?', accepted = 'boolean', locked = 'table?',
         rewards = { obj = { money = 'number?' } } } },
 }
 S.journal = {

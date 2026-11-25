@@ -385,8 +385,8 @@ Gating is evaluated strictly per region against the player's progression tier:
 ### `locked = { min_tier }` and `FhQuestsConfig.showLockedOffers`
 
 For development and UI preview:
-- `FhQuestsConfig.showLockedOffers` (`config.lua`, default `false`): When `false`, locked offers (`min_tier > playerTier`) are omitted from the board sync payload.
-- When set to `true`, locked offers remain in `board.offers` but have a `locked = { min_tier = N }` table attached (`FhQuestsJournal.boardView`). This allows UI work to display the contract greyed out or show "Requires Tier N" badges.
+- `FhQuestsConfig.showLockedOffers` (`config.lua`, default `true` since the fh_ui jobs board renders locked rows): When `false`, locked offers (`min_tier > playerTier`) are omitted from the board sync payload.
+- When `true`, locked offers remain in `board.offers` but have a `locked = { min_tier = N }` table attached (`FhQuestsJournal.boardView`). fh_ui shows them greyed ("Needs tier N") with no Accept button.
 - Even when previewed with `showLockedOffers = true`, server-side `acceptOffer` strictly enforces the tier gate and refuses locked contracts with `fh_offer_locked`.
 
 ### Reward scaling by offer tier

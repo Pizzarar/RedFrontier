@@ -437,6 +437,9 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 36. Saddlebag Wardrobe button. Set `set fh_saddlebag_pane true` in `server/server.cfg` (or leave it false: then there is one pane and the button shows on it), restart, open your inventory with your horse beside you. Click `Wardrobe` on the Saddlebag pane, first at a tailor stop (or your own homestead plot), then 20+ m from any stop. Then `restart fh_inventory` and check the button is still there.
     Expected: at a stop/own plot the Wardrobe screen opens (same as step 34). Away from any stop nothing opens and chat shows the not-at-wardrobe refusal (this is the chosen range rule: the saddlebag button does not bypass the stop/homestead check). After `restart fh_inventory` the button is back without relogging. No F8 errors with `fh_inventory` stopped.
     RESULT:
+37. Locked jobs offer. Stand at a jobs board as a tier 1 player in a region that posts a tier 2+ contract (or `/fh_ui_demo jobs`).
+    Expected: the locked job shows in the list greyed but readable with "Needs tier 2" and has no Accept button (nothing to click); open jobs still have Accept.
+    RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 

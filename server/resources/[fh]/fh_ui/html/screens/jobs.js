@@ -1,4 +1,4 @@
-// jobs board: data { region_id, expires_at, expired?, notice?, notice_kind?, offers: [{id,job_type,title,text,rewards,accepted}] }.
+// jobs board: data { region_id, expires_at, expired?, notice?, notice_kind?, offers: [{id,job_type,title,text,rewards,accepted, locked?: {min_tier?, reason?}}] }.
 // An update without `offers` only changes the inline notice. Actions: accept { id }, close {}. No autofocus; Enter does nothing.
 FH_UI.register('jobs', {
   last: null,
@@ -19,13 +19,15 @@ FH_UI.register('jobs', {
     if (data.expired) body.appendChild(D.h('p', 'note', 'The board is being restocked.'));
     else if (!rows.length) body.appendChild(D.h('p', 'note', 'No jobs posted.'));
     rows.forEach(function (o) {
-      const row = D.h('div', 'row card');
+      const row = D.h('div', o.locked ? 'row card disabled' : 'row card');
       const info = D.h('div', 'grow');
       info.appendChild(D.h('strong', '', o.title));
       if (o.text) info.appendChild(D.h('div', '', o.text));
       info.appendChild(D.h('div', '', 'Reward: ' + rewardText(o.rewards)));
+      if (o.locked) info.appendChild(D.h('div', 'note muted', lockText(o.locked)));
       row.appendChild(info);
-      if (o.accepted) row.appendChild(D.h('span', 'rare', 'Accepted'));
+      if (o.locked) { /* locked: no button at all; the server still refuses fh_offer_locked */ }
+      else if (o.accepted) row.appendChild(D.h('span', 'rare', 'Accepted'));
       else row.appendChild(D.btn('Accept', function () { FH_UI.action('jobs', 'accept', { id: String(o.id) }); }));
       body.appendChild(row);
     });
@@ -35,6 +37,11 @@ FH_UI.register('jobs', {
   },
   close: function (el) { this.last = null; FH_DOM.clear(el); },
 });
+
+function lockText(l) {
+  if (l && Number(l.min_tier) > 0) return 'Needs tier ' + l.min_tier;
+  return (l && typeof l.reason === 'string' && l.reason) || 'Locked';
+}
 
 function rewardText(r) {
   r = r || {};

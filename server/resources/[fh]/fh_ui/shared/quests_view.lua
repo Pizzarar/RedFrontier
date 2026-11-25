@@ -31,10 +31,15 @@ function M.jobs(snap, now)
     if not expired then
         for _, o in ipairs(asTable(board.offers)) do
             if type(o) == 'table' and type(o.id) == 'string' then
+                local lk
+                if type(o.locked) == 'table' then
+                    -- tier lock and/or hook lock ({ reason }); an empty table still means locked
+                    lk = { min_tier = tonumber(o.locked.min_tier), reason = type(o.locked.reason) == 'string' and o.locked.reason or nil }
+                end
                 offers[#offers + 1] = {
                     id = o.id, job_type = tostring(o.job_type or ''), title = tostring(o.title or o.id),
                     text = type(o.text) == 'string' and o.text or '', rewards = rewards(o.rewards),
-                    accepted = o.accepted == true,
+                    accepted = o.accepted == true, locked = lk,
                 }
             end
         end

@@ -68,3 +68,28 @@ case('accept notice: known codes and fallback', function()
     T.eq(TX.DEFAULT, TX.acceptNotice(nil, 'fh_made_up').notice)
 end)
 T.finish()
+
+case('locked offers keep min_tier / reason; plain offers have no locked', function()
+    local a, b, c = {}, {}, {}
+    for k, v in pairs(offer) do a[k], b[k], c[k] = v, v, v end
+    a.id, a.locked = 'heartlands:5:bounty:a', { min_tier = 2 }
+    b.id, b.locked = 'heartlands:5:bounty:b', { reason = 'Not yet.' }
+    c.id, c.locked = 'heartlands:5:bounty:c', { min_tier = 3, reason = 'Come back later.' }
+    local d = V.jobs(snap({ offer, a, b, c }), 100)
+    assert(d.offers[1].locked == nil)
+    T.eq(2, d.offers[2].locked.min_tier)
+    assert(d.offers[3].locked and d.offers[3].locked.min_tier == nil)
+    T.eq('Not yet.', d.offers[3].locked.reason)
+    T.eq(3, d.offers[4].locked.min_tier)
+    local ok, errs = F.validate('jobs', d)
+    assert(ok, table.concat(errs or {}, ';'))
+end)
+case('jobs fixture carries a tier-locked offer; quests ships showLockedOffers = true', function()
+    local n
+    for _, o in ipairs(F.fixtures.jobs.offers) do if o.locked then n = o.locked.min_tier end end
+    T.eq(2, n)
+    local env = { FhQuestsConfig = {} }
+    local f = assert(loadfile(here .. '../server/resources/[fh]/fh_quests/config.lua', 't', setmetatable(env, { __index = _G })))
+    f()
+    T.eq(true, env.FhQuestsConfig.showLockedOffers)
+end)

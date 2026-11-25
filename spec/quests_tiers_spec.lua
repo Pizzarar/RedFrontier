@@ -351,7 +351,7 @@ end
 
 describe('quests tiers: server gating, per-region tier, fallback, dev flag, tier_changed', function()
     it('accept of a t2 offer by a t1 player fails with fh_offer_locked (no hook, no DB write)', function()
-        local S = bootServer({ tiers = { [1] = { heartlands = 1 } } })
+        local S = bootServer({ tiers = { [1] = { heartlands = 1 } }, showLockedOffers = false })
         local t2Id = S.offerId('heartlands', 'heartlands_t2')
         local ok, err = S.exports.acceptOffer(1, t2Id)
         eq(false, ok)
@@ -369,7 +369,7 @@ describe('quests tiers: server gating, per-region tier, fallback, dev flag, tier
     end)
 
     it('per-region tier: t3 in bayou_nwa, t1 in heartlands -> bayou t2 visible/acceptable, heartlands t2 hidden/locked', function()
-        local S = bootServer({ tiers = { [1] = { bayou_nwa = 3, heartlands = 1 } } })
+        local S = bootServer({ tiers = { [1] = { bayou_nwa = 3, heartlands = 1 } }, showLockedOffers = false })
 
         local bayouView = assert(S.exports.getBoard(1, 'bayou_nwa'))
         local bayouKeys = offerKeys(bayouView)
@@ -393,14 +393,14 @@ describe('quests tiers: server gating, per-region tier, fallback, dev flag, tier
     end)
 
     it('getTier failure or fh_progression not started falls back to tier 1', function()
-        local S1 = bootServer({ progState = 'stopped', tiers = { [1] = { heartlands = 3 } } })
+        local S1 = bootServer({ progState = 'stopped', tiers = { [1] = { heartlands = 3 } }, showLockedOffers = false })
         local v1 = assert(S1.exports.getBoard(1, 'heartlands'))
         eq(1, #v1.offers)
         eq(true, offerKeys(v1).heartlands_t1)
         local ok1, err1 = S1.exports.acceptOffer(1, S1.offerId('heartlands', 'heartlands_t2'))
         eq(false, ok1); eq('fh_offer_locked', err1)
 
-        local S2 = bootServer({ getTierThrows = true, tiers = { [1] = { heartlands = 3 } } })
+        local S2 = bootServer({ getTierThrows = true, tiers = { [1] = { heartlands = 3 } }, showLockedOffers = false })
         local v2 = assert(S2.exports.getBoard(1, 'heartlands'))
         eq(1, #v2.offers)
         eq(true, offerKeys(v2).heartlands_t1)
@@ -429,7 +429,7 @@ describe('quests tiers: server gating, per-region tier, fallback, dev flag, tier
     end)
 
     it('fh:progression:tier_changed triggers a board refresh for that player only', function()
-        local S = bootServer({ tiers = { [1] = { heartlands = 1 }, [2] = { heartlands = 1 } } })
+        local S = bootServer({ tiers = { [1] = { heartlands = 1 }, [2] = { heartlands = 1 } }, showLockedOffers = false })
         -- Both players open the heartlands board at tier 1.
         local vA = assert(S.exports.getBoard(1, 'heartlands'))
         local vB = assert(S.exports.getBoard(2, 'heartlands'))
