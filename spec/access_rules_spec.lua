@@ -249,6 +249,24 @@ case('parseStore: valid admin/allow entries, comments, dedupe; malformed entries
     T.same({ admins = {}, allow = {}, bad = {} }, A.parseStore(nil), 'missing file -> empty store')
 end)
 
+case('parseStore: admin/allow keywords are case-insensitive; a malformed admin line in any case locks', function()
+    local st = A.parseStore(table.concat({ 'ADMIN ' .. OWNER, 'Allow ' .. FRIEND, 'aLlOw discord:123456789012345678' }, '\r\n'))
+    T.same({ OWNER }, st.admins)
+    T.same({ FRIEND, 'discord:123456789012345678' }, st.allow)
+    T.same({}, st.bad)
+    assert(A.initialState('', st).locked, 'uppercase admin entry locks')
+
+    local mixed = A.parseStore('ADMIN ' .. OWNER .. ' group.admin\n') -- extra token: malformed admin
+    T.same({ { line = 1, kind = 'admin' } }, mixed.bad)
+    local locked, msg = A.initialState('', mixed)
+    assert(locked.locked and locked.badStore and msg:find('malformed admin', 1, true), 'mixed-case malformed admin -> locked')
+    local badId = A.parseStore('Admin license:nothex\n')
+    T.same({ { line = 1, kind = 'admin' } }, badId.bad)
+    assert(A.initialState('', badId).locked, 'mixed-case admin with a bad id -> locked')
+    T.same({ { line = 1, kind = 'admin' } }, A.parseStore('ADMIN\n').bad, 'keyword-only admin line still locks')
+    assert(not A.initialState('', A.parseStore('Allow junk\n')).locked, 'a mixed-case bad allow line does not lock')
+end)
+
 case('storeAdd / storeText / bootLines round-trip; invalid ids refused', function()
     local st = A.parseStore(nil)
     T.eq(true, A.storeAdd(st, 'admin', OWNER))

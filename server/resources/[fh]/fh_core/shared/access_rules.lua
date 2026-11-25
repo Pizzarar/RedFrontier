@@ -123,6 +123,7 @@ function M.parseStore(text)
         local a = active(l)
         if a ~= '' then
             local kind, raw = a:match('^(%a+) (%S+)$')
+            kind = kind and kind:lower() -- hand-edited files may use ADMIN/Allow; the keyword is case-insensitive
             local id = raw and M.parseIdentifier(raw)
             if kind == 'admin' and id and id:match('^license:') then
                 if not seen['admin ' .. id] then store.admins[#store.admins + 1] = id end
@@ -131,7 +132,7 @@ function M.parseStore(text)
                 if not seen['allow ' .. id] then store.allow[#store.allow + 1] = id end
                 seen['allow ' .. id] = true
             else
-                local k = (kind == 'admin' or kind == 'allow') and kind or (a:match('^admin') and 'admin') or '?'
+                local k = (kind == 'admin' or kind == 'allow') and kind or (a:lower():match('^admin') and 'admin') or '?'
                 store.bad[#store.bad + 1] = { line = n, kind = k }
             end
         end
