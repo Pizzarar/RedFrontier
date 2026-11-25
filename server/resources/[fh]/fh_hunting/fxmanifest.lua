@@ -27,6 +27,7 @@ server_scripts {
     'shared/chain.lua',
     'shared/coats.lua',
     'server/main.lua',
+    'server/trappers_export.lua',
 }
 
 -- Legendary data files (one per FhRegions id), read by shared/legendaries.lua on both sides; never run as scripts.
@@ -41,4 +42,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'fh_economy', 'ox_lib', 'rsg-target', 'oxmysql' }
 
-server_exports { 'getAnimal', 'getPeltItem', 'price', 'getTrophyComfort' }
+server_exports { 'getAnimal', 'getPeltItem', 'price', 'getTrophyComfort', 'getTrappers' }

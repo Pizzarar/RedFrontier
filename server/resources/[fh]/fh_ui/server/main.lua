@@ -30,6 +30,15 @@ lib.callback.register('fh:ui:plot_claims', function()
     return list
 end)
 
+-- Map blips & /where: enabled-region trappers, read from fh_hunting (read-only, presentation only). Returns nil while
+-- fh_hunting is down or not ready so the client falls back to FhHuntingConfig.Trapper (heartlands).
+lib.callback.register('fh:ui:trappers', function()
+    if GetResourceState('fh_hunting') ~= 'started' or not exports.fh_hunting.getTrappers then return nil end
+    local ok, list = pcall(function() return exports.fh_hunting:getTrappers() end)
+    if not ok or type(list) ~= 'table' then return nil end
+    return list
+end)
+
 -- world-04 M: /where shows place ids to admins / fh_dev. The decision is fh_core's (exports.fh_core:canSeeIds, server-side).
 lib.callback.register('fh:ui:show_ids', function(src)
     local ok, show = pcall(function() return exports.fh_core:canSeeIds(src) end)

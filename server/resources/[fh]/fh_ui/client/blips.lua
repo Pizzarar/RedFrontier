@@ -20,11 +20,21 @@ local _SET_BLIP_NAME = 0x9CB1A1623062F402
 local blips = {}
 
 -- The lane configs, read from the `@`-includes. A config a lane did not provide is nil and gather skips it.
-local function sources()
+-- Enabled-region trappers come from the read-only `fh:ui:trappers` callback (fh_ui server -> fh_hunting getTrappers);
+-- when nil (e.g. fh_hunting not started yet), places.lua falls back to FhHuntingConfig.Trapper.
+local function fetchTrappers()
+    if not (lib and lib.callback) then return nil end
+    local ok, list = pcall(function() return lib.callback.await('fh:ui:trappers', false) end)
+    if ok and type(list) == 'table' then return list end
+    return nil
+end
+
+local function sources(trappers)
     return {
         homestead = FhHomesteadConfig,
         trade = FhTradeConfig,
         hunting = FhHuntingConfig,
+        trappers = trappers,
         zones = FhZonesConfig,
         crafting = FhCraftingConfig,
         fence = FhFenceConfig,
@@ -51,15 +61,21 @@ local function clear()
 end
 
 local function refresh()
+    if not FhUiConfig or FhUiConfig.blips == false then clear(); return end
+    local trappers = fetchTrappers()
     clear()
-    if not FhUiConfig or FhUiConfig.blips == false then return end
-    for _, p in ipairs(P.gather(sources(), { isEnabled = FhRegions and FhRegions.isEnabled })) do
+    for _, p in ipairs(P.gather(sources(trappers), { isEnabled = FhRegions and FhRegions.isEnabled })) do
         local b = addBlip(p)
         if b then blips[#blips + 1] = b end
     end
 end
 
 FH.thread(refresh)
+
+-- fh_hunting starts after fh_ui in server.cfg: refresh blips when fh_hunting starts or restarts.
+FH.on('onResourceStart', function(res)
+    if res == 'fh_hunting' then FH.thread(refresh) end
+end)
 
 FH.on('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end

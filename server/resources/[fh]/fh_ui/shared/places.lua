@@ -81,12 +81,13 @@ local function push(places, id, kind, label, x, y, z, region, verified)
 end
 
 ---Build the canonical place list from the lane configs. sources = {
----  homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig, zones = FhZonesConfig,
+---  homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig,
+---  trappers = { { region_id, label, coords }, ... }, zones = FhZonesConfig,
 ---  crafting = FhCraftingConfig, fence = FhFenceConfig, quests = { givers = FhQuestsGivers, boards = FhQuestsBoardSpots } }.
 --- Any source (or nested field) may be nil; missing data is skipped, never an error.
 --- opts = { claimed = { [plot_id] = true }, mine = <own plot_id>, isEnabled = <fn(region_id)->bool> }.
 --- isEnabled (world-01 block D enabled gate): when given, a place with a region is dropped when isEnabled(region) is
---- false; places with no region (givers/trapper/fence/stations) are never region-gated.
+--- false; places with no region (givers/fence/stations) are never region-gated.
 function M.gather(sources, opts)
     local places = {}
     sources = sources or {}
@@ -128,11 +129,39 @@ function M.gather(sources, opts)
         end
     end
 
-    -- Trapper (fh_hunting/config.lua: Trapper.coords / label).
+    -- Trappers (fh_hunting data/legendaries/<region>.lua via fh:ui:trappers, with fh_hunting/config.lua Trapper as
+    -- the heartlands fallback when its region is not already listed).
+    local seenTrapper = {}
+    local addedTrapper = 0
+    if type(sources.trappers) == 'table' then
+        for _, t in ipairs(sources.trappers) do
+            if type(t) == 'table' then
+                local rid = type(t.region_id) == 'string' and t.region_id ~= '' and t.region_id or nil
+                if not (rid and seenTrapper[rid]) then
+                    local x, y, z = M.coords(t.coords)
+                    if x then
+                        if rid then seenTrapper[rid] = true end
+                        local id = (type(t.id) == 'string' and t.id ~= '' and t.id)
+                            or (rid and ('trapper_' .. rid))
+                            or 'trapper'
+                        push(places, id, 'trapper', t.label or 'Trapper', x, y, z, rid)
+                        addedTrapper = addedTrapper + 1
+                    end
+                end
+            end
+        end
+    end
     local hu = sources.hunting
     if type(hu) == 'table' and type(hu.Trapper) == 'table' then
-        local x, y, z = M.coords(hu.Trapper.coords)
-        if x then push(places, 'trapper', 'trapper', hu.Trapper.label or 'Trapper', x, y, z) end
+        local t = hu.Trapper
+        local rid = type(t.region_id) == 'string' and t.region_id ~= '' and t.region_id or nil
+        if (rid and not seenTrapper[rid]) or (not rid and addedTrapper == 0) then
+            local x, y, z = M.coords(t.coords)
+            if x then
+                local id = rid and ('trapper_' .. rid) or 'trapper'
+                push(places, id, 'trapper', t.label or 'Trapper', x, y, z, rid)
+            end
+        end
     end
 
     -- Outlaw camps (fh_zones/config.lua: camps[id].center).
@@ -193,7 +222,7 @@ function M.gather(sources, opts)
     end
 
     -- Enabled gate (world-01 block D): drop places whose region is disabled. Places with no region (givers,
-    -- trapper, fence, stations) are not region-gated and stay. isEnabled is optional (nil = show everything).
+    -- fence, stations) are not region-gated and stay. isEnabled is optional (nil = show everything).
     if type(opts.isEnabled) == 'function' then
         local kept = {}
         for _, p in ipairs(places) do

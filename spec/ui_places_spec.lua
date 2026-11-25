@@ -282,4 +282,84 @@ case('world-04 M: line() keeps the player label byte-identical; showIds gives "l
     T.eq('', P.idTag(nil, true))
 end)
 
+case('trappers: multiple regions gathered, disabled regions excluded, /where picks & sorts nearest first', function()
+    local trappers = {
+        { region_id = 'heartlands', label = 'Trapper', coords = { x = -299, y = 792, z = 118.2 } },
+        { region_id = 'scarlett_meadows', label = 'Scarlett Meadows Trapper', coords = { x = 1265, y = -1305, z = 77 } },
+        { region_id = 'bayou_nwa', label = 'Bayou Nwa Trapper', coords = { x = 2000, y = -1000, z = 42 } },
+    }
+    local huntingCfg = { Trapper = { region_id = 'heartlands', label = 'Trapper', coords = { x = -299, y = 792, z = 118.2 } } }
+    local enabled = { heartlands = true, scarlett_meadows = true, bayou_nwa = false }
+    local places = P.gather({ hunting = huntingCfg, trappers = trappers }, {
+        isEnabled = function(rid) return enabled[rid] == true end,
+    })
+    -- 2 enabled trappers (heartlands not duplicated by config fallback; disabled bayou_nwa excluded)
+    T.eq(2, #places)
+    local byId = {}
+    for _, p in ipairs(places) do byId[p.id] = p end
+    T.eq('Trapper', byId.trapper_heartlands.label)
+    T.eq('heartlands', byId.trapper_heartlands.region)
+    T.eq('Scarlett Meadows Trapper', byId.trapper_scarlett_meadows.label)
+    T.eq('scarlett_meadows', byId.trapper_scarlett_meadows.region)
+    T.eq(nil, byId.trapper_bayou_nwa)
+
+    -- /where trapper picks the nearest enabled trapper; /where lists nearest first
+    local nearScarlett = { x = 1200, y = -1300, z = 77 }
+    T.eq('trapper_scarlett_meadows', P.pick(places, 'trapper', nearScarlett).id)
+    local rows = P.list(places, nearScarlett)
+    T.eq(2, #rows)
+    T.eq('trapper_scarlett_meadows', rows[1].id)
+    T.eq('trapper_heartlands', rows[2].id)
+    T.eq(true, rows[1].dist < rows[2].dist)
+
+    -- Exact id and label match work for regional trappers
+    T.eq('trapper_scarlett_meadows', P.pick(places, 'trapper_scarlett_meadows', { x = 0, y = 0, z = 0 }).id)
+    T.eq('trapper_scarlett_meadows', P.pick(places, 'Scarlett Meadows Trapper', { x = 0, y = 0, z = 0 }).id)
+end)
+
+case('trappers: heartlands fallback when trappers list is absent or omits heartlands', function()
+    local huntingCfg = { Trapper = { region_id = 'heartlands', label = 'Trapper', coords = { x = -299, y = 792, z = 118.2 } } }
+    local enabled = { heartlands = true, scarlett_meadows = true }
+    local isEnabled = function(rid) return enabled[rid] == true end
+
+    -- 1) trappers = nil (e.g. fh_hunting not started yet): falls back to config.Trapper
+    local fb = P.gather({ hunting = huntingCfg }, { isEnabled = isEnabled })
+    T.eq(1, #fb)
+    T.eq('trapper_heartlands', fb[1].id)
+    T.eq('heartlands', fb[1].region)
+
+    -- 2) trappers has scarlett_meadows only: heartlands still added from config fallback
+    local mixed = P.gather({
+        hunting = huntingCfg,
+        trappers = { { region_id = 'scarlett_meadows', label = 'Scarlett Meadows Trapper', coords = { x = 1265, y = -1305, z = 77 } } },
+    }, { isEnabled = isEnabled })
+    T.eq(2, #mixed)
+
+    -- 3) heartlands disabled: fallback is excluded by isEnabled
+    local heartOff = P.gather({ hunting = huntingCfg }, { isEnabled = function(rid) return rid ~= 'heartlands' end })
+    T.eq(0, #heartOff)
+end)
+
+case('trappers: integrates with real fh_hunting FhHuntingSell.trappers + FhRegions.isEnabled', function()
+    local fhBase = here .. '../server/resources/[fh]/'
+    local regions = dofile(fhBase .. 'fh_core/shared/regions.lua')
+    local hCfg = dofile(fhBase .. 'fh_hunting/config.lua')
+    FhHuntingWagon = dofile(fhBase .. 'fh_hunting/shared/wagon.lua')
+    local sell = dofile(fhBase .. 'fh_hunting/shared/sell.lua')
+    local leg = dofile(fhBase .. 'fh_hunting/shared/legendaries.lua')
+
+    local allTrappers = sell.trappers(hCfg, leg)
+    local places = P.gather({ hunting = hCfg, trappers = allTrappers }, { isEnabled = regions.isEnabled })
+    local expectedEnabled = 0
+    for _, t in ipairs(allTrappers) do
+        if regions.isEnabled(t.region_id) then expectedEnabled = expectedEnabled + 1 end
+    end
+    T.eq(expectedEnabled, #places)
+    T.eq(true, expectedEnabled >= 1)
+    for _, p in ipairs(places) do
+        T.eq('trapper', p.kind)
+        T.eq(true, regions.isEnabled(p.region))
+    end
+end)
+
 T.finish()

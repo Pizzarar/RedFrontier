@@ -219,9 +219,13 @@ aggregates them into a canonical place list. `FhUiPlaces` is pure and specced un
 
 - `config.lua` `FhUiConfig.blips = false` hides the whole blip layer (the `/where` destination marker still works).
 - `client/blips.lua` draws the layer; `client/where.lua` registers `/where` (list, or pick + destination marker).
-- Homestead plots, trade posts, trapper, quest givers, jobs boards, outlaw camps, crafting dev-stations and fence
+- Homestead plots, trade posts, trappers, quest givers, jobs boards, outlaw camps, crafting dev-stations and fence
   stops are blipped and named. Every entry in the `@`-included configs is picked up (so a second region's posts,
-  camps, plots and board appear automatically). `/where plot` picks the nearest **unclaimed** plot: fh_ui reads the
+  camps, plots and board appear automatically). Enabled-region trappers (`fh_hunting/data/legendaries/<region>.lua`,
+  with heartlands falling back to `fh_hunting/config.lua` `Trapper`) are fetched through the read-only `fh:ui:trappers`
+  callback (`fh_ui` server -> `fh_hunting` `getTrappers` export); if `fh_hunting` is not started yet, `places.lua`
+  falls back to `FhHuntingConfig.Trapper`, and `client/blips.lua` refreshes when `fh_hunting` starts. `/where` lists
+  every enabled-region trapper sorted nearest first; `/where trapper` picks the nearest enabled trapper. `/where plot` picks the nearest **unclaimed** plot: fh_ui reads the
   claimed plot ids through the `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead `claimedPlots` export) and
   passes them as `FhUiPlaces.gather`'s `claimed` set. `/where lot` (aliases `lots`, `townlot`, `town_lot`) picks the
   nearest unowned, claimable town lot (`class == 'town_lot'`, enabled region) labelled `<name> (town lot)`; it never

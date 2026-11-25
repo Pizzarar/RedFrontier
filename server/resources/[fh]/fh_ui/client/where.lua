@@ -35,12 +35,21 @@ local function distText(place, player)
 end
 
 -- The lane configs, read from the `@`-includes (read-only). nil when a lane did not provide one.
-local function sources()
+local function sources(trappers)
     return {
-        homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig,
+        homestead = FhHomesteadConfig, trade = FhTradeConfig, hunting = FhHuntingConfig, trappers = trappers,
         zones = FhZonesConfig, crafting = FhCraftingConfig, fence = FhFenceConfig,
         quests = { givers = FhQuestsGivers, boards = FhQuestsBoardSpots },
     }
+end
+
+-- Enabled-region trappers, from the read-only `fh:ui:trappers` callback (fh_ui server -> fh_hunting getTrappers).
+-- nil when the fetch fails (places.lua falls back to FhHuntingConfig.Trapper).
+local function fetchTrappers()
+    if not (lib and lib.callback) then return nil end
+    local ok, list = pcall(function() return lib.callback.await('fh:ui:trappers', false) end)
+    if ok and type(list) == 'table' then return list end
+    return nil
 end
 
 -- Claimed homestead plots, from the read-only `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead getClaims).
@@ -77,7 +86,7 @@ end
 local function run(query)
     local player = playerPos()
     local ids = showIds()
-    local places = P.gather(sources(), { claimed = claimedSet(), isEnabled = FhRegions and FhRegions.isEnabled })
+    local places = P.gather(sources(fetchTrappers()), { claimed = claimedSet(), isEnabled = FhRegions and FhRegions.isEnabled })
 
     if (query or ''):gsub('%s+', '') == '' then
         local rows = P.list(places, player)
