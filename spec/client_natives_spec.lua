@@ -160,4 +160,19 @@ case('fh client/shared code calls no unknown global native', function()
     assert(#names == 0, 'unknown global native(s) in fh client/shared code: ' .. table.concat(names, ', '))
 end)
 
+case('fh:tp:snap is registered only when the resource is fh_core', function()
+    -- fh_core/client/ground_snap.lua is @-included by fh_homestead and fh_zones too; an unguarded FH.onNet here would
+    -- register the snap handler three times (three snap loops / SetEntityCoords per teleport). The guard must appear
+    -- before the handler registration, as in fh_core/client/safe.lua.
+    local f = assert(io.open(FH .. 'fh_core/client/ground_snap.lua', 'r'))
+    local src = f:read('*a')
+    f:close()
+    local handler = src:find('fh:tp:snap', 1, true)
+    assert(handler, 'fh:tp:snap handler missing')
+    local guard = src:find("GetCurrentResourceName() == 'fh_core'", 1, true)
+        or src:find('GetCurrentResourceName() == "fh_core"', 1, true)
+    assert(guard, 'GetCurrentResourceName() == "fh_core" guard missing')
+    assert(guard < handler, 'fh:tp:snap must be registered after (inside) the fh_core-only guard')
+end)
+
 T.finish()

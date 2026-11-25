@@ -25,9 +25,35 @@ it('index covers towns, territories, posts, claims, lots and camps', function()
     eq('claim', byId.heartlands_01.kind)
     eq('lot', byId.heartlands_lot_01.kind)
     eq('camp', byId.heartlands_t1_01.kind) -- resolved fh_zones camp
-    -- the resolved camp carries its territory's center (single source of truth)
-    eq(byId.heartlands_t1_camp.x, byId.heartlands_t1_01.x)
-    eq(byId.heartlands_t1_camp.y, byId.heartlands_t1_01.y)
+end)
+
+it('a camp aliases its territory: one entry per camp, both ids resolve', function()
+    eq(byId.heartlands_t1_camp, byId.heartlands_t1_01, 'camp and territory are the same place')
+    eq('heartlands_t1_camp', byId.heartlands_t1_01.id, 'canonical id is the territory (added first)')
+end)
+
+it('index carries class for lots/claims (drives the tight town-lot probe)', function()
+    eq('town_lot', byId.heartlands_lot_01.class)
+    eq('lot', byId.heartlands_lot_01.kind)
+    eq('claim', byId.heartlands_01.class)
+    eq(nil, byId.valentine.class, 'towns carry no class')
+end)
+
+it('index lists each physical spot once (no duplicate coordinates)', function()
+    local seen = {}
+    for _, p in ipairs(places) do
+        local key = tostring(p.x) .. ',' .. tostring(p.y) .. ',' .. tostring(p.z)
+        assert(not seen[key], 'duplicate coords ' .. key .. ' (' .. p.id .. ' vs ' .. tostring(seen[key]) .. ')')
+        seen[key] = p.id
+    end
+end)
+
+it('index order is deterministic: sorted by kind then id', function()
+    for i = 2, #places do
+        local a, b = places[i - 1], places[i]
+        local ok = (a.kind < b.kind) or (a.kind == b.kind and a.id < b.id)
+        assert(ok, 'places out of order at ' .. i .. ': ' .. a.kind .. '/' .. a.id .. ' then ' .. b.kind .. '/' .. b.id)
+    end
 end)
 
 it('index entry shape is { x, y, z, kind, region, verified }', function()
@@ -114,16 +140,19 @@ it('tour returns empty for a region with no unverified places', function()
     eq(0, #P.tour(pts, 'r'))
 end)
 
-it('heartlands tour visits only unverified places and never the origin town', function()
+it('heartlands tour visits unverified places once each, with one town as the origin', function()
     local order = P.tour(places, 'heartlands')
     assert(#order > 0, 'heartlands has unverified places')
-    local seen = {}
+    local seen, towns = {}, 0
     for _, p in ipairs(order) do
         eq('heartlands', p.region)
         eq(false, p.verified)
-        seen[p.id] = true
+        local key = tostring(p.x) .. ',' .. tostring(p.y)
+        assert(not seen[key], 'duplicate tour coords ' .. key .. ' (' .. p.id .. ')')
+        seen[key] = true
+        if p.kind == 'town' then towns = towns + 1 end
     end
-    assert(not seen.valentine, 'valentine (first town) is the origin, not a stop')
+    eq(1, towns, 'heartlands has two towns: one is the origin (excluded), the other is a stop')
 end)
 
 it('advanceTour returns the next place and nil at the end', function()

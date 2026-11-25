@@ -34,13 +34,21 @@ end
 
 local tours = {} -- [src] = { region, order, index }
 
+AddEventHandler('playerDropped', function()
+    tours[tonumber(source)] = nil
+end)
+
 -- Teleport src to a place's z-hint, then ask that client to ground-snap (fh:tp:snap, client/ground_snap.lua).
+-- Sends kind/class/verified so the client picks the right probe depth (tight for town lots and verified places).
 -- Returns false when src has no ped (the caller replies with its own fh_no_player prefix).
 local function teleportPlace(src, place)
     local ped = targetPed(src)
     if not ped then return false end
     SetEntityCoords(ped, place.x, place.y, place.z, false, false, false, false)
-    TriggerClientEvent('fh:tp:snap', src, { id = place.id, x = place.x, y = place.y, z = place.z, verified = place.verified })
+    TriggerClientEvent('fh:tp:snap', src, {
+        id = place.id, x = place.x, y = place.y, z = place.z,
+        kind = place.kind, class = place.class, verified = place.verified,
+    })
     return true
 end
 

@@ -56,21 +56,32 @@ local function dist2d(ax, ay, bx, by)
 end
 
 ---Build the walk-tool place index (world-03 J). Returns two views of the same entries:
----  places = array of { id, x, y, z, kind, region, verified, label? } in a stable order;
----  byId   = map id -> same entry (first source wins on a duplicate id).
+---  places = array of { id, x, y, z, kind, region, verified, label?, class? }, deterministically sorted by (kind, id);
+---  byId   = map id -> same entry. A camp resolves to the SAME entry as its territory (both ids work for fh_tp; the
+---  physical spot is listed once), so fh_tour never visits one place twice.
 ---Covers FhRegions towns/territories/posts/ambush, fh_homestead plots (class 'town_lot' -> kind 'lot', else 'claim')
 ---and resolved fh_zones camps. Any absent table (ambush, homestead, zones) is skipped, never an error.
 ---sources = { homestead = FhHomesteadConfig, zones = FhZonesConfig } (both optional).
 function M.index(regions, sources)
     local places, byId = {}, {}
+    local byCoord = {}
     sources = sources or {}
-    local function put(id, kind, label, x, y, z, region, verified)
+    local function coordKey(x, y, z) return tostring(x) .. ',' .. tostring(y) .. ',' .. tostring(z) end
+    local function put(id, kind, label, x, y, z, region, verified, class)
         if type(id) ~= 'string' or id == '' then return end
         if not (finite(x) and finite(y) and finite(z)) then return end
         if byId[id] then return end
+        local key = coordKey(x, y, z)
+        local existing = byCoord[key]
+        if existing then
+            byId[id] = existing -- alias: same physical spot (a camp and its territory), listed once
+            return
+        end
         local p = { id = id, kind = kind, x = x, y = y, z = z, region = region, verified = verified == true }
+        if class ~= nil then p.class = class end
         if type(label) == 'string' and label ~= '' then p.label = label end
         byId[id] = p
+        byCoord[key] = p
         places[#places + 1] = p
     end
 
@@ -95,7 +106,8 @@ function M.index(regions, sources)
         for id, plot in pairs(hs.plots) do
             if type(plot) == 'table' then
                 local x, y, z = xyz(plot.center)
-                if x then put(id, plot.class == 'town_lot' and 'lot' or 'claim', plot.name, x, y, z, plot.region, plot.verified) end
+                if x then put(id, plot.class == 'town_lot' and 'lot' or 'claim', plot.name, x, y, z, plot.region,
+                    plot.verified, plot.class) end
             end
         end
     end
@@ -110,6 +122,12 @@ function M.index(regions, sources)
         end
     end
 
+    -- Deterministic order: sort by kind then id (ids are unique, so this is total and stable regardless of the
+    -- pairs() iteration order above). Makes nearest tie-breaks and the tour's greedy order reproducible.
+    table.sort(places, function(a, b)
+        if a.kind ~= b.kind then return a.kind < b.kind end
+        return a.id < b.id
+    end)
     return places, byId
 end
 
@@ -128,8 +146,9 @@ function M.nearest(places, player, maxDist)
 end
 
 ---Greedy nearest-neighbour riding order for a region's unverified places (world-03 J). Starts from the region's first
----town (the first 'town' entry in `places`), which is the origin and not part of the order; with no town it starts from
----the first candidate. Returns an array of places (empty when the region has none).
+---town (the first 'town' entry in `places`, deterministic since `places` is sorted by kind then id), which is the origin
+---and not part of the order; with no town it starts from the first candidate. Returns an array of places (empty when the
+---region has none).
 function M.tour(places, region)
     local start
     for _, p in ipairs(places or {}) do
