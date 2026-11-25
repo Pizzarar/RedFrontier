@@ -560,10 +560,65 @@ case('C2c ledger: a v3 save without raidLoot (C1/C2) loads with an empty ledger;
     eq(1, R.lootCount(st, HEART[1]), 'old save then raids normally')
     local st2 = R.deserialize({ version = 3, raidLoot = { [HEART[1]] = { { name = 'ok', amount = 2.5 },
         { name = 'bad', amount = -1 }, 'junk', { name = 'info', amount = 1, info = 'str' } },
-        [HEART[2]] = { { amount = 1 } }, [7] = { { name = 'num', amount = 1 } }, x = 'notalist' } }, ctx)
+        [HEART[2]] = { { amount = 1 } }, [7] = { { name = 'num', amount = 1 } }, [''] = { { name = 'empty', amount = 1 } },
+        x = 'notalist' } }, ctx)
     same({ [HEART[1]] = { { name = 'ok', amount = 2 }, { name = 'info', amount = 1 } } }, st2.raidLoot)
+    eq(nil, st2.raidLoot[''], 'empty campId rejected on deserialize')
     local st3 = R.deserialize({ version = 2, tick = 1 }, ctx)
     same({}, st3.raidLoot)
+end)
+
+case('C2c ledger: lootAdd sanitises info (JSON-safe copy: drops fn/thread/NaN, string keys only, depth/cycle limit)', function()
+    local st = Rules.newState()
+    local deep = { l1 = { l2 = { l3 = { l4 = { ok6 = true, l5 = { tooDeep = 1 } } } } } }
+    local cyc = { keep = 'yes' }; cyc.self = cyc
+    local srcInfo = {
+        q = 2,
+        flag = true,
+        label = 'worn',
+        fn = function() end,
+        th = coroutine.create(function() end),
+        nan = 0 / 0,
+        inf = math.huge,
+        [1] = 'numkey',
+        [true] = 'boolkey',
+        [{}] = 'tblkey',
+        nested = deep,
+        cyc = cyc,
+    }
+    local ok, err = R.lootAdd(ctx, st, HEART[1], { name = 'rifle', amount = 1, info = srcInfo })
+    eq(true, ok); eq(nil, err)
+    local got = st.raidLoot[HEART[1]][1].info
+    same({
+        q = 2,
+        flag = true,
+        label = 'worn',
+        nested = { l1 = { l2 = { l3 = { l4 = { ok6 = true } } } } },
+        cyc = { keep = 'yes' },
+    }, got)
+    -- deep copy: mutating source info does not mutate the ledger
+    srcInfo.q = 999
+    eq(2, st.raidLoot[HEART[1]][1].info.q)
+    -- all-junk info collapses to nil
+    R.lootAdd(ctx, st, HEART[1], { name = 'junk_info', amount = 1, info = { fn = function() end, [1] = 'x' } })
+    eq(nil, st.raidLoot[HEART[1]][2].info)
+end)
+
+case('C2c ledger: deserialize trims each camp ledger to lootStacksMax, oldest dropped', function()
+    local big = {}
+    for i = 1, 25 do big[i] = { name = 'i' .. i, amount = 1 } end
+    local st, err = R.deserialize({ version = 3, raidLoot = { [HEART[1]] = big } }, ctx)
+    eq(nil, err)
+    eq(20, R.lootCount(st, HEART[1]))
+    eq('i6', st.raidLoot[HEART[1]][1].name)
+    eq('i25', st.raidLoot[HEART[1]][20].name)
+    -- custom cap via ctx
+    local smallCtx = Rules.context({ claimRaids = { lootStacksMax = 3 } }, Regions, camps)
+    local st2 = R.deserialize({ version = 3, raidLoot = { [HEART[1]] = {
+        { name = 'a', amount = 1 }, { name = 'b', amount = 1 }, { name = 'c', amount = 1 },
+        { name = 'd', amount = 1 }, { name = 'e', amount = 1 },
+    } } }, smallCtx)
+    same({ 'c', 'd', 'e' }, names(st2.raidLoot[HEART[1]]))
 end)
 
 T.finish()

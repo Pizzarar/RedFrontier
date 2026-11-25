@@ -382,7 +382,8 @@ local function trimLoot(ctx, list)
     return dropped
 end
 
----Append one stolen stack to a camp's ledger (newest last), then drop the oldest entries over lootStacksMax.
+---Append one stolen stack to a camp's ledger (newest last), sanitising `info` (JSON-safe copy via cleanLootEntry),
+---then drop the oldest entries over lootStacksMax.
 ---@return boolean ok, string|nil err ('fh_alife_bad_camp' | 'fh_alife_bad_loot'), table dropped  oldest-first entries
 function M.lootAdd(ctx, state, campId, entry)
     if type(campId) ~= 'string' or campId == '' then return false, 'fh_alife_bad_camp', {} end
@@ -406,7 +407,7 @@ end
 ---Put undelivered entries back at the front of a camp's ledger (they are older than anything added since), then
 ---trim to lootStacksMax. @return table dropped
 function M.lootRestore(ctx, state, campId, entries)
-    if type(campId) ~= 'string' or type(entries) ~= 'table' or #entries == 0 then return {} end
+    if type(campId) ~= 'string' or campId == '' or type(entries) ~= 'table' or #entries == 0 then return {} end
     state.raidLoot = state.raidLoot or {}
     local list = {}
     for _, e in ipairs(entries) do
@@ -472,12 +473,16 @@ function M.pruneRaids(ctx, state, plots)
     return effects
 end
 
----FhAlifeRules.deserialize (v1/v2/v3) plus pruneRaids. @return table|nil state, string|nil err, table effects
+---FhAlifeRules.deserialize (v1/v2/v3) plus pruneRaids and per-camp loot ledger cap trimming (oldest dropped).
+---@return table|nil state, string|nil err, table effects
 function M.deserialize(t, ctx, plots)
     local s, err, effects = Rules.deserialize(t, ctx)
     if not s then return nil, err, effects or {} end
     effects = effects or {}
     for _, e in ipairs(M.pruneRaids(ctx, s, plots)) do effects[#effects + 1] = e end
+    for _, campId in ipairs(sortedKeys(s.raidLoot)) do
+        trimLoot(ctx, s.raidLoot[campId])
+    end
     return s, nil, effects
 end
 

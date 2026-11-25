@@ -8,8 +8,8 @@
 --     through the fh_core container API (snapshot, removeItem); an entry is recorded only after a confirmed remove, so
 --     nothing is duplicated. Itemised notice to the owner listing exactly what was recorded.
 --   fh:zones:camp_cleared (main.lua handler -> raidLootDeliver): the camp's ledger is taken (emptied) and each entry
---     added to the camp stash fh:camp:<campId> (fh_core addItem); refused entries go into one drop bag at the camp's
---     loot coords; if the bag is refused too they go back into the ledger. Never destroyed, never delivered twice.
+--     added to the camp stash fh:camp:<campId> (fh_core addItem); each refused entry goes into its own drop bag at the
+--     camp's loot coords; any stack whose bag call fails goes back into the ledger. Never destroyed, never delivered twice.
 --   Why not the stash at steal time: fh_zones wipes camp stashes on restart/boot (twice-daily restart windows).
 -- Death-watch repels (fh:alife:raid_repelled) are emitted by squads.lua; raidNotify tells the owner.
 -- Natives: GetPlayers, GetPlayerPed, GetEntityCoords, GetResourceState, TriggerClientEvent (unverified in game).
@@ -192,7 +192,8 @@ local function steal(e)
     log('raid %s stole from %s -> loot ledger %s: %s', tostring(e.squad_id), chest.id, tostring(e.camp_id),
         #moved > 0 and itemList(moved) or 'nothing')
     if #moved > 0 then
-        server.save() -- the removal from chest 1 is done: persist the ledger now, not at the end of the step
+        local saveOk, saveErr = pcall(server.save) -- persist now; a failed save must not block notifyOwner
+        if not saveOk then log('^1raid %s steal: save error: %s^7', tostring(e.squad_id), tostring(saveErr)) end
         notifyOwner(e.citizenid, ('Riders from %s raided your claim while you were away and took from your chest: %s. '
             .. 'Clear their camp to get it back.'):format(who, itemList(moved)))
     elseif #picks == 0 then
@@ -215,8 +216,9 @@ end
 
 ---Deliver a cleared camp's loot ledger into its stash (main.lua's fh:zones:camp_cleared handler calls this after
 ---fh_zones' rollIntoStash; the caller saves). The ledger is emptied BEFORE any add (lootTake), so a second clear or a
----re-entry delivers nothing. Refused adds -> one drop bag at the camp's loot coords; a refused bag -> those entries
----go back into the ledger for the next clear. @return integer delivered, integer bagged, integer kept
+---re-entry delivers nothing. Each refused add gets its own drop bag at the camp's loot coords (one stack per call so a
+---partial bag accept cannot lose leftovers); any stack whose bag call fails goes back into the ledger for the next
+---clear. @return integer delivered, integer bagged, integer kept
 function server.raidLootDeliver(campId)
     if type(campId) ~= 'string' then return 0, 0, 0 end
     local state = server.getState()
@@ -233,27 +235,33 @@ function server.raidLootDeliver(campId)
             failed[#failed + 1] = it
         end
     end
-    local bagged, kept = 0, 0
+    local bagged, kept = {}, {}
     if #failed > 0 then
         local coords = campLootCoords(campId)
-        local items = {}
-        for _, it in ipairs(failed) do items[#items + 1] = { name = it.name, amount = it.amount, info = it.info } end
-        local bag, bagWhy = coreDropBag(coords, items, { label = 'Raiders\' plunder' })
-        if bag then
-            bagged = #failed
-            log('^1raid loot %s: %d refused stack(s) in drop bag %s at the camp: %s^7', campId, #failed, tostring(bag),
-                itemList(failed))
-        else
-            kept = #failed
-            for _, d in ipairs(R.lootRestore(ctx, state, campId, failed)) do
+        for _, it in ipairs(failed) do
+            -- One stack per bag call: fh_core:createDropBag drops Fh.CreateDropBag's leftovers on partial accepts.
+            local bag, bagWhy = coreDropBag(coords, { { name = it.name, amount = it.amount, info = it.info } },
+                { label = 'Raiders\' plunder' })
+            if bag then
+                bagged[#bagged + 1] = it
+                log('^1raid loot %s: refused stack %dx %s in drop bag %s at the camp^7', campId, it.amount, it.name,
+                    tostring(bag))
+            else
+                kept[#kept + 1] = it
+                log('^1raid loot %s: drop bag refused for %dx %s (%s); keeping in the ledger^7', campId, it.amount,
+                    it.name, tostring(bagWhy))
+            end
+        end
+        if #kept > 0 then
+            for _, d in ipairs(R.lootRestore(ctx, state, campId, kept)) do
                 log('^1raid loot ledger %s full: dropped oldest %dx %s^7', campId, d.amount, d.name)
             end
-            log('^1raid loot %s: drop bag refused (%s); %d stack(s) kept in the ledger for the next clear: %s^7',
-                campId, tostring(bagWhy), #failed, itemList(failed))
+            log('^1raid loot %s: %d stack(s) kept in the ledger for the next clear: %s^7',
+                campId, #kept, itemList(kept))
         end
     end
     log('raid loot %s delivered to %s: %s', campId, stash.id, #delivered > 0 and itemList(delivered) or 'nothing')
-    return #delivered, bagged, kept
+    return #delivered, #bagged, #kept
 end
 
 -- ---------------------------------------------------------------- effects

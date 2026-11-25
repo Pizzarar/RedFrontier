@@ -200,7 +200,12 @@ local function boot(preKvp, ambush, opts)
                 return true
             end,
             createDropBag = function(_, coords, items, opts)
-                if B.failBag then return nil, B.failBag end
+                if type(B.failBag) == 'function' then
+                    local why = B.failBag(items, coords, opts)
+                    if why then return nil, why end
+                elseif B.failBag then
+                    return nil, B.failBag
+                end
                 B.bags[#B.bags + 1] = { coords = coords, items = copy(items), opts = opts }
                 return 'drop:' .. #B.bags
             end,
@@ -226,7 +231,10 @@ local function boot(preKvp, ambush, opts)
         DoesEntityExist = function(e) return e ~= 0 end,
         GetPedSourceOfDeath = function(e) return B.killers[e] or 0 end,
         GetGameTimer = function() return 0 end,
-        SetResourceKvp = function(k, v) B.kvp[k] = v end,
+        SetResourceKvp = function(k, v)
+            if B.failKvp then error(B.failKvp) end
+            B.kvp[k] = v
+        end,
         GetResourceKvpString = function(k) return B.kvp[k] end,
         TriggerEvent = function(name, payload)
             if name == 'fh:alife:camp_flipped' then B.flipped[#B.flipped + 1] = payload end
@@ -616,20 +624,40 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         T.eq(0, total(B.containers[STASH], 'bread'), 'nothing delivered')
     end)
 
-    T.it('C2c clear: stash add refused -> drop bag at the camp loot coords; bag refused -> kept in the ledger',
+    T.it('C2c clear: stash add refused -> one drop bag per stack at camp coords; failed bag -> kept in ledger',
         function()
         local B = raidBoot(false)
         B.commands.alife(1, {}, 'alife tick 6')
         B.failAdd[STASH] = 'fh_too_heavy'
         clearCamp(B)
-        T.eq(1, #B.bags)
-        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, B.bags[1].items)
+        T.eq(2, #B.bags, 'one drop bag per refused stack')
+        T.same({ { name = 'bread', amount = 1 } }, B.bags[1].items)
+        T.same({ { name = 'rope', amount = 1, info = { q = 1 } } }, B.bags[2].items)
         local at = B.server.ctx.camps[CAMP].loot.coords
         T.eq(at.x, B.bags[1].coords.x); T.eq(at.y, B.bags[1].coords.y)
+        T.eq(at.x, B.bags[2].coords.x); T.eq(at.y, B.bags[2].coords.y)
         T.eq(nil, ledger(B), 'bagged entries leave the ledger')
         clearCamp(B)
-        T.eq(1, #B.bags, 'second clear: no second bag')
-        -- bag refused too: the entries stay in the ledger (never destroyed) and the next clear delivers them
+        T.eq(2, #B.bags, 'second clear: no extra bags')
+        -- partial bag failure: bread bagged, rope bag refused -> rope restored to ledger, nothing lost
+        local Bp = raidBoot(false)
+        Bp.commands.alife(1, {}, 'alife tick 6')
+        Bp.failAdd[STASH] = 'fh_too_heavy'
+        Bp.failBag = function(items)
+            if items[1] and items[1].name == 'rope' then return 'fh_bag_refused' end
+            return nil
+        end
+        clearCamp(Bp)
+        T.eq(1, #Bp.bags, 'only accepted stack bagged')
+        T.same({ { name = 'bread', amount = 1 } }, Bp.bags[1].items)
+        T.same({ { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(Bp), 'refused stack restored to ledger')
+        T.same(ledger(Bp), savedLedger(Bp))
+        Bp.failAdd[STASH], Bp.failBag = nil, nil
+        clearCamp(Bp)
+        T.eq(0, total(Bp.containers[STASH], 'bread'), 'already-bagged bread not delivered twice')
+        T.eq(1, total(Bp.containers[STASH], 'rope'), 'restored rope delivered on next clear')
+        T.eq(nil, ledger(Bp))
+        -- all bags refused: all entries stay in the ledger (never destroyed) and the next clear delivers them
         local B2 = raidBoot(false)
         B2.commands.alife(1, {}, 'alife tick 6')
         B2.failAdd[STASH], B2.failBag = 'fh_too_heavy', 'fh_refused'
@@ -641,6 +669,36 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         clearCamp(B2)
         T.eq(1, total(B2.containers[STASH], 'bread')); T.eq(1, total(B2.containers[STASH], 'rope'))
         T.eq(nil, ledger(B2))
+    end)
+
+    T.it('C2c save resilience: non-JSON info sanitised before ledger; KVP save throw logs, notifies owner, never stops ticks',
+        function()
+        -- non-JSON info in chest item is sanitised by lootAdd so json.encode succeeds
+        local B = raidBoot(false)
+        B.containers[CHEST] = {
+            [1] = { name = 'bread', amount = 4 },
+            [2] = { name = 'rope', amount = 2, info = { q = 1, badFn = function() end, [1] = 'numkey' } },
+        }
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(B))
+        T.same(ledger(B), savedLedger(B), 'sanitised ledger saved cleanly to KVP')
+        assert(said(B, 'took from your chest: 1x bread, 1x rope'), 'owner notified')
+        -- KVP failure during steal: save is pcall-guarded, logged, notifyOwner still runs, later ticks continue
+        local B2 = raidBoot(false)
+        B2.failKvp = 'kvp_write_boom'
+        B2.commands.alife(1, {}, 'alife tick 6')
+        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(B2))
+        assert(said(B2, 'took from your chest: 1x bread, 1x rope'), 'owner still notified despite save failure')
+        local loggedSaveErr = false
+        for _, l in ipairs(B2.printed) do if l:find('save failed', 1, true) then loggedSaveErr = true end end
+        assert(loggedSaveErr, 'save failure logged')
+        local ok, err = B2.server.save()
+        T.eq(false, ok); assert(tostring(err):find('kvp_write_boom', 1, true))
+        -- tick loop continues after a save failure
+        B2.failKvp = nil
+        B2.commands.alife(1, {}, 'alife tick 1')
+        T.eq(7, B2.server.getState().tick)
+        T.same(ledger(B2), savedLedger(B2), 'next save persists the ledger once KVP recovers')
     end)
 
     T.it('C2c steal: chest unreadable -> nothing taken, owner told they rode off empty-handed', function()

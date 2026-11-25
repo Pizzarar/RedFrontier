@@ -22,7 +22,14 @@ end
 -- ---------------------------------------------------------------- persistence
 
 local function save()
-    SetResourceKvp(KVP_KEY, json.encode(rules.serialize(state)))
+    local ok, err = pcall(function()
+        SetResourceKvp(KVP_KEY, json.encode(rules.serialize(state)))
+    end)
+    if not ok then
+        log('^1save failed: %s^7', tostring(err))
+        return false, err
+    end
+    return true
 end
 
 local function load()
@@ -133,7 +140,8 @@ end)
 CreateThread(function()
     while true do
         Wait(math.floor((cfg.tickSeconds or 60) * 1000))
-        step()
+        local ok, err = pcall(step)
+        if not ok then log('^1tick step error: %s^7', tostring(err)) end
         save()
     end
 end)

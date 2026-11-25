@@ -128,12 +128,42 @@ function M.serialize(state)
         raidCooldowns = state.raidCooldowns or {}, raidLoot = state.raidLoot or {} }
 end
 
----One raid-loot ledger entry, normalised: { name, amount (integer >= 1), info (table or nil) } or nil when malformed.
+local MAX_INFO_DEPTH = 6
+
+---JSON-safe deep copy of an item `info` table: string keys only; strings, booleans, finite numbers and nested tables
+---up to MAX_INFO_DEPTH (cycles skipped). Drops functions, userdata, threads and non-finite numbers. Nil when empty.
+local function cleanJsonTable(t, depth, seen)
+    if type(t) ~= 'table' or depth > MAX_INFO_DEPTH or seen[t] then return nil end
+    seen[t] = true
+    local out, any = {}, false
+    for k, v in pairs(t) do
+        if type(k) == 'string' then
+            local vt = type(v)
+            local cv
+            if vt == 'string' or vt == 'boolean' then
+                cv = v
+            elseif vt == 'number' and finite(v) then
+                cv = v
+            elseif vt == 'table' then
+                cv = cleanJsonTable(v, depth + 1, seen)
+            end
+            if cv ~= nil then
+                out[k] = cv
+                any = true
+            end
+        end
+    end
+    seen[t] = nil
+    return any and out or nil
+end
+
+---One raid-loot ledger entry, normalised: { name, amount (integer >= 1), info (JSON-safe table or nil) } or nil.
 function M.cleanLootEntry(e)
     if type(e) ~= 'table' or type(e.name) ~= 'string' or e.name == '' or not finite(e.amount) then return nil end
     local n = math.floor(e.amount)
     if n < 1 then return nil end
-    return { name = e.name, amount = n, info = type(e.info) == 'table' and e.info or nil }
+    local info = type(e.info) == 'table' and cleanJsonTable(e.info, 1, {}) or nil
+    return { name = e.name, amount = n, info = info }
 end
 
 local PHASES = { travel = true, hold = true, ['return'] = true }
@@ -220,7 +250,7 @@ function M.deserialize(t, ctx)
     end
     if type(t.raidLoot) == 'table' then
         for campId, list in pairs(t.raidLoot) do
-            if type(campId) == 'string' and type(list) == 'table' then
+            if type(campId) == 'string' and campId ~= '' and type(list) == 'table' then
                 local out = {}
                 for i = 1, #list do
                     local e = M.cleanLootEntry(list[i])
