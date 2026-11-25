@@ -1,6 +1,6 @@
 {
   "laneId": "ui",
-  "updatedAt": "2026-11-25T20:49:42.232Z",
+  "updatedAt": "2026-11-25T20:58:23.475Z",
   "units": [
     {
       "id": "ui-saddlebag-pane",
@@ -23,7 +23,7 @@
       "goal": "Low (rn-9a6e31db4284): fh_ui client/trappers.lua start handler does not retry when fh:ui:trappers fails right at fh_hunting start; blips stay on cfg fallback until next refresh",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done"
     }
   ]
 }
