@@ -58,25 +58,130 @@ function M.minWagonTier(cfg, tier)
     return t and t.minWagonTier or 2
 end
 
+local function excludeSet(f)
+    local set = {}
+    local ex = type(f) == 'table' and f.exclude
+    if type(ex) ~= 'table' then return set end
+    for k, v in pairs(ex) do
+        if type(k) == 'number' and type(v) == 'string' and v ~= '' then
+            set[v] = true
+        elseif type(k) == 'string' and k ~= '' and v == true then
+            set[k] = true
+        end
+    end
+    return set
+end
+
+local function validDest(d, defaultRadius)
+    if type(d) ~= 'table' or not finite(d.x) or not finite(d.y) then return nil end
+    local r = finite(d.radius) and d.radius > 0 and d.radius or defaultRadius
+    return {
+        x = d.x, y = d.y, z = finite(d.z) and d.z or 0, radius = r,
+        post = type(d.post) == 'string' and d.post or nil,
+    }
+end
+
+local function postCoords(p, rposts)
+    if type(p) ~= 'table' then return nil end
+    local rp = rposts and type(p.id) == 'string' and rposts[p.id] or nil
+    local region = (type(p.region) == 'string' and p.region ~= '' and p.region)
+        or (rp and type(rp.region) == 'string' and rp.region ~= '' and rp.region)
+        or nil
+    local x = finite(p.x) and p.x or (rp and finite(rp.x) and rp.x or nil)
+    local y = finite(p.y) and p.y or (rp and finite(rp.y) and rp.y or nil)
+    local z = finite(p.z) and p.z or (rp and finite(rp.z) and rp.z or 0)
+    return region, x, y, z
+end
+
+---Resolve freight destinations (region_id -> { x, y, z, radius, post? }) from `cfg.posts` (filled from FhRegions.posts
+---at load, or via the optional `regions` table) plus per-region `freight.overrides` and `freight.exclude` (roads-03 R12).
+---Only regions with >= 1 post get destinations (legacy `freight.destinations` is still read as a fallback when no post
+---supplied the region). Posts/entries with missing coords are skipped (never throw).
+function M.resolveDestinations(cfg, regions)
+    local f = type(cfg) == 'table' and type(cfg.freight) == 'table' and cfg.freight or {}
+    local defaultRadius = (finite(f.destinationRadius) and f.destinationRadius > 0) and f.destinationRadius or 40.0
+    local excluded = excludeSet(f)
+    local dests, hasPost, byPostId = {}, {}, {}
+    local rposts = type(regions) == 'table' and type(regions.posts) == 'table' and regions.posts or nil
+    local hasPostsList = type(cfg) == 'table' and type(cfg.posts) == 'table'
+
+    if hasPostsList then
+        for _, p in ipairs(cfg.posts) do
+            local region, x, y, z = postCoords(p, rposts)
+            if type(p) == 'table' and type(p.id) == 'string' and p.id ~= '' and x and y then
+                byPostId[p.id] = { x = x, y = y, z = z, region = region, post = p.id }
+            end
+            if region then
+                hasPost[region] = true
+                if not excluded[region] and not dests[region] and x and y then
+                    dests[region] = { x = x, y = y, z = z, radius = defaultRadius, post = type(p.id) == 'string' and p.id or nil }
+                end
+            end
+        end
+    end
+
+    if type(f.destinations) == 'table' then
+        for region, d in pairs(f.destinations) do
+            if type(region) == 'string' and region ~= '' and not excluded[region] and not dests[region] then
+                local v = validDest(d, defaultRadius)
+                if v then dests[region] = v end
+            end
+        end
+    end
+
+    if type(f.overrides) == 'table' then
+        for region, ov in pairs(f.overrides) do
+            if type(region) == 'string' and region ~= '' and not excluded[region] and type(ov) == 'table' then
+                if not hasPostsList or hasPost[region] or dests[region] then
+                    local base = dests[region]
+                    if type(ov.post) == 'string' and byPostId[ov.post] then
+                        base = byPostId[ov.post]
+                    end
+                    local merged = {
+                        x = ov.x ~= nil and ov.x or (base and base.x),
+                        y = ov.y ~= nil and ov.y or (base and base.y),
+                        z = ov.z ~= nil and ov.z or (base and base.z),
+                        radius = ov.radius ~= nil and ov.radius or (base and base.radius),
+                        post = ov.post ~= nil and ov.post or (base and base.post),
+                    }
+                    dests[region] = validDest(merged, defaultRadius)
+                end
+            end
+        end
+    end
+
+    return dests
+end
+
+---Resolved freight destination for one region, or nil when excluded / no post / missing coords.
+function M.destinationFor(cfg, region, regions)
+    if type(region) ~= 'string' or region == '' then return nil end
+    return M.resolveDestinations(cfg, regions)[region]
+end
+
 local function defaults(cfg)
     local f = cfg.freight or {}
     return {
         minQty = f.minQty or 1, maxQty = f.maxQty or 20, qtyPerLevel = f.qtyPerLevel or 20,
         premium = f.premium or 1.25, repDelta = f.repDelta or 2, deadlineSeconds = f.deadlineSeconds or 1800,
         maxOffers = f.maxOffers or 3, cooldownMin = f.cooldownMin or 30, rewardCap = f.rewardCapMultiple or 4,
-        allowSameRegion = f.allowSameRegion == true, destinations = f.destinations or {},
+        allowSameRegion = f.allowSameRegion == true,
+        minDistance = (finite(f.minDistance) and f.minDistance >= 0) and f.minDistance or 0,
     }
 end
 
 local function clamp(v, lo, hi) if v < lo then return lo elseif v > hi then return hi end return v end
 
----Horizontal route length (m) between two regions' freight destinations, or nil when either has none.
-function M.routeDistance(cfg, from, to)
-    local dest = (cfg.freight or {}).destinations or {}
-    local a, b = dest[from], dest[to]
+local function dist2d(a, b)
     if type(a) ~= 'table' or type(b) ~= 'table' or not finite(a.x) or not finite(a.y) or not finite(b.x) or not finite(b.y) then return nil end
     local dx, dy = a.x - b.x, a.y - b.y
     return math.sqrt(dx * dx + dy * dy)
+end
+
+---Horizontal route length (m) between two regions' freight destinations, or nil when either has none.
+function M.routeDistance(cfg, from, to, regions)
+    local dest = M.resolveDestinations(cfg, regions)
+    return dist2d(dest[from], dest[to])
 end
 
 ---T2 deadline (s): deadlineBase + distance * deadlinePerMeter, whole seconds, clamped to 60..86400.
@@ -114,10 +219,9 @@ local function t2Qty(t, good, level)
 end
 
 ---T2 offers for one route: one per shortage with a qty template, only on routes of at least minDistance.
-local function t2Offers(cfg, d, fromRegion, to, list, out)
+local function t2Offers(cfg, d, fromRegion, to, dist, list, out)
     local t = t2cfg(cfg)
     if not t then return end
-    local dist = M.routeDistance(cfg, fromRegion, to)
     if not dist or dist < (t.minDistance or 0) then return end
     local deadline = M.t2Deadline(cfg, dist)
     local cooldown = math.max(t.cooldownMin or d.cooldownMin, math.ceil(deadline / 60)) -- not re-takeable while one could be live
@@ -146,39 +250,47 @@ local function t2Offers(cfg, d, fromRegion, to, list, out)
     end
 end
 
----Offers for a board at `fromRegion`, one per shortage in the OTHER regions that have a destination.
+---Offers for a board at `fromRegion`, one per shortage in the OTHER post regions with valid destination coords and
+---horizontal route distance >= that tier's minDistance.
 ---`shortagesByRegion[region] = fh_trade shortages list { item, level, multiplier, price }`. Pure; worst shortage first.
 ---T1 offers (tier = 1) are listed first, capped at maxOffers; then T2 offers (tier = 2, freight.t2 configured, routes of
 ---at least t2.minDistance), capped at t2.maxOffers. fh_quests calls offers(region_id) with no player, so a T2 offer is
 ---always `locked = true` (gated by `unlock`): the board is shared and the per-player check happens at accept.
 ---@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, locked?, unlock?, min_wagon_tier? }
-function M.generate(cfg, fromRegion, shortagesByRegion)
+function M.generate(cfg, fromRegion, shortagesByRegion, regions)
     local d, out, t2out = defaults(cfg), {}, {}
     if type(fromRegion) ~= 'string' or fromRegion == '' then return out end
-    local regions = {}
-    for r in pairs(shortagesByRegion or {}) do regions[#regions + 1] = r end
-    table.sort(regions)
-    for _, to in ipairs(regions) do
-        if (to ~= fromRegion or d.allowSameRegion) and d.destinations[to] then
-            for _, s in ipairs(shortagesByRegion[to]) do
-                local good = cfg.goods[s.item]
-                if good and finite(s.level) and finite(s.price) then
-                    local qty = clamp(math.ceil(s.level * d.qtyPerLevel), d.minQty, d.maxQty)
-                    local reward = math.floor(qty * s.price * d.premium)
-                    if reward >= 1 then
-                        local label = good.label or s.item
-                        out[#out + 1] = {
-                            key = M.offerKey(fromRegion, to, s.item), tier = 1,
-                            title = ('Freight: %dx %s to %s'):format(qty, label, to),
-                            text = ('Haul %dx %s from %s to %s before time runs out.'):format(qty, label, fromRegion, to),
-                            region_id = fromRegion, from_region = fromRegion, to_region = to,
-                            item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = d.deadlineSeconds, cooldown_min = d.cooldownMin,
-                            rewards = { money = reward, rep = { region_id = to, delta = d.repDelta } },
-                        }
+    local dests = M.resolveDestinations(cfg, regions)
+    local fromDest = dests[fromRegion]
+    if not fromDest then return out end
+    local listRegions = {}
+    for r in pairs(shortagesByRegion or {}) do listRegions[#listRegions + 1] = r end
+    table.sort(listRegions)
+    for _, to in ipairs(listRegions) do
+        local toDest = dests[to]
+        if (to ~= fromRegion or d.allowSameRegion) and toDest then
+            local dist = dist2d(fromDest, toDest)
+            if dist and dist >= d.minDistance then
+                for _, s in ipairs(shortagesByRegion[to]) do
+                    local good = cfg.goods[s.item]
+                    if good and finite(s.level) and finite(s.price) then
+                        local qty = clamp(math.ceil(s.level * d.qtyPerLevel), d.minQty, d.maxQty)
+                        local reward = math.floor(qty * s.price * d.premium)
+                        if reward >= 1 then
+                            local label = good.label or s.item
+                            out[#out + 1] = {
+                                key = M.offerKey(fromRegion, to, s.item), tier = 1,
+                                title = ('Freight: %dx %s to %s'):format(qty, label, to),
+                                text = ('Haul %dx %s from %s to %s before time runs out.'):format(qty, label, fromRegion, to),
+                                region_id = fromRegion, from_region = fromRegion, to_region = to,
+                                item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = d.deadlineSeconds, cooldown_min = d.cooldownMin,
+                                rewards = { money = reward, rep = { region_id = to, delta = d.repDelta } },
+                            }
+                        end
                     end
                 end
             end
-            t2Offers(cfg, d, fromRegion, to, shortagesByRegion[to], t2out)
+            t2Offers(cfg, d, fromRegion, to, dist, shortagesByRegion[to], t2out)
         end
     end
     local function worstFirst(a, b) if a.level ~= b.level then return a.level > b.level end return a.key < b.key end
@@ -191,7 +303,7 @@ function M.generate(cfg, fromRegion, shortagesByRegion)
 end
 
 ---Re-check an offer that came back through fh_quests (never trust it). @return boolean ok, string? err
-function M.validateOffer(cfg, offer, isKnownRegion)
+function M.validateOffer(cfg, offer, isKnownRegion, regions)
     local d = defaults(cfg)
     if type(offer) ~= 'table' then return false, 'bad_offer' end
     local good = type(offer.item) == 'string' and cfg.goods[offer.item]
@@ -199,7 +311,10 @@ function M.validateOffer(cfg, offer, isKnownRegion)
     if type(offer.from_region) ~= 'string' or type(offer.to_region) ~= 'string' then return false, 'bad_region' end
     if isKnownRegion and not (isKnownRegion(offer.from_region) and isKnownRegion(offer.to_region)) then return false, 'bad_region' end
     if offer.from_region == offer.to_region and not d.allowSameRegion then return false, 'same_region' end
-    if not d.destinations[offer.to_region] then return false, 'no_destination' end
+    local dests = M.resolveDestinations(cfg, regions)
+    local excluded = excludeSet(cfg.freight)
+    if excluded[offer.from_region] or not dests[offer.to_region] then return false, 'no_destination' end
+    if type(cfg.posts) == 'table' and not dests[offer.from_region] then return false, 'no_destination' end
     local tier = M.tierOf(offer)
     if tier ~= 1 and tier ~= 2 then return false, 'bad_tier' end
     local t = t2cfg(cfg)
@@ -207,10 +322,14 @@ function M.validateOffer(cfg, offer, isKnownRegion)
     if offer.key ~= M.offerKey(offer.from_region, offer.to_region, offer.item, tier) or #M.questId(offer.key) > 64 then return false, 'bad_key' end
     if tier == 1 then
         if not int(offer.qty) or offer.qty < d.minQty or offer.qty > d.maxQty then return false, 'bad_qty' end
+        if d.minDistance > 0 then
+            local dist = dist2d(dests[offer.from_region], dests[offer.to_region])
+            if not dist or dist < d.minDistance then return false, 'bad_route' end
+        end
     else
         if not finite(offer.level) or offer.level <= 0 or offer.level > 1 then return false, 'bad_level' end
         if not int(offer.qty) or offer.qty ~= t2Qty(t, good, offer.level) then return false, 'bad_qty' end
-        local dist = M.routeDistance(cfg, offer.from_region, offer.to_region)
+        local dist = dist2d(dests[offer.from_region], dests[offer.to_region])
         if not dist or dist < (t.minDistance or 0) then return false, 'bad_route' end
         if offer.deadline_s ~= M.t2Deadline(cfg, dist) then return false, 'bad_deadline' end
     end

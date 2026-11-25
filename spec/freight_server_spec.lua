@@ -404,4 +404,34 @@ case('T2 accept: the character changed while canUnlock ran -> fh_no_player, noth
     T.eq(0, #E.addCalls)
 end)
 
+case('R12: post-derived destinations deliver at resolved post coords and skip disabled regions', function()
+    local E = newEnv({ t2 = true })
+    FhTradeConfig.freight.destinations = nil
+    FhTradeConfig.posts = {
+        { id = 'val_post', radius = 6 },
+        { id = 'dunes_post', radius = 6 },
+        { id = 'off_post', radius = 6 },
+    }
+    FhRegions = {
+        regions = { heartlands = {}, dunes = {}, offworld = {} },
+        posts = {
+            val_post   = { id = 'val_post',   region = 'heartlands', x = 0,    y = 0, z = 0 },
+            dunes_post = { id = 'dunes_post', region = 'dunes',      x = 500,  y = 0, z = 0 },
+            off_post   = { id = 'off_post',   region = 'offworld',   x = 2000, y = 0, z = 0 },
+        },
+        isKnownRegion = function(id) return id == 'heartlands' or id == 'dunes' or id == 'offworld' end,
+        isEnabled = function(id) return id ~= 'offworld' end,
+    }
+    E.shortages.dunes = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    E.shortages.offworld = { { item = 'trade_salt', level = 0.9, price = 10 } }
+    local list = E.hooks.offers('heartlands')
+    T.eq(2, #list, 'disabled region offworld is excluded from offers')
+    for _, o in ipairs(list) do assert(o.to_region == 'dunes') end
+    T.eq(0, #E.hooks.offers('offworld'), 'disabled board returns no offers')
+    assert(acceptWith(E, list[1], 't1') == true)
+    E.wagons['CID1:t1'].coords = { x = 500, y = 0, z = 0 }
+    E.tick()
+    T.eq(1, delivered(E), 'delivered using post-derived destination')
+end)
+
 T.finish()

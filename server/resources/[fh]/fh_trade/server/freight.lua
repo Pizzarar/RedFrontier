@@ -115,15 +115,20 @@ end
 -- ---------------------------------------------------------------- job type hooks
 
 local function offers(regionId)
+    if FhRegions.isEnabled and not FhRegions.isEnabled(regionId) then return {} end
     local byRegion = {}
-    for id in pairs(FhRegions.regions) do byRegion[id] = exports.fh_trade:getShortages(id) end
-    return F.generate(cfg, regionId, byRegion)
+    for id in pairs(FhRegions.regions) do
+        if not FhRegions.isEnabled or FhRegions.isEnabled(id) then
+            byRegion[id] = exports.fh_trade:getShortages(id)
+        end
+    end
+    return F.generate(cfg, regionId, byRegion, FhRegions)
 end
 
 local function accept(src, offer)
     local citizenid = citizenidOf(src)
     if not citizenid then return false, 'fh_no_player' end
-    local ok, err = F.validateOffer(cfg, offer, FhRegions.isKnownRegion)
+    local ok, err = F.validateOffer(cfg, offer, FhRegions.isKnownRegion, FhRegions)
     if not ok then return false, 'fh_freight_' .. err end
     if accepting[citizenid] then return false, 'fh_busy' end
     accepting[citizenid] = true -- held across the yielding exports below, so two accepts cannot both pass the cap
@@ -199,7 +204,7 @@ local function check(c)
             facts.owner_ok = usable == nil or usable.owner == c.citizenid
             if usable then
                 facts.cargoCount = cargoCount(c.wagon, c.item)
-                facts.atTarget = F.atTarget(fcfg.destinations[c.to_region], usable.coords)
+                facts.atTarget = F.atTarget(F.destinationFor(cfg, c.to_region, FhRegions), usable.coords)
             end
         end
         if c.abandoned then return end

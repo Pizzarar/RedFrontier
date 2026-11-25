@@ -358,12 +358,18 @@ case('T2 checkUnlock: allowed / tier_too_low / not started / getState throws / c
     T.eq('contracts_t2', F.unlockFor(cfgT2(), 2)); T.eq(nil, F.unlockFor(cfgT2(), 1)); T.eq(1, F.minWagonTier(cfgT2(), 1))
 end)
 
-case('T2 real config: every T2 pay <= 4x matching T1 (about 3x at half); qty fits t2 slots/weight; t1 refused, t2 fits', function()
-    local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
+local function loadRealTradeConfig()
+    local Regions = dofile(here .. 'support/world_config.lua')
     local saved = FhTradeConfig
     dofile(here .. '../server/resources/[fh]/fh_trade/config.lua')
     local c = FhTradeConfig
     FhTradeConfig = saved
+    return c, Regions
+end
+
+case('T2 real config: every T2 pay <= 4x matching T1 (about 3x at half); qty fits t2 slots/weight; t1 refused, t2 fits', function()
+    local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
+    local c = loadRealTradeConfig()
     local t = assert(c.freight.t2, 'freight.t2 missing')
     T.eq('contracts_t2', t.unlock); T.eq(2, t.minWagonTier)
     T.eq(true, t.maxQty <= CARGO.TIERS.t2.slots, 't2.maxQty must not exceed the t2 wagon slots')
@@ -416,6 +422,217 @@ case('T2 real config: every T2 pay <= 4x matching T1 (about 3x at half); qty fit
     assert(one, 'no real T2 offer to fit-check')
     T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, one, CARGO.TIERS.t1)), 't1 cart refused')
     assert(F.wagonFits(c, one, CARGO.TIERS.t2), 't2 wagon accepted')
+end)
+
+-- ---------------------------------------------------------------- R12: destinations from FhRegions + posts
+
+local function postCfg(over)
+    local c = {
+        goods = {
+            trade_salt  = { base = 10, label = 'Salt',  weight = 1500, stackable = true },
+            trade_cloth = { base = 20, label = 'Cloth', weight = 2500, stackable = true },
+        },
+        posts = {
+            { id = 'a_post',  region = 'reg_a', x = 0,    y = 0, z = 10, radius = 6 },
+            { id = 'b_post',  region = 'reg_b', x = 800,  y = 0, z = 10, radius = 6 },
+            { id = 'c_post',  region = 'reg_c', x = 2000, y = 0, z = 10, radius = 6 },
+            { id = 'c_post2', region = 'reg_c', x = 2500, y = 0, z = 10, radius = 6 },
+            { id = 'd_post',  region = 'reg_d', x = 4000, y = 0, z = 10, radius = 6 },
+        },
+        freight = {
+            minQty = 1, maxQty = 20, qtyPerLevel = 20, premium = 1.25, repDelta = 2, deadlineSeconds = 1800,
+            maxOffers = 3, rewardCapMultiple = 4, cooldownMin = 30, destinationRadius = 40, minDistance = 0,
+            t2 = t2With({ minDistance = 1500 }),
+            overrides = {}, exclude = {},
+        },
+    }
+    for k, v in pairs(over or {}) do c.freight[k] = v end
+    return c
+end
+
+case('R12 pairs generated: posts resolve to destinations, only post regions get offers, board caps hold', function()
+    local c = postCfg({ maxOffers = 20, t2 = t2With({ minDistance = 1500, maxOffers = 20 }) })
+    local sh = {
+        reg_a = { { item = 'trade_salt', level = 0.5, price = 10 } },
+        reg_b = { { item = 'trade_salt', level = 0.6, price = 10 } },
+        reg_c = { { item = 'trade_salt', level = 0.7, price = 10 } },
+        reg_d = { { item = 'trade_salt', level = 0.8, price = 10 } },
+        no_post_region = { { item = 'trade_salt', level = 1.0, price = 10 } },
+    }
+    local offers = F.generate(c, 'reg_a', sh)
+    local t1To, t2To = {}, {}
+    for _, o in ipairs(offers) do
+        if o.tier == 1 then t1To[o.to_region] = true else t2To[o.to_region] = true end
+        assert(o.to_region ~= 'no_post_region', 'region without a post must not get offers')
+    end
+    T.eq(true, t1To.reg_b); T.eq(true, t1To.reg_c); T.eq(true, t1To.reg_d)
+    T.eq(nil, t2To.reg_b, 'reg_a -> reg_b is 800 m < T2 minDistance 1500')
+    T.eq(true, t2To.reg_c, 'reg_a -> reg_c is 2000 m >= 1500')
+    T.eq(true, t2To.reg_d, 'reg_a -> reg_d is 4000 m >= 1500')
+    T.eq(0, #F.generate(c, 'no_post_region', sh), 'origin without a post produces no offers')
+
+    -- First post in list wins by default; overrides can tweak radius, coords, or select another post.
+    T.eq(2000, F.destinationFor(c, 'reg_c').x)
+    c.freight.overrides = {
+        reg_b = { radius = 55 },
+        reg_c = { post = 'c_post2' },
+        no_post_region = { x = 5000, y = 0, z = 0, radius = 40 }, -- no post -> ignored
+    }
+    local dests = F.resolveDestinations(c)
+    T.eq(800, dests.reg_b.x); T.eq(55, dests.reg_b.radius)
+    T.eq(2500, dests.reg_c.x); T.eq('c_post2', dests.reg_c.post)
+    T.eq(nil, dests.no_post_region, 'override must not invent a destination for a region with 0 posts')
+
+    -- Default board caps keep offers bounded even with many regions and shortages.
+    local capped = postCfg()
+    local list = F.generate(capped, 'reg_a', sh)
+    local n1, n2 = 0, 0
+    for _, o in ipairs(list) do if o.tier == 1 then n1 = n1 + 1 else n2 = n2 + 1 end end
+    T.eq(3, n1, 'T1 capped at maxOffers'); T.eq(2, n2, 'T2 capped at t2.maxOffers')
+end)
+
+case('R12 exclusion: array and map forms exclude region from destinations, offers, and validateOffer', function()
+    local sh = {
+        reg_a = { { item = 'trade_salt', level = 0.5, price = 10 } },
+        reg_b = { { item = 'trade_salt', level = 0.6, price = 10 } },
+        reg_c = { { item = 'trade_salt', level = 0.7, price = 10 } },
+    }
+    for _, ex in ipairs({ { 'reg_c' }, { reg_c = true } }) do
+        local c = postCfg({ exclude = ex, overrides = { reg_c = { x = 2000, y = 0, z = 10, radius = 40 } } })
+        T.eq(nil, F.destinationFor(c, 'reg_c'), 'excluded region has no destination even with override')
+        T.eq(0, #F.generate(c, 'reg_c', sh), 'excluded origin generates 0 offers')
+        for _, o in ipairs(F.generate(c, 'reg_a', sh)) do
+            assert(o.to_region ~= 'reg_c', 'excluded region must not appear as destination')
+        end
+        -- Offer generated before exclusion is rejected by validateOffer once excluded.
+        local rawOffer = F.generate(postCfg(), 'reg_a', sh)[1]
+        assert(rawOffer.to_region == 'reg_c')
+        T.eq('no_destination', select(2, F.validateOffer(c, rawOffer)))
+        local fromExcluded = F.generate(postCfg(), 'reg_c', sh)[1]
+        T.eq('no_destination', select(2, F.validateOffer(c, fromExcluded)))
+    end
+end)
+
+case('R12 distance filter: T1 and T2 each filter by their own minDistance in generate and validateOffer', function()
+    local c = postCfg({ minDistance = 1000, t2 = t2With({ minDistance = 2500 }) })
+    local sh = {
+        reg_b = { { item = 'trade_salt', level = 0.5, price = 10 } }, -- 800 m from reg_a (< T1 1000)
+        reg_c = { { item = 'trade_salt', level = 0.5, price = 10 } }, -- 2000 m from reg_a (>= T1 1000, < T2 2500)
+        reg_d = { { item = 'trade_salt', level = 0.5, price = 10 } }, -- 4000 m from reg_a (>= T2 2500)
+    }
+    local offers = F.generate(c, 'reg_a', sh)
+    local seen = {}
+    for _, o in ipairs(offers) do seen[o.to_region .. ':t' .. o.tier] = o end
+    T.eq(nil, seen['reg_b:t1'], '800 m < T1 minDistance 1000')
+    T.eq(nil, seen['reg_b:t2'])
+    assert(seen['reg_c:t1'], '2000 m >= T1 minDistance 1000')
+    T.eq(nil, seen['reg_c:t2'], '2000 m < T2 minDistance 2500')
+    assert(seen['reg_d:t1'] and seen['reg_d:t2'], '4000 m >= both')
+    assert(F.validateOffer(c, seen['reg_c:t1']))
+    -- A short T1 offer built under minDistance=0 is rejected when minDistance=1000.
+    local shortT1 = F.generate(postCfg({ minDistance = 0 }), 'reg_a', { reg_b = sh.reg_b })[1]
+    T.eq('bad_route', select(2, F.validateOffer(c, shortT1)))
+end)
+
+case('R12 missing coords skipped (no throw), fallback to second post in same region, regions table fallback', function()
+    local c = postCfg()
+    c.posts = {
+        { id = 'a_post', region = 'reg_a', x = 0, y = 0, z = 10 },
+        { id = 'broken_only', region = 'reg_missing' },                         -- missing x, y
+        { id = 'nan_post', region = 'reg_nan', x = 0 / 0, y = 100, z = 0 },     -- NaN x
+        { id = 'bad_first', region = 'reg_fallback', x = nil, y = 500 },        -- missing x
+        { id = 'good_second', region = 'reg_fallback', x = 2000, y = 0, z = 5 }, -- valid second post
+        { id = 'unres_post' },                                                  -- resolved via regions arg
+    }
+    local fakeRegions = { posts = { unres_post = { id = 'unres_post', region = 'reg_r', x = 3000, y = 0, z = 5 } } }
+    local dests = F.resolveDestinations(c, fakeRegions)
+    T.eq(nil, dests.reg_missing); T.eq(nil, dests.reg_nan)
+    T.eq(2000, dests.reg_fallback.x); T.eq('good_second', dests.reg_fallback.post)
+    T.eq(3000, dests.reg_r.x)
+    T.eq(nil, F.routeDistance(c, 'reg_a', 'reg_missing', fakeRegions))
+    local sh = {
+        reg_missing  = { { item = 'trade_salt', level = 0.9, price = 10 } },
+        reg_nan      = { { item = 'trade_salt', level = 0.9, price = 10 } },
+        reg_fallback = { { item = 'trade_salt', level = 0.5, price = 10 } },
+        reg_r        = { { item = 'trade_salt', level = 0.5, price = 10 } },
+    }
+    T.eq(0, #F.generate(c, 'reg_missing', sh, fakeRegions), 'missing-coord origin skipped without throw')
+    local offers = F.generate(c, 'reg_a', sh, fakeRegions)
+    assert(#offers >= 2)
+    for _, o in ipairs(offers) do
+        assert(o.to_region ~= 'reg_missing' and o.to_region ~= 'reg_nan')
+    end
+end)
+
+case('R12 real config: resolves destinations from FhRegions posts, >= 3 region pairs incl. bayou_nwa and great_plains', function()
+    local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
+    local c, Regions = loadRealTradeConfig()
+    T.eq(nil, c.freight.destinations, 'hardcoded freight.destinations list is removed')
+    local dests = F.resolveDestinations(c, Regions)
+    local destCount = 0
+    for r, d in pairs(dests) do
+        destCount = destCount + 1
+        local rp = assert(Regions.posts[d.post], r .. ': resolved post missing in FhRegions.posts')
+        T.eq(rp.x, d.x); T.eq(rp.y, d.y); T.eq(rp.z, d.z)
+    end
+    assert(destCount >= 15, 'all 15 post regions resolve, got ' .. destCount)
+
+    -- Enabled regions: heartlands, scarlett_meadows, bayou_nwa, great_plains.
+    local enabled = {}
+    for id in pairs(Regions.regions) do
+        if Regions.isEnabled(id) then enabled[#enabled + 1] = id end
+    end
+    table.sort(enabled)
+    local state, now = P.newState(), 1700000000
+    for _, r in ipairs(enabled) do
+        P.setShortage(c, state, r, 'trade_salt', 0.6, now)
+    end
+    local byRegion = {}
+    for _, r in ipairs(enabled) do byRegion[r] = P.shortages(c, state, r, now) end
+
+    -- Inspect all pairs with high caps first.
+    local wide = copy(c); wide.freight = copy(c.freight); wide.freight.t2 = copy(c.freight.t2)
+    wide.freight.maxOffers, wide.freight.t2.maxOffers = 99, 99
+    local pairsSeen, t2Pairs = {}, {}
+    local hasBayou, hasPlains = false, false
+    for _, from in ipairs(enabled) do
+        local offers = F.generate(wide, from, byRegion, Regions)
+        for _, o in ipairs(offers) do
+            assert(F.validateOffer(wide, o, Regions.isKnownRegion, Regions), 'invalid real offer ' .. o.key)
+            assert(#F.questId(o.key) <= 64, 'quest id > 64: ' .. o.key)
+            local a, b = o.from_region < o.to_region and o.from_region or o.to_region,
+                         o.from_region < o.to_region and o.to_region or o.from_region
+            local pair = a .. '<->' .. b
+            pairsSeen[pair] = true
+            if o.tier == 2 then t2Pairs[pair] = true end
+            if o.from_region == 'bayou_nwa' or o.to_region == 'bayou_nwa' then hasBayou = true end
+            if o.from_region == 'great_plains' or o.to_region == 'great_plains' then hasPlains = true end
+        end
+    end
+    local nPairs = 0
+    for _ in pairs(pairsSeen) do nPairs = nPairs + 1 end
+    assert(nPairs >= 3, 'expected >= 3 region pairs, got ' .. nPairs)
+    assert(hasBayou, 'expected offers involving bayou_nwa')
+    assert(hasPlains, 'expected offers involving great_plains')
+    -- scarlett_meadows <-> bayou_nwa (~1420 m) is T1 only; bayou_nwa <-> great_plains (~3566 m) has T2.
+    T.eq(true, pairsSeen['bayou_nwa<->scarlett_meadows'])
+    T.eq(nil, t2Pairs['bayou_nwa<->scarlett_meadows'], 'Rhodes <-> Saint Denis (~1420 m) is under T2 minDistance 1500')
+    T.eq(true, t2Pairs['bayou_nwa<->great_plains'], 'Saint Denis <-> Blackwater (~3566 m) has T2')
+
+    -- Real config board caps hold even when every post region has shortages on every good.
+    local allByRegion = {}
+    for r in pairs(dests) do
+        for item in pairs(c.goods) do P.setShortage(c, state, r, item, 0.7, now) end
+        allByRegion[r] = P.shortages(c, state, r, now)
+    end
+    local board = F.generate(c, 'heartlands', allByRegion, Regions)
+    local n1, n2 = 0, 0
+    for _, o in ipairs(board) do
+        assert(#F.questId(o.key) <= 64, 'quest id > 64: ' .. o.key)
+        if o.tier == 1 then n1 = n1 + 1 else n2 = n2 + 1 end
+    end
+    T.eq(c.freight.maxOffers, n1, 'T1 board cap holds with all 15 regions')
+    T.eq(c.freight.t2.maxOffers, n2, 'T2 board cap holds with all 15 regions')
 end)
 
 T.finish()

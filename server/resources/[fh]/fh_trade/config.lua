@@ -69,9 +69,11 @@ FhTradeConfig = {
         maxOffers = 3, rewardCapMultiple = 4,
         cooldownMin = 30,              -- fh_quests cooldown_min: minutes before the same route/cargo offer can be taken again (= deadline)
         maxActivePerPlayer = 2,
-        allowSameRegion = false,       -- two regions exist now: offers are generated between them (set true to test one-region)
+        allowSameRegion = false,       -- offers are generated between distinct post regions (set true to test one-region)
         checkMs = 5000, graceChecks = 3, -- delivery/loss scan period; consecutive misses before wagon/cargo loss counts
         acceptReach = 8.0,             -- m: your wagon must be this close to you to take a contract
+        minDistance = 0,               -- m: minimum horizontal distance between origin and destination for T1 offers
+        destinationRadius = 40.0,      -- m: default delivery radius around each region's resolved trade post
         -- T2 contracts (roads-02 R9): bulk loads on long routes, gated per player at accept by fh_progression
         -- canUnlock(unlock) (fail closed) and by the wagon's fh_cargo tier. Listed on the board as `[T2]`, `locked = true`.
         t2 = {
@@ -88,10 +90,11 @@ FhTradeConfig = {
             maxOffers = 2,             -- per board, listed after the T1 offers (own cap, T1 is never crowded out)
             cooldownMin = 30,          -- raised to the deadline in minutes when that is longer
         },
-        destinations = {
-            heartlands = { x = -176.0, y = 630.0, z = 114.0, radius = 40.0 },
-            scarlett_meadows = { x = 1288.0, y = -1278.0, z = 77.0, radius = 40.0 }, -- Rhodes trade post (unverified)
-        },
+        -- Freight destinations resolve from FhTradeConfig.posts (filled from FhRegions.posts at load, roads-03 R12).
+        -- Only regions with >= 1 post get offers. `overrides` holds per-region { x?, y?, z?, radius?, post? } tweaks;
+        -- `exclude` opts a region out of freight (either { 'region_id', ... } or { region_id = true }).
+        overrides = {},
+        exclude = {},
     },
 
     -- Initial shortages (data): seeded at startup ONLY for a region/item with no persisted fh_trade_prices row (never
