@@ -37,6 +37,8 @@ local ALLOW = {
     'SetEntityInvincible', 'SetModelAsNoLongerNeeded', 'SetPedCanRagdoll', 'SetPedCombatAttributes',
     'SetPedFleeAttributes', 'SetPedOutfitPreset', 'SetPedRelationshipGroupHash', 'SetRelationshipBetweenGroups',
     'TaskCombatHatedTargetsAroundPed', 'TaskFollowToOffsetOfEntity', 'TaskPlayAnim', 'Wait',
+    'IsEntityPlayingAnim', 'IsPedActiveInScenario', 'IsPedInAnyVehicle', 'IsPedRagdoll', 'IsPedSwimming', -- fh_anim guards (run under pcall)
+    'TaskStartScenarioInPlaceHash', -- fh_anim hash-form scenarios (rsg-core/client/progress.lua:45)
     -- CfxLua / CFX runtime builtins
     'AddEventHandler', 'CreateThread', 'Entity', 'GetConvarInt', 'GetCurrentResourceName', 'GetGamePool',
     'LoadResourceFile', -- fh_hunting shared/legendaries.lua reads data/legendaries/*.lua (manifest files {})
