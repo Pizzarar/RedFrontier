@@ -104,7 +104,15 @@ class T(unittest.TestCase):
               "return {\n  row = {\n    item = 'outer_only',\n    meta = { label = 'Inner Label' },\n  },\n}\n")
         self.assertEqual([f[1] for f in findings(t, 'items')], ['outer_only'])
 
-    def test_allowlist_and_stale_warning(self):
+    def test_label_inside_string_or_long_bracket_is_not_a_label_field(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[fh]/fh_b/data/str.lua',
+              "return {\n  a = { item = 'only_str', note = 'label = x' },\n"
+              "  b = { item = 'only_long', note = [[ label = y ]] },\n"
+              "  c = { item = 'real_def', label = 'R' },\n}\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'items')), ['only_long', 'only_str'])
+
+    def test_allowlist_and_stale_fails(self):
         t = tree(self.root, "exports.fh_a:nope()\n")
         al = os.path.join(self.root, 'allow.txt')
         write(self.root, 'allow.txt', 'exports|fh_a:nope  # idea-1\nexports|fh_a:gone  # stale\n')
@@ -112,7 +120,7 @@ class T(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cc.main(['--root', t[0], '--cfg', t[1], '--allowlist', al])
-        self.assertEqual(rc, 0)
+        self.assertEqual(rc, 1)   # stale entry fails the gate
         self.assertIn('stale allowlist entry', buf.getvalue())
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cc.main(['--root', t[0], '--cfg', t[1], '--allowlist', os.path.join(self.root, 'none')]), 1)
@@ -193,13 +201,66 @@ class T(unittest.TestCase):
         write(self.root, 'resources/[fh]/fh_inventory/fxmanifest.lua', MANIFEST % '')
         write(self.root, 'resources/[fh]/fh_inventory/html/images/has_icon.png', 'x')
         write(self.root, 'resources/[fh]/fh_a/items.lua',
-              "I = { has_icon = { name = 'has_icon', label = 'A' }, no_icon = { name = 'no_icon', label = 'B' } }\n")
+              "I = { has_icon = { name = 'has_icon', label = 'A', weight = 1 }, no_icon = { name = 'no_icon', label = 'B', weight = 1 }, menu = { label = 'Menu' } }\n")
         self.assertEqual([f for f in findings(t) if f[0] == 'icon'], [])
         self.assertEqual([w[1] for w in cc.WARNINGS if w[0] == 'icon'], ['no_icon'])
 
     def test_manifest_literal_missing(self):
         t = tree(self.root, "", mfa='server_scripts { "s.lua", "gone.lua" }\nclient_scripts { "c.lua" }')
         self.assertEqual(sorted(f[1] for f in findings(t, 'manifest')), ['fh_a:gone.lua'])
+
+    def _items(self, extra=''):
+        write(self.root, 'resources/[rsg]/rsg-core/shared/items.lua',
+              "RSGShared.Items = {\n" + extra + "}\n")
+
+    def test_useable_via_helper_loop_with_bracket_keys(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'ammo_box_x', chance = 1 } }\n")
+        self._items("ammo_box_x = { name = 'ammo_box_x', label = 'Box', useable = true },\n")
+        write(self.root, 'resources/[fh]/fh_a/shared.lua', "Config = {}\nConfig.BoxAmmo = {\n  ['ammo_box_x'] = 'AMMO_X',\n}\n")
+        write(self.root, 'resources/[fh]/fh_a/s.lua',
+              "exports('ok', function() end)\nlocal function reg(itemName, a)\n"
+              "  exports['rsg-core']:CreateUseableItem(itemName, function() end)\nend\n"
+              "for itemName, a in pairs(Config.BoxAmmo) do\n  reg(itemName, a)\nend\n")
+        self.assertEqual(findings(t, 'useable'), [])
+
+    def test_unrelated_pairs_loop_does_not_suppress(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'bandage', chance = 1 } }\n")
+        self._items("bandage = { name = 'bandage', label = 'B', useable = true },\n")
+        write(self.root, 'resources/[fh]/fh_a/s.lua',
+              "exports('ok', function() end)\nfor n in pairs({ tonic = true }) do exports['rsg-core']:CreateUseableItem(n, f) end\n"
+              "for k in pairs({ bandage = true }) do print(k) end\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'useable')), ['bandage'])
+
+    def test_field_named_name_does_not_resolve_loop_var(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'bandage', chance = 1 } }\n")
+        self._items("bandage = { name = 'bandage', label = 'B', useable = true },\n")
+        write(self.root, 'resources/[fh]/fh_a/s.lua',
+              "exports('ok', function() end)\nlocal row = {\n  name = 'bandage',\n}\n"
+              "exports['rsg-core']:CreateUseableItem(name, function() end)\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'useable')), ['bandage'])
+
+    def test_weapon_type_dispatch_needs_listener(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'weapon_x', chance = 1 } }\n")
+        self._items("weapon_x = { name = 'weapon_x', label = 'W', type = 'weapon', useable = true },\n")
+        write(self.root, 'resources/[fh]/fh_a/s.lua',
+              "exports('ok', function() end)\nlocal weaponEvents = { weapon = 'rsg-weapons:client:UseWeapon' }\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'useable')), ['weapon_x'])
+        write(self.root, 'resources/[rsg]/rsg-weapons/fxmanifest.lua', MANIFEST % "client_scripts { 'c.lua' }")
+        write(self.root, 'resources/[rsg]/rsg-weapons/c.lua', "RegisterNetEvent('rsg-weapons:client:UseWeapon', function() end)\n")
+        self.assertEqual(findings(t, 'useable'), [])
+
+    def test_crafting_inputs_are_not_grants(self):
+        t = tree(self.root, "", cfg_items="")
+        self._items("carrot = { name = 'carrot', label = 'C', useable = true },\n")
+        write(self.root, 'resources/[fh]/fh_b/data/recipes.lua', "R = { { inputs = { { item = 'carrot', amount = 1 } } } }\n")
+        self.assertEqual(findings(t, 'useable'), [])
+
+    def test_item_and_label_table_defines_item(self):
+        t = tree(self.root, "", cfg_items="")
+        write(self.root, 'resources/[fh]/fh_b/data/pelts.lua', "P = { { item = 'legend_pelt', label = 'Legendary Pelt' } }\n"
+              "G = { { item = 'ghost_item', amount = 1 } }\n")
+        names = sorted(f[1] for f in findings(t, 'items'))
+        self.assertEqual(names, ['ghost_item'])
 
     # ---- G3: manifest globs/literals must match ----
     def test_manifest_glob_no_match(self):

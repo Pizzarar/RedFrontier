@@ -37,7 +37,7 @@ Rules
   definitions `[cfg.feed.item] = { label = ...` define the value of `item` in any `feed = { ... }` table.
 Allowlist: one entry per line `<rule>|<key>  # reason / idea id`. Keys: `exports|res:fn`, `events|fh:name`,
   `items|name`, `useable|item`, `event-target|event`, `manifest|res:glob`, `clothes|gender:category`.
-  Unused entries are reported as warnings. Warning-tier findings (`dead`, `icon`) never fail the gate.
+  Unused (stale) entries fail the gate. Warning-tier findings (`dead`, `icon`) never fail the gate.
 """
 import argparse, glob, os, re, sys
 from collections import defaultdict
@@ -65,9 +65,9 @@ def braced(text, open_pos):
 def top_keys(body):
     """Top-level identifier keys of a table body (text between the outer braces)."""
     keys = set()
-    for m in re.finditer(r'([A-Za-z_]\w*)\s*=', body):
+    for m in re.finditer(r'(?:([A-Za-z_]\w*)|\[\s*[\'"]([^\'"]+)[\'"]\s*\])\s*=(?!=)', body):
         if body[:m.start()].count('{') == body[:m.start()].count('}'):
-            keys.add(m.group(1))
+            keys.add(m.group(1) or m.group(2))
     return keys
 
 
@@ -244,11 +244,11 @@ def run(root, cfg_path):
     HOOKCONST = re.compile(r'\b(?:on|events?)\s*=\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)')
     # module-constant event names: `M.SQUAD_EVENT = 'fh:...'` / `local E = 'fh:...'` -> `on = M.SQUAD_EVENT` is a listener
     CONST_ASSIGN = re.compile(r'\b(?:local\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*=\s*([\'"])(fh:[A-Za-z0-9_:.\-]+)\2')
-    const_map = {}
+    const_maps = defaultdict(dict)   # per resource, so equal constant names in different resources cannot collide
     for (rn, rel), t in texts.items():
         for m in CONST_ASSIGN.finditer(t):
-            const_map[m.group(1)] = m.group(3)
-            const_map[m.group(1).split('.')[-1]] = m.group(3)
+            const_maps[rn][m.group(1)] = m.group(3)
+            const_maps[rn][m.group(1).split('.')[-1]] = m.group(3)
     senders, listeners, lits = [], defaultdict(set), defaultdict(list)
     listen_locs = defaultdict(list)
     for (rn, rel), t in sorted(texts.items()):
@@ -271,7 +271,7 @@ def run(root, cfg_path):
             for s in SIDES:
                 listeners[m.group(1)].add(s)     # hook consumer: any side
         for m in HOOKCONST.finditer(t):
-            name = const_map.get(m.group(1))
+            name = const_maps[rn].get(m.group(1))
             if name:
                 for s in SIDES:
                     listeners[name].add(s)       # hook via a module constant (G1c)
@@ -307,21 +307,21 @@ def run(root, cfg_path):
     LISTEN_ANY = re.compile(r'\b(RegisterNetEvent|RegisterServerEvent|AddEventHandler|onNet)\s*\(\s*([\'"])([A-Za-z0-9_:.\-]+)\2')
     EVENTVAL = re.compile(r"['\"]((?:rsg-[A-Za-z0-9_-]+|fh_[A-Za-z0-9_]+):[A-Za-z0-9_:.\-]+)['\"]")
     MAP_SEND = re.compile(r'\b(TriggerEvent|TriggerServerEvent|TriggerClientEvent|TriggerLatentClientEvent)\s*\(\s*([A-Za-z_]\w*)\s*[\[.]')
-    table_events = defaultdict(set)   # table name -> event names it maps to (event-map sender)
+    table_events = defaultdict(lambda: defaultdict(set))   # resource -> table name -> event names (event-map sender)
+    for (rn, rel), t in sorted(texts.items()):
+        for m in re.finditer(r"\b([A-Za-z_]\w*)\s*=\s*\{", t):
+            for v in EVENTVAL.finditer(braced(t, t.find('{', m.start()))):
+                table_events[rn][m.group(1)].add(v.group(1))
     any_senders = defaultdict(list)   # event name -> [(kind, need, loc)]
     any_listeners = defaultdict(set)  # event name -> set(sides)
     for (rn, rel), t in sorted(texts.items()):
         sides = resources[rn].files[rel]
-        for m in re.finditer(r"\b([A-Za-z_]\w*)\s*=\s*\{", t):
-            body = braced(t, t.find('{', m.start()))
-            for v in EVENTVAL.finditer(body):
-                table_events[m.group(1)].add(v.group(1))
         for m in SEND_ANY.finditer(t):
             any_senders[m.group(3)].append(
                 (m.group(1), {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(m.group(1), {'client'}),
                  '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))
         for m in MAP_SEND.finditer(t):
-            for name in table_events.get(m.group(2), ()):
+            for name in table_events[rn].get(m.group(2), ()):
                 any_senders[name].append(
                     (m.group(1), {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(m.group(1), {'client'}),
                      '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))
@@ -346,15 +346,27 @@ def run(root, cfg_path):
     LABELFLD = re.compile(r"(?<![\w.])label\s*=(?!=)")
 
     def table_item_defs(t):
+        """Items defined by table literals holding both `item = '<x>'` and `label =` at the same brace depth.
+        String contents are blanked (a `label =` / `item =` inside a string is not a field) except the literal right
+        after `item =`; Lua long brackets `[[..]]` / `[=[..]=]` are skipped like strings."""
         out, stack, i, n = set(), [], 0, len(t)
         while i < n:
             c = t[i]
+            lb = re.match(r'\[(=*)\[', t[i:i + 12]) if c == '[' else None
+            if lb:
+                close = t.find(']' + lb.group(1) + ']', i + len(lb.group(0)))
+                j = (close + len(lb.group(1)) + 1) if close >= 0 else n - 1
+                if stack:
+                    stack[-1].append("''")
+                i = j + 1
+                continue
             if c in '\'"':
                 j = i + 1
                 while j < n and t[j] != c and t[j] != '\n':
                     j += 2 if t[j] == '\\' else 1
                 if stack:
-                    stack[-1].append(t[i:j + 1])
+                    after_item = re.search(r"(?<![\w.])item\s*=\s*$", ''.join(stack[-1][-8:])[-24:])
+                    stack[-1].append(t[i:j + 1] if after_item else c + c)
                 i = j + 1
                 continue
             if c == '{':
@@ -372,11 +384,12 @@ def run(root, cfg_path):
             i += 1
         return out
 
+    ITEM_LABEL_DEF = re.compile(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*(?:name\s*=\s*['\"][^'\"]*['\"]\s*,\s*)?label\s*=")
     defined = set()
     for r in resources.values():
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
             t = strip_file(p)
-            for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*(?:name\s*=\s*['\"][^'\"]*['\"]\s*,\s*)?label\s*=", t):
+            for m in ITEM_LABEL_DEF.finditer(t):
                 defined.add(m.group(1) or m.group(2))
             for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*name\s*=\s*['\"](\w+)['\"]", t):
                 if (m.group(1) or m.group(2)) == m.group(3):
@@ -397,7 +410,7 @@ def run(root, cfg_path):
                         depth += {'{': 1, '}': -1}.get(t[i], 0); i += 1
                     for v in re.finditer(r"\b%s\s*=\s*['\"]([\w-]+)['\"]" % re.escape(fld), t[m.end():i]):
                         defined.add(v.group(1))
-    ADDITEM = re.compile(r"\b(?:AddItem|FhAddItem|addItem)\s*\(\s*[^,\n)]*,\s*['\"]([a-z_][a-z0-9_]*)['\"]")
+    ADDITEM = re.compile(r"\b(?:AddItem|FhAddItem|addItem)\s*\(\s*(?:[^,\n)'\"]*,\s*)?['\"]([a-z_][a-z0-9_]*)['\"]")
     # granted items: every config/data/shared grant row across all resources (fh + rsg), plus AddItem literals.
     granted = defaultdict(list)   # item -> [(rn, rel, line)]
     for r in resources.values():
@@ -412,6 +425,12 @@ def run(root, cfg_path):
         for p in paths:
             t = strip_file(p)
             rel = os.path.relpath(p, r.path)
+            while True:   # blank crafting `inputs = { ... }` bodies (consumed items, not grants), keeping line numbers
+                m = re.search(r"\binputs\s*=\s*\{", t)
+                if not m:
+                    break
+                blk = braced(t, m.end() - 1)
+                t = t[:m.start()] + 'inputs_ = ' + re.sub(r'[^\n]', ' ', blk) + t[m.end() - 1 + len(blk):]
             for rx in (NAMEROW, ITEMFLD, ADDITEM):
                 for m in rx.finditer(t):
                     granted[m.group(1)].append((r.name, rel, lineno(t, m.start())))
@@ -442,9 +461,11 @@ def run(root, cfg_path):
     CREATEUSE = re.compile(r"\bCreateUseableItem\s*\(\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*[,)]")
     CREATEUSE_LIT = re.compile(r"\bCreateUseableItem\s*\(\s*['\"]([a-z_][a-z0-9_]*)['\"]\s*[,)]")
     USE_TABLE = re.compile(r"\b([A-Za-z_]\w*)(?:\.USE|\[['\"]USE['\"]\])\s*=\s*\{")
-    INLINE_PAIRS = re.compile(r"\bfor\s+\w+\s*(?:,\s*\w+\s*)?in\s+pairs\s*\(\s*\{([^}]*)\}")
+    # `for k[, v] in pairs(<inline table | dotted.name>) do ... end` loops; only those whose body registers k count
+    PAIRS_LOOP = re.compile(r"^([ \t]*)[^\n]*?\bfor\s+(\w+)\s*(?:,\s*\w+\s*)?in\s+pairs\s*\(\s*(\{[^}]*\}|[A-Za-z_][\w.]*)\s*\)\s*do\b", re.M)
     FIELD_ITEM = re.compile(r"\b(\w+)\s*=\s*\{[^{}]*\bitem\s*=\s*['\"]([a-z_][a-z0-9_]*)['\"]")
-    CONST_STR = re.compile(r"\b(?:local\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*=\s*['\"]([a-z_][a-z0-9_]*)['\"]")
+    # statement-level string constants only (`local X = 'a'` / `M.X = 'a'`), never table fields (`name = 'a',`)
+    CONST_STR = re.compile(r"^[ \t]*(?:local\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)[ \t]*=[ \t]*['\"]([a-z_][a-z0-9_]*)['\"][ \t]*$", re.M)
     ALIAS = re.compile(r"\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*[\n,]")
     use_handlers = set()
     field_items = set()   # `item = 'x'` in a named table (e.g. fence leads.item) -> a consumed/delivered item
@@ -468,14 +489,45 @@ def run(root, cfg_path):
                 for k in top_keys(body[1:-1]):
                     if re.fullmatch(r'[a-z_][a-z0-9_]*', k):
                         use_handlers.add(k)
-            for m in INLINE_PAIRS.finditer(jt):
-                for k in top_keys(m.group(1)):
-                    if re.fullmatch(r'[a-z_][a-z0-9_]*', k):
-                        use_handlers.add(k)
+            loop_regs = []   # (resource-text offset, key var, body) of every pairs-loop
+            for m in PAIRS_LOOP.finditer(jt):
+                end = re.compile(r'^%send\b' % re.escape(m.group(1)), re.M).search(jt, m.end())
+                body = jt[m.end():end.start() if end else len(jt)]
+                kv, src = m.group(2), m.group(3)
+                if src.startswith('{'):
+                    keys = top_keys(src[1:-1])
+                else:
+                    last = src.split('.')[-1]
+                    keys = set()
+                    for tm in re.finditer(r"(?:[\w.]*\.)?\b%s\s*=\s*\{" % re.escape(last), jt):
+                        keys |= top_keys(braced(jt, jt.find('{', tm.end() - 1))[1:-1])
+                # direct: the loop body itself calls CreateUseableItem(k, ...)
+                direct = re.search(r"\bCreateUseableItem\s*\(\s*%s\s*[,)]" % re.escape(kv), body)
+                via_helper = False
+                for cm in re.finditer(r"\b([A-Za-z_]\w*)\s*\(([^()]*)\)", body):
+                    args = [a.strip() for a in cm.group(2).split(',')]
+                    if kv not in args:
+                        continue
+                    idx = args.index(kv)
+                    fd = re.search(r"\bfunction\s+%s\s*\(([^)]*)\)" % re.escape(cm.group(1)), jt)
+                    if not fd:
+                        continue
+                    params = [a.strip() for a in fd.group(1).split(',')]
+                    if idx >= len(params):
+                        continue
+                    fend = re.compile(r'^end\b', re.M).search(jt, fd.end())
+                    fbody = jt[fd.end():fend.start() if fend else len(jt)]
+                    if re.search(r"\bCreateUseableItem\s*\(\s*%s\s*[,)]" % re.escape(params[idx]), fbody):
+                        via_helper = True
+                if direct or via_helper:
+                    for k in keys:
+                        if re.fullmatch(r'[a-z_][a-z0-9_]*', k):
+                            use_handlers.add(k)
         strconst, aliases = {}, {}
         for m in CONST_STR.finditer(jt):
             strconst[m.group(1)] = m.group(2)
-            strconst[m.group(1).split('.')[-1]] = m.group(2)
+            if m.group(1).split('.')[-1].isupper():   # bare suffix lookup only for CONSTANT_STYLE names (via alias imports)
+                strconst[m.group(1).split('.')[-1]] = m.group(2)
         for m in ALIAS.finditer(jt):
             aliases[m.group(1)] = m.group(2)
         field_item = {m.group(1): m.group(2) for m in FIELD_ITEM.finditer(jt)}
@@ -497,6 +549,27 @@ def run(root, cfg_path):
                 use_handlers.add(strconst[cur]); continue
             if cur.endswith('.item') and cur.rsplit('.', 1)[0].split('.')[-1] in field_item:
                 use_handlers.add(field_item[cur.rsplit('.', 1)[0].split('.')[-1]])
+    # type-dispatch consumers: a table `<x>Events = { <item type> = '<res>:client:Ev' }` (fh_inventory weaponEvents) routes
+    # every item of that type to the event; those items are consumed iff the event has a client listener on disk.
+    item_type = {}
+    for r in resources.values():
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            t = strip_file(p)
+            for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*name\s*=", t):
+                tm = re.search(r"\btype\s*=\s*['\"](\w+)['\"]", braced(t, t.find('{', m.start())))
+                if tm:
+                    item_type[m.group(1) or m.group(2)] = tm.group(1)
+    dispatch_types = set()
+    for r in resources.values():
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            t = strip_file(p)
+            for m in re.finditer(r"\b\w*[Ee]vents\w*\s*=\s*\{", t):
+                for km in re.finditer(r"\b(\w+)\s*=\s*['\"]([\w-]+:client:\w+)['\"]", braced(t, t.find('{', m.start()))):
+                    if 'client' in any_listeners.get(km.group(2), ()):
+                        dispatch_types.add(km.group(1))
+    for item, ty in item_type.items():
+        if ty in dispatch_types:
+            use_handlers.add(item)
     for item in sorted(granted):
         if item in useable_true and item not in use_handlers:
             rn, rel, ln = granted[item][0]
@@ -538,7 +611,7 @@ def run(root, cfg_path):
                 for g in re.finditer(r"\b(male|female)\s*=\s*\{", dc_body):
                     gbody = braced(dc_body, dc_body.find('{', g.end() - 1))
                     gname = g.group(1)
-                    for c in re.finditer(r"\b(\w+)\s*=\s*\{\s*hash\s*=\s*(\d+)\s*\}", gbody):
+                    for c in re.finditer(r"\b(\w+)\s*=\s*\{[^{}]*?\bhash\s*=\s*(\d+)[^{}]*\}", gbody):
                         cat, hv = c.group(1), int(c.group(2))
                         gb = re.search(r"\[\s*['\"]%s['\"]\s*\]\s*=\s*\{" % re.escape(gname), cloth_t)
                         valid = False
@@ -561,8 +634,9 @@ def run(root, cfg_path):
             continue
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
             t = strip_file(p)
-            for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*(?:name\s*=\s*['\"][^'\"]*['\"]\s*,\s*)?label\s*=", t):
-                defined_fh.add(m.group(1) or m.group(2))
+            for m in ITEM_LABEL_DEF.finditer(t):
+                if re.search(r"\bweight\s*=", braced(t, t.find('{', m.start()))):   # real item rows only (L1: not menus/NPC tables)
+                    defined_fh.add(m.group(1) or m.group(2))
     if imgdir:
         for item in sorted(defined_fh):
             if not os.path.isfile(os.path.join(imgdir, item + '.png')):
@@ -627,11 +701,12 @@ def main(argv=None):
             print('== warning: %s (%d)' % (rule, len(grp)))
             for _, key, loc, msg in sorted(grp, key=lambda x: x[2]):
                 print('  %s  %s' % (loc, msg))
-    for k, (ln, _) in allow.items():
-        if k not in used:
-            print('warning: stale allowlist entry %r (line %d)' % (k, ln))
-    print('contracts: %d finding(s), %d allowlisted, %d warning(s)' % (len(bad), len(findings) - len(bad), len(WARNINGS)))
-    return 1 if bad else 0
+    stale = [(k, ln) for k, (ln, _) in allow.items() if k not in used]
+    for k, ln in stale:
+        print('error: stale allowlist entry %r (line %d): the finding is gone, delete the entry' % (k, ln))
+    print('contracts: %d finding(s), %d allowlisted, %d warning(s), %d stale allowlist entr%s'
+          % (len(bad), len(findings) - len(bad), len(WARNINGS), len(stale), 'y' if len(stale) == 1 else 'ies'))
+    return 1 if bad or stale else 0
 
 if __name__ == '__main__':
     sys.exit(main())

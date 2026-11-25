@@ -2,7 +2,9 @@
 events|fh:cargo:offroad_hint  # TODO(R2 off-road) in fh_cargo/README.md: no verified road native yet, client never sends it (@roads, no lane dir; reported to core lead)
 events|fh:alife:camp_flipped  # published event, no consumer or README mention; fh_alife has no lane dir, reported to core lead
 
-# -- KNOWN-H1 owner: core, see audit H1: weapon/equipment use routes to rsg-weapons, which is not on disk --
+# -- KNOWN-H1 owner: core, see audit H1: missing event-target resources (rsg-log, rsg-weaponcomp) --
+event-target|rsg-weaponcomp:server:removeComponents  # KNOWN-H1b owner: core, see audit H1 (vendored rsg-weapons Config.WeaponComponents=true but rsg-weaponcomp not vendored)
+event-target|rsg-weaponcomp:server:check_comps  # KNOWN-H1b owner: core, see audit H1 (same: rsg-weaponcomp not vendored)
 event-target|rsg-log:server:CreateLog  # KNOWN-H1 owner: core, see audit H1 (no rsg-log resource; audit trail dropped)
 
 # -- KNOWN-H2 owner: core, see audit H2: useable=true loot/starter/crafting items with no use handler --
@@ -34,7 +36,6 @@ useable|tonic_stamina  # KNOWN-H2 owner: core, see audit H2
 useable|tool_goldpan  # KNOWN-H2 owner: core, see audit H2
 useable|tool_lockpick  # KNOWN-H2 owner: core, see audit H2
 useable|weapon_gun_oil  # KNOWN-H2 owner: core, see audit H2
-useable|weapon_kit_binoculars  # KNOWN-H2 owner: core, see audit H2
 
 # -- vendored rsg-loading ships an empty html/music/ dir, so `files { 'html/music/*' }` matches 0 files --
-manifest|rsg-loading:html/music/*  # vendored rsg-loading (Rexshack-RedM) empty html/music/ dir; not a load break
+manifest|rsg-loading:html/music/*  # owner: core; vendored rsg-loading (Rexshack-RedM) empty html/music/ dir; not a load break
