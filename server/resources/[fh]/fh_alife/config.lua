@@ -51,7 +51,8 @@ FhAlifeConfig = {
     -- eligible claim rolls baseChance x (outlaw-held camps in its region) x (1 - fenceMitigation if a fence is built).
     -- The owner is warned; the squad arrives warnTicks later. Owner at the claim (within raidRadius metres) -> a fight
     -- on foot for up to fightTicks; owner away -> the raiders take up to stealStacks stacks from chest 1, at most
-    -- stealMaxFraction of each stack (always >= 1 item), into the raiding camp's stash. Then they ride home
+    -- stealMaxFraction of each stack (always >= 1 item) into the raiding camp's loot ledger (saved with the A-Life
+    -- state, so it survives restarts); clearing that camp puts the ledger into its stash. Then they ride home
     -- (returnTicks). One raid per claim per cooldownTicks; at most liveCap live raids in the world.
     claimRaids = {
         baseChance = 0.01,      -- per tick, per outlaw-held camp in the region (1% at 60 s/tick)
@@ -67,6 +68,7 @@ FhAlifeConfig = {
         stealMaxFraction = 0.5,
         raidRadius = 60.0,      -- metres: owner "home" at arrival (server/C2 reads it). TODO-verify-in-game.
         bootGraceTicks = 3,     -- server: raid steps skipped after start while fh_homestead shows 0 claims (cache load)
+        lootStacksMax = 20,     -- stolen stacks a camp's loot ledger holds (oldest dropped first, logged)
     },
 
     -- Camp-ownership shortage effects. `item` is the region's initialShortages good (fh_trade config).

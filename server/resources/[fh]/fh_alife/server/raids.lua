@@ -4,9 +4,13 @@
 -- claimRaids.raidRadius), runs FhAlifeRaidRules.tick and applies its effects:
 --   raid_warned / raid_fight / raid_withdrew / raid_cancelled -> a chat notice to the claim owner;
 --   raid_fight -> squads.lua materialises the squad at the claim (FhAlifeServer.raidCenter / raidOwnerOnline);
---   raid_steal -> chest 1 -> the raiding camp's fh_zones stash (fh:camp:<campId>), ONLY through the fh_core container
---     API: snapshot, canFit, removeItem then addItem; a failed add puts the items back in the chest (and, if even that
---     fails, into a drop bag at the claim), so nothing is ever duplicated or destroyed; itemised notice to the owner.
+--   raid_steal -> chest 1 -> the raiding camp's loot ledger (state.raidLoot, saved to KVP; C2c). Chest access ONLY
+--     through the fh_core container API (snapshot, removeItem); an entry is recorded only after a confirmed remove, so
+--     nothing is duplicated. Itemised notice to the owner listing exactly what was recorded.
+--   fh:zones:camp_cleared (main.lua handler -> raidLootDeliver): the camp's ledger is taken (emptied) and each entry
+--     added to the camp stash fh:camp:<campId> (fh_core addItem); refused entries go into one drop bag at the camp's
+--     loot coords; if the bag is refused too they go back into the ledger. Never destroyed, never delivered twice.
+--   Why not the stash at steal time: fh_zones wipes camp stashes on restart/boot (twice-daily restart windows).
 -- Death-watch repels (fh:alife:raid_repelled) are emitted by squads.lua; raidNotify tells the owner.
 -- Natives: GetPlayers, GetPlayerPed, GetEntityCoords, GetResourceState, TriggerClientEvent (unverified in game).
 -- Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game World.
@@ -97,11 +101,6 @@ local function coreSnapshot(ref)
     if not ok then return nil, 'fh_core_error' end
     return items, why
 end
-local function coreCanFit(ref, name, amount)
-    local ok, fits, why = pcall(function() return exports.fh_core:canFit(ref, name, amount) end)
-    if not ok then return false, 'fh_core_error' end
-    return fits == true, why
-end
 local function coreRemove(ref, name, amount)
     local ok, done, why = pcall(function() return exports.fh_core:removeItem(ref, name, amount) end)
     if not ok then return false, 'fh_core_error: ' .. tostring(done) end
@@ -128,29 +127,38 @@ local function slotItem(items, slot)
     return nil
 end
 
----Move one pick. Order: canFit on the camp stash, removeItem from the chest, addItem to the stash. Never an add before
----a confirmed remove (no duplication). A refused add is undone by adding the same items back to the chest; if that is
----refused too, they go into a drop bag at the claim (never destroyed). @return boolean moved, string|nil reason
-local function movePick(chest, stash, pick, info, e)
-    local fits, fitWhy = coreCanFit(stash, pick.name, pick.amount)
-    if not fits then return false, 'stash_full:' .. tostring(fitWhy) end
-    local removed, remWhy = coreRemove(chest, pick.name, pick.amount)
-    if not removed then return false, 'remove_refused:' .. tostring(remWhy) end
-    local added, addWhy = coreAdd(stash, pick.name, pick.amount, info)
-    if added then return true end
+---Put a removed-but-unrecorded pick back (the ledger refused it): chest 1 first, else a drop bag at the claim.
+local function restorePick(chest, pick, info, e, why)
     local back, backWhy = coreAdd(chest, pick.name, pick.amount, info)
     if back then
-        log('^1raid %s steal: add %dx %s to %s refused (%s); returned to %s^7', tostring(e.squad_id), pick.amount,
-            pick.name, stash.id, tostring(addWhy), chest.id)
-        return false, 'add_refused:' .. tostring(addWhy)
+        log('^1raid %s steal: ledger refused %dx %s (%s); returned to %s^7', tostring(e.squad_id), pick.amount,
+            pick.name, tostring(why), chest.id)
+        return
     end
     local coords = plotCoords[e.plot_id] or (H.plotInfo(e.plot_id) or {}).coords
     local bag, bagWhy = coreDropBag(coords, { { name = pick.name, amount = pick.amount, info = info } },
         { owner = e.citizenid, label = 'Dropped by raiders' })
-    log('^1raid %s steal: add %dx %s refused by %s (%s) AND by %s (%s); drop bag %s (%s) at %s^7',
-        tostring(e.squad_id), pick.amount, pick.name, stash.id, tostring(addWhy), chest.id, tostring(backWhy),
-        tostring(bag), tostring(bagWhy), tostring(e.plot_id))
-    return false, 'rollback_refused'
+    log('^1raid %s steal: ledger refused %dx %s (%s) AND %s refused it back (%s); drop bag %s (%s) at %s^7',
+        tostring(e.squad_id), pick.amount, pick.name, tostring(why), chest.id, tostring(backWhy), tostring(bag),
+        tostring(bagWhy), tostring(e.plot_id))
+end
+
+---Move one pick: removeItem from chest 1, then (only on a confirmed remove) append it to the camp's loot ledger.
+---@return boolean moved, string|nil reason
+local function movePick(chest, pick, info, e)
+    local removed, remWhy = coreRemove(chest, pick.name, pick.amount)
+    if not removed then return false, 'remove_refused:' .. tostring(remWhy) end
+    local ok, err, dropped = R.lootAdd(ctx, server.getState(), e.camp_id,
+        { name = pick.name, amount = pick.amount, info = info })
+    if not ok then
+        restorePick(chest, pick, info, e, err)
+        return false, 'ledger_refused:' .. tostring(err)
+    end
+    for _, d in ipairs(dropped) do
+        log('^1raid loot ledger %s full (%d stacks): dropped oldest %dx %s^7', tostring(e.camp_id),
+            R.lootCount(server.getState(), e.camp_id), d.amount, d.name)
+    end
+    return true
 end
 
 local function itemList(moved)
@@ -159,20 +167,12 @@ local function itemList(moved)
     return table.concat(parts, ', ')
 end
 
----raid_steal: read chest 1 and the camp stash (existence) through fh_core, pick with R.pickSteal, move each pick.
----A missing camp stash (fh_zones not running / never registered) skips the steal with a notice.
+---raid_steal: read chest 1 through fh_core, pick with R.pickSteal, move each pick into the camp's loot ledger, save.
+---The owner notice lists exactly the recorded picks (idea-961: never claims items that were not taken).
 ---@return table moved  { { name, amount } }
 local function steal(e)
     local chest = H.chestRef(e.plot_id)
-    local stash = { type = 'chest', id = FhCampRules.stashId(e.camp_id) }
     local who = e.camp_label or tostring(e.camp_id)
-    local stashItems, stashWhy = coreSnapshot(stash)
-    if type(stashItems) ~= 'table' then
-        log('raid %s steal skipped: camp stash %s unavailable (%s)', tostring(e.squad_id), stash.id, tostring(stashWhy))
-        notifyOwner(e.citizenid, ('Riders from %s reached your claim while you were away but rode off empty-handed.')
-            :format(who))
-        return {}
-    end
     local items, why = coreSnapshot(chest)
     if type(items) ~= 'table' then
         log('raid %s steal skipped: chest %s unreadable (%s)', tostring(e.squad_id), chest.id, tostring(why))
@@ -180,24 +180,80 @@ local function steal(e)
             :format(who))
         return {}
     end
+    local picks = R.pickSteal(ctx, items, rng)
     local moved = {}
-    for _, pick in ipairs(R.pickSteal(ctx, items, rng)) do
+    for _, pick in ipairs(picks) do
         local it = slotItem(items, pick.slot)
         local info = it and type(it.info) == 'table' and it.info or nil
-        local ok, reason = movePick(chest, stash, pick, info, e)
+        local ok, reason = movePick(chest, pick, info, e)
         if ok then moved[#moved + 1] = { name = pick.name, amount = pick.amount }
         else log('raid %s steal: %dx %s not taken (%s)', tostring(e.squad_id), pick.amount, pick.name, tostring(reason)) end
     end
-    log('raid %s stole from %s -> %s: %s', tostring(e.squad_id), chest.id, stash.id,
+    log('raid %s stole from %s -> loot ledger %s: %s', tostring(e.squad_id), chest.id, tostring(e.camp_id),
         #moved > 0 and itemList(moved) or 'nothing')
     if #moved > 0 then
+        server.save() -- the removal from chest 1 is done: persist the ledger now, not at the end of the step
         notifyOwner(e.citizenid, ('Riders from %s raided your claim while you were away and took from your chest: %s. '
             .. 'Clear their camp to get it back.'):format(who, itemList(moved)))
-    else
+    elseif #picks == 0 then
         notifyOwner(e.citizenid, ('Riders from %s raided your claim while you were away but found nothing to take.')
+            :format(who))
+    else
+        notifyOwner(e.citizenid, ('Riders from %s raided your claim while you were away but left without taking anything.')
             :format(who))
     end
     return moved
+end
+
+-- ---------------------------------------------------------------- loot delivery (fh:zones:camp_cleared)
+
+local function campLootCoords(campId)
+    local camp = ctx.camps and ctx.camps[campId]
+    if type(camp) ~= 'table' then return nil end
+    return (type(camp.loot) == 'table' and camp.loot.coords) or camp.center
+end
+
+---Deliver a cleared camp's loot ledger into its stash (main.lua's fh:zones:camp_cleared handler calls this after
+---fh_zones' rollIntoStash; the caller saves). The ledger is emptied BEFORE any add (lootTake), so a second clear or a
+---re-entry delivers nothing. Refused adds -> one drop bag at the camp's loot coords; a refused bag -> those entries
+---go back into the ledger for the next clear. @return integer delivered, integer bagged, integer kept
+function server.raidLootDeliver(campId)
+    if type(campId) ~= 'string' then return 0, 0, 0 end
+    local state = server.getState()
+    local entries = R.lootTake(state, campId)
+    if #entries == 0 then return 0, 0, 0 end
+    local stash = { type = 'chest', id = FhCampRules.stashId(campId) }
+    local delivered, failed = {}, {}
+    for _, it in ipairs(entries) do
+        local ok, why = coreAdd(stash, it.name, it.amount, it.info)
+        if ok then delivered[#delivered + 1] = it
+        else
+            log('^1raid loot %s: add %dx %s to %s refused (%s); to the drop bag^7', campId, it.amount, it.name,
+                stash.id, tostring(why))
+            failed[#failed + 1] = it
+        end
+    end
+    local bagged, kept = 0, 0
+    if #failed > 0 then
+        local coords = campLootCoords(campId)
+        local items = {}
+        for _, it in ipairs(failed) do items[#items + 1] = { name = it.name, amount = it.amount, info = it.info } end
+        local bag, bagWhy = coreDropBag(coords, items, { label = 'Raiders\' plunder' })
+        if bag then
+            bagged = #failed
+            log('^1raid loot %s: %d refused stack(s) in drop bag %s at the camp: %s^7', campId, #failed, tostring(bag),
+                itemList(failed))
+        else
+            kept = #failed
+            for _, d in ipairs(R.lootRestore(ctx, state, campId, failed)) do
+                log('^1raid loot ledger %s full: dropped oldest %dx %s^7', campId, d.amount, d.name)
+            end
+            log('^1raid loot %s: drop bag refused (%s); %d stack(s) kept in the ledger for the next clear: %s^7',
+                campId, tostring(bagWhy), #failed, itemList(failed))
+        end
+    end
+    log('raid loot %s delivered to %s: %s', campId, stash.id, #delivered > 0 and itemList(delivered) or 'nothing')
+    return #delivered, bagged, kept
 end
 
 -- ---------------------------------------------------------------- effects

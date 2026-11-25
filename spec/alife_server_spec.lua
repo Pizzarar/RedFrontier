@@ -200,6 +200,7 @@ local function boot(preKvp, ambush, opts)
                 return true
             end,
             createDropBag = function(_, coords, items, opts)
+                if B.failBag then return nil, B.failBag end
                 B.bags[#B.bags + 1] = { coords = coords, items = copy(items), opts = opts }
                 return 'drop:' .. #B.bags
             end,
@@ -556,65 +557,117 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         assert(said(B, 'took from your chest: 1x bread, 1x rope'), 'itemised steal notice')
     end)
 
-    T.it('C2 steal: remove-then-add per pick through fh_core; chest + stash totals conserved, info kept', function()
+    local CAMP = 'heartlands_t1_01'
+    local function ledger(B) return (B.server.getState().raidLoot or {})[CAMP] end
+    local function clearCamp(B) B.handlers['fh:zones:camp_cleared']({ camp_id = CAMP, region_id = 'heartlands',
+        participants = {} }) end
+    local function savedLedger(B)
+        local t = Json.decode(B.kvp.fh_alife_state)
+        return t.raidLoot and t.raidLoot[CAMP] or nil
+    end
+
+    T.it('C2c steal: remove per pick into the camp loot ledger (no stash add); conserved, info kept, saved', function()
         local B = raidBoot(false)
         B.commands.alife(1, {}, 'alife tick 6')
-        T.same({ { 'remove', CHEST, 'bread', 1 }, { 'add', STASH, 'bread', 1 },
-            { 'remove', CHEST, 'rope', 1 }, { 'add', STASH, 'rope', 1 } }, B.invLog)
-        T.eq(3, total(B.containers[CHEST], 'bread')); T.eq(1, total(B.containers[STASH], 'bread'))
-        T.eq(1, total(B.containers[CHEST], 'rope')); T.eq(1, total(B.containers[STASH], 'rope'))
+        T.same({ { 'remove', CHEST, 'bread', 1 }, { 'remove', CHEST, 'rope', 1 } }, B.invLog, 'chest removes only')
+        T.eq(3, total(B.containers[CHEST], 'bread')); T.eq(1, total(B.containers[CHEST], 'rope'))
+        T.same({}, B.containers[STASH], 'the fh_zones stash is not touched at steal time')
+        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(B))
+        T.same(ledger(B), savedLedger(B), 'ledger persisted to KVP')
+        assert(said(B, 'took from your chest: 1x bread, 1x rope. Clear their camp'), 'itemised notice')
+        T.eq(0, #B.bags)
+    end)
+
+    T.it('C2c restart: steal -> KVP -> reboot (stash wiped) -> camp_cleared -> items in the stash, ledger empty',
+        function()
+        local B0 = raidBoot(false)
+        B0.commands.alife(1, {}, 'alife tick 6')
+        local B = boot({ fh_alife_state = B0.kvp.fh_alife_state })
+        T.eq(2, B.raidRules.lootCount(B.server.getState(), CAMP), 'ledger survived the restart')
+        B.containers[STASH] = { [1] = { name = 'worn_rifle', amount = 1 } } -- fh_zones rollIntoStash ran first
+        clearCamp(B)
+        T.same({ { 'add', STASH, 'bread', 1 }, { 'add', STASH, 'rope', 1 } }, B.invLog)
+        T.eq(1, total(B.containers[STASH], 'bread')); T.eq(1, total(B.containers[STASH], 'rope'))
+        T.eq(1, total(B.containers[STASH], 'worn_rifle'), 'with the camp loot')
         local rope
         for _, it in pairs(B.containers[STASH]) do if it.name == 'rope' then rope = it end end
-        T.same({ q = 1 }, rope.info, 'picked stack info carried to the stash')
-        T.eq(0, #B.bags)
+        T.same({ q = 1 }, rope.info, 'info survived the JSON round trip')
+        T.eq(nil, ledger(B)); T.eq(nil, savedLedger(B), 'empty ledger persisted')
+        -- a second clear (or a re-entry) delivers nothing
+        clearCamp(B)
+        T.eq(2, #B.invLog, 'no double delivery')
+        T.eq(1, total(B.containers[STASH], 'bread'))
+        local B2 = boot({ fh_alife_state = B.kvp.fh_alife_state })
+        B2.containers[STASH] = {}
+        clearCamp(B2)
+        T.eq(0, #B2.invLog, 'nothing re-delivered after another restart')
     end)
 
-    T.it('C2 steal: a refused add puts the items back in the chest (no loss, no dup)', function()
-        local B = raidBoot(false)
-        B.failAdd[STASH] = 'fh_too_heavy'
-        B.commands.alife(1, {}, 'alife tick 6')
-        T.same({ { 'remove', CHEST, 'bread', 1 }, { 'add', STASH, 'bread', 1 }, { 'add', CHEST, 'bread', 1 },
-            { 'remove', CHEST, 'rope', 1 }, { 'add', STASH, 'rope', 1 }, { 'add', CHEST, 'rope', 1 } }, B.invLog)
-        T.eq(4, total(B.containers[CHEST], 'bread')); T.eq(2, total(B.containers[CHEST], 'rope'))
-        T.eq(0, total(B.containers[STASH], 'bread')); T.eq(0, total(B.containers[STASH], 'rope'))
-        T.eq(0, #B.bags)
-        assert(said(B, 'found nothing to take'), 'owner told nothing was taken')
-        local logged = false
-        for _, l in ipairs(B.printed) do if l:find('returned to ' .. CHEST, 1, true) then logged = true end end
-        assert(logged, 'rollback logged')
-    end)
-
-    T.it('C2 steal: add refused by stash AND chest -> drop bag at the claim (never destroyed)', function()
-        local B = raidBoot(false)
-        B.failAdd[STASH], B.failAdd[CHEST] = 'fh_too_heavy', 'fh_too_heavy'
-        B.commands.alife(1, {}, 'alife tick 6')
-        T.eq(2, #B.bags)
-        T.same({ { name = 'bread', amount = 1 } }, B.bags[1].items)
-        T.same({ { name = 'rope', amount = 1, info = { q = 1 } } }, B.bags[2].items)
-        T.eq(CLAIM_AT.x, B.bags[1].coords.x); T.eq('CID1', B.bags[1].opts.owner)
-        T.eq(3, total(B.containers[CHEST], 'bread')); T.eq(0, total(B.containers[STASH], 'bread'))
-    end)
-
-    T.it('C2 steal: a refused remove never adds (no duplication); a full stash is never touched', function()
+    T.it('C2c steal: a refused remove records nothing; the notice says nothing was taken', function()
         local B = raidBoot(false)
         B.failRemove[CHEST] = 'fh_refused'
         B.commands.alife(1, {}, 'alife tick 6')
-        for _, op in ipairs(B.invLog) do T.eq('remove', op[1], 'no add after a refused remove') end
-        T.eq(4, total(B.containers[CHEST], 'bread')); T.eq(0, total(B.containers[STASH], 'bread'))
-        local B2 = raidBoot(false)
-        B2.noFit[STASH] = 'fh_too_heavy'
-        B2.commands.alife(1, {}, 'alife tick 6')
-        T.eq(0, #B2.invLog, 'canFit refused: no remove at all')
+        for _, op in ipairs(B.invLog) do T.eq('remove', op[1], 'no add at steal time') end
+        T.eq(4, total(B.containers[CHEST], 'bread')); T.eq(2, total(B.containers[CHEST], 'rope'))
+        T.eq(nil, ledger(B), 'nothing recorded')
+        assert(said(B, 'left without taking anything'), 'truthful notice')
+        T.eq(nil, said(B, 'took from your chest'), 'never claims items it did not take')
+        clearCamp(B)
+        T.eq(0, total(B.containers[STASH], 'bread'), 'nothing delivered')
     end)
 
-    T.it('C2 steal: missing camp stash (fh_zones down) skips the steal with a notice, chest untouched', function()
+    T.it('C2c clear: stash add refused -> drop bag at the camp loot coords; bag refused -> kept in the ledger',
+        function()
         local B = raidBoot(false)
-        B.containers[STASH] = nil
+        B.commands.alife(1, {}, 'alife tick 6')
+        B.failAdd[STASH] = 'fh_too_heavy'
+        clearCamp(B)
+        T.eq(1, #B.bags)
+        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, B.bags[1].items)
+        local at = B.server.ctx.camps[CAMP].loot.coords
+        T.eq(at.x, B.bags[1].coords.x); T.eq(at.y, B.bags[1].coords.y)
+        T.eq(nil, ledger(B), 'bagged entries leave the ledger')
+        clearCamp(B)
+        T.eq(1, #B.bags, 'second clear: no second bag')
+        -- bag refused too: the entries stay in the ledger (never destroyed) and the next clear delivers them
+        local B2 = raidBoot(false)
+        B2.commands.alife(1, {}, 'alife tick 6')
+        B2.failAdd[STASH], B2.failBag = 'fh_too_heavy', 'fh_refused'
+        clearCamp(B2)
+        T.eq(0, #B2.bags)
+        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(B2))
+        T.same(ledger(B2), savedLedger(B2))
+        B2.failAdd[STASH], B2.failBag = nil, nil
+        clearCamp(B2)
+        T.eq(1, total(B2.containers[STASH], 'bread')); T.eq(1, total(B2.containers[STASH], 'rope'))
+        T.eq(nil, ledger(B2))
+    end)
+
+    T.it('C2c steal: chest unreadable -> nothing taken, owner told they rode off empty-handed', function()
+        local B = raidBoot(false)
+        B.containers[CHEST] = nil
         B.commands.alife(1, {}, 'alife tick 6')
         T.eq(0, #B.invLog)
-        T.eq(4, total(B.containers[CHEST], 'bread'))
+        T.eq(nil, ledger(B))
         assert(said(B, 'rode off empty-handed'), 'skip notice')
         T.eq('steal', raids(B)[1].mode, 'raid still rides home')
+    end)
+
+    T.it('C2c cap: the ledger keeps lootStacksMax stacks per camp, oldest dropped (logged); /alife shows counts',
+        function()
+        local B = raidBoot(false)
+        B.cfg.claimRaids.lootStacksMax = 3
+        local st = B.server.getState()
+        st.raidLoot[CAMP] = { { name = 'old1', amount = 1 }, { name = 'old2', amount = 1 } }
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.same({ 'old2', 'bread', 'rope' }, (function()
+            local o = {} for _, e in ipairs(ledger(B)) do o[#o + 1] = e.name end return o end)())
+        local logged = false
+        for _, l in ipairs(B.printed) do if l:find('dropped oldest 1x old1', 1, true) then logged = true end end
+        assert(logged, 'drop logged')
+        B.commands.alife(1, {}, 'alife')
+        assert(said(B, 'raid loot: ' .. CAMP .. '=3'), '/alife ledger count')
+        B.cfg.claimRaids.lootStacksMax = 20
     end)
 
     T.it('C2 fight: owner home -> squad spawns at the claim with owner tag alife_raid and is not swept away', function()

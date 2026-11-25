@@ -501,4 +501,69 @@ case('describeRaid: one /alife line', function()
     assert(line:find('^sq1 raid p1 by outlaws x4 from .+ warn %(eta tick %d+%)$'), line)
 end)
 
+-- ---------------------------------------------------------------- C2c loot ledger
+-- Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game World.
+
+local function names(list) local o = {} for _, e in ipairs(list or {}) do o[#o + 1] = e.name end return o end
+
+case('C2c ledger: lootAdd appends oldest-first, serialize round trip (restart), lootTake empties it', function()
+    local st = Rules.newState()
+    eq(true, (R.lootAdd(ctx, st, HEART[1], { name = 'bread', amount = 2 })))
+    eq(true, (R.lootAdd(ctx, st, HEART[1], { name = 'rope', amount = 1, info = { q = 7 } })))
+    eq(true, (R.lootAdd(ctx, st, HEART[2], { name = 'gold', amount = 1 })))
+    eq(2, R.lootCount(st, HEART[1])); eq(0, R.lootCount(st, 'nope'))
+    eq('raid loot: ' .. HEART[1] .. '=2 ' .. HEART[2] .. '=1', R.describeLoot(st))
+    local st2, err = R.deserialize(R.serialize(st), ctx)
+    eq(nil, err)
+    same(st.raidLoot, st2.raidLoot)
+    same({ { name = 'bread', amount = 2 }, { name = 'rope', amount = 1, info = { q = 7 } } }, R.lootTake(st2, HEART[1]))
+    eq(0, R.lootCount(st2, HEART[1]))
+    same({}, R.lootTake(st2, HEART[1]), 'a second take gets nothing')
+    eq('raid loot: ' .. HEART[2] .. '=1', R.describeLoot(st2))
+    eq(nil, R.serialize(st2).raidLoot[HEART[1]], 'emptied ledger is not saved')
+    eq('raid loot: none', R.describeLoot(Rules.newState()))
+end)
+
+case('C2c ledger: cap lootStacksMax per camp drops the oldest first (returned for logging)', function()
+    eq(20, RC.lootStacksMax); eq(20, R.DEFAULTS.lootStacksMax)
+    local st = Rules.newState()
+    for i = 1, 20 do
+        local ok, _, dropped = R.lootAdd(ctx, st, HEART[1], { name = 'i' .. i, amount = 1 })
+        eq(true, ok); same({}, dropped)
+    end
+    local ok, _, dropped = R.lootAdd(ctx, st, HEART[1], { name = 'i21', amount = 3 })
+    eq(true, ok)
+    same({ { name = 'i1', amount = 1 } }, dropped)
+    eq(20, R.lootCount(st, HEART[1]))
+    eq('i2', st.raidLoot[HEART[1]][1].name); eq('i21', st.raidLoot[HEART[1]][20].name)
+    eq(0, R.lootCount(st, HEART[2]), 'cap is per camp')
+end)
+
+case('C2c ledger: bad entries refused (nothing recorded); lootRestore puts entries back in front', function()
+    local st = Rules.newState()
+    for _, bad in ipairs({ { name = '', amount = 1 }, { name = 'x', amount = 0 }, { name = 'x', amount = 0 / 0 },
+        { amount = 2 }, 'junk' }) do
+        local ok, err, dropped = R.lootAdd(ctx, st, HEART[1], bad)
+        eq(false, ok); eq('fh_alife_bad_loot', err); same({}, dropped)
+    end
+    eq('fh_alife_bad_camp', select(2, R.lootAdd(ctx, st, nil, { name = 'x', amount = 1 })))
+    eq(0, R.lootCount(st, HEART[1]))
+    R.lootAdd(ctx, st, HEART[1], { name = 'new', amount = 1 })
+    same({}, R.lootRestore(ctx, st, HEART[1], { { name = 'a', amount = 1 }, { name = 'b', amount = 2 } }))
+    same({ 'a', 'b', 'new' }, names(st.raidLoot[HEART[1]]))
+end)
+
+case('C2c ledger: a v3 save without raidLoot (C1/C2) loads with an empty ledger; junk entries dropped', function()
+    local st, err = R.deserialize({ version = 3, tick = 5, owners = {}, squads = {}, raidCooldowns = {} }, ctx)
+    eq(nil, err); same({}, st.raidLoot)
+    R.lootAdd(ctx, st, HEART[1], { name = 'bread', amount = 1 })
+    eq(1, R.lootCount(st, HEART[1]), 'old save then raids normally')
+    local st2 = R.deserialize({ version = 3, raidLoot = { [HEART[1]] = { { name = 'ok', amount = 2.5 },
+        { name = 'bad', amount = -1 }, 'junk', { name = 'info', amount = 1, info = 'str' } },
+        [HEART[2]] = { { amount = 1 } }, [7] = { { name = 'num', amount = 1 } }, x = 'notalist' } }, ctx)
+    same({ [HEART[1]] = { { name = 'ok', amount = 2 }, { name = 'info', amount = 1 } } }, st2.raidLoot)
+    local st3 = R.deserialize({ version = 2, tick = 1 }, ctx)
+    same({}, st3.raidLoot)
+end)
+
 T.finish()

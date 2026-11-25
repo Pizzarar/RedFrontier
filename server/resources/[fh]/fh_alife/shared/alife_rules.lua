@@ -25,7 +25,9 @@
 -- a-life-03 C1 (wilderness-claim raids, shared/raid_rules.lua). Raid squads live in state.squads with goal 'raid' so
 -- onSquadKill's regionPressure and the B2 death watch apply to them unchanged; raid_rules owns their lifecycle, so
 -- tick() here never advances or resolves a 'raid' squad. Save format v3 = v2 + raidCooldowns { [plotId] = untilTick }
--- (+ 'raid' squads). v1 and v2 saves load (no raids, no cooldowns).
+-- (+ 'raid' squads). v1 and v2 saves load (no raids, no cooldowns). v3 also carries raidLoot (a-life-03 C2c, optional:
+-- a v3 save without it loads with an empty ledger): { [campId] = { { name, amount, info? }, ... } } oldest first, the
+-- goods raiders took from claims, delivered to the camp stash when the camp is cleared (raid_rules lootAdd/lootTake).
 -- Law detection: a faction is law if its `kind == 'law'`; when `kind` is absent, fall back to { lawmen, rhodes_law }.
 local M = {}
 
@@ -116,14 +118,22 @@ end
 
 function M.newState()
     return { version = M.VERSION, tick = 0, owners = {}, squads = {}, nextSquadId = 1, regionPressure = {},
-        raidCooldowns = {} }
+        raidCooldowns = {}, raidLoot = {} }
 end
 
 ---Plain-table serialization (JSON-safe; the server json.encode's it for KVP). Deserialize reverses it.
 function M.serialize(state)
     return { version = state.version, tick = state.tick, owners = state.owners, squads = state.squads,
         nextSquadId = state.nextSquadId, regionPressure = state.regionPressure or {},
-        raidCooldowns = state.raidCooldowns or {} }
+        raidCooldowns = state.raidCooldowns or {}, raidLoot = state.raidLoot or {} }
+end
+
+---One raid-loot ledger entry, normalised: { name, amount (integer >= 1), info (table or nil) } or nil when malformed.
+function M.cleanLootEntry(e)
+    if type(e) ~= 'table' or type(e.name) ~= 'string' or e.name == '' or not finite(e.amount) then return nil end
+    local n = math.floor(e.amount)
+    if n < 1 then return nil end
+    return { name = e.name, amount = n, info = type(e.info) == 'table' and e.info or nil }
 end
 
 local PHASES = { travel = true, hold = true, ['return'] = true }
@@ -206,6 +216,18 @@ function M.deserialize(t, ctx)
         for plotId, untilTick in pairs(t.raidCooldowns) do
             local n = nonNegInt(untilTick)
             if type(plotId) == 'string' and n then s.raidCooldowns[plotId] = n end
+        end
+    end
+    if type(t.raidLoot) == 'table' then
+        for campId, list in pairs(t.raidLoot) do
+            if type(campId) == 'string' and type(list) == 'table' then
+                local out = {}
+                for i = 1, #list do
+                    local e = M.cleanLootEntry(list[i])
+                    if e then out[#out + 1] = e end
+                end
+                if #out > 0 then s.raidLoot[campId] = out end
+            end
         end
     end
     local effects = ctx and M.pruneSquads(ctx, s) or {}

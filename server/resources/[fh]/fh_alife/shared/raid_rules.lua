@@ -22,7 +22,12 @@
 --      phase = 'warn'|'fight'|'return', mode = nil|'fight'|'steal', travel, etaTick, cancelled = reason|nil }
 --  * lifecycle: warn --(warnTicks)--> arrive: owner home -> 'fight' (fightTicks on foot at the claim, squad goal
 --    'raid', spawn owner tag OWNER_TAG) then withdraw; owner away -> steal (effect raid_steal; the server picks with
---    pickSteal and moves chest 1 -> the camp's stash) -> 'return' (travel ticks) -> removed (raid_returned).
+--    pickSteal, removes from chest 1 and records each confirmed removal in the camp's loot ledger, lootAdd) ->
+--    'return' (travel ticks) -> removed (raid_returned).
+--  * loot ledger (C2c): state.raidLoot[campId] = { { name, amount, info? }, ... } oldest first, persisted with the
+--    save (not in the fh_zones stash: fh_zones wipes camp stashes on restart/boot). At most lootStacksMax entries per
+--    camp, the oldest dropped first. On fh:zones:camp_cleared the server lootTake's the camp's ledger (emptied at
+--    once, so a second clear or a re-entry delivers nothing) and adds the entries to the camp stash.
 --    Before 'return', at any phase: owner offline, plot gone / no longer raidable, or owner changed -> cancelled
 --    (straight to 'return', nothing stolen). During 'warn' the raiding camp lost (law took it) -> cancelled too.
 --  * repelled: onSquadKill wiping a raid squad -> squad_wiped + raid_repelled; regionPressure exactly as a-life-02.
@@ -38,7 +43,7 @@ M.OWNER_TAG = 'alife_raid' -- C2: requestSpawn owner = { kind = OWNER_TAG, id = 
 -- Fallbacks when FhAlifeConfig.claimRaids lacks a knob (config.lua documents each).
 M.DEFAULTS = {
     baseChance = 0.01, fenceMitigation = 0.5, cooldownTicks = 180, liveCap = 2, warnTicks = 5, fightTicks = 10,
-    returnTicks = 3, strengthMin = 3, strengthMax = 5, stealStacks = 2, stealMaxFraction = 0.5,
+    returnTicks = 3, strengthMin = 3, strengthMax = 5, stealStacks = 2, stealMaxFraction = 0.5, lootStacksMax = 20,
 }
 
 local ROLL = 10000 -- odds resolution: chance is rolled as rng(1, ROLL) <= chance * ROLL
@@ -368,9 +373,71 @@ function M.pickSteal(ctx, items, rng)
     return picks
 end
 
+-- ---------------------------------------------------------------- loot ledger (C2c)
+
+local function trimLoot(ctx, list)
+    local dropped = {}
+    local cap = intKnob(ctx, 'lootStacksMax', 1)
+    while #list > cap do dropped[#dropped + 1] = table.remove(list, 1) end
+    return dropped
+end
+
+---Append one stolen stack to a camp's ledger (newest last), then drop the oldest entries over lootStacksMax.
+---@return boolean ok, string|nil err ('fh_alife_bad_camp' | 'fh_alife_bad_loot'), table dropped  oldest-first entries
+function M.lootAdd(ctx, state, campId, entry)
+    if type(campId) ~= 'string' or campId == '' then return false, 'fh_alife_bad_camp', {} end
+    local e = Rules.cleanLootEntry(entry)
+    if not e then return false, 'fh_alife_bad_loot', {} end
+    state.raidLoot = state.raidLoot or {}
+    local list = state.raidLoot[campId] or {}
+    state.raidLoot[campId] = list
+    list[#list + 1] = e
+    return true, nil, trimLoot(ctx, list)
+end
+
+---Take (and remove) a camp's whole ledger. The ledger is empty before the caller delivers anything, so a second
+---clear or a re-entrant call gets {}. @return table entries  oldest first
+function M.lootTake(state, campId)
+    local list = state.raidLoot and state.raidLoot[campId]
+    if state.raidLoot then state.raidLoot[campId] = nil end
+    return type(list) == 'table' and list or {}
+end
+
+---Put undelivered entries back at the front of a camp's ledger (they are older than anything added since), then
+---trim to lootStacksMax. @return table dropped
+function M.lootRestore(ctx, state, campId, entries)
+    if type(campId) ~= 'string' or type(entries) ~= 'table' or #entries == 0 then return {} end
+    state.raidLoot = state.raidLoot or {}
+    local list = {}
+    for _, e in ipairs(entries) do
+        local c = Rules.cleanLootEntry(e)
+        if c then list[#list + 1] = c end
+    end
+    for _, e in ipairs(state.raidLoot[campId] or {}) do list[#list + 1] = e end
+    local dropped = trimLoot(ctx, list)
+    state.raidLoot[campId] = #list > 0 and list or nil
+    return dropped
+end
+
+---Ledger stack count of one camp.
+function M.lootCount(state, campId)
+    local list = state.raidLoot and state.raidLoot[campId]
+    return type(list) == 'table' and #list or 0
+end
+
+---One /alife part: "raid loot: heartlands_t1_01=2 scarlett_meadows_t1_01=1" (camps by id) or "raid loot: none".
+function M.describeLoot(state)
+    local parts = {}
+    for _, campId in ipairs(sortedKeys(state.raidLoot)) do
+        local n = M.lootCount(state, campId)
+        if n > 0 then parts[#parts + 1] = ('%s=%d'):format(campId, n) end
+    end
+    return 'raid loot: ' .. (#parts > 0 and table.concat(parts, ' ') or 'none')
+end
+
 -- ---------------------------------------------------------------- save
 
----Same plain table as FhAlifeRules.serialize (v3: includes raid squads and raidCooldowns).
+---Same plain table as FhAlifeRules.serialize (v3: includes raid squads, raidCooldowns and the raidLoot ledger).
 M.serialize = Rules.serialize
 
 local function cleanRaid(sq)

@@ -86,7 +86,8 @@ FhAlifeServer = {
     getState = function() return state end, -- state is reassigned by load()
     save = save,
     -- rng = nil: raids.lua uses math.random unless a test sets FhAlifeServer.rng(lo, hi).
-    -- raidStep / raidCommand / raidNotify / raidCenter / raidOwnerOnline: set by server/raids.lua (a-life-03 C2).
+    -- raidStep / raidCommand / raidNotify / raidCenter / raidOwnerOnline / raidLootDeliver: set by server/raids.lua
+    -- (a-life-03 C2, C2c).
 }
 
 ---One sim step: FhAlifeRules.tick(ctx, state, 1), then the claim-raid step right after it (server/raids.lua runs
@@ -119,6 +120,11 @@ AddEventHandler('fh:zones:camp_cleared', function(data)
     if type(data) ~= 'table' or type(data.camp_id) ~= 'string' then return end
     local effects = rules.onCampCleared(ctx, state, data.camp_id, data.participants, nil, notify)
     applyEffects(effects)
+    -- a-life-03 C2c: the camp's raid loot ledger goes into its stash (fired after fh_zones' rollIntoStash)
+    if FhAlifeServer.raidLootDeliver then
+        local ok, err = pcall(FhAlifeServer.raidLootDeliver, data.camp_id)
+        if not ok then log('raid loot delivery error for %s: %s', data.camp_id, tostring(err)) end
+    end
     save()
 end)
 
@@ -170,6 +176,7 @@ local function statusLine()
     end
     table.sort(sqs)
     for _, s in ipairs(sqs) do parts[#parts + 1] = s end
+    parts[#parts + 1] = raidRules.describeLoot(state) -- a-life-03 C2c: loot ledger stacks per camp
     -- Ambush nodes per region (rules.describeAmbush prints "<region>: no ambush nodes" for a region with none).
     local rids = {}
     for _, camp in pairs(ctx.camps) do rids[camp.region] = true end
