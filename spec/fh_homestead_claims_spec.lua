@@ -260,8 +260,6 @@ T.describe('fh_homestead claims per class (H7)', function()
     end)
 end)
 
-T.finish()
-
 T.describe('fh_homestead claimsReady (idea-958)', function()
     case('false before the boot load, true after it with 0 claims', function()
         local W = newWorld(nil, { deferLoad = true })
@@ -291,4 +289,16 @@ T.describe('fh_homestead claimsReady (idea-958)', function()
         T.eq(nil, W.db.plots.claim_b)
         W.consistent()
     end)
+
+    case('load failure: the select throws, claimsReady stays false', function()
+        local W = newWorld({ { plot_id = 'claim_a', citizenid = 'A' } }, { deferLoad = true })
+        W.fail.select_plots = true
+        T.eq(false, (pcall(W.load)))
+        T.eq(false, W.ex.claimsReady())
+        W.fail.select_plots = nil
+        W.load()
+        T.eq(true, W.ex.claimsReady())
+    end)
 end)
+
+T.finish()

@@ -32,6 +32,7 @@ return function(T, cfg)
         local function db(sql, p)
             p = p or {}
             if sql:find('^SELECT %* FROM fh_plots') then
+                if W.fail.select_plots then error('db down') end
                 local out = {}
                 for pid, r in pairs(W.db.plots) do
                     -- opts.noClassColumn: a DB from before migration 0018 has no class key at all
