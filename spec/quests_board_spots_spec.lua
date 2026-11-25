@@ -4,15 +4,16 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local case = T.it
 local B = dofile(here .. '../server/resources/[fh]/fh_quests/shared/board_spots.lua')
 
-case('board spots cover the known regions with coordinates', function()
-    T.eq(2, #B.spots)
-    local regions = {}
-    for _, s in ipairs(B.spots) do regions[s.region_id] = true end
-    assert(regions.heartlands, 'heartlands board missing')
-    assert(regions.scarlett_meadows, 'scarlett_meadows board missing')
+case('board spots cover every region (quests-02 C5) with coordinates', function()
+    local regions = require('regions')
+    T.eq(15, #B.spots)
+    local covered = {}
     for _, s in ipairs(B.spots) do
+        assert(regions.regions[s.region_id], s.region_id .. ' is not a known region')
+        covered[s.region_id] = true
         assert(type(s.coords.x) == 'number' and type(s.coords.y) == 'number' and type(s.coords.z) == 'number')
     end
+    for id in pairs(regions.regions) do assert(covered[id], id .. ' board missing') end
 end)
 
 case('regionFor picks the nearest board to the player', function()

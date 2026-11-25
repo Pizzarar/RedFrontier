@@ -9,6 +9,46 @@ local M = {
         { id = 'scarlett_meadows_board', region_id = 'scarlett_meadows', label = 'Jobs board',
           coords = { x = 1288.0, y = -1278.0, z = 77.0 }, -- Rhodes general store / trade post (unverified)
           model = 'p_notice_board01x' }, -- model unverified; if invalid only the target zone is made
+        -- quests-02 C5: one board spot per region with data. Coords are TODO-verify-in-game, near each region's town.
+        { id = 'bayou_nwa_board', region_id = 'bayou_nwa', label = 'Jobs board',
+          coords = { x = 2695.0, y = -1448.0, z = 45.0 }, -- near Saint Denis
+          model = 'p_notice_board01x' },
+        { id = 'great_plains_board', region_id = 'great_plains', label = 'Jobs board',
+          coords = { x = -859.0, y = -1338.0, z = 44.0 }, -- near Blackwater
+          model = 'p_notice_board01x' },
+        { id = 'bluewater_marsh_board', region_id = 'bluewater_marsh', label = 'Jobs board',
+          coords = { x = 2300.0, y = -600.0, z = 20.0 }, -- near the Bluewater Marsh trade post
+          model = 'p_notice_board01x' },
+        { id = 'roanoke_ridge_board', region_id = 'roanoke_ridge', label = 'Jobs board',
+          coords = { x = 2921.0, y = 1290.0, z = 96.0 }, -- near Annesburg
+          model = 'p_notice_board01x' },
+        { id = 'grizzlies_east_board', region_id = 'grizzlies_east', label = 'Jobs board',
+          coords = { x = 1673.0, y = 1900.0, z = 200.0 }, -- near Wapiti
+          model = 'p_notice_board01x' },
+        { id = 'grizzlies_west_board', region_id = 'grizzlies_west', label = 'Jobs board',
+          coords = { x = -1300.0, y = 1600.0, z = 240.0 }, -- near Colter
+          model = 'p_notice_board01x' },
+        { id = 'cumberland_forest_board', region_id = 'cumberland_forest', label = 'Jobs board',
+          coords = { x = -810.0, y = 1340.0, z = 130.0 }, -- near Bacchus Station
+          model = 'p_notice_board01x' },
+        { id = 'big_valley_board', region_id = 'big_valley', label = 'Jobs board',
+          coords = { x = -1814.0, y = -440.0, z = 120.0 }, -- near Strawberry
+          model = 'p_notice_board01x' },
+        { id = 'tall_trees_board', region_id = 'tall_trees', label = 'Jobs board',
+          coords = { x = -1795.0, y = -1600.0, z = 150.0 }, -- near Manzanita Post
+          model = 'p_notice_board01x' },
+        { id = 'hennigans_stead_board', region_id = 'hennigans_stead', label = 'Jobs board',
+          coords = { x = -2283.0, y = -2493.0, z = 60.0 }, -- near MacFarlane's Ranch
+          model = 'p_notice_board01x' },
+        { id = 'cholla_springs_board', region_id = 'cholla_springs', label = 'Jobs board',
+          coords = { x = -3711.0, y = -2581.0, z = 70.0 }, -- near Armadillo
+          model = 'p_notice_board01x' },
+        { id = 'gaptooth_ridge_board', region_id = 'gaptooth_ridge', label = 'Jobs board',
+          coords = { x = -5522.0, y = -2938.0, z = 90.0 }, -- near Tumbleweed
+          model = 'p_notice_board01x' },
+        { id = 'rio_bravo_board', region_id = 'rio_bravo', label = 'Jobs board',
+          coords = { x = -2000.0, y = -3000.0, z = 55.0 }, -- near the Rio Bravo trade post
+          model = 'p_notice_board01x' },
     },
     DEFAULT_REGION = 'heartlands',
 }
