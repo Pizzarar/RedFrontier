@@ -352,7 +352,7 @@ describe('hunting skin: H8 raw_meat grant', function()
         eq(false, ok2)
         eq(1, #Wfail.adds); eq('pelt_deer', Wfail.adds[1].name)
     end)
-    it('raw_meat falls back backpack -> saddlebag -> wagon', function()
+    it('raw_meat falls back backpack -> saddlebag', function()
         local W = world({ wagon = wagonAt(3), refuse = { backpack = 'no_space' } })
         local ok, res = W.skin()
         assert(ok, tostring(res))
@@ -360,6 +360,23 @@ describe('hunting skin: H8 raw_meat grant', function()
         eq('pelt_deer', W.adds[1].name)
         eq('raw_meat', W.adds[2].name); eq('backpack', W.adds[2].ref.type)
         eq('raw_meat', W.adds[3].name); eq('saddlebag', W.adds[3].ref.type)
+    end)
+    it('raw_meat falls back to the wagon when backpack and saddlebag refuse it', function()
+        local W = world({ wagon = wagonAt(3) })
+        local origAdd = W.deps.addItem
+        W.deps.addItem = function(ref, name, n, info)
+            if name == 'raw_meat' and (ref.type == 'backpack' or ref.type == 'saddlebag') then
+                W.adds[#W.adds + 1] = { ref = ref, name = name, n = n, info = info }
+                return false, 'no_space'
+            end
+            return origAdd(ref, name, n, info)
+        end
+        local ok, res = W.skin()
+        assert(ok, tostring(res))
+        eq('pelt_deer', W.adds[1].name)
+        eq('wagon', res.meat.container); eq(2, res.meat.amount)
+        local last = W.adds[#W.adds]
+        eq('raw_meat', last.name); eq('wagon', last.ref.type)
     end)
     it('no room for raw_meat keeps the pelt, skips meat, marks skinned, and emits meat = 0', function()
         local W = world({ wagon = wagonAt(3) })
@@ -450,7 +467,11 @@ end)
 describe('H8 meat size class', function()
     it('MeatSizeClass equals the size class fh_core resolves for MeatItem', function()
         local Items = require('items') -- fh_core/shared/items.lua
-        local def = assert(Items.resolve(cfg.MeatItem, { label = 'Raw Meat', weight = 0 })) -- rsg raw_meat carries no size_class
+        RSGShared = nil
+        dofile(here .. '../server/resources/[rsg]/rsg-core/shared/items.lua') -- the real rsg item table
+        local real = RSGShared and RSGShared.Items and RSGShared.Items[cfg.MeatItem]
+        assert(real, 'rsg-core has no item ' .. tostring(cfg.MeatItem))
+        local def = assert(Items.resolve(cfg.MeatItem, real))
         eq(def.size_class, cfg.MeatSizeClass)
     end)
 end)
