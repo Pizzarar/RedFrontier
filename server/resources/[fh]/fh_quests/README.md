@@ -46,6 +46,7 @@ migration (`server/migrations/0007_quest_state.sql`) applied by
     money = 25,                                   -- whole dollars, fh_economy.pay
     rep   = { region_id = 'heartlands', delta = 5 }, -- fh_economy.rep (non-zero integer)
     items = { { name = 'bread', amount = 2, info = nil } }, -- player inventory via fh_core addItem
+    outfit = { male = 'quest_hale_male', female = 'quest_hale_female' }, -- fh_tailor wardrobe ids (either may be omitted)
   },
 }
 ```
@@ -153,7 +154,7 @@ All player exports take `src` (player server id) and resolve the citizenid thems
 | `fh_bad_def`, `fh_bad_id`, `fh_bad_kind`, `fh_bad_title`, `fh_bad_giver`, `fh_bad_region`, `fh_bad_prereq`, `fh_prereq_self`, `fh_bad_repeat`, `fh_no_steps`, `fh_too_many_steps` | `registerQuest`, `acceptOffer` | `engine.validate`: the def's own fields |
 | `fh_bad_steps` | `registerQuest`, `acceptOffer` | `steps` is not a dense 1..n list (holes or non-integer keys) |
 | `fh_bad_step@stepN`, `fh_bad_step_id@stepN`, `fh_duplicate_step_id@stepN`, `fh_bad_step_text@stepN`, `fh_bad_step_count@stepN`, `fh_bad_talk@stepN`, `fh_bad_talk_lines@stepN`, `fh_bad_step_event@stepN`, `fh_bad_<pred>@<field>@stepN` | `registerQuest`, `acceptOffer` | a step, its id, its talk block, its event (not on the intake / job events) or a `where` predicate |
-| `fh_bad_rewards`, `fh_unknown_reward:<k>`, `fh_bad_money`, `fh_bad_rep_region`, `fh_bad_rep_delta`, `fh_bad_items`, `fh_bad_item`, `fh_bad_item_amount`, `fh_bad_item_info` | `registerQuest`, `acceptOffer` | the rewards block |
+| `fh_bad_rewards`, `fh_unknown_reward:<k>`, `fh_bad_money`, `fh_bad_rep_region`, `fh_bad_rep_delta`, `fh_bad_items`, `fh_bad_item`, `fh_bad_item_amount`, `fh_bad_item_info`, `fh_bad_outfit` | `registerQuest`, `acceptOffer` | the rewards block |
 | `fh_reserved_id` | `registerQuest` | ids starting with `job:` are reserved for accepted jobs |
 | `fh_bad_job_name`, `fh_bad_hooks`, `fh_bad_hook:<hook>`, `fh_bad_job_events`, `fh_bad_job_event:<name>` | `registerJobType` | name not `[a-z0-9_]+` (max 32), hooks not a table, `offers` missing or a hook not callable, `events` not a list of `fh:*` names (never `fh:quests:talked`) |
 | `fh_unknown_quest` | `start` | no registered quest with that id |
@@ -210,7 +211,7 @@ Internal codes that only reach the server log: `fh_bad_row`, `fh_bad_row_citizen
 | `count` | no | matching events needed (default 1) |
 | `cooldown_min` | no | minutes before the same offer can be taken again after completion (default **60**, one board rotation; `0` allowed) |
 | `text` | no | step / board text (defaults to `title`) |
-| `rewards` | no | the reward shape of quest defs (`money`, `rep`, `items`) |
+| `rewards` | no | the reward shape of quest defs (`money`, `rep`, `items`, `outfit`) |
 | `min_tier` | no | minimum progression tier required to see or accept the offer; floors any number ≥1 with no upper cap (default `1`; content uses 1–3) |
 
 **Accepted jobs.** An accepted offer becomes a one-step repeatable quest with id `job:<name>:<offer key>`, kind
@@ -553,11 +554,23 @@ Storage notes:
 - Money and rep only via `exports.fh_economy:pay(src, money, 'quest:<id>', region_id)` and
   `exports.fh_economy:rep(src, rep.region_id, rep.delta, 'quest:<id>')`; items via
   `exports.fh_core:addItem({ type = 'backpack', id = src }, name, amount, info)`. No money/rep without a ledger row.
-- Parts are paid in order `money`, `rep`, `item:<i>`, each exactly once (`shared/rewards.lua`): mark the part
+- Parts are paid in order `money`, `rep`, `item:<i>`, `outfit`, each exactly once (`shared/rewards.lua`): mark the part
   in flight and save, call the payer, then save it paid. A crash in between is settled on the next run from
   `fh_ledger` (money/rep) or assumed delivered (items). A refusal (player offline, fh_economy down, refused)
   stops the run; the rest stays owed and is retried on the next character load and before the next `start` /
   `acceptOffer` of that quest. Payouts only happen while the player is online.
+- Outfit reward (idea-1005, optional `rewards.outfit = { male = id, female = id }`, paid last as part `outfit`): calls
+  `exports.fh_tailor:grant(citizenid, id, 'quests:<family>')` for **both** ids. fh_tailor refuses the one that does not
+  fit the character with `wrong_sex` (expected, ignored), so fh_quests needs no sex lookup; the grant is idempotent and
+  works offline, so it does not wait for the player. Any one `granted` / `already_owned` pays the part. The source tag
+  is `quests:` + the quest id minus a leading `family_`, cut to 32 chars. fh_tailor stopped or missing, `unknown_entry`
+  (catalog not filled yet), a thrown export or any other refusal: the part is logged
+  (`reward <cid> <quest> outfit: refused (<code>)`) and stays owed, retried on the next character load; money and rep
+  were already paid and the quest is already done, so completion is never blocked (a non-repeatable family line is not
+  affected by the pending marker). The five family lines use `quest_<family>_male|female`
+  (`hale`, `marrow`, `whitlock`, `cormier`, `ashby`); **@progression must add these ten earned_only outfit entries to
+  `fh_tailor/config.lua`** (only the starter entries exist there today). Lines completed before this shipped are not
+  backfilled.
 - The engine emits the `reward` effect only on the active -> done transition. Re-fired events after completion, a
   second `complete` verdict, or a duplicate step event produce no second reward (specced).
 - Server order: persist `done` with `progress.reward_pending = true`, emit the events, then pay part by part as

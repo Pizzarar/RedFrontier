@@ -197,6 +197,15 @@ function Q.payout(cid, def)
         now = os.time(),
         save = Q.save,
         pay = function(part)
+            if part.kind == 'outfit' then
+                -- fh_tailor is optional and its grant works offline: no player needed. Never throws; a refusal keeps
+                -- only this part owed (retried on the next load), the quest is already done.
+                local called, ok, err = R.grantOutfit(part, cid, {
+                    available = function() return GetResourceState('fh_tailor') == 'started' end,
+                    grant = function(c, id, source) return exports.fh_tailor:grant(c, id, source) end,
+                })
+                return called, ok, err
+            end
             local src = online(cid)
             if not src then return true, false, 'fh_no_player' end
             if part.kind == 'pay' then
@@ -283,12 +292,21 @@ end
 ---returned nil/false). A table result is a lock { reason?, min_tier? }; any other truthy result is a bare lock.
 ---A hook that throws is logged and the offer counts as locked (never unlocked). Display only: acceptOffer's own
 ---gates stay authoritative.
+local function deepcopy(v, seen)
+    if type(v) ~= 'table' then return v end
+    seen = seen or {}
+    if seen[v] then return seen[v] end
+    local c = {}
+    seen[v] = c
+    for k, x in pairs(v) do c[deepcopy(k, seen)] = deepcopy(x, seen) end
+    return c
+end
+
 function Q.hookLock(o, src)
     local jt = Q.jobTypes[o.job_type]
     local fn = jt and jt.hooks and jt.hooks.lockedFor
     if fn == nil then return nil end
-    local copy = {}
-    for k, v in pairs(o.offer or {}) do copy[k] = v end
+    local copy = deepcopy(o.offer or {}) -- nested tables (rewards, where...) too: Q.boards is a shared cache
     local ok, res = pcall(fn, copy, src)
     if not ok then
         Q.log('job type %s lockedFor(%s) failed: %s', tostring(o.job_type), tostring(o.id), tostring(res))
@@ -321,7 +339,9 @@ function Q.boardView(region_id, states, now, src)
         local minTier = B.offerMinTier(o)
         local lock = nil
         if minTier > tierFor(Q.offerRegionOf(o, region_id)) then lock = { min_tier = minTier } end
-        local hl = Q.hookLock(o, src)
+        -- Already tier-locked and locked offers are hidden: the hook's answer would never be shown, skip it.
+        local hl = nil
+        if showLocked or not lock then hl = Q.hookLock(o, src) end
         if hl then
             lock = lock or {}
             if lock.min_tier == nil then lock.min_tier = hl.min_tier end

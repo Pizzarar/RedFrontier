@@ -10,7 +10,7 @@
 -- steps ids ({ id = 'claim_plot', ... }); progress is then resolved by id first, so reordering/inserting steps does
 -- not move a player mid-quest. Rows written before a def had ids have no step_id and fall back to the index.
 -- Effects: { type = 'started'|'step'|'completed'|'failed'|'abandoned'|'reward', citizenid, quest_id, kind, step,
---   reason? } ('reward' also carries money, rep, items, reason = 'quest:<id>').
+--   reason? } ('reward' also carries money, rep, items, outfit, reason = 'quest:<id>').
 -- `now` is injected everywhere: a number (unix seconds) or a function returning one.
 local M = {}
 
@@ -131,7 +131,7 @@ local function validateRewards(r, regions)
     if r == nil then return true end
     if type(r) ~= 'table' then return false, 'fh_bad_rewards' end
     for k in pairs(r) do
-        if k ~= 'money' and k ~= 'rep' and k ~= 'items' then return false, 'fh_unknown_reward:' .. tostring(k) end
+        if k ~= 'money' and k ~= 'rep' and k ~= 'items' and k ~= 'outfit' then return false, 'fh_unknown_reward:' .. tostring(k) end
     end
     if r.money ~= nil and not (math.type(r.money) == 'integer' and r.money >= 0 and r.money <= M.LIMITS.money) then
         return false, 'fh_bad_money'
@@ -150,6 +150,17 @@ local function validateRewards(r, regions)
             if not posInt(it.amount, M.LIMITS.itemAmount) then return false, 'fh_bad_item_amount' end
             if it.info ~= nil and type(it.info) ~= 'table' then return false, 'fh_bad_item_info' end
         end
+    end
+    if r.outfit ~= nil then
+        -- { male = catalog id, female = catalog id } (either may be omitted): the fh_tailor ids granted on completion
+        if type(r.outfit) ~= 'table' then return false, 'fh_bad_outfit' end
+        for k, v in pairs(r.outfit) do
+            if (k ~= 'male' and k ~= 'female') or type(v) ~= 'string' or #v == 0 or #v > M.LIMITS.idLen
+                or not v:match('^[%w_]+$') then
+                return false, 'fh_bad_outfit'
+            end
+        end
+        if r.outfit.male == nil and r.outfit.female == nil then return false, 'fh_bad_outfit' end
     end
     return true
 end
@@ -223,14 +234,14 @@ local function effect(type_, def, state, extra)
 end
 
 local function hasReward(r)
-    return type(r) == 'table' and ((r.money or 0) > 0 or r.rep ~= nil or (r.items ~= nil and #r.items > 0))
+    return type(r) == 'table' and ((r.money or 0) > 0 or r.rep ~= nil or (r.items ~= nil and #r.items > 0) or r.outfit ~= nil)
 end
 
 local function rewardEffect(def, state)
     local r = def.rewards or {}
     return effect('reward', def, state, {
         reason = 'quest:' .. (def.reason_id or def.id), region_id = def.region_id,
-        money = r.money, rep = r.rep, items = r.items,
+        money = r.money, rep = r.rep, items = r.items, outfit = r.outfit,
     })
 end
 

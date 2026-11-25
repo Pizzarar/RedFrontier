@@ -203,6 +203,7 @@ local function bootServer(opts)
                 error('must not gate contracts on canUnlock')
             end,
         },
+        fh_tailor = opts.tailor,
         fh_economy = {
             pay = function(_, src, amount, reason, region_id)
                 S.economyCalls[#S.economyCalls + 1] = {
@@ -240,6 +241,7 @@ local function bootServer(opts)
         GetInvokingResource = function() return 'fh_quests' end,
         GetResourceState = function(res)
             if res == 'fh_progression' then return S.progState end
+            if res == 'fh_tailor' then return opts.tailorState or 'started' end
             return 'started'
         end,
         GetPlayers = function()
@@ -620,6 +622,136 @@ describe('quests lockedFor: optional per-player display lock hook (idea-873)', f
         eq(true, seen)
         eq(before, S.Q.boardFor('heartlands', CLOCK), 'same cached board table')
         for _, o in ipairs(before.offers) do eq(true, o.offer.title ~= 'MUTATED') end
+    end)
+end)
+
+describe('quests lockedFor hook isolation + skip (idea-1038)', function()
+    local function reg(S, hook)
+        assert(S.exports.registerJobType('lock_iso', {
+            offers = function(region_id)
+                return { { key = region_id .. '_iso', title = 'ISO', on = 'fh:zones:camp_cleared', region_id = region_id,
+                    rewards = { money = 5, items = { { name = 'bread', amount = 2 } } }, where = { a = { b = 1 } },
+                    min_tier = 1 } }
+            end,
+            lockedFor = hook,
+        }))
+    end
+
+    it('a hook that mutates nested tables of the offer cannot change the shared board cache', function()
+        local S = bootServer({ showLockedOffers = true, tiers = { [1] = { heartlands = 3 } } })
+        reg(S, function(offer)
+            offer.rewards.money = 9999
+            offer.rewards.items[1].amount = 9999
+            offer.where.a.b = 'MUTATED'
+            return nil
+        end)
+        assert(S.exports.getBoard(1, 'heartlands'))
+        local found
+        for _, o in ipairs(S.Q.boardFor('heartlands', CLOCK).offers) do
+            if o.job_type == 'lock_iso' then found = o end
+        end
+        eq(true, found ~= nil)
+        eq(5, found.offer.rewards.money)
+        eq(2, found.offer.rewards.items[1].amount)
+        eq(1, found.offer.where.a.b)
+    end)
+
+    it('the hook is skipped for a tier-locked offer when showLockedOffers is off, still run when it is on', function()
+        local calls = 0
+        local hook = function(offer) if offer.key == 'heartlands_lk2' then calls = calls + 1 end return nil end
+        local function boot(show)
+            local S = bootServer({ showLockedOffers = show, tiers = { [1] = { heartlands = 1 } } })
+            assert(S.exports.registerJobType('lock_skip', {
+                offers = function(region_id)
+                    return { { key = region_id .. '_lk2', title = 'LK2', on = 'fh:zones:camp_cleared',
+                        region_id = region_id, rewards = { money = 5 }, min_tier = 2 } }
+                end,
+                lockedFor = hook,
+            }))
+            return S
+        end
+        assert(boot(false).exports.getBoard(1, 'heartlands'))
+        eq(0, calls, 'tier-locked and hidden: hook not called')
+        assert(boot(true).exports.getBoard(1, 'heartlands'))
+        eq(true, calls > 0, 'shown as locked: hook still adds its reason')
+    end)
+end)
+
+describe('quests outfit reward through fh_tailor (idea-1005)', function()
+    local DEF = {
+        id = 'family_test_outfit', kind = 'line', title = 'T', region_id = 'heartlands',
+        steps = { { on = 'fh:homestead:claimed', text = 'x' } },
+        rewards = { money = 5, outfit = { male = 'quest_t_male', female = 'quest_t_female' } },
+    }
+    -- A done state owing its reward, in the server cache; returns the saved state after payout.
+    local function run(S, cid)
+        local E = S.env.FhQuestsEngine
+        local st = E.start(DEF, {}, cid, CLOCK)
+        st = E.apply(DEF, st, 'complete', CLOCK)
+        S.Q.cache[cid] = { [DEF.id] = st }
+        S.Q.srcOf[cid] = 1
+        S.Q.payout(cid, DEF)
+        return S.Q.cache[cid][DEF.id]
+    end
+
+    it('grants both sex variants once, with the quests:<family> source; wrong_sex is the expected answer', function()
+        local calls = {}
+        local S = bootServer({ tailor = { grant = function(_, cid, id, src)
+            calls[#calls + 1] = { cid, id, src }
+            if id == 'quest_t_female' then return false, 'wrong_sex' end
+            return true, 'granted'
+        end } })
+        local st = run(S, 'CID_A')
+        eq(2, #calls)
+        same({ 'CID_A', 'quest_t_male', 'quests:test_outfit' }, calls[1])
+        same({ 'CID_A', 'quest_t_female', 'quests:test_outfit' }, calls[2])
+        eq(false, S.env.FhQuestsRewards.pending(st))
+        eq(1, #S.economyCalls, 'money paid before the outfit (DEF has money only)')
+        eq('pay', S.economyCalls[1].kind)
+    end)
+
+    it('fh_tailor stopped: refused, logged, everything else paid, retried on the next payout', function()
+        local calls = 0
+        local S = bootServer({ tailorState = 'stopped',
+            tailor = { grant = function() calls = calls + 1 return true, 'granted' end } })
+        local st = run(S, 'CID_A')
+        eq(0, calls)
+        eq(true, S.env.FhQuestsRewards.pending(st))
+        eq(true, st.progress.reward_paid.money)
+        eq(nil, st.progress.reward_paid.outfit)
+        S.Q.payout('CID_A', DEF) -- still down: no throw, still owed
+        eq(true, S.env.FhQuestsRewards.pending(S.Q.cache['CID_A'][DEF.id]))
+    end)
+
+    it('a grant error (unknown_entry, then a throw) never throws out of payout; the outfit stays owed and retries', function()
+        local mode = 'unknown'
+        local S = bootServer({ tailor = { grant = function()
+            if mode == 'throw' then error('boom') end
+            if mode == 'unknown' then return false, 'unknown_entry' end
+            return true, 'already_owned'
+        end } })
+        local st = run(S, 'CID_A')
+        eq(true, S.env.FhQuestsRewards.pending(st))
+        eq(nil, st.progress.reward_paid.outfit)
+        mode = 'throw'
+        S.Q.payout('CID_A', DEF)
+        eq(true, S.env.FhQuestsRewards.pending(S.Q.cache['CID_A'][DEF.id]))
+        mode = 'ok'
+        S.Q.payout('CID_A', DEF)
+        eq(false, S.env.FhQuestsRewards.pending(S.Q.cache['CID_A'][DEF.id]))
+    end)
+
+    it('works while the player is offline (grant needs only the citizenid)', function()
+        local calls = 0
+        local S = bootServer({ tailor = { grant = function() calls = calls + 1 return true, 'granted' end } })
+        local E = S.env.FhQuestsEngine
+        local def = { id = 'family_test_off', kind = 'line', title = 'T', region_id = 'heartlands',
+            steps = DEF.steps, rewards = { outfit = { male = 'quest_t_male' } } }
+        local st = E.apply(def, (E.start(def, {}, 'CID_Z', CLOCK)), 'complete', CLOCK)
+        S.Q.cache['CID_Z'] = { [def.id] = st }
+        S.Q.payout('CID_Z', def)
+        eq(1, calls)
+        eq(false, S.env.FhQuestsRewards.pending(S.Q.cache['CID_Z'][def.id]))
     end)
 end)
 

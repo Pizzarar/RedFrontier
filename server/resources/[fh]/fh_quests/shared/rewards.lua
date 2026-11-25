@@ -2,7 +2,7 @@
 -- call fh_economy / the inventory, look up fh_ledger) through `io` and this module decides the order.
 --
 -- A reward is split into parts, paid in this order: 'money' (fh_economy.pay), 'rep' (fh_economy.rep), then
--- 'item:<i>' per item (player inventory AddItem). Progress keys (in fh_quest_state.progress JSON):
+-- 'item:<i>' per item (player inventory AddItem), then 'outfit' (fh_tailor.grant, idempotent, works offline). Progress keys (in fh_quest_state.progress JSON):
 --   reward_pending  = true while any part is still owed (set by the engine on active -> done)
 --   reward_paid     = { [part key] = true }   parts already delivered
 --   reward_inflight = { key, at }             a part being paid right now (at = unix seconds)
@@ -84,6 +84,9 @@ function M.scaleByTier(rewards, tier, multipliers)
         end
         out.items = items
     end
+    if type(rewards.outfit) == 'table' then
+        out.outfit = { male = rewards.outfit.male, female = rewards.outfit.female }
+    end
     return out
 end
 
@@ -91,8 +94,40 @@ end
 ---(jobs.def sets reason_id from progress.job.legacy_key) so a crash-recovery lookup finds its fh_ledger rows.
 function M.reason(def) return 'quest:' .. (def.reason_id or def.id) end
 
+---fh_tailor grant source tag: 'quests:<id minus a leading family_>', cut to 32 chars (fh_tailor MAX_SOURCE; allowed
+---chars [%w_:.-], anything else becomes '_').
+function M.outfitSource(def)
+    local id = tostring(def.reason_id or def.id):gsub('^family_', ''):gsub('[^%w_:.%-]', '_')
+    return ('quests:' .. id):sub(1, 32)
+end
+
+---Grant the outfit part through fh_tailor. deps = { available = fn() -> bool, grant = fn(cid, id, source) -> ok, code }.
+---Both sex variants are granted: fh_tailor refuses the one that does not fit the character with 'wrong_sex' (the
+---expected result, ignored), and grant is idempotent and works offline, so no sex lookup is needed. Never throws.
+---Success = at least one grant answered ok (granted | already_owned). Anything else is a refusal (retried on the next
+---character load, the quest itself is already done).
+---@return boolean called, boolean ok, string|nil err   (the rewards.run pay() triple)
+function M.grantOutfit(part, citizenid, deps)
+    if not deps.available() then return true, false, 'fh_tailor_down' end
+    local ok, firstErr = false, nil
+    for _, id in ipairs({ part.male or false, part.female or false }) do
+        if id then
+            local called, a, b = pcall(deps.grant, citizenid, id, part.source)
+            if called and a == true then
+                ok = true
+            elseif not called then
+                firstErr = firstErr or ('threw: ' .. tostring(a))
+            elseif b ~= 'wrong_sex' then
+                firstErr = firstErr or tostring(b)
+            end
+        end
+    end
+    if ok then return true, true end
+    return true, false, firstErr or 'wrong_sex'
+end
+
 ---Ordered reward parts of a def.
----@return table parts  { { key, kind = 'pay'|'rep'|'item', amount?, delta?, region_id?, name?, info? }... }
+---@return table parts  { { key, kind = 'pay'|'rep'|'item'|'outfit', amount?, delta?, region_id?, name?, info?, male?, female?, source? }... }
 function M.parts(def)
     local r, out = def.rewards or {}, {}
     if (r.money or 0) > 0 then
@@ -103,6 +138,10 @@ function M.parts(def)
     end
     for i, it in ipairs(r.items or {}) do
         out[#out + 1] = { key = 'item:' .. i, kind = 'item', name = it.name, amount = it.amount, info = it.info }
+    end
+    if r.outfit ~= nil then
+        out[#out + 1] = { key = 'outfit', kind = 'outfit', male = r.outfit.male, female = r.outfit.female,
+            source = M.outfitSource(def) }
     end
     return out
 end
@@ -201,6 +240,7 @@ end
 function M.resolveUnknown(part, ledgerHit)
     if not part then return 'refused' end -- the def no longer has this part: drop the marker
     if part.kind == 'item' then return 'assumed' end
+    if part.kind == 'outfit' then return 'refused' end -- fh_tailor.grant is idempotent: just retry
     if ledgerHit == nil then return nil end
     return ledgerHit and 'paid' or 'refused'
 end
@@ -221,7 +261,7 @@ function M.run(def, state, io)
     if f then
         local part = M.part(def, f.key)
         local hit = nil
-        if part and part.kind ~= 'item' then hit = io.ledger(part, f) end
+        if part and (part.kind == 'pay' or part.kind == 'rep') then hit = io.ledger(part, f) end
         local outcome = M.resolveUnknown(part, hit)
         if not outcome then
             log[#log + 1] = { key = f.key, outcome = 'ledger_unavailable' }
@@ -255,7 +295,7 @@ function M.run(def, state, io)
             outcome = ok and 'paid' or 'refused'
         else
             local hit = nil
-            if part.kind ~= 'item' then hit = io.ledger(part, M.inflight(state)) end
+            if part.kind == 'pay' or part.kind == 'rep' then hit = io.ledger(part, M.inflight(state)) end
             outcome = M.resolveUnknown(part, hit)
             if not outcome then
                 log[#log + 1] = { key = part.key, outcome = 'ledger_unavailable', err = err }

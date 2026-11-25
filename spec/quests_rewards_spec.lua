@@ -359,4 +359,41 @@ describe('quests rewards: scaleByTier (quests-03 T2)', function()
     end)
 end)
 
+describe('rewards: outfit part (idea-1005)', function()
+    local function withOutfit(o)
+        local d = line(); d.rewards = { outfit = o }; return d
+    end
+
+    it('validates { male, female } catalog ids; refuses junk', function()
+        eq(true, (E.validate(withOutfit({ male = 'quest_a_male', female = 'quest_a_female' }))))
+        eq(true, (E.validate(withOutfit({ male = 'quest_a_male' }))))
+        local ok, err = E.validate(withOutfit({})); eq(false, ok); eq('fh_bad_outfit', err)
+        ok, err = E.validate(withOutfit('quest_a')); eq(false, ok); eq('fh_bad_outfit', err)
+        ok, err = E.validate(withOutfit({ male = 'bad id!' })); eq(false, ok); eq('fh_bad_outfit', err)
+        ok, err = E.validate(withOutfit({ other = 'x' })); eq(false, ok); eq('fh_bad_outfit', err)
+    end)
+
+    it('an outfit-only reward still marks the quest reward_pending; the part is last, source quests:<family>', function()
+        local d = line(); d.rewards.outfit = { male = 'quest_a_male', female = 'quest_a_female' }
+        local p = R.parts(d)
+        eq('outfit', p[#p].key); eq('quests:test_1', p[#p].source)
+        eq(true, R.pending(done(withOutfit({ male = 'quest_a_male' }))))
+    end)
+
+    it('outfitSource stays within fh_tailor limits (<= 32 chars, [%w_:.-])', function()
+        local s = R.outfitSource({ id = 'family_' .. ('x'):rep(60) })
+        eq(32, #s); eq(true, s:match('^[%w_:%.%-]+$') ~= nil)
+    end)
+
+    it('an in-flight outfit marker resolves to refused (idempotent grant: retry), never a ledger lookup', function()
+        local d = withOutfit({ male = 'quest_a_male' })
+        eq('refused', R.resolveUnknown(R.part(d, 'outfit'), nil))
+    end)
+
+    it('scaleByTier copies the outfit unchanged', function()
+        local out = R.scaleByTier({ money = 10, outfit = { male = 'a', female = 'b' } }, 2)
+        same({ male = 'a', female = 'b' }, out.outfit)
+    end)
+end)
+
 T.finish()

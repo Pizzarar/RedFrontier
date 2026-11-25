@@ -15,5 +15,6 @@ return {
             'We do not have much, but the landing remembers its friends. Take this.',
         } }, text = 'Tell Odile Cormier the water is safe again.' },
     },
-    rewards = { money = 70, rep = { region_id = 'bayou_nwa', delta = 8 } },
+    rewards = { money = 70, rep = { region_id = 'bayou_nwa', delta = 8 },
+        outfit = { male = 'quest_cormier_male', female = 'quest_cormier_female' } },
 }

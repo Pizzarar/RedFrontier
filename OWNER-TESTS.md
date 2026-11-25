@@ -1875,3 +1875,16 @@ warning). Town lots are never raided. Console lines start with `[fh_alife]`. Adm
    RESULT:
 4. Use a `cigar` (or any item from the VENDORED.md list). Expected: notify "You can't use that." and nothing is consumed. TODO-verify
    RESULT:
+
+## quests-04 · questline outfit reward (fh_quests + fh_tailor, idea-1005)
+Needs the fh_tailor catalog to contain `quest_<family>_male` / `quest_<family>_female` (earned_only; @progression owns
+the catalog, see README "Outfit rewards"). Until then the grant answers `unknown_entry` and the part stays owed.
+1. Finish a family questline start to end (e.g. the Hale line in Heartlands). Expected: money and rep pay as before; the
+   server console shows no `reward ... outfit: refused` line; `exports.fh_tailor:getWardrobe(src)` (or the Wardrobe pane)
+   lists `quest_hale_<your sex>` with source `quests:hale`. TODO-verify
+   RESULT:
+2. Stop fh_tailor (`stop fh_tailor`), finish another family questline, then `start fh_tailor` and relog. Expected: money
+   and rep paid at completion, console `reward <cid> <quest> outfit: refused (fh_tailor_down)`; after the relog the
+   outfit appears in the wardrobe and the line is no longer `reward_pending`. TODO-verify
+   RESULT:
+

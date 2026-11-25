@@ -11,5 +11,6 @@ return {
             'The girls will be telling folks about you. Take this, and stay for supper.',
         } }, text = 'Report back to Ruth Hale.' },
     },
-    rewards = { money = 40, rep = { region_id = 'heartlands', delta = 5 } },
+    rewards = { money = 40, rep = { region_id = 'heartlands', delta = 5 },
+        outfit = { male = 'quest_hale_male', female = 'quest_hale_female' } },
 }

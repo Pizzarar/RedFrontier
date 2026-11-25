@@ -12,5 +12,6 @@ return {
             'Badge says I cannot pay a bounty. This is just a thank you.',
         } }, text = 'Tell Sheriff Marrow it is done.' },
     },
-    rewards = { money = 60, rep = { region_id = 'heartlands', delta = 8 } },
+    rewards = { money = 60, rep = { region_id = 'heartlands', delta = 8 },
+        outfit = { male = 'quest_marrow_male', female = 'quest_marrow_female' } },
 }

@@ -16,5 +16,6 @@ return {
             'My husband built this range on a handshake. Here is mine, and a little more.',
         } }, text = 'Ride back and tell June Ashby.' },
     },
-    rewards = { money = 75, rep = { region_id = 'great_plains', delta = 8 } },
+    rewards = { money = 75, rep = { region_id = 'great_plains', delta = 8 },
+        outfit = { male = 'quest_ashby_male', female = 'quest_ashby_female' } },
 }

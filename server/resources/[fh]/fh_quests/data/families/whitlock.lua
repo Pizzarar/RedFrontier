@@ -13,5 +13,6 @@ return {
             'Hang that hide where folks can see it. This is for the tellin\'.',
         } }, text = 'Take the news to Whitlock.' },
     },
-    rewards = { money = 120, rep = { region_id = 'heartlands', delta = 12 } },
+    rewards = { money = 120, rep = { region_id = 'heartlands', delta = 12 },
+        outfit = { male = 'quest_whitlock_male', female = 'quest_whitlock_female' } },
 }
