@@ -41,7 +41,7 @@ local function begin(key)
     local token = Logic.claim(S, key) -- bumps seq: any older begin() yielding in requestAnimDict is now stale
     token.scenario, token.dict, token.clip = e.scenario, e.dict, e.clip
     if not e.scenario then
-        local ok = pcall(lib.requestAnimDict, e.dict)
+        local ok = pcall(lib.requestAnimDict, e.dict, 1000)
         if not ok then Logic.invalidate(S, key) return false end
     end
     -- re-check after the yield: a newer start or a stop invalidated us, or the ped mounted/died meanwhile

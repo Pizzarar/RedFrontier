@@ -1,3 +1,3 @@
--- fh_anim config. Off until the P0 probe (spk_anim) confirms which clips play in RedM; A7 flips it.
+-- fh_anim config. On by default; entries are still candidates until A7 swaps in the S8-confirmed ones.
 Config = Config or {}
-Config.Enabled = false
+Config.Enabled = true

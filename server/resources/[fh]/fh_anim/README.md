@@ -1,8 +1,7 @@
 # fh_anim
 
-Cosmetic, named action animations (plan animations-01). Client-only; off by default (`Config.Enabled = false`)
-until the P0 probe (`spk_anim`) confirms which clips play in RedM. Table entries in `shared/anims.lua` are
-**candidate, unproven**.
+Cosmetic, named action animations (plan animations-01). Client-only; on by default (`Config.Enabled = true`);
+entries in `shared/anims.lua` are still candidates until A7 swaps in the S8-confirmed ones.
 
 - `exports.fh_anim:play(key)`: instant clip, auto-ends after `ms`.
 - `exports.fh_anim:start(key)` / `:stop(key)`: wrap a progress bar; `stop` clears only if our anim is still active.

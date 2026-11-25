@@ -86,4 +86,76 @@ case('FXServer load path sets globals (stub GetCurrentResourceName)', function()
     assert(gt and gt.skin, 'FhAnimTable global')
 end)
 
+case('config: Enabled is true by default', function()
+    local env = {}
+    assert(loadfile(res .. 'config.lua', 't', env))()
+    eq(true, env.Config.Enabled)
+end)
+
+local function clientRig(reqAnimDict, overrides)
+    overrides = overrides or {}
+    local exported = {}
+    local env = setmetatable({
+        FhAnimLogic = logic,
+        FhAnimTable = tbl,
+        Config = { Enabled = true },
+        PlayerPedId = function() return 1 end,
+        IsPedOnMount = function() return false end,
+        IsPedInAnyVehicle = function() return false end,
+        IsPedSwimming = function() return false end,
+        IsEntityDead = function() return false end,
+        IsPedRagdoll = function() return false end,
+        IsPedActiveInScenario = function() return false end,
+        IsEntityPlayingAnim = function() return false end,
+        ClearPedTasks = function() end,
+        TaskStartScenarioInPlaceHash = overrides.TaskStartScenarioInPlaceHash or function() end,
+        joaat = function(s) return 12345 end,
+        CreateThread = function(fn) fn() end,
+        Wait = function(ms) end,
+        lib = {
+            requestAnimDict = reqAnimDict or function(dict, timeout) return dict end,
+            playAnim = function(...) end,
+        },
+        exports = function(name, fn) exported[name] = fn end,
+        RegisterNetEvent = function() end,
+    }, { __index = _G })
+    env._G = env
+    local fn, err = loadfile(res .. 'client/main.lua', 't', env)
+    assert(fn, err)()
+    return exported, env
+end
+
+case('client: requestAnimDict error returns false, no throw, claim released', function()
+    local exp = clientRig(function(dict, timeout)
+        error("attempted to load invalid animDict '" .. tostring(dict) .. "'")
+    end)
+    eq(false, exp.play('eat'), 'play returns false on requestAnimDict error')
+    eq(false, exp.stop('eat'), 'claim released after play failure (nothing to stop)')
+    eq(false, exp.start('eat'), 'start returns false on requestAnimDict error')
+    eq(false, exp.stop('eat'), 'claim released after start failure (nothing to stop)')
+end)
+
+case('client: requestAnimDict timeout returns false, no throw, timeout <= 1s, claim released', function()
+    local observedTimeout = nil
+    local exp = clientRig(function(dict, timeout)
+        observedTimeout = timeout
+        error("failed to load animDict within timeout")
+    end)
+    eq(false, exp.play('eat'), 'play returns false on timeout')
+    eq(1000, observedTimeout, 'timeout capped to 1000ms')
+    eq(false, exp.stop('eat'), 'claim released after play timeout')
+    observedTimeout = nil
+    eq(false, exp.start('eat'), 'start returns false on timeout')
+    eq(1000, observedTimeout, 'timeout capped to 1000ms')
+    eq(false, exp.stop('eat'), 'claim released after start timeout')
+end)
+
+case('client: scenario native error does not throw out of play/start', function()
+    local exp = clientRig(nil, {
+        TaskStartScenarioInPlaceHash = function() error('scenario native failed') end
+    })
+    eq(false, exp.play('skin'), 'play returns false on scenario native throw')
+    eq(false, exp.start('skin'), 'start returns false on scenario native throw')
+end)
+
 T.finish()
