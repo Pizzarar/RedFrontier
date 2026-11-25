@@ -132,6 +132,99 @@ class T(unittest.TestCase):
         write(self.root, 'resources/[fh]/fh_a/c.lua', "function T.Cli() end\n")   # client file, no loop: not exported
         self.assertEqual([f[1] for f in findings(t, 'exports')], ['fh_a:FhCli'])
 
+    # ---- G1c: module-constant event names resolve as listeners ----
+    def test_module_constant_event_listener(self):
+        t = tree(self.root, "TriggerEvent('fh:b:wipe')\n")
+        write(self.root, 'resources/[fh]/fh_b/config.lua',
+              "local M = {}\nM.SQUAD_EVENT = 'fh:b:wipe'\noffer = { on = M.SQUAD_EVENT }\n")
+        self.assertEqual(findings(t, 'events'), [])
+
+    # ---- G1b: event-target namespace must exist on disk ----
+    def test_event_target_missing_namespace(self):
+        t = tree(self.root, "TriggerEvent('rsg-weapons:client:UseWeapon')\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'event-target')), ['rsg-weapons:client:UseWeapon'])
+
+    def test_event_target_self_contained_namespace(self):
+        t = tree(self.root, "TriggerServerEvent('rsg-multicharacter:server:createCharacter')\n"
+                 "RegisterNetEvent('rsg-multicharacter:server:createCharacter', function() end)\n")
+        self.assertEqual(findings(t, 'event-target'), [])
+
+    def test_event_target_provided_namespace(self):
+        t = tree(self.root, "TriggerEvent('rsg-multijob:server:jobsLoaded')\n")
+        write(self.root, 'resources/[rsg]/rsg-core/fxmanifest.lua', MANIFEST % "provide 'rsg-multijob'\n")
+        self.assertEqual(findings(t, 'event-target'), [])
+
+    # ---- G1a: useable=true items need a use handler ----
+    def test_useable_item_without_handler(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'bandage', chance = 1 } }\n")
+        write(self.root, 'resources/[rsg]/rsg-core/shared/items.lua',
+              "RSGShared.Items = { bread = { name = 'bread', label = 'Bread' }, "
+              "bandage = { name = 'bandage', label = 'Bandage', useable = true } }\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'useable')), ['bandage'])
+
+    def test_useable_item_with_handler(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'bread', chance = 1 } }\n")
+        write(self.root, 'resources/[rsg]/rsg-core/shared/items.lua',
+              "RSGShared.Items = { bread = { name = 'bread', label = 'Bread', useable = true } }\n")
+        write(self.root, 'resources/[fh]/fh_a/s.lua',
+              "exports('ok', function() end)\nexports['rsg-core']:CreateUseableItem('bread', function() end)\n")
+        self.assertEqual(findings(t, 'useable'), [])
+
+    def test_useable_handler_via_use_table_loop(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'stew', chance = 1 } }\n")
+        write(self.root, 'resources/[rsg]/rsg-core/shared/items.lua',
+              "RSGShared.Items = { stew = { name = 'stew', label = 'Stew', useable = true } }\n")
+        write(self.root, 'resources/[fh]/fh_a/s.lua',
+              "exports('ok', function() end)\nI.USE = { stew = { hunger = 5 } }\n"
+              "for name, d in pairs(I.USE) do exports['rsg-core']:CreateUseableItem(name, function() end) end\n")
+        self.assertEqual(findings(t, 'useable'), [])
+
+    def test_additem_literal_undefined(self):
+        t = tree(self.root, "AddItem(src, 'ghost_item', 1)\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'items')), ['ghost_item'])
+
+    def test_dead_item_is_warning_not_finding(self):
+        t = tree(self.root, "", cfg_items="loot = { { name = 'bread', chance = 1 } }\n")
+        self.assertEqual(findings(t, 'useable'), [])
+        self.assertIn('bread', [w[1] for w in cc.WARNINGS if w[0] == 'dead'])
+
+    def test_fh_item_missing_icon_is_warning(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[fh]/fh_inventory/fxmanifest.lua', MANIFEST % '')
+        write(self.root, 'resources/[fh]/fh_inventory/html/images/has_icon.png', 'x')
+        write(self.root, 'resources/[fh]/fh_a/items.lua',
+              "I = { has_icon = { name = 'has_icon', label = 'A' }, no_icon = { name = 'no_icon', label = 'B' } }\n")
+        self.assertEqual([f for f in findings(t) if f[0] == 'icon'], [])
+        self.assertEqual([w[1] for w in cc.WARNINGS if w[0] == 'icon'], ['no_icon'])
+
+    def test_manifest_literal_missing(self):
+        t = tree(self.root, "", mfa='server_scripts { "s.lua", "gone.lua" }\nclient_scripts { "c.lua" }')
+        self.assertEqual(sorted(f[1] for f in findings(t, 'manifest')), ['fh_a:gone.lua'])
+
+    # ---- G3: manifest globs/literals must match ----
+    def test_manifest_glob_no_match(self):
+        t = tree(self.root, "", mfa='server_scripts { "s.lua" }\nclient_scripts { "c.lua" }\nfiles { "missing/*.png" }')
+        self.assertEqual(sorted(f[1] for f in findings(t, 'manifest')), ['fh_a:missing/*.png'])
+
+    # ---- G3: default clothes hashes must exist in clothing.lua ----
+    def test_default_clothes_hash_valid(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[rsg]/rsg-character/fxmanifest.lua', MANIFEST % '')
+        write(self.root, 'resources/[rsg]/rsg-character/data/clothing.lua',
+              "local clothing = { ['male'] = { ['shirts_full'] = { [1] = { [1] = { ['hash'] = 123 } } } } }\n")
+        write(self.root, 'resources/[rsg]/rsg-character/shared/config.lua',
+              "RSG.DefaultClothes = { male = { shirts_full = { hash = 123 } } }\n")
+        self.assertEqual(findings(t, 'clothes'), [])
+
+    def test_default_clothes_hash_invalid(self):
+        t = tree(self.root, "")
+        write(self.root, 'resources/[rsg]/rsg-character/fxmanifest.lua', MANIFEST % '')
+        write(self.root, 'resources/[rsg]/rsg-character/data/clothing.lua',
+              "local clothing = { ['male'] = { ['shirts_full'] = { [1] = { [1] = { ['hash'] = 123 } } } } }\n")
+        write(self.root, 'resources/[rsg]/rsg-character/shared/config.lua',
+              "RSG.DefaultClothes = { male = { shirts_full = { hash = 999 } } }\n")
+        self.assertEqual(sorted(f[1] for f in findings(t, 'clothes')), ['male:shirts_full'])
+
 
 if __name__ == '__main__':
     unittest.main()

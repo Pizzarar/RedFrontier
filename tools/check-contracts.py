@@ -36,12 +36,40 @@ Rules
   the same side. `provide 'x'` aliases (fh_inventory -> rsg-inventory) resolve to the providing resource. Dynamic-key item
   definitions `[cfg.feed.item] = { label = ...` define the value of `item` in any `feed = { ... }` table.
 Allowlist: one entry per line `<rule>|<key>  # reason / idea id`. Keys: `exports|res:fn`, `events|fh:name`,
-  `items|name`. Unused entries are reported as warnings.
+  `items|name`, `useable|item`, `event-target|event`, `manifest|res:glob`, `clothes|gender:category`.
+  Unused entries are reported as warnings. Warning-tier findings (`dead`, `icon`) never fail the gate.
 """
 import argparse, glob, os, re, sys
 from collections import defaultdict
 
 SIDES = ('server', 'client')
+
+# Warning-tier findings (printed, but they never fail the gate). Populated by run(), read by main().
+WARNINGS = []
+
+
+def braced(text, open_pos):
+    """Return text[open_pos:..] from the '{' at open_pos through its matching '}' (inclusive)."""
+    depth = 0
+    for i in range(open_pos, len(text)):
+        c = text[i]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return text[open_pos:i + 1]
+    return text[open_pos:]
+
+
+def top_keys(body):
+    """Top-level identifier keys of a table body (text between the outer braces)."""
+    keys = set()
+    for m in re.finditer(r'([A-Za-z_]\w*)\s*=', body):
+        if body[:m.start()].count('{') == body[:m.start()].count('}'):
+            keys.add(m.group(1))
+    return keys
+
 
 def strip_comments(src):
     """Blank out Lua comments (keeps line count and string contents)."""
@@ -127,6 +155,14 @@ def lineno(text, pos):
 
 def run(root, cfg_path):
     findings = []   # (rule, key, location, message)
+    WARNINGS[:] = []   # (rule, key, location, message) -- printed but never fail the gate
+    _strip_cache = {}
+
+    def strip_file(p):
+        if p not in _strip_cache:
+            _strip_cache[p] = strip_comments(read(p))
+        return _strip_cache[p]
+
     resources, category_of = {}, {}
     for cat in sorted(glob.glob(os.path.join(glob.escape(root), '*'))):
         if not os.path.isdir(cat):
@@ -205,6 +241,14 @@ def run(root, cfg_path):
     LISTEN = re.compile(r'\b(RegisterNetEvent|RegisterServerEvent|AddEventHandler|onNet)\s*\(\s*([\'"])(fh:[^\'"]*)\2')
     LIT = re.compile(r'([\'"])(fh:[A-Za-z0-9_:.\-]+)\1')
     HOOK = re.compile(r'\b(?:on|events?)\s*=\s*[\'"](fh:[^\'"]*)[\'"]')
+    HOOKCONST = re.compile(r'\b(?:on|events?)\s*=\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)')
+    # module-constant event names: `M.SQUAD_EVENT = 'fh:...'` / `local E = 'fh:...'` -> `on = M.SQUAD_EVENT` is a listener
+    CONST_ASSIGN = re.compile(r'\b(?:local\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*=\s*([\'"])(fh:[A-Za-z0-9_:.\-]+)\2')
+    const_map = {}
+    for (rn, rel), t in texts.items():
+        for m in CONST_ASSIGN.finditer(t):
+            const_map[m.group(1)] = m.group(3)
+            const_map[m.group(1).split('.')[-1]] = m.group(3)
     senders, listeners, lits = [], defaultdict(set), defaultdict(list)
     listen_locs = defaultdict(list)
     for (rn, rel), t in sorted(texts.items()):
@@ -226,6 +270,11 @@ def run(root, cfg_path):
         for m in HOOK.finditer(t):
             for s in SIDES:
                 listeners[m.group(1)].add(s)     # hook consumer: any side
+        for m in HOOKCONST.finditer(t):
+            name = const_map.get(m.group(1))
+            if name:
+                for s in SIDES:
+                    listeners[name].add(s)       # hook via a module constant (G1c)
         for m in LIT.finditer(t):
             if m.start() not in lstart:
                 lits[m.group(2)].append((rn, rel, m.start()))
@@ -250,6 +299,46 @@ def run(root, cfg_path):
         if re.match(r'fh:\w+:ui_\w+$', name) and 'fh:ui:action' in listen_locs:
             continue   # fh_ui relays fh:ui:action to fh:<res>:ui_<action> with a computed name
         findings.append(('events', name, locs[0], 'handler for %r has no sender' % name))
+
+    # ---- rule: event-target exists (G1b) ----
+    # Any Trigger*Event whose namespace looks like a resource (`rsg-*` / `fh_*`) must resolve to a resource on
+    # disk (or a `provide` alias) AND have a listener on the target side. Catches e.g. rsg-weapons / rsg-log.
+    SEND_ANY = re.compile(r'\b(TriggerEvent|TriggerServerEvent|TriggerClientEvent|TriggerLatentClientEvent)\s*\(\s*([\'"])([A-Za-z0-9_:.\-]+)\2')
+    LISTEN_ANY = re.compile(r'\b(RegisterNetEvent|RegisterServerEvent|AddEventHandler|onNet)\s*\(\s*([\'"])([A-Za-z0-9_:.\-]+)\2')
+    EVENTVAL = re.compile(r"['\"]((?:rsg-[A-Za-z0-9_-]+|fh_[A-Za-z0-9_]+):[A-Za-z0-9_:.\-]+)['\"]")
+    MAP_SEND = re.compile(r'\b(TriggerEvent|TriggerServerEvent|TriggerClientEvent|TriggerLatentClientEvent)\s*\(\s*([A-Za-z_]\w*)\s*[\[.]')
+    table_events = defaultdict(set)   # table name -> event names it maps to (event-map sender)
+    any_senders = defaultdict(list)   # event name -> [(kind, need, loc)]
+    any_listeners = defaultdict(set)  # event name -> set(sides)
+    for (rn, rel), t in sorted(texts.items()):
+        sides = resources[rn].files[rel]
+        for m in re.finditer(r"\b([A-Za-z_]\w*)\s*=\s*\{", t):
+            body = braced(t, t.find('{', m.start()))
+            for v in EVENTVAL.finditer(body):
+                table_events[m.group(1)].add(v.group(1))
+        for m in SEND_ANY.finditer(t):
+            any_senders[m.group(3)].append(
+                (m.group(1), {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(m.group(1), {'client'}),
+                 '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))
+        for m in MAP_SEND.finditer(t):
+            for name in table_events.get(m.group(2), ()):
+                any_senders[name].append(
+                    (m.group(1), {'TriggerEvent': set(sides), 'TriggerServerEvent': {'server'}}.get(m.group(1), {'client'}),
+                     '%s/%s:%d' % (rn, rel, lineno(t, m.start()))))
+        for m in LISTEN_ANY.finditer(t):
+            for s in sides:
+                any_listeners[m.group(3)].add(s)
+    for name in sorted(any_senders):
+        ns = name.split(':')[0]
+        if not (ns.startswith('rsg-') or ns.startswith('fh_')):
+            continue
+        if alias.get(ns, ns) in resources:
+            continue   # namespace resource exists on disk (or is provided)
+        for kind, need, loc in any_senders[name]:
+            if not (any_listeners.get(name, set()) & need):
+                findings.append(('event-target', name, loc,
+                                 '%s %r: namespace resource %r is not on disk and has no listener on %s side'
+                                 % (kind, name, ns, '/'.join(sorted(need)))))
 
     # ---- rule 3: items
     NAMEROW = re.compile(r"\{\s*name\s*=\s*['\"]([\w-]+)['\"]\s*,[^\n}]*\b(?:chance|amount|count|price|qty|weight)\b")
@@ -286,7 +375,7 @@ def run(root, cfg_path):
     defined = set()
     for r in resources.values():
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
-            t = strip_comments(read(p))
+            t = strip_file(p)
             for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*(?:name\s*=\s*['\"][^'\"]*['\"]\s*,\s*)?label\s*=", t):
                 defined.add(m.group(1) or m.group(2))
             for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*name\s*=\s*['\"](\w+)['\"]", t):
@@ -296,11 +385,11 @@ def run(root, cfg_path):
     dyn = set()   # `[a.b.c] = { label = ...` registers whatever `c` holds inside a table `b = { ... }` in config
     for r in resources.values():
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
-            for m in re.finditer(r"\[\s*(?:\w+\.)*?(\w+)\.(\w+)\s*\]\s*=\s*\{\s*label\s*=", strip_comments(read(p))):
+            for m in re.finditer(r"\[\s*(?:\w+\.)*?(\w+)\.(\w+)\s*\]\s*=\s*\{\s*label\s*=", strip_file(p)):
                 dyn.add((m.group(1), m.group(2)))
     for r in resources.values():
         for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
-            t = strip_comments(read(p))
+            t = strip_file(p)
             for tbl, fld in dyn:
                 for m in re.finditer(r"\b%s\s*=\s*\{" % re.escape(tbl), t):
                     depth, i = 1, m.end()
@@ -308,19 +397,195 @@ def run(root, cfg_path):
                         depth += {'{': 1, '}': -1}.get(t[i], 0); i += 1
                     for v in re.finditer(r"\b%s\s*=\s*['\"]([\w-]+)['\"]" % re.escape(fld), t[m.end():i]):
                         defined.add(v.group(1))
-    for rn in sorted(fh_names):
-        r = resources[rn]
+    ADDITEM = re.compile(r"\b(?:AddItem|FhAddItem|addItem)\s*\(\s*[^,\n)]*,\s*['\"]([a-z_][a-z0-9_]*)['\"]")
+    # granted items: every config/data/shared grant row across all resources (fh + rsg), plus AddItem literals.
+    granted = defaultdict(list)   # item -> [(rn, rel, line)]
+    for r in resources.values():
         g = glob.escape(r.path)
-        paths = sorted(set(glob.glob(os.path.join(g, 'config.lua')) + glob.glob(os.path.join(g, 'config', '*.lua')) +
-                           glob.glob(os.path.join(g, 'data', '**', '*.lua'), recursive=True)))
+        paths = sorted(set(
+            glob.glob(os.path.join(g, 'config.lua')) +
+            glob.glob(os.path.join(g, 'config', '*.lua')) +
+            glob.glob(os.path.join(g, 'data', '**', '*.lua'), recursive=True) +
+            glob.glob(os.path.join(g, 'shared', 'config.lua')) +
+            glob.glob(os.path.join(g, 'shared', 'main.lua')) +
+            glob.glob(os.path.join(g, 'shared', 'recipes.lua'))))
         for p in paths:
-            t = strip_comments(read(p))
+            t = strip_file(p)
             rel = os.path.relpath(p, r.path)
-            for rx in (NAMEROW, ITEMFLD):
+            for rx in (NAMEROW, ITEMFLD, ADDITEM):
                 for m in rx.finditer(t):
-                    if m.group(1) not in defined:
-                        findings.append(('items', m.group(1), '%s/%s:%d' % (rn, rel, lineno(t, m.start())),
-                                         'item %r is not defined (no rsg item / fh item definition)' % m.group(1)))
+                    granted[m.group(1)].append((r.name, rel, lineno(t, m.start())))
+    # AddItem/FhAddItem literals anywhere in code (not only config files)
+    for r in resources.values():
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            t = strip_file(p)
+            rel = os.path.relpath(p, r.path)
+            for m in ADDITEM.finditer(t):
+                loc = (r.name, rel, lineno(t, m.start()))
+                if loc not in granted[m.group(1)]:
+                    granted[m.group(1)].append(loc)
+    for item in sorted(granted):
+        if item not in defined:
+            rn, rel, ln = granted[item][0]
+            findings.append(('items', item, '%s/%s:%d' % (rn, rel, ln),
+                             'item %r is not defined (no rsg item / fh item definition)' % item))
+
+    # ---- rule: useable items with no handler (G1a) ----
+    # useable=true flags come from rsg-core/shared/items.lua and fh item definitions (flat `key = { ..., useable = true }`).
+    USEABLE_DEF = re.compile(r"\b([a-z][a-z0-9_]*)\s*=\s*\{[^{}]*\buseable\s*=\s*true")
+    useable_true = set()
+    for r in resources.values():
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            for m in USEABLE_DEF.finditer(strip_file(p)):
+                useable_true.add(m.group(1))
+    # use handlers: resolve CreateUseableItem arguments (literal, inline pairs loop, `.USE` table, const, `*.item` field).
+    CREATEUSE = re.compile(r"\bCreateUseableItem\s*\(\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*[,)]")
+    CREATEUSE_LIT = re.compile(r"\bCreateUseableItem\s*\(\s*['\"]([a-z_][a-z0-9_]*)['\"]\s*[,)]")
+    USE_TABLE = re.compile(r"\b([A-Za-z_]\w*)(?:\.USE|\[['\"]USE['\"]\])\s*=\s*\{")
+    INLINE_PAIRS = re.compile(r"\bfor\s+\w+\s*(?:,\s*\w+\s*)?in\s+pairs\s*\(\s*\{([^}]*)\}")
+    FIELD_ITEM = re.compile(r"\b(\w+)\s*=\s*\{[^{}]*\bitem\s*=\s*['\"]([a-z_][a-z0-9_]*)['\"]")
+    CONST_STR = re.compile(r"\b(?:local\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*=\s*['\"]([a-z_][a-z0-9_]*)['\"]")
+    ALIAS = re.compile(r"\b(?:local\s+)?([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*[\n,]")
+    use_handlers = set()
+    field_items = set()   # `item = 'x'` in a named table (e.g. fence leads.item) -> a consumed/delivered item
+    for r in resources.values():
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            for m in FIELD_ITEM.finditer(strip_file(p)):
+                field_items.add(m.group(2))
+    for r in resources.values():
+        joined = []
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            joined.append(strip_file(p))
+        jt = '\n'.join(joined)
+        if not CREATEUSE.search(jt) and not CREATEUSE_LIT.search(jt):
+            continue
+        for m in CREATEUSE_LIT.finditer(jt):
+            use_handlers.add(m.group(1))
+        has_dyn = bool(CREATEUSE.search(jt))
+        if has_dyn:
+            for m in USE_TABLE.finditer(jt):
+                body = braced(jt, jt.find('{', m.end() - 1))
+                for k in top_keys(body[1:-1]):
+                    if re.fullmatch(r'[a-z_][a-z0-9_]*', k):
+                        use_handlers.add(k)
+            for m in INLINE_PAIRS.finditer(jt):
+                for k in top_keys(m.group(1)):
+                    if re.fullmatch(r'[a-z_][a-z0-9_]*', k):
+                        use_handlers.add(k)
+        strconst, aliases = {}, {}
+        for m in CONST_STR.finditer(jt):
+            strconst[m.group(1)] = m.group(2)
+            strconst[m.group(1).split('.')[-1]] = m.group(2)
+        for m in ALIAS.finditer(jt):
+            aliases[m.group(1)] = m.group(2)
+        field_item = {m.group(1): m.group(2) for m in FIELD_ITEM.finditer(jt)}
+        for m in CREATEUSE.finditer(jt):
+            arg = m.group(1)
+            if arg in strconst:
+                use_handlers.add(strconst[arg]); continue
+            # resolve dotted path with one-hop aliases (e.g. cfg.leads.item, BEDROLL via FhSurvivalItems.BEDROLL)
+            cur, seen = arg, set()
+            while '.' in cur and cur not in strconst:
+                head, _, tail = cur.partition('.')
+                if head in aliases and tail:
+                    cur = aliases[head] + '.' + tail
+                    if cur in seen: break
+                    seen.add(cur)
+                    continue
+                break
+            if cur in strconst:
+                use_handlers.add(strconst[cur]); continue
+            if cur.endswith('.item') and cur.rsplit('.', 1)[0].split('.')[-1] in field_item:
+                use_handlers.add(field_item[cur.rsplit('.', 1)[0].split('.')[-1]])
+    for item in sorted(granted):
+        if item in useable_true and item not in use_handlers:
+            rn, rel, ln = granted[item][0]
+            findings.append(('useable', item, '%s/%s:%d' % (rn, rel, ln),
+                             'item %r is useable=true but has no use handler' % item))
+
+    # ---- rule: granted item nothing consumes (G1a warning tier) ----
+    money_items = {'dollar', 'cent', 'blood_dollar', 'blood_cent', 'gold'}
+    crafting_inputs = set()
+    buy_items = set()
+    for r in resources.values():
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            t = strip_file(p)
+            if 'fh_crafting' in resources and p == os.path.join(resources['fh_crafting'].path, 'shared', 'recipes.lua'):
+                for m in re.finditer(r"\binputs\s*=\s*\{([^{}]*)\}", t):
+                    for v in re.finditer(r"\bitem\s*=\s*['\"]([a-z_][a-z0-9_]*)['\"]", m.group(1)):
+                        crafting_inputs.add(v.group(1))
+            for m in re.finditer(r"\b(?:buys|goods|supplies)\s*=\s*\{([^{}]*)\}", t):
+                for v in re.finditer(r"\b([a-z_][a-z0-9_]*)\s*=", m.group(1)):
+                    buy_items.add(v.group(1))
+    consumers = use_handlers | money_items | crafting_inputs | field_items | buy_items
+    for item in sorted(granted):
+        if item not in consumers:
+            rn, rel, ln = granted[item][0]
+            WARNINGS.append(('dead', item, '%s/%s:%d' % (rn, rel, ln),
+                             'item %r is granted but nothing consumes it' % item))
+
+    # ---- rule: default-clothes hashes valid (G3) ----
+    if 'rsg-character' in resources:
+        rc = resources['rsg-character']
+        cfg_p = os.path.join(rc.path, 'shared', 'config.lua')
+        cloth_p = os.path.join(rc.path, 'data', 'clothing.lua')
+        if os.path.isfile(cfg_p) and os.path.isfile(cloth_p):
+            cfg_t = strip_file(cfg_p)
+            cloth_t = strip_file(cloth_p)
+            dc = re.search(r'\bDefaultClothes\s*=\s*\{', cfg_t)
+            if dc:
+                dc_body = braced(cfg_t, cfg_t.find('{', dc.start()))
+                for g in re.finditer(r"\b(male|female)\s*=\s*\{", dc_body):
+                    gbody = braced(dc_body, dc_body.find('{', g.end() - 1))
+                    gname = g.group(1)
+                    for c in re.finditer(r"\b(\w+)\s*=\s*\{\s*hash\s*=\s*(\d+)\s*\}", gbody):
+                        cat, hv = c.group(1), int(c.group(2))
+                        gb = re.search(r"\[\s*['\"]%s['\"]\s*\]\s*=\s*\{" % re.escape(gname), cloth_t)
+                        valid = False
+                        if gb:
+                            gbody2 = braced(cloth_t, cloth_t.find('{', gb.start()))
+                            cb = re.search(r"\[\s*['\"]%s['\"]\s*\]\s*=\s*\{" % re.escape(cat), gbody2)
+                            if cb:
+                                cbody = braced(gbody2, gbody2.find('{', cb.start()))
+                                valid = bool(re.search(r"\[\s*['\"]hash['\"]\s*\]\s*=\s*%d\b" % hv, cbody))
+                        if not valid:
+                            findings.append(('clothes', '%s:%s' % (gname, cat),
+                                             '%s/shared/config.lua' % rc.name,
+                                             'DefaultClothes %s.%s hash %d is not in clothing.lua' % (gname, cat, hv)))
+
+    # ---- rule: fh item icons (G3, warning tier) ----
+    imgdir = os.path.join(resources['fh_inventory'].path, 'html', 'images') if 'fh_inventory' in resources else None
+    defined_fh = set()
+    for r in resources.values():
+        if category_of.get(r.name) != '[fh]':
+            continue
+        for p in glob.glob(os.path.join(glob.escape(r.path), '**', '*.lua'), recursive=True):
+            t = strip_file(p)
+            for m in re.finditer(r"(?:^|[\s,{])(?:\[\s*['\"]([\w-]+)['\"]\s*\]|([A-Za-z_]\w*))\s*=\s*\{\s*(?:name\s*=\s*['\"][^'\"]*['\"]\s*,\s*)?label\s*=", t):
+                defined_fh.add(m.group(1) or m.group(2))
+    if imgdir:
+        for item in sorted(defined_fh):
+            if not os.path.isfile(os.path.join(imgdir, item + '.png')):
+                WARNINGS.append(('icon', item, 'fh_inventory/html/images', 'fh item %r has no icon (%s.png)' % (item, item)))
+
+    # ---- rule: manifest globs/literals exist (G3) ----
+    FILE_KEYS = ('server_scripts', 'client_scripts', 'shared_scripts', 'server_script', 'client_script',
+                 'shared_script', 'files', 'file', 'ui_page', 'loadscreen')
+    for r in resources.values():
+        if r.manifest is None:
+            continue
+        for key in FILE_KEYS:
+            for pat in r.manifest.get(key, []):
+                if pat.startswith('@') or pat.startswith('!'):
+                    continue
+                hits = glob.glob(os.path.join(glob.escape(r.path), pat), recursive=True)
+                if any(ch in pat for ch in '*?['):
+                    if not hits:
+                        findings.append(('manifest', '%s:%s' % (r.name, pat), '%s/fxmanifest.lua' % r.name,
+                                         'manifest glob %r matches no files' % pat))
+                elif not hits:
+                    findings.append(('manifest', '%s:%s' % (r.name, pat), '%s/fxmanifest.lua' % r.name,
+                                     'manifest entry %r does not exist' % pat))
     return findings
 
 def load_allow(path):
@@ -350,16 +615,22 @@ def main(argv=None):
             used.add(k)
         else:
             bad.append(f)
-    for rule in ('exports', 'events', 'items'):
+    for rule in ('exports', 'events', 'event-target', 'items', 'useable', 'manifest', 'clothes'):
         grp = [f for f in bad if f[0] == rule]
         if grp:
             print('== %s (%d)' % (rule, len(grp)))
             for _, key, loc, msg in sorted(grp, key=lambda x: x[2]):
                 print('  %s  %s' % (loc, msg))
+    for rule in ('dead', 'icon'):
+        grp = [w for w in WARNINGS if w[0] == rule]
+        if grp:
+            print('== warning: %s (%d)' % (rule, len(grp)))
+            for _, key, loc, msg in sorted(grp, key=lambda x: x[2]):
+                print('  %s  %s' % (loc, msg))
     for k, (ln, _) in allow.items():
         if k not in used:
             print('warning: stale allowlist entry %r (line %d)' % (k, ln))
-    print('contracts: %d finding(s), %d allowlisted' % (len(bad), len(findings) - len(bad)))
+    print('contracts: %d finding(s), %d allowlisted, %d warning(s)' % (len(bad), len(findings) - len(bad), len(WARNINGS)))
     return 1 if bad else 0
 
 if __name__ == '__main__':
