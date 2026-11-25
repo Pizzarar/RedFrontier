@@ -433,4 +433,60 @@ case('client/where.lua: uses shared FhUiTrappers cache, falls back on fh_hunting
     end)
 end)
 
+-- Start-retry: fh_hunting's callback may fail right at resource start; bounded retry, cancelled by stop.
+local function startRetryEnv(awaitFn, waitFn)
+    local fh, fire = makeClientBus()
+    return fh, fire, {
+        FH = fh,
+        GetCurrentResourceName = function() return 'fh_ui' end,
+        FhUiTrappers = '__NIL__',
+        Wait = waitFn,
+        lib = { callback = { await = awaitFn } },
+    }
+end
+
+case('client/trappers.lua: start retry succeeds on the 2nd try and notifies once', function()
+    local calls, waits, noticed = 0, {}, {}
+    local list = { { region_id = 'heartlands', label = 'Trapper', coords = { x = 1, y = 2, z = 3 } } }
+    local fh, fire, env = startRetryEnv(function() calls = calls + 1; if calls >= 2 then return list end end,
+        function(ms) waits[#waits + 1] = ms end)
+    withGlobals(env, function()
+        dofile(fhBase .. 'fh_ui/client/trappers.lua')
+        FhUiTrappers.onChange(function(l) noticed[#noticed + 1] = l == nil and 'NIL' or #l end)
+        fire('onResourceStart', 'fh_hunting')
+        eq(2, calls)
+        eq(1, #waits)
+        same({ 1 }, noticed)
+        eq(1, #FhUiTrappers.fetch())
+    end)
+end)
+
+case('client/trappers.lua: start retry gives up after max tries and notifies nil once', function()
+    local calls, waits, noticed = 0, {}, {}
+    local fh, fire, env = startRetryEnv(function() calls = calls + 1 end, function(ms) waits[#waits + 1] = ms end)
+    withGlobals(env, function()
+        dofile(fhBase .. 'fh_ui/client/trappers.lua')
+        FhUiTrappers.onChange(function(l) noticed[#noticed + 1] = l == nil and 'NIL' or #l end)
+        fire('onResourceStart', 'fh_hunting')
+        eq(3, calls)
+        eq(2, #waits)
+        same({ 'NIL' }, noticed)
+    end)
+end)
+
+case('client/trappers.lua: start retry is cancelled when fh_hunting stops', function()
+    local calls, noticed = 0, {}
+    local fire
+    local fh, fire_, env = startRetryEnv(function() calls = calls + 1 end,
+        function() fire('onResourceStop', 'fh_hunting') end)
+    fire = fire_
+    withGlobals(env, function()
+        dofile(fhBase .. 'fh_ui/client/trappers.lua')
+        FhUiTrappers.onChange(function(l) noticed[#noticed + 1] = l == nil and 'NIL' or #l end)
+        fire('onResourceStart', 'fh_hunting')
+        eq(1, calls) -- no further tries after stop
+        same({ 'NIL' }, noticed) -- only the stop notification
+    end)
+end)
+
 T.finish()

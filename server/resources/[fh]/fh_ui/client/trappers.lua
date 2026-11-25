@@ -6,6 +6,8 @@ local M = {}
 local cache = nil
 local huntingDown = false
 local listeners = {}
+local startGen = 0
+local START_TRIES, START_RETRY_MS = 3, 2000
 
 local function notify(trappers)
     for _, fn in ipairs(listeners) do
@@ -42,15 +44,25 @@ if FH and FH.on then
         if res ~= 'fh_hunting' then return end
         huntingDown = false
         cache = nil
+        startGen = startGen + 1
+        local gen = startGen
         FH.thread(function()
-            local list = M.fetch(true)
-            if not huntingDown then notify(list) end
+            -- fh_hunting's server side may not be ready yet: retry a few times, stopping on success or a newer start/stop.
+            local list
+            for attempt = 1, START_TRIES do
+                list = M.fetch(true)
+                if list ~= nil or gen ~= startGen or huntingDown then break end
+                if attempt < START_TRIES then Wait(START_RETRY_MS) end
+                if gen ~= startGen or huntingDown then return end
+            end
+            if gen == startGen and not huntingDown then notify(list) end
         end)
     end)
 
     FH.on('onResourceStop', function(res)
         if res == 'fh_hunting' then
             huntingDown = true
+            startGen = startGen + 1 -- cancels any pending start retry
             cache = nil
             notify(nil)
         elseif GetCurrentResourceName and res == GetCurrentResourceName() then
