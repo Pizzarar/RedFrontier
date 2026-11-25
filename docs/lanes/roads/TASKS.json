@@ -1,6 +1,6 @@
 {
   "laneId": "roads",
-  "updatedAt": "2026-11-25T03:42:28.171Z",
+  "updatedAt": "2026-11-25T19:45:32.246Z",
   "units": [
     {
       "id": "R0",
@@ -182,8 +182,9 @@
         "spec"
       ],
       "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
-      "status": "in_progress",
-      "branch": "roads-r14"
+      "status": "done",
+      "branch": "roads-r14",
+      "commit": "c1c8df5"
     },
     {
       "id": "R15",
@@ -194,8 +195,9 @@
         "docs/lanes/roads/TASKS.json"
       ],
       "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
-      "status": "in_progress",
-      "branch": "roads-r15"
+      "status": "done",
+      "branch": "roads-r15",
+      "commit": "c1c8df5"
     },
     {
       "id": "R16",
@@ -237,8 +239,20 @@
         "server/resources/[fh]"
       ],
       "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
-      "status": "in_progress",
-      "branch": "roads-r19"
+      "status": "done",
+      "branch": "roads-r19",
+      "commit": "abbf600"
+    },
+    {
+      "id": "R20",
+      "goal": "idea-1039: freight lockedFor per-player display lock (fh_quests hook d593e45)",
+      "files": [
+        "server/resources/[fh]/fh_trade",
+        "spec"
+      ],
+      "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
+      "status": "done",
+      "commit": "4e94d16"
     }
   ]
 }
