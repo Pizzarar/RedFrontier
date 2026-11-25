@@ -8,9 +8,10 @@
 - Workers: 0
 
 ## Done when
-- (what makes this team finished)
+- The M2 crafting loop plays end to end in game: loot worn_rifle → restore at the bench, craft ammo, brew a tonic and see the buff. Every input has an in-game source (C8 sources spec has no PENDING), and the Crafting OWNER-TESTS card PASSes.
 
 ## Decided
+- 2026-11-24 Plan docs/brainstorm/plans/crafting-02-herbs.md (C9a-c, idea-720): herb patches via lib.points + [E] + progressBar, server reach + shared per-patch cooldown, addItem carried. No new natives. Props/blips → spikes spk_herb (Open).
 - 2026-11-23 C7 merged 9211816, playtest-ready. idea-712 UN-PARKED as C8: buy lumber/nails/lead/casings at fh_trade posts (@roads `supplies` list); gun_parts = outlaw camp loot (@core fh_zones). No gathering. Crafting adds a sources spec + OWNER-TESTS only. idea-718: gunpowder + 4 herbs also BUY via idea-716 supplies; herb gathering parked.
 - 2026-11-23 CORRECTION: B7 removeItem was already on main. C1-C6 + C5a/C5b merged to main 40e0b57 (docs 11bb2ce, specs 57/1155/0). Next: C7 = H3 type map + ready gate + owner-plot reach via getStations + core-03 carried API/setItemInfo swap (lead packet-crafting.md). Not playtest-ready until C7.
 - 2026-11-23 H3 merged (2a7d98a). Crafting maps its station types onto homestead's: gunsmith/reload→workbench, apothecary→campfire (stationTypeMap in fh_crafting config). C5 H3 half unblocked; B7 half still waits. In-game OWNER-TESTS need H2 /fh_build (in review).
@@ -26,7 +27,8 @@
 - C7 (next lead): H3 type map + ready gate + getStations reach + core-03 carried API/setItemInfo swap. Tonic caps idea-612 status unverified.
 
 ## In flight
+- 2026-11-25 PASS+MERGED C9a-c herb gathering (idea-720, plan crafting-02-herbs) to main 3ee435d (ff on 743221f; Gemini PASS 0/0/0 7314883; venv 111/2046/0, contracts 0, syntax 0). Herb patches = second herb source next to trade supplies; coords TODO-verify-in-game.
 - 2026-11-23 PASS+MERGED C8 (idea-712) to main dc6c11e (ff on efc5227; Gemini PASS 0/0/2 + spec-only minors; venv 70/1357/0). spec/crafting_sources_spec.lua PENDING: 9 buy items -> @roads idea-716, gun_parts -> @core idea-717; must shrink to {}.
 - 2026-11-23 PASS+MERGED C7 to main 9211816 (ff on 9c86f29; Gemini PASS 0/0/0 51413f3 + docs-only 612 commit; venv 67/1335/0). Crafting plan complete: playtest-ready 9211816 (owner test needs H2 /fh_build or fh_dev 1).
-- 2026-11-23 Lead rn-5fa69919de55 handing off at 160k; next lead picks up C7 from packet-crafting.md.
+- 2026-11-24 Cra2 rn-ba5485686a96: C8 sources spec running; C9 herbs handed over.
 - 2026-11-23 MERGED C1-C6 (incl. C5a, C5b) to main 40e0b57 (ff, on 9beb4c0; venv specs 57/1155/0; crafting files identical to reviewed b6fb09a; shared append-only files +lines only). NEXT unit C7 (not started): H3 type map + ready gate + owner-plot reach via getStations, and swap to core-03 carried API (addItem/removeItem carried refs, setItemInfo). Not playtest-ready until C7.
