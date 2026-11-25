@@ -1,6 +1,6 @@
 {
   "laneId": "survival",
-  "updatedAt": "2026-11-24T23:53:03.909Z",
+  "updatedAt": "2026-11-25T01:51:21.825Z",
   "units": [
     {
       "id": "S3-low",
@@ -69,21 +69,24 @@
       "goal": "survival-02 block F1",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done",
+      "commit": "c6e26bd"
     },
     {
       "id": "F2",
       "goal": "survival-02 block F2",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done",
+      "commit": "029a49f"
     },
     {
       "id": "F3",
       "goal": "survival-02 block F3",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done",
+      "commit": "dc424a1"
     },
     {
       "id": "F-lows",

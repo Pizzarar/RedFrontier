@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Survival
 - Lead: ★ Sur2
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - S1-S5 of plan survival-01 merged on local main (specs green), `## Survival` card in OWNER-TESTS.md, `survival playtest-ready <hash>` logged. S3b/S4b (remove the stubs) done once @core B7 and @homestead H3/H4 are on main.
@@ -23,6 +23,7 @@
 
 ## In flight
 - survival-02 handed to Sur2 rn-9bba3824750e (2026-11-24). survival-01 fully merged (caebf25).
+- PASS/MERGED survival-02 complete: F1 c6e26bd + F2 029a49f (Gemini PASS 0/0/1, 0/0/3), F3 card dc424a1 (PASS 0/0/0). venv 105/1947/0/0. Lows queued: task F-lows, @homestead idea-893. Next: owner runs ## Survival steps 21-28; native default flip only after spike PASS.
 - MERGED S1 on main @ 9730266 (range-diff '=' vs 1d21178, venv specs 36/697/0).
 - MERGED S2 on main @ 1408a01 (101d57d 1c40722 a2986fd 1408a01; mig 0012_survival_needs.sql; range-diff 1 '!' server.cfg ctx only, 2/3 '='; venv 57/1159/0).
 - MERGED S3+S3b on main @ 883d46c (c239455 40a24fe eeea378 f92c87e 883d46c; Gemini PASS 0/0/0 on 4a513b6; range-diff 1 '!' natives.md keep-both doc, rest '='; venv 58/1172/0).
