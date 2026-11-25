@@ -236,9 +236,8 @@ end
 
 -- ---------------------------------------------------------------- R8: wagon tier rep-unlock gate (roads-02)
 -- t2/t3 wagons need an fh_progression unlock (wagon_t2 / wagon_t3); t1 is always allowed, so it is absent here.
--- wagon_t3 is not yet in fh_progression's config: until @progression adds it, t3 fails closed with the surfaced
--- 'unknown_unlock' (correct). The server pcall's exports.fh_progression:canUnlock and passes the result to
--- wagonTierGate, keeping the decision pure and specced.
+-- (wagon_t3 landed in fh_progression config at G1: heartlands tier 3.) The server pcall's
+-- exports.fh_progression:canUnlock and passes the result to wagonTierGate, keeping the decision pure and specced.
 M.UNLOCKS = {
     t2 = 'wagon_t2',
     t3 = 'wagon_t3',

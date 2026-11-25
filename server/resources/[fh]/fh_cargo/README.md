@@ -24,8 +24,7 @@ t2/t3 wagons are gated on regional rep via `fh_progression`: `spawnWagon` calls 
 'wagon_t2')` / `'wagon_t3'` (the id lives in `shared/cargo_rules.lua` `UNLOCKS`). t1 is always allowed. Fail closed:
 if fh_progression is not started, `canUnlock` throws, or it returns `false`, the spawn is refused and the reason is
 surfaced to the player (`fh_locked` when no reason is available, otherwise the returned reason, e.g. `tier_too_low`).
-`wagon_t3` is not yet in fh_progression's config (requested from @progression), so t3 correctly refuses with
-`unknown_unlock` until it lands. Soft dependency only: there is no `dependencies` entry for fh_progression.
+Soft dependency only: there is no `dependencies` entry for fh_progression.
 
 ## Tiers
 
