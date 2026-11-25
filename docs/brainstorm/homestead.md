@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Homestead
 - Lead: ★ Hom3
-- Workers: 1
+- Workers: 0
 
 ## Done when
 - H1-H5 of plans/homestead-01 merged to local main (review PASS, run-specs green) and `decision homestead playtest-ready <hash>` logged; Overlord gates the combined playtest.
@@ -24,8 +24,13 @@
 - (none in lane) Parked/elsewhere: nails.png idea-724; owner in-game checks = OWNER-TESTS homestead cards (plots, props, lots); stale homestead worktrees (pre-rebase hashes) need manual sweep, owner OK first.
 
 ## In flight
-- homestead-03 home hygiene (plans/homestead-03-home-hygiene.md): all reviewed PASS. Merge order H16 (e0b0e4d, slot asked from Red4, rebase again at slot) → H13+H13b (5f3c2a9, rebasing onto H16) → H15 (f6b7db6 + unreviewed fix 51e0fb0, rebase over H13, comfort.lua). H14a @core idea-856 pending; H14b after.
+- PASS/MERGED homestead-04 H18 garden pure rules: cc2f603 (PASS 0/1/3 3e3e341; carrot allowlist stopgap idea-1008 @survival). H19 finishing (Hom40), H20a fixing review FAIL.
+- PASS/MERGED homestead-04 H19 garden server + migration 0021: d035a92 (PASS 0/0/0 0863d03). H20a PASS (53b1cb8 delta); H20b building (Hom43).
+- PASS/MERGED homestead-04 H20 trough (H20a+H20b, 7 commits 61015ec..4866324 + slot commit, migration 0024): PASS 0/0/0 53b1cb8, 0/0/2 2bc08bf, 0/0/2 74c5954, 0/0/0 fdc75fc. feedTrough export (writes stay in homestead), getTrough read-only, refill flagged off. Next: H21 @progression.
+- NOW: homestead-04 working homestead (plans/homestead-04-working-homestead.md): H18 MERGED cc2f603, H19 MERGED d035a92 (0021, idea-916 closed), H20 trough MERGED (0024). Remaining: H21 request to @progression (fh_hands feed_topup -> feedTrough), then playtest-ready. Owner Q: both/garden only/neither (default both, no answer). Disk 97%: owner must run `vs worktree sweep --apply` (needs-you logged).
+- PASS/DONE homestead-03 complete: H14b merged a37a9c3+d5a0756 (PASS 0/1/2 913291e + delta PASS 0/0/0 32208d8; 129/2335/0). Logged `homestead homestead-03 playtest-ready d5a0756`. Next: Buddy plans homestead-04 (idea-916 farming candidate). Core follow-up idea-970.
+- homestead-03 home hygiene (plans/homestead-03-home-hygiene.md): MERGED + pushed H16 (8d445f8, db07231), H13+H13b (68b815b, 24c4080, 6e2e898). H15 MERGED + pushed (36e9c42; PASS f6b7db6 + delta PASS e1b449a; 106/1976/0). H17 stationAt type + coords (idea-893) MERGED + pushed 13798db (PASS 0/0/0 2a4046a); Sur2 told, idea-893 archived. @a-life AL2 adds plotInfo coords/region/fenceBuilt (main.lua:577) on their side (a-life-03 C0), additive only, Hom3's conditions. H14a DELIVERED by core-03 C3a (9beb4c0): removeItem({type='backpack', id=src}, item, n), one section only. H17 MERGED 13798db (idea-893 closed). H14b PASS 0/1/2 913291e, M+2L folded in 32208d8, delta review rn-039c3850c771; then slot, then playtest-ready. fh_inventory addItem false-failure → @core idea-970. Hom3 hit 5h limit (resets 10:20Z). homestead-04 proposal to owner: garden slot (idea-916 veg for crafting) then trough slot (horse refill; hands feed trough not chest, removes fh_hands workaround). Awaiting owner pick.
 - Owner Qs (non-blocking, defaults stand): lot trophies/extra slots = no; admin force-unclaim = clear items (logged).
 - DONE: homestead-01 (H1-H5 + H2b/c/d) and homestead-02 town lots (H6-H12 incl. H9b, repByCitizenid rep-back, /where lot 3307497) on main, pushed, tip deb80ca, specs 86/1588/0. Logged `homestead town-lots playtest-ready deb80ca` 2026-11-24T17:13Z.
-- Lead Hom3 rn-8ca5c7592ea0 (took over from Hom2 2026-11-24). Overlord = `vs who lead --lane redfrontier` (Red4 now). Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (homestead highest 0018).
+- Lead Hom3 rn-8ca5c7592ea0 (took over from Hom2 2026-11-24). Routing: normal builds plain Implement (A/B Sonnet/Gemini), tierA Implement - Opus pinned; review by the other provider; no DeepSeek. Slot work only in the worktree (push HEAD:main), no git writes in the main checkout. Overlord = `vs who lead --lane redfrontier` (Red4 now). Specs only via ~/.venvs/rf/bin/python. Migrations = main highest+1 at merge (main highest 0024, homestead trough).
 - Contacts: Hunting Buddy rn-323e75f78948, Crafting Buddy (stations), @a-life Ali1 (lawSafeAt consumer), @world Wor1 (plot/lot config, /where).

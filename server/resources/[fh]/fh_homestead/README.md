@@ -314,7 +314,7 @@ slot, so no chest prompt) and its only writer is the load below.
   + `trough.cooldownSeconds` (1800) passed), takes exactly 1 feedbag from the container, records `last_refill_at`
   (conditional on the plot still being the owner's; if that write fails the feedbag goes back), then sends
   `fh:homestead:trough_refilled`, and the client sets the horse health and stamina cores to full (`GetMount`,
-  `SetAttributeCoreValue`: unverified natives, TODO-verify). No fh_buffs buff. Migration `0099_homestead_trough.sql`
+  `SetAttributeCoreValue`: unverified natives, TODO-verify). No fh_buffs buff. Migration `0024_homestead_trough.sql`
   (placeholder number, renumbered at merge).
 - **Cap**: `trough.capacity` (default **10** = `maxWeight` 20000 g / feedbag 2000 g). The use handler and `feedTrough` both stop there (`fh_trough_full`).
 - **Exports** (all writes stay inside fh_homestead; no container ref is ever handed out):
