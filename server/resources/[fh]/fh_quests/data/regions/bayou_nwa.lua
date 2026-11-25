@@ -45,4 +45,7 @@ JT.registerRegion('bayou_nwa', {
             coords = { x = 2555.0, y = -1745.0, z = 20.0 }, -- TODO-verify-in-game (beside the Cypress Hollow camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/bayou_nwa.lua)
+        { chain_id = 'legendary_mossback_gator', legendary = 'legendary_mossback_gator', money = 60, rep = 5, min_tier = 3 },
+    },
 })

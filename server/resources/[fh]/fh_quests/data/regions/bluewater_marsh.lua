@@ -34,4 +34,7 @@ JT.registerRegion('bluewater_marsh', {
             coords = { x = 2395.0, y = -405.0, z = 25.0 }, -- TODO-verify-in-game (beside the Marsh Ford camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/bluewater_marsh.lua)
+        { chain_id = 'legendary_brackhide_boar', legendary = 'legendary_brackhide_boar', money = 60, rep = 5, min_tier = 3 },
+    },
 })

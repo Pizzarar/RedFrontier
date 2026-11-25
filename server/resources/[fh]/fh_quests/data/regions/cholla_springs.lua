@@ -34,4 +34,7 @@ JT.registerRegion('cholla_springs', {
             coords = { x = -3355.0, y = -2485.0, z = 75.0 }, -- TODO-verify-in-game (beside the Alkali Flat camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/cholla_springs.lua)
+        { chain_id = 'legendary_cinderjaw_coyote', legendary = 'legendary_cinderjaw_coyote', money = 60, rep = 5, min_tier = 3 },
+    },
 })

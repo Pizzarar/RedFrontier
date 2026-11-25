@@ -34,4 +34,7 @@ JT.registerRegion('rio_bravo', {
             coords = { x = -1805.0, y = -3195.0, z = 55.0 }, -- TODO-verify-in-game (beside the Rio camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/rio_bravo.lua)
+        { chain_id = 'legendary_canyonback_boar', legendary = 'legendary_canyonback_boar', money = 60, rep = 5, min_tier = 3 },
+    },
 })

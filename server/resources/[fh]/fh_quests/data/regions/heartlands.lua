@@ -47,4 +47,7 @@ JT.registerRegion('heartlands', {
             coords = { x = 605.0, y = 205.0, z = 90.0 }, -- TODO-verify-in-game (beside the Dakota South camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/heartlands.lua)
+        { chain_id = 'legendary_bear', legendary = 'legendary_bear', money = 60, rep = 5, min_tier = 3 },
+    },
 })

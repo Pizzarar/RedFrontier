@@ -20,6 +20,7 @@ dofile(here .. 'support/world_config.lua')
 dofile(fh .. 'fh_zones/config.lua')
 dofile(fh .. 'fh_trade/config.lua')
 local animals = dofile(fh .. 'fh_hunting/shared/animals.lua')
+local legendaries = dofile(fh .. 'fh_hunting/shared/legendaries.lua')
 local zones = assert(_G.FhZonesConfig, 'FhZonesConfig missing')
 local trade = assert(_G.FhTradeConfig, 'FhTradeConfig missing')
 
@@ -28,9 +29,9 @@ for _, p in ipairs(trade.posts or {}) do posts[p.id] = p end
 
 local FIELD = {
     hunt_request = 'hunt', camp_clear = 'camps', bounty = 'bounties', supply_run = 'supply',
-    survey = 'surveys', escort = 'escorts', rescue = 'rescues',
+    survey = 'surveys', escort = 'escorts', rescue = 'rescues', legendary = 'legendaries',
 }
-local FIELDS = { 'hunt', 'camps', 'bounties', 'supply', 'surveys', 'escorts', 'rescues' }
+local FIELDS = { 'hunt', 'camps', 'bounties', 'supply', 'surveys', 'escorts', 'rescues', 'legendaries' }
 
 local function hasData(d)
     for _, f in ipairs(FIELDS) do if #(d[f] or {}) > 0 then return true end end
@@ -58,6 +59,14 @@ describe('quests content: id references exist and match the region', function()
             end
             for _, h in ipairs(d.hunt or {}) do
                 assert(animals.byKey[h[1]], id .. ' hunt animal ' .. tostring(h[1]) .. ' is not an fh_hunting animal')
+            end
+            eq(1, #(d.legendaries or {}), id .. ' must have exactly one legendary commission')
+            for _, l in ipairs(d.legendaries or {}) do
+                local leg = legendaries.byId[l.legendary]
+                assert(leg, id .. ' legendary ' .. tostring(l.legendary) .. ' is not in fh_hunting legendaries')
+                eq(id, leg.region_id, id .. ' legendary ' .. l.legendary .. ' region')
+                eq(leg.chain_id, l.chain_id, id .. ' legendary ' .. l.legendary .. ' chain_id')
+                eq(3, l.min_tier, id .. ' legendary ' .. l.legendary .. ' min_tier')
             end
         end
     end)

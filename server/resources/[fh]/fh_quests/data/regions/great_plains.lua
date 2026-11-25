@@ -45,4 +45,7 @@ JT.registerRegion('great_plains', {
             coords = { x = -695.0, y = -1595.0, z = 40.0 }, -- TODO-verify-in-game (beside the Great Plains East camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/great_plains.lua)
+        { chain_id = 'legendary_dusthorn_bison', legendary = 'legendary_dusthorn_bison', money = 60, rep = 5, min_tier = 3 },
+    },
 })

@@ -9,7 +9,7 @@ local M = {}
 
 local function match() return FhQuestsMatch or require('match') end
 
-M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run', 'survey', 'escort', 'rescue' }
+M.TYPES = { 'hunt_request', 'camp_clear', 'bounty', 'supply_run', 'survey', 'escort', 'rescue', 'legendary' }
 M.BOUNTY_EVENT = 'fh:quests:bounty_down' -- local server event fired by the bounty death watcher: { citizenid, offer_key, region_id }
 M.BOUNTY_TAG_PREFIX = 'fh_quests:bounty:'
 

@@ -34,4 +34,7 @@ JT.registerRegion('hennigans_stead', {
             coords = { x = -1905.0, y = -1955.0, z = 60.0 }, -- TODO-verify-in-game (beside the Tableland camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/hennigans_stead.lua)
+        { chain_id = 'legendary_saltbrush_buck', legendary = 'legendary_saltbrush_buck', money = 60, rep = 5, min_tier = 3 },
+    },
 })

@@ -34,4 +34,7 @@ JT.registerRegion('tall_trees', {
             coords = { x = -2145.0, y = -1645.0, z = 130.0 }, -- TODO-verify-in-game (beside the Pine Flats camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/tall_trees.lua)
+        { chain_id = 'legendary_embercoat_coyote', legendary = 'legendary_embercoat_coyote', money = 60, rep = 5, min_tier = 3 },
+    },
 })

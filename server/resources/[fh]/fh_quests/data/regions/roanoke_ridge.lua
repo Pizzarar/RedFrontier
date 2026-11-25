@@ -34,4 +34,7 @@ JT.registerRegion('roanoke_ridge', {
             coords = { x = 2255.0, y = 805.0, z = 90.0 }, -- TODO-verify-in-game (beside the Riverbend camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/roanoke_ridge.lua)
+        { chain_id = 'legendary_coalhorn_moose', legendary = 'legendary_coalhorn_moose', money = 60, rep = 5, min_tier = 3 },
+    },
 })

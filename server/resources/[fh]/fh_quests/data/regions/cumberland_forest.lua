@@ -34,4 +34,7 @@ JT.registerRegion('cumberland_forest', {
             coords = { x = -925.0, y = 1125.0, z = 110.0 }, -- TODO-verify-in-game (beside the Rapids camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/cumberland_forest.lua)
+        { chain_id = 'legendary_greyhowl_wolf', legendary = 'legendary_greyhowl_wolf', money = 60, rep = 5, min_tier = 3 },
+    },
 })

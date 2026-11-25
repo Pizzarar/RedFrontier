@@ -133,6 +133,22 @@ AddEventHandler('onResourceStop', function(res)
 end)
 
 -- ---------------------------------------------------------------- registration
+-- TODO(quests-04 L0): exports.fh_hunting:chainState(citizenid, chain_id) does not exist yet (@hunting L0).
+-- Until L0 lands, this returns nil so the offer is shown. Once L0 lands, the GetResourceState + pcall + callable
+-- check picks it up automatically and returns { reason = 'legendary_done' } when chainState == 'complete'.
+local function legendaryLockedFor(offer, src)
+    if GetResourceState('fh_hunting') ~= 'started' then return nil end
+    local h = exports.fh_hunting
+    if not h then return nil end
+    local okFn, fn = pcall(function() return h.chainState end)
+    if not okFn or not Jobs.callable(fn) then return nil end
+    return JT.legendaryLockedFor(offer, src, {
+        citizenidOf = Q.citizenidOf,
+        huntingStarted = function() return true end,
+        chainState = function(cid, chain_id) return h:chainState(cid, chain_id) end,
+    })
+end
+
 local function hooks(job_type, extra)
     local h = {
         offers = function(region_id) return JT.offers(job_type, region_id) end,
@@ -152,6 +168,7 @@ CreateThread(function()
         survey = hooks('survey', FhQuestsWatch.jobHooks('survey')), -- reach-watcher (server/watch.lua)
         escort = hooks('escort', FhQuestsWatch.escortHooks()),       -- reach-watcher escort section
         rescue = hooks('rescue', FhQuestsWatch.rescueHooks()),       -- reach-watcher rescue section
+        legendary = hooks('legendary', { lockedFor = legendaryLockedFor }),
     }
     for _, name in ipairs(JT.TYPES) do
         local ok, err = exports.fh_quests:registerJobType(name, defs[name])

@@ -27,7 +27,7 @@ describe('quests tiers: offer min_tier default and builders', function()
     it('every built-in builder sets min_tier = 1 when omitted in region data', function()
         local FIELD = {
             hunt_request = 'hunt', camp_clear = 'camps', bounty = 'bounties', supply_run = 'supply',
-            survey = 'surveys', escort = 'escorts', rescue = 'rescues',
+            survey = 'surveys', escort = 'escorts', rescue = 'rescues', legendary = 'legendaries',
         }
         local d = JT.DATA.heartlands
         for _, jt in ipairs(JT.TYPES) do
@@ -42,7 +42,9 @@ describe('quests tiers: offer min_tier default and builders', function()
                     eq(1, o.min_tier, jt .. ':' .. o.key .. ' default min_tier')
                 end
             end
-            assert(omitted >= 1, 'expected at least one omitted min_tier entry in heartlands for ' .. jt)
+            if jt ~= 'legendary' then
+                assert(omitted >= 1, 'expected at least one omitted min_tier entry in heartlands for ' .. jt)
+            end
         end
     end)
 
@@ -79,6 +81,10 @@ describe('quests tiers: offer min_tier default and builders', function()
                 { key = 'r1', name = 'R1', camp = 'c1', model = 'm', coords = { x = 1, y = 2, z = 3 }, heading = 0, money = 20, rep = 2 },
                 { key = 'r2', name = 'R2', camp = 'c2', model = 'm', coords = { x = 1, y = 2, z = 3 }, heading = 0, money = 50, rep = 4, min_tier = 2 },
             },
+            legendaries = {
+                { chain_id = 'leg_1', legendary = 'leg_1', money = 60, rep = 5 },
+                { chain_id = 'leg_3', legendary = 'leg_3', money = 60, rep = 5, min_tier = 3 },
+            },
         })
         local ok, err = pcall(function()
             local hunt = JT.offers('hunt_request', probe)
@@ -95,6 +101,8 @@ describe('quests tiers: offer min_tier default and builders', function()
             eq(1, escorts[1].min_tier); eq(3, escorts[2].min_tier)
             local rescues = JT.offers('rescue', probe)
             eq(1, rescues[1].min_tier); eq(2, rescues[2].min_tier)
+            local legs = JT.offers('legendary', probe)
+            eq(1, legs[1].min_tier); eq(3, legs[2].min_tier)
         end)
         JT.DATA[probe] = nil
         assert(ok, err)

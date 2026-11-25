@@ -45,4 +45,7 @@ JT.registerRegion('scarlett_meadows', {
             coords = { x = 1705.0, y = -1745.0, z = 65.0 }, -- TODO-verify-in-game (beside the Catfish Bottom camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/scarlett_meadows.lua)
+        { chain_id = 'legendary_redclay_stag', legendary = 'legendary_redclay_stag', money = 60, rep = 5, min_tier = 3 },
+    },
 })

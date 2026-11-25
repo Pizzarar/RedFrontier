@@ -34,4 +34,7 @@ JT.registerRegion('big_valley', {
             coords = { x = -1655.0, y = -895.0, z = 90.0 }, -- TODO-verify-in-game (beside the Creekside camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/big_valley.lua)
+        { chain_id = 'legendary_copperhide_deer', legendary = 'legendary_copperhide_deer', money = 60, rep = 5, min_tier = 3 },
+    },
 })

@@ -34,4 +34,7 @@ JT.registerRegion('gaptooth_ridge', {
             coords = { x = -5105.0, y = -2605.0, z = 90.0 }, -- TODO-verify-in-game (beside the Gaptooth camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/gaptooth_ridge.lua)
+        { chain_id = 'legendary_sandveil_fox', legendary = 'legendary_sandveil_fox', money = 60, rep = 5, min_tier = 3 },
+    },
 })

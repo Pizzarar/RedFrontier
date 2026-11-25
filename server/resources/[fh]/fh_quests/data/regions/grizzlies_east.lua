@@ -34,4 +34,7 @@ JT.registerRegion('grizzlies_east', {
             coords = { x = 1385.0, y = 1385.0, z = 190.0 }, -- TODO-verify-in-game (beside the Frost Creek camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/grizzlies_east.lua)
+        { chain_id = 'legendary_frostmane_moose', legendary = 'legendary_frostmane_moose', money = 60, rep = 5, min_tier = 3 },
+    },
 })

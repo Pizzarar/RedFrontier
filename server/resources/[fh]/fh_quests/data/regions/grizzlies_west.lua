@@ -34,4 +34,7 @@ JT.registerRegion('grizzlies_west', {
             coords = { x = -1455.0, y = 985.0, z = 210.0 }, -- TODO-verify-in-game (beside the Tundra camp)
         },
     },
+    legendaries = { -- one-shot tier-3 legendary commission (fh_hunting/data/legendaries/grizzlies_west.lua)
+        { chain_id = 'legendary_palehorn_elk', legendary = 'legendary_palehorn_elk', money = 60, rep = 5, min_tier = 3 },
+    },
 })
