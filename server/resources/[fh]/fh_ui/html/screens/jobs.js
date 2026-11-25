@@ -24,7 +24,7 @@ FH_UI.register('jobs', {
       info.appendChild(D.h('strong', '', o.title));
       if (o.text) info.appendChild(D.h('div', '', o.text));
       info.appendChild(D.h('div', '', 'Reward: ' + rewardText(o.rewards)));
-      if (o.locked) info.appendChild(D.h('div', 'note muted', lockText(o.locked)));
+      if (o.locked) info.appendChild(D.h('div', 'note', lockText(o.locked)));
       row.appendChild(info);
       if (o.locked) { /* locked: no button at all; the server still refuses fh_offer_locked */ }
       else if (o.accepted) row.appendChild(D.h('span', 'rare', 'Accepted'));

@@ -67,7 +67,6 @@ case('accept notice: known codes and fallback', function()
     T.eq(TX.DEFAULT, TX.acceptNotice(false, nil).notice)
     T.eq(TX.DEFAULT, TX.acceptNotice(nil, 'fh_made_up').notice)
 end)
-T.finish()
 
 case('locked offers keep min_tier / reason; plain offers have no locked', function()
     local a, b, c = {}, {}, {}
@@ -85,9 +84,10 @@ case('locked offers keep min_tier / reason; plain offers have no locked', functi
     assert(ok, table.concat(errs or {}, ';'))
 end)
 case('jobs fixture carries a tier-locked offer; quests ships showLockedOffers = true', function()
-    local n
-    for _, o in ipairs(F.fixtures.jobs.offers) do if o.locked then n = o.locked.min_tier end end
-    T.eq(2, n)
+    local boss
+    for _, o in ipairs(F.fixtures.jobs.offers) do if o.id == 'heartlands:1:bounty:ridge_boss' then boss = o end end
+    assert(boss and boss.locked)
+    T.eq(2, boss.locked.min_tier)
     local env = { FhQuestsConfig = {} }
     local f = assert(loadfile(here .. '../server/resources/[fh]/fh_quests/config.lua', 't', setmetatable(env, { __index = _G })))
     f()
@@ -106,3 +106,4 @@ case('jobs fixture has a freight_disabled reason-only lock and a tier+reason loc
     local ok, errs = F.validate('jobs', F.fixtures.jobs)
     assert(ok, table.concat(errs or {}, ';'))
 end)
+T.finish()

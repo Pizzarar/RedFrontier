@@ -34,7 +34,9 @@ function M.jobs(snap, now)
                 local lk
                 if type(o.locked) == 'table' then
                     -- tier lock and/or hook lock ({ reason }); an empty table still means locked
-                    lk = { min_tier = tonumber(o.locked.min_tier), reason = type(o.locked.reason) == 'string' and o.locked.reason or nil }
+                    local mt = tonumber(o.locked.min_tier)
+                    if mt ~= nil and (mt ~= mt or mt == math.huge or mt == -math.huge) then mt = nil end
+                    lk = { min_tier = mt, reason = type(o.locked.reason) == 'string' and o.locked.reason or nil }
                 end
                 offers[#offers + 1] = {
                     id = o.id, job_type = tostring(o.job_type or ''), title = tostring(o.title or o.id),
