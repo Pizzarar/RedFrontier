@@ -175,7 +175,7 @@ character (rsg-core has a Player for it), else `fh_player_offline`; a non-number
 | `registerContainer(ref, { coords, slots?, maxWeight?, label? })` | `ok, reason` |
 | `setContainerCoords(ref, coords)` | `ok, reason` |
 | `open(src, ref)` | `ok, reason` (reach checked from the server-side ped position) |
-| `createDropBag(coords, items, { owner?, label? })` | `id` or `nil, reason` |
+| `createDropBag(coords, items, { owner?, label? })` | `id, leftovers` or `nil, reason[, leftovers]`; each stack is all-or-nothing, `leftovers` = the stacks the bag refused (`{}` when all fit; core-10 I1). Every stack refused: no bag, `nil, 'fh_refused', leftovers`. Bad coords / fh_inventory down: `nil, reason` |
 | `addItem(ref, name, amount?, info?)` | `true` or `false, reason`; adds `amount` (default 1, integer >= 1) to a registered world container or a carried ref (C3a), all-or-nothing: the rules veto runs first and nothing is added on a refusal (`fh_size_class`: bulky never enters the backpack; `fh_too_heavy`, `fh_no_slot`: not all of it fits) |
 | `setItemInfo(ref, slot, info, expectName?)` | `true` or `false, reason`; replaces the `info` table of the item in `slot` of a registered world container or a carried ref (C3b). The caller merges: read the item (`snapshot`/`view`), build the whole new table, pass it. `slot` is the container's own slot number and must be inside the ref's section (`fh_bad_slot`). `fh_empty_slot`: nothing there. `expectName`: refused with `fh_wrong_item` unless the slot still holds that item (closes a swap between your read and this write). Name, amount, weight and the other item fields are never changed |
 | `clearContainer(ref)` | `true` or `false, reason`; empties a registered world container (only fh_core may wipe one in fh_inventory) |
@@ -200,6 +200,9 @@ character (rsg-core has a Player for it), else `fh_player_offline`; a non-number
   valid coords (`fh_no_coords`). Registrations are kept and re-sent when fh_inventory restarts, so register once
   from your resource's start; it is fine to call before fh_inventory is up.
 - `move` from server code is trusted: no reach check. `open` is the player-facing path and checks reach.
+- A `false` / `nil` from `addItem`, `removeItem`, `setItemInfo` or `createDropBag` always means nothing changed, so
+  it is safe to fall back (refund, drop bag). Once fh_inventory has committed, it returns success even if the
+  refresh, item box or log after the commit throws (core-10 I1, idea-970).
 - If fh_inventory is not running, calls fail with `fh_inventory_down`.
 
 ### fh_inventory adapter (what fh_core calls)
@@ -217,7 +220,7 @@ state before mutating.
 | `FhSetCoords(ref, coords)` | `ok, reason` |
 | `FhOpen(src, ref)` | `ok, reason` |
 | `FhOpenRef(src)` | `{ type, id }` of the fh container the player has open, or `nil, reason` |
-| `FhCreateDropBag(coords, items, opts)` | `id` or `nil, reason` |
+| `FhCreateDropBag(coords, items, opts)` | `id, leftovers`, `nil, leftovers` (every stack refused, no bag) or `nil, reason` |
 | `FhDeleteContainer(ref)` | `true, items` or `false, reason` (deletes memory, FhMeta and the `inventories` row; refused while open) |
 | `FhAddItem(ref, name, amount, info?, reason?)` | `true` or `false, reason`; carried refs only: the veto runs against that section alone (`AddTo` with `onlyType`), nothing is added on refusal |
 | `FhSetItemInfo(ref, slot, info, expectName?)` | `true` or `false, reason`; any ref `Resolve` accepts: slot inside the ref's section, item present, name check, then `info` (deep copy) replaces the slot's info and the container is committed and refreshed. fh_inventory's `SetItemInfo(target, slot, info)` / `SetItemData(src, name, key, val)` are not used: they are not section-scoped and have no name check |

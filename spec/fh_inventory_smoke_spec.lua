@@ -505,6 +505,135 @@ T.describe('fh_core.setItemInfo (C3b)', function()
     return why == 'not_fh_core' and item(30, 7).info.quality == 90, why end)
 end)
 
+T.describe('commit-safe returns (core-10 I1, idea-970)', function()
+  -- Every side effect after InvCore.Commit throws: the change is real, so the call must still return true. A false
+  -- here would send the caller down its fallback (refund / drop bag) and duplicate the items.
+  local function boom() error('side effect boom') end
+  local function withThrowingEffects(fn)
+    local saved = { Refresh = I.Refresh, Log = I.Log, CheckWeapon = I.CheckWeapon, TCE = env.TriggerClientEvent,
+      print = env.print }
+    I.Refresh, I.Log, I.CheckWeapon, env.TriggerClientEvent = boom, boom, boom, boom
+    env.print = function() end -- the side-effect error lines are expected here
+    local r = table.pack(pcall(fn))
+    I.Refresh, I.Log, I.CheckWeapon, env.TriggerClientEvent = saved.Refresh, saved.Log, saved.CheckWeapon, saved.TCE
+    env.print = saved.print
+    if not r[1] then error(r[2], 0) end
+    return table.unpack(r, 2, r.n)
+  end
+  local function count(src, name) local n = 0
+    for _, x in pairs(players[src].PlayerData.items) do if x.name == name then n = n + x.amount end end return n end
+  mkPlayer(40, { [1] = it('bread', 1, 1), [6] = it('knife', 1, 6) })
+  local bp, eq = { type = 'backpack', id = 40 }, { type = 'equipped', id = 40 }
+  case('addItem: post-commit throw still returns true, caller fallback does not duplicate', function()
+    return withThrowingEffects(function()
+      local drops0 = drops()
+      local ok, why = CORE.addItem(bp, 'bread', 3)
+      -- the caller's fallback (H14b-style refund): only on a false return
+      if not ok then CORE.createDropBag({ x = 40, y = 40, z = 1 }, { { name = 'bread', amount = 3 } }) end
+      return ok == true and count(40, 'bread') == 4 and drops() == drops0, why
+    end) end)
+  case('addItem: pre-commit refusal still returns false + reason, nothing added', function()
+    return withThrowingEffects(function()
+      local ok, why = CORE.addItem(bp, 'saddle', 1)
+      return ok == false and why == 'fh_size_class' and count(40, 'saddle') == 0, why
+    end) end)
+  case('removeItem: post-commit throw (incl. weapon check) still returns true', function()
+    return withThrowingEffects(function()
+      local ok, why = CORE.removeItem(bp, 'knife', 1)
+      return ok == true and count(40, 'knife') == 0, why
+    end) end)
+  case('removeItem: pre-commit refusal still returns false + reason, nothing removed', function()
+    return withThrowingEffects(function()
+      local ok, why = CORE.removeItem(eq, 'bread', 9)
+      return ok == false and why == 'fh_not_enough' and count(40, 'bread') == 4, why
+    end) end)
+  case('setItemInfo: post-commit refresh throw still returns true', function()
+    return withThrowingEffects(function()
+      local ok, why = CORE.setItemInfo(eq, 1, { baked = 'i1' }, 'bread')
+      return ok == true and players[40].PlayerData.items[1].info.baked == 'i1', why
+    end) end)
+  case('setItemInfo: pre-commit refusal still returns false + reason', function()
+    return withThrowingEffects(function()
+      local ok, why = CORE.setItemInfo(eq, 1, { x = 1 }, 'knife')
+      return ok == false and why == 'fh_wrong_item', why
+    end) end)
+  case('compat SetItemData: refresh throw still returns true', function()
+    return withThrowingEffects(function()
+      local ok = EXPORTED.SetItemData(40, 'bread', 'info', { tag = 'i1' })
+      return ok == true and players[40].PlayerData.items[1].info.tag == 'i1'
+    end) end)
+  -- world refs go through fh_inventory's API.AddItem / API.RemoveItem (main.lua): a player watching the chest makes
+  -- its Refresh call TriggerClientEvent, which throws here
+  local chestId = 'fh:chest:i1:1'
+  local chest = { type = 'chest', id = chestId }
+  local function inChest(name) local n = 0
+    for _, x in pairs(I.Inventories[chestId] and I.Inventories[chestId].items or {}) do
+      if x.name == name then n = n + x.amount end end return n end
+  case('world addItem/removeItem: post-commit throw still returns true', function()
+    if CORE.registerContainer(chest, { coords = { x = 410, y = 410, z = 10 } }) ~= true then return false, 'register' end
+    I.OpenInv[40] = chestId
+    local r = table.pack(withThrowingEffects(function()
+      local okA, whyA = CORE.addItem(chest, 'bread', 5)
+      local okR, whyR = CORE.removeItem(chest, 'bread', 2)
+      return okA == true and okR == true and inChest('bread') == 3, tostring(whyA) .. '/' .. tostring(whyR)
+    end))
+    I.OpenInv[40] = nil
+    return table.unpack(r, 1, r.n) end)
+  case('world addItem: pre-commit refusal still returns false + reason', function()
+    return withThrowingEffects(function()
+      local ok, why = CORE.addItem(chest, 'bread', env.Config.Drop.MaxWeight) -- 100 g each: far over the chest cap
+      return ok == false and type(why) == 'string' and inChest('bread') == 3, why
+    end) end)
+  case('compat AddItem / RemoveItem on a player: post-commit throw still returns true', function()
+    return withThrowingEffects(function()
+      local before = count(40, 'bread')
+      local okA = EXPORTED.AddItem(40, 'bread', 1)
+      local okR = EXPORTED.RemoveItem(40, 'bread', 1)
+      return okA == true and okR == true and count(40, 'bread') == before
+    end) end)
+  case('createDropBag: refresh throw still returns the bag', function()
+    return withThrowingEffects(function()
+      local id, left = CORE.createDropBag({ x = 41, y = 41, z = 1 }, { { name = 'bread', amount = 2 } })
+      return type(id) == 'string' and I.Inventories[id].items[1].amount == 2 and type(left) == 'table'
+        and next(left) == nil, tostring(left)
+    end) end)
+end)
+
+T.describe('fh_core createDropBag returns leftovers (core-10 I1, idea-987)', function()
+  local big = env.Config.Drop.MaxWeight // 100 + 1 -- one bread stack over the drop weight cap
+  local function inBag(id, name) local n = 0
+    for _, x in pairs(I.Inventories[id].items) do if x.name == name then n = n + x.amount end end return n end
+  case('all fit: id, {}', function()
+    local id, left = CORE.createDropBag({ x = 50, y = 50, z = 1 }, { { name = 'bread', amount = 2 } })
+    return type(id) == 'string' and type(left) == 'table' and next(left) == nil and inBag(id, 'bread') == 2 end)
+  case('over capacity: the bag keeps what fits, refused stacks come back', function()
+    local id, left = CORE.createDropBag({ x = 51, y = 51, z = 1 }, {
+      { name = 'bread', amount = 1 }, { name = 'crate', amount = 1 }, { name = 'bread', amount = big } })
+    return type(id) == 'string' and inBag(id, 'bread') == 1 and inBag(id, 'crate') == 0 and #left == 2
+      and left[1].name == 'crate' and left[2].name == 'bread' and left[2].amount == big, #(left or {}) end)
+  case('every stack refused: nil, fh_refused, leftovers (no bag left behind)', function()
+    local n0 = drops()
+    local id, why, left = CORE.createDropBag({ x = 52, y = 52, z = 1 }, { { name = 'crate', amount = 1 } })
+    return id == nil and why == 'fh_refused' and type(left) == 'table' and #left == 1 and left[1].name == 'crate'
+      and drops() == n0, why end)
+  case('a stack whose add throws is rolled back and returned, not half-added', function()
+    local realAdd, realPrint = I.AddTo, env.print
+    I.AddTo = function(c, name, ...)
+      local r = table.pack(realAdd(c, name, ...))
+      if name == 'knife' then error('add boom') end -- after writing the bag: the worst case
+      return table.unpack(r, 1, r.n)
+    end
+    env.print = function() end
+    local ok, id, left = pcall(CORE.createDropBag, { x = 53, y = 53, z = 1 },
+      { { name = 'bread', amount = 2 }, { name = 'knife', amount = 1 } })
+    I.AddTo, env.print = realAdd, realPrint
+    return ok and type(id) == 'string' and inBag(id, 'bread') == 2 and inBag(id, 'knife') == 0 and #left == 1
+      and left[1].name == 'knife', tostring(id) end)
+  case('pre-commit failure still returns nil + reason', function()
+    local id, why = CORE.createDropBag({ x = 1, y = 2 }, { { name = 'bread', amount = 1 } })
+    return id == nil and why == 'fh_no_coords', why end)
+end)
+
 T.describe('fh_core.registerItems wiring (B7)', function()
   case('base rsg item name refused as duplicate (read from RSGCore.Shared.Items)', function()
     local ok, err, bad = CORE.registerItems({ bread = { label = 'B', weight = 1 } })

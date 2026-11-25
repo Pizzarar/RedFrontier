@@ -345,15 +345,18 @@ end
 
 ---Create a drop bag (death / spill) at coords holding `items` (array of {name, amount, info}).
 ---opts = { owner = citizenid?, label? }.
----@return string|nil id, string|nil reason
+---Each stack is all-or-nothing. Success returns the bag id and the stacks the bag refused (`{}` when all fit): drop
+---them somewhere else or log the loss. When every stack is refused there is no bag: nil, 'fh_refused', leftovers.
+---@return string|nil id, table|string leftoversOrReason, table|nil leftovers
 local function createDropBag(coords, items, opts)
     if not FhContainers.validCoords(coords) then return nil, 'fh_no_coords' end
-    local id, reason = inv('FhCreateDropBag', coords, items or {}, opts or {})
+    local id, second = inv('FhCreateDropBag', coords, items or {}, opts or {})
     if type(id) ~= 'string' then
         -- FhCreateDropBag returns nil, leftovers (a table) when every item was refused: that is not a reason code.
-        return nil, type(reason) == 'string' and reason or 'fh_refused'
+        if type(second) == 'table' then return nil, 'fh_refused', second end
+        return nil, type(second) == 'string' and second or 'fh_refused'
     end
-    return id
+    return id, type(second) == 'table' and second or {}
 end
 
 ---Delete a registered world container (death bags). Refused while anyone has it open (fh_in_use: retry later).

@@ -55,6 +55,15 @@ When the rules can't place something, the mutation is refused and nothing change
   size classes per section, section and total weight. Otherwise it returns `false, reason`, logs the refusal and
   leaves the inventory as it was.
 - **Locked fields.** `SetItemData` refuses `name`, `slot`, `amount`, `weight`, `unique` and `type`.
+- **Committed means success (core-10 I1).** Once `InvCore.Commit` has run in `FhAddItem`, `FhRemoveItem`,
+  `FhSetItemInfo`, `FhCreateDropBag` or compat `SetItemData`, the call returns success: the refresh, item box,
+  weapon check and log after it each run under `pcall`, and a throw only prints an error line. `API.AddItem` /
+  `API.RemoveItem` (the `AddItem` / `RemoveItem` exports, and fh_core's world-ref path) do the same (`AfterCommit`
+  in `server/main.lua`), and `API.CreateDrop` does it for its drop announce. A false return therefore always means nothing changed, so a caller's
+  fallback (refund, second drop bag) cannot duplicate items. Pre-commit refusals still return `false, reason`.
+- **`FhCreateDropBag` leftovers.** Each stack is all-or-nothing. Refused stacks come back as leftovers (`{}` when
+  all fit), and so does a stack whose add throws: the bag is rolled back to before that stack, so it is never
+  half-added and reported as a leftover at the same time. If every stack is refused there is no bag (`nil, leftovers`).
 - **Reasons** are `fh_*` locale keys (`locales/en.json`), shown to the player when a drag is refused.
 
 Allowed without a veto (they only remove items or rewrite info): decay, trash, sort, `RemoveItem`,

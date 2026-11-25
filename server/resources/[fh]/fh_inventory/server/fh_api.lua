@@ -49,6 +49,17 @@ local function InView(view, slot)
     return type(slot) == 'number' and slot >= first and slot <= last
 end
 
+-- Post-commit side effects (refresh, item box, weapon check, log) run through here. Once InvCore.Commit has run the
+-- change is real, so a throw after it must never become a failure return: the caller's fallback (a refund, a retry,
+-- a second bag) would duplicate the items (idea-970). Each effect is isolated, so one failing never skips the next
+-- (the log line still lands); the error is printed and the call still returns success.
+local function After(what, fn, ...)
+    local ok, err = pcall(fn, ...)
+    if not ok then
+        print(('^1[fh_inventory] %s: post-commit side effect failed (change kept): %s^7'):format(what, tostring(err)))
+    end
+end
+
 local Fh = {}
 
 --- FhRegisterContainer(ref, { coords, label, slots, maxWeight }) -> true | false, reason
@@ -118,8 +129,11 @@ function Fh.OpenRef(src)
     return { type = t, id = id }
 end
 
---- FhCreateDropBag(coords, items?, opts?) -> id, leftovers
---- items = { { name, amount, info? }, ... }; anything the bag refuses (AddTo veto) comes back in leftovers.
+--- FhCreateDropBag(coords, items?, opts?) -> id, leftovers | nil, leftovers (every stack refused) | nil, reason
+--- items = { { name, amount, info? }, ... }; each stack is all-or-nothing (AddTo veto), and anything the bag refuses
+--- comes back in leftovers ({} when all fit), so whatever is not in leftovers is in the bag. An add that throws is a
+--- leftover too, with the bag rolled back to before that stack (AddTo writes the live bag): one bad stack never aborts
+--- the call after earlier stacks went in, and never leaves a half-added stack that is also reported as a leftover.
 --- opts (owner, label) is accepted for fh_core's signature and not used yet.
 function Fh.CreateDropBag(coords, items)
     if not FromCore() then return nil, 'not_fh_core' end
@@ -129,14 +143,22 @@ function Fh.CreateDropBag(coords, items)
     local bag = InvCore.Inventories[id]
     local leftovers = {}
     for _, it in ipairs(type(items) == 'table' and items or {}) do
-        if type(it) ~= 'table' or not InvCore.AddTo(bag, it.name, it.amount, it.info) then
-            leftovers[#leftovers + 1] = it
+        local ok, added = false, false
+        if type(it) == 'table' then
+            local before = InvCore.DeepClone(bag.items)
+            ok, added = pcall(InvCore.AddTo, bag, it.name, it.amount, it.info)
+            if not ok then
+                bag.items = before
+                print(('^1[fh_inventory] CreateDropBag: add of %s threw (rolled back): %s^7'):format(
+                    tostring(it.name), tostring(added)))
+            end
         end
+        if not (ok and added) then leftovers[#leftovers + 1] = it end
     end
     InvCore.Commit(bag)
-    InvCore.CleanupDropIfEmpty(id)
+    After('CreateDropBag cleanup', InvCore.CleanupDropIfEmpty, id)
     if not InvCore.Inventories[id] then return nil, leftovers end
-    InvCore.Refresh(id)
+    After('CreateDropBag refresh', InvCore.Refresh, id)
     return id, leftovers
 end
 
@@ -241,10 +263,15 @@ function Fh.AddItem(ref, name, amount, info, reason)
     local ok, why = InvCore.AddTo(c, name, amount, info, nil, ref.type)
     if not ok then return false, why end
     InvCore.Commit(c)
-    InvCore.Refresh(src)
-    TriggerClientEvent('rsg-inventory:client:ItemBox', src, InvCore.SharedItem(name), 'add', amount)
-    InvCore.Log('AddItem', ('%s received %sx %s in %s (%s) [fh_core]'):format(GetPlayerName(src), amount, name,
-        ref.type, tostring(reason or 'unknown')))
+    -- committed: from here on the call returns true whatever the side effects do (After)
+    After('AddItem refresh', InvCore.Refresh, src)
+    After('AddItem item box', function()
+        TriggerClientEvent('rsg-inventory:client:ItemBox', src, InvCore.SharedItem(name), 'add', amount)
+    end)
+    After('AddItem log', function()
+        InvCore.Log('AddItem', ('%s received %sx %s in %s (%s) [fh_core]'):format(GetPlayerName(src), amount, name,
+            ref.type, tostring(reason or 'unknown')))
+    end)
     return true
 end
 
@@ -279,11 +306,18 @@ function Fh.RemoveItem(ref, name, amount, reason)
         end
     end
     InvCore.Commit(c)
-    InvCore.Refresh(src)
-    if InvCore.CountIn(c, name) == 0 then InvCore.CheckWeapon(src, taken) end
-    TriggerClientEvent('rsg-inventory:client:ItemBox', src, InvCore.SharedItem(name), 'remove', amount)
-    InvCore.Log('RemoveItem', ('%s lost %sx %s from %s (%s) [fh_core]'):format(GetPlayerName(src), amount, name,
-        ref.type, tostring(reason or 'unknown')))
+    -- committed: from here on the call returns true whatever the side effects do (After)
+    After('RemoveItem refresh', InvCore.Refresh, src)
+    After('RemoveItem weapon check', function()
+        if InvCore.CountIn(c, name) == 0 then InvCore.CheckWeapon(src, taken) end
+    end)
+    After('RemoveItem item box', function()
+        TriggerClientEvent('rsg-inventory:client:ItemBox', src, InvCore.SharedItem(name), 'remove', amount)
+    end)
+    After('RemoveItem log', function()
+        InvCore.Log('RemoveItem', ('%s lost %sx %s from %s (%s) [fh_core]'):format(GetPlayerName(src), amount, name,
+            ref.type, tostring(reason or 'unknown')))
+    end)
     return true
 end
 
@@ -306,7 +340,7 @@ function Fh.SetItemInfo(ref, slot, info, expectName)
     if expectName ~= nil and item.name ~= expectName:lower() then return false, 'fh_wrong_item' end
     item.info = InvCore.DeepClone(info)
     InvCore.Commit(c)
-    InvCore.Refresh(id)
+    After('SetItemInfo refresh', InvCore.Refresh, id) -- committed: returns true even if the refresh throws
     return true
 end
 

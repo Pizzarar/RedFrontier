@@ -231,6 +231,15 @@ local function Commit(c)
     end
 end
 
+-- FH (core-10 I1): run a side effect that follows a Commit (refresh, item box, weapon check, log). The change is
+-- already real, so a throw must not reach the caller as a failure (its fallback would duplicate): print it, go on.
+local function AfterCommit(what, fn, ...)
+    local ok, err = pcall(fn, ...)
+    if not ok then
+        print(('^1[fh_inventory] %s: post-commit side effect failed (change kept): %s^7'):format(what, tostring(err)))
+    end
+end
+
 -- Extra header buttons a script can give a stash: { { id = 'sort', label = 'Sort' }, ... } (max 3)
 local function SanitizeActions(actions)
     if type(actions) ~= 'table' then return nil end
@@ -573,10 +582,14 @@ function API.AddItem(target, name, amount, info, slot, reason)
     local ok, err = AddTo(c, name, amount, info, slot)
     if not ok then return false, err end
     Commit(c)
-    Refresh(target)
+    AfterCommit('AddItem refresh', Refresh, target) -- FH (core-10 I1): committed, so the call returns true from here
     if c.type == 'player' then
-        TriggerClientEvent('rsg-inventory:client:ItemBox', target, SharedItem(name), 'add', amount)
-        Log('AddItem', ('%s received %sx %s (%s) [%s]'):format(GetPlayerName(target), amount, name, reason or 'unknown', GetInvokingResource() or 'rsg-inventory'))
+        AfterCommit('AddItem item box', function()
+            TriggerClientEvent('rsg-inventory:client:ItemBox', target, SharedItem(name), 'add', amount)
+        end)
+        AfterCommit('AddItem log', function()
+            Log('AddItem', ('%s received %sx %s (%s) [%s]'):format(GetPlayerName(target), amount, name, reason or 'unknown', GetInvokingResource() or 'rsg-inventory'))
+        end)
     end
     return true
 end
@@ -589,11 +602,17 @@ function API.RemoveItem(target, name, amount, slot, reason)
     local item = c.items[math.tointeger(tonumber(slot)) or first or -1]
     if not RemoveFrom(c, name, amount, slot) then return false end
     Commit(c)
-    Refresh(target)
+    AfterCommit('RemoveItem refresh', Refresh, target) -- FH (core-10 I1): committed, so the call returns true from here
     if c.type == 'player' then
-        if CountIn(c, tostring(name):lower()) == 0 then CheckWeapon(target, item) end
-        TriggerClientEvent('rsg-inventory:client:ItemBox', target, SharedItem(name), 'remove', amount)
-        Log('RemoveItem', ('%s lost %sx %s (%s) [%s]'):format(GetPlayerName(target), amount, name, reason or 'unknown', GetInvokingResource() or 'rsg-inventory'))
+        AfterCommit('RemoveItem weapon check', function()
+            if CountIn(c, tostring(name):lower()) == 0 then CheckWeapon(target, item) end
+        end)
+        AfterCommit('RemoveItem item box', function()
+            TriggerClientEvent('rsg-inventory:client:ItemBox', target, SharedItem(name), 'remove', amount)
+        end)
+        AfterCommit('RemoveItem log', function()
+            Log('RemoveItem', ('%s lost %sx %s (%s) [%s]'):format(GetPlayerName(target), amount, name, reason or 'unknown', GetInvokingResource() or 'rsg-inventory'))
+        end)
     end
     return true
 end
@@ -875,7 +894,12 @@ function API.CreateDrop(coords, items)
     drop.id = id
     Inventories[id] = drop
     Inventories[id].dirty = true
-    AnnounceDrop(id)
+    -- FH (core-10 I1): the drop and its items exist now; a failed announce must not turn into an error the caller
+    -- reads as "nothing dropped" (it would re-drop or refund: duplicates). Late joiners get it from SyncDropsFor.
+    local announced, err = pcall(AnnounceDrop, id)
+    if not announced then
+        print(('^1[fh_inventory] CreateDrop %s: announce failed (drop kept): %s^7'):format(id, tostring(err)))
+    end
     return id
 end
 

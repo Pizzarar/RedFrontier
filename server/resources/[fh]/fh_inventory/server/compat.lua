@@ -66,7 +66,9 @@ local function SetItemData(src, itemName, key, val)
     if not item then return false end
     item[key] = val
     InvCore.Commit(c)
-    InvCore.Refresh(src)
+    -- committed: a refresh error must not turn into a false return (the caller would retry / compensate)
+    local ok, err = pcall(InvCore.Refresh, src)
+    if not ok then print(('^1[fh_inventory] SetItemData: refresh failed (change kept): %s^7'):format(tostring(err))) end
     return true
 end
 
