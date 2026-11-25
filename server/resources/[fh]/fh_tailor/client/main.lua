@@ -84,6 +84,7 @@ end
 ---@return boolean applied
 local function previewLook(look)
     if not applyLook(look, true) then return false end
+    applySeq = applySeq + 1 -- cancels a pending apply / revert that is still waiting on the server
     previewing = true
     return true
 end
@@ -97,10 +98,13 @@ exports('previewLook', previewLook)
 local function revertLook(noWait)
     if cfg.FittedOutfits then
         applySeq = applySeq + 1
+        local seq = applySeq
         previewing = false
         local look = lastLook
         if not noWait then
             local fresh = lib.callback.await('fh:tailor:worn', false)
+            -- A previewLook or another apply that landed while we waited wins: do not clobber it.
+            if seq ~= applySeq or previewing then return false end
             if type(fresh) == 'table' then lastLook = fresh; look = fresh end
         end
         return look ~= nil and applyLook(look)

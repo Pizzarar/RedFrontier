@@ -38,7 +38,7 @@ FH_UI.register('tailor', {
       row.appendChild(info);
       const isOutfit = r.kind === 'outfit';
       const pv = D.btn('Preview', function () {
-        if (isOutfit) { self.pOutfit = String(r.id); FH_UI.preview('tailor', { outfit: self.pOutfit, items: [] }); }
+        if (isOutfit) { self.pOutfit = String(r.id); FH_UI.preview('tailor', { outfit: self.pOutfit, items: [] }); self.update(el, {}); } // re-render: item Preview buttons unlock
         else FH_UI.preview('tailor', { outfit: self.pOutfit, items: [String(r.id)] });
       });
       if (!isOutfit && !self.pOutfit) { pv.disabled = true; pv.title = 'Preview an outfit first'; }
