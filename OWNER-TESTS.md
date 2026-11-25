@@ -1022,6 +1022,51 @@ Each check is: heat to 0, then up. Only spawns are suppressed; heat still accrue
    Expected: the roadblock still spawns for B (a stranger's lot is not safe); no skip line for B.
    RESULT:
 
+### A-life: road ambush squads + contracts (a-life-02)
+
+A-Life road raids (plan a-life-02): an outlaw-held camp can send an ambush squad to a road node, and the region jobs
+board offers `alife_contract` jobs to break an ambush or clear an outlaw camp. Console lines start with `[fh_alife]`.
+Needs `fh_alife` ensured (after `fh_zones`) and `fh_quests` for the board. Admin: `/alife`, `/alife tick n`
+(`group.admin`). Ambush nodes come only from `regions[].ambush` in fh_core (@world world-03 H); until that data is on
+main there are no raids. A held squad materialises only within `FhAlifeConfig.squads.ambushRadius` (45 m).
+
+0. Precondition: run `/alife` and look for a region line with ambush nodes (e.g. `heartlands: 3 ambush node(s): ...`).
+   If no region has ambush data, every line reads `<region>: no ambush nodes`.
+   Expected: with data, each region line lists its nodes as `<label>=free`; with none, no raids ever start and steps
+   1-5 are SKIP (that is the expected result until world-03 H is on main).
+   RESULT:
+1. Run `/alife` to find an outlaw-held camp (an owner without `(law)`). Run `/alife tick 5` and check `/alife` again;
+   repeat until a squad line appears, e.g. `sq1 ambush@<node label> x3 travel`. Then tick until it reads `hold`.
+   Expected: each tick replies `Advanced A-Life 5 tick(s) -> N effect(s).`; while a squad is out, `/alife` lists it by
+   goal, node label and strength (`sq1 ambush@<label> x3 travel|hold`), and the region's ambush line shows
+   `<label>=sq1 outlaws x3 hold`. `FhAlifeConfig.raids.chancePct` is 5 (out of 100) per outlaw camp per tick; a
+   squad holds for `holdTicks` 15 (~15 min at 60 s/tick), with `regionCap` 2 per region.
+   RESULT:
+2. Ride to that node and stop within 45 m (`FhAlifeConfig.squads.ambushRadius`); then ride more than 45 m away.
+   Expected: on approach the console prints `[fh_alife] squad <id> materialised at <node id> (<n> peds)` and `<n>`
+   hostile peds are standing on foot at the node (no horses, no mounted riders); note the real ground position in
+   RESULT if it floats or buries. Riding away prints `[fh_alife] squad <id> despawned (no_player_near)`, the peds
+   vanish, and the squad's strength is unchanged in `/alife`.
+   RESULT:
+3. Kill every ped in the squad, checking `/alife` after each kill.
+   Expected: the squad's `x<n>` strength drops by 1 per kill; after the last kill `/alife` no longer lists it and the
+   node reads `<label>=free`. The console prints `[fh_alife] squad <id> despawned (wiped)` and the server emits
+   `fh:alife:squad_wiped` (the event that pays the board job; `fh:alife:squad_wiped` has no separate console line).
+   Killing a squad adds no heat (known follow-up).
+   RESULT:
+4. Open the region board with `/jobs` (or its trade-post prop). Look for `Break the ambush: <node label>` while a
+   squad holds a node, and `Clear out: <camp label>` while a camp is outlaw-held. Accept the ambush job, then wipe
+   the squad.
+   Expected: both are `alife_contract` offers; `Clear out:` is absent for a law-held camp. The board keeps only 3-5
+   offers and rotates hourly, so a specific job may be absent from this hour's board: reopen after the rotation. On
+   the wipe the job completes and pays 30 cash and +2 region rep (the camp job pays 40 and +3 on `camp_cleared`).
+   RESULT:
+5. Clear an outlaw-held camp (e.g. the Heartlands camp if it is still outlaw-held), run `/alife`, then `/alife tick 1`.
+   Expected: the camp shows `<camp id>=<law faction>(law)` and `/alife` lists a data-only reinforce squad
+   `sq<n> reinforce-><camp id> x2 travel` (then `hold` after 3 ticks; it renews while the law holds the camp). No
+   peds spawn for it: it adds holder strength only, and the camp's normal peds are unaffected.
+   RESULT:
+
 ## World-01: walk the claims (fh_core regions, fh_homestead, fh_zones, fh_trade, fh_ui)
 
 Ground-snap + enabled-gate check (plan world-01 block D). `/where` is the fix-up tool: run `/where plot` to get a
