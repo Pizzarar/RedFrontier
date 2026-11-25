@@ -4,7 +4,7 @@
 --   { name, label, weight, size_class, stackable, value_base, illicit, fast_travel }
 --   weight is per unit, in grams. stackable is the inverse of rsg's `unique`.
 -- Per-instance data lives in item.info (rsg-inventory persists only {name, amount, info, slot}):
---   info.condition  nullable 0-100
+--   info.quality    nullable 0-100 (canonical wear; legacy info.condition still read)
 --   info.stars      nullable 1-3 (spec calls it "quality"; info.quality is already rsg's 0-100 freshness, so not reused)
 -- Items saved before these fields existed simply lack them: read them through FhItems.condition/stars, never reject.
 local M = {}
@@ -177,7 +177,7 @@ end
 
 ---Instance condition (0-100) or nil when the item has none. Out-of-range values are clamped, junk reads as nil.
 function M.condition(item)
-    local v = item and item.info and tonumber(item.info.condition)
+    local v = item and item.info and tonumber(item.info.quality ~= nil and item.info.quality or item.info.condition)
     if not v then return nil end
     if v < 0 then return 0 elseif v > 100 then return 100 end
     return v

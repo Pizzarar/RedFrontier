@@ -12,7 +12,7 @@ Seed of lane L3 (spec L89, M1 L107): one T1 outlaw camp, `heartlands_t1_01`, in 
     the camp keeps one record per ped and ignores/despawns a re-adopted ped that was already seen dead.
   - Cleared when every ped is dead and at least one died. Death = server-side `GetEntityHealth <= 0` of the adopted entity,
     polled each tick; a client `fh:zones:ped_dead` report only triggers an early check (and is accepted only from a nearby player).
-  - On clear: loot is rolled (`rollLoot`, `info.condition` on the rifle) into an fh_core `chest` container
+  - On clear: loot is rolled (`rollLoot`, `info.quality` on the rifle) into an fh_core `chest` container
     `fh:camp:<id>` (accepts cargo; the bulky safe and rifle cannot go into a backpack/equipped, only saddlebag/chest). Open = `fh:zones:open_loot`
     -> `exports.fh_core:open` (server reach check), only after the camp is cleared.
   - On clear the ped requests are despawned (no corpse re-request pop-in). If every ped fails to spawn the camp aborts to idle

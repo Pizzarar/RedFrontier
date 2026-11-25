@@ -128,7 +128,7 @@ function M.pickLootTable(lootByFaction, owner, campTable, tier)
 end
 
 ---Roll a loot table. rng(a, b) -> integer in [a, b] (default math.random); chance is compared on a 0..1000000 scale.
----entry: { name, chance (0..1), amount? (integer, or { min, max } rolled inclusive), condition = { min, max }? }. Returns array of { name, amount, info? }.
+---entry: { name, chance (0..1), amount? (integer, or { min, max } rolled inclusive), quality = { min, max }? (legacy key `condition` still read) }. Returns array of { name, amount, info? }.
 function M.rollLoot(tbl, rng)
     rng = rng or math.random
     local out = {}
@@ -141,10 +141,11 @@ function M.rollLoot(tbl, rng)
                     local lo, hi = math.tointeger(e.amount[1]), math.tointeger(e.amount[2])
                     if lo and hi and lo >= 1 and hi >= lo then item.amount = rng(lo, hi) end
                 end
-                if type(e.condition) == 'table' then
-                    local lo, hi = e.condition[1], e.condition[2]
+                local qr = e.quality or e.condition
+                if type(qr) == 'table' then
+                    local lo, hi = qr[1], qr[2]
                     if type(lo) == 'number' and type(hi) == 'number' and hi >= lo then
-                        item.info = { condition = math.max(0, math.min(100, rng(math.floor(lo), math.floor(hi)))) }
+                        item.info = { quality = math.max(0, math.min(100, rng(math.floor(lo), math.floor(hi)))) }
                     end
                 end
                 out[#out + 1] = item

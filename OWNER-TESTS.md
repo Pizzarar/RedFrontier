@@ -164,7 +164,7 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    Expected: it sometimes (about 80%) also holds 2-3 `gun_parts` (never 1, never 4+); other times none.
    RESULT:
 4. Walk to the camp center (within 2 m) and press E at `[E] Outlaw camp stash`.
-   Expected: the stash opens with a Worn Rifle (condition between 20 and 45 shown or in item info) and a Small Safe.
+   Expected: the stash opens with a Worn Rifle (quality between 20 and 45 shown or in item info) and a Small Safe.
    Standing 10 m away and pressing E does nothing.
    RESULT:
 5. Move the Small Safe into your backpack.
@@ -253,7 +253,7 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    Expected: `camp heartlands_t1_01 cleared, 2 or 3 loot entries` (3 when gun_parts drops).
    RESULT:
 4. Press E at the camp stash.
-   Expected: Worn Rifle (condition 20-45) and Small Safe (both bulky).
+   Expected: Worn Rifle (quality 20-45) and Small Safe (both bulky).
    RESULT:
 5. Try to drag the Worn Rifle and the Small Safe into your backpack (refused: bulky). Then, with the camp stash still open and your horse within 3.5 m of you AND of the stash, run `/saddlebag in <slot>` for each (`<slot>` = the item's slot in the camp stash).
    Expected: the backpack refuses both; each `/saddlebag in` replies `saddlebag: moved (in)` and the open camp stash pane drops the item (if it does not, close and reopen the stash with E and note that in RESULT). Open the saddlebag (`/saddlebag`) and confirm both are inside. (A horse farther than 3.5 m, or a non-horse ped: `saddlebag: fh_out_of_reach` / `fh_not_a_horse`.)
@@ -265,10 +265,10 @@ One pass, one character, starting with an empty hotbar/backpack. Console lines s
    Expected: bread returns to the backpack; the bag empties and is swept.
    RESULT:
 8. Ride the horse home. Open the plot chest (E) and move the bread in. With the chest open and the horse within 3.5 m of you and the chest, run `/saddlebag out <slot>` for the rifle and the safe (`<slot>` = their slots in the saddlebag; run `/saddlebag` first to read them, then press E at the chest again).
-   Expected: `saddlebag: moved (out)` for both and the open chest pane shows them (if not, reopen the chest with E and note it); the chest now holds the rifle (condition intact) and the safe.
+   Expected: `saddlebag: moved (out)` for both and the open chest pane shows them (if not, reopen the chest with E and note it); the chest now holds the rifle (quality intact) and the safe.
    RESULT:
 9. Restart persistence: put an item in the chest, stop the server, start it, rejoin, open the chest.
-   Expected: the item is still there with its condition intact (check a rifle if you got one home).
+   Expected: the item is still there with its quality intact (check a rifle if you got one home).
    RESULT:
 
 ## B6e saddlebag
@@ -903,8 +903,9 @@ exception: `raw_meat` has no in-game source until the @hunting skin grant (idea-
 until the @roads supplies cards (idea-915), so use `fh_give` for those until then.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
-   Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle
-   (condition 20-45)"). It is `bulky`, so the backpack and the hotbar refuse it; it fits saddlebag and chest.
+   Expected: the stash holds a Worn Rifle with `quality` between 20 and 45 in its item info (M1 "Worn Rifle
+   (quality 20-45)"). It is `bulky`, so the backpack and the hotbar refuse it; it fits saddlebag and chest.
+   Also check the looted rifle shows worn quality (20-45, not 100) in its item info / weapon inspect, not a pristine 100.
    RESULT:
 2. Put the rifle where `/fh_restore` can read it: a chest, wagon or saddlebag near the bench. Open that container (press
    E) and note the rifle's slot inside it for step 4.
@@ -917,12 +918,12 @@ until the @roads supplies cards (idea-915), so use `fh_give` for those until the
    Expected: 5 Gun Parts in the backpack. Nothing says `no_station` anymore.
    RESULT:
 4. With the container still open, run `/fh_restore <slot>` (the rifle's slot from step 2) with 5 gun parts.
-   Expected: chat `Restored to 60% condition using N gun parts.` (a worn rifle has no stars, so its cap is 60); the
-   slot's condition info reads 60 and you hold `5 - N` parts. N is `ceil((60 - condition) / 20)`, e.g. condition 45 ->
-   1 part, condition 20 -> 2 parts.
+   Expected: chat `Restored to 60% quality using N gun parts.` (a worn rifle has no stars, so its cap is 60); the
+   slot's quality info reads 60 and you hold `5 - N` parts. N is `ceil((60 - quality) / 20)`, e.g. quality 45 ->
+   1 part, quality 20 -> 2 parts.
    RESULT:
 5. Run `/fh_restore <slot>` again at 60.
-   Expected: chat `That weapon is already at its best condition.` and no gun parts are taken.
+   Expected: chat `That weapon is already at its best quality.` and no gun parts are taken.
    RESULT:
 6. Craft rifle ammo. Stand at the reload station (-283.0, 805.0, 119.0 with `fh_dev 1`), run
    `fh_give <yourId> resource_gunpowder 2`, `fh_give <yourId> lead 2`, `fh_give <yourId> casings 2`, then
@@ -960,8 +961,8 @@ until the @roads supplies cards (idea-915), so use `fh_give` for those until the
     need gun parts.`
     RESULT:
 13. Failure path, wrong slot. Run `/fh_restore 99` (empty), `/fh_restore x`, and `/fh_restore <slot>` on a container
-    slot holding an item without condition.
-    Expected: `Nothing in that slot.`, `Usage: /fh_restore <slot>`, and `That item has no condition to restore.`
+    slot holding an item without quality.
+    Expected: `Nothing in that slot.`, `Usage: /fh_restore <slot>`, and `That item has no quality to restore.`
     RESULT:
 14. Failure path, wrong station type. With the open container near the reload station (not the gunsmith), run
     `/fh_restore <slot>`; at the gunsmith run `/fh_craft ammo_rifle`.

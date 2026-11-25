@@ -27,9 +27,9 @@ FhZonesConfig = {
             loot = {
                 coords = vector3(-145.0, 845.0, 117.0),
                 label = 'Outlaw camp stash',
-                -- chance 0..1 per entry; condition = {min,max} is rolled per instance into info.condition (0-100)
+                -- chance 0..1 per entry; quality = {min,max} is rolled per instance into info.condition (0-100)
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } }, -- item registered by fh_crafting
                 },
@@ -54,7 +54,7 @@ FhZonesConfig = {
                 coords = vector3(850.0, -1050.0, 75.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -79,7 +79,7 @@ FhZonesConfig = {
                 coords = vector3(850.0, 850.0, 100.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -103,7 +103,7 @@ FhZonesConfig = {
                 coords = vector3(-900.0, 500.0, 105.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -127,7 +127,7 @@ FhZonesConfig = {
                 coords = vector3(600.0, 200.0, 90.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -152,7 +152,7 @@ FhZonesConfig = {
                 coords = vector3(1500.0, -1650.0, 70.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -176,7 +176,7 @@ FhZonesConfig = {
                 coords = vector3(1700.0, -1750.0, 65.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -201,7 +201,7 @@ FhZonesConfig = {
                 coords = vector3(2050.0, -1500.0, 25.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -225,7 +225,7 @@ FhZonesConfig = {
                 coords = vector3(2400.0, -950.0, 25.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -249,7 +249,7 @@ FhZonesConfig = {
                 coords = vector3(2200.0, -1650.0, 25.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -273,7 +273,7 @@ FhZonesConfig = {
                 coords = vector3(2550.0, -1750.0, 20.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -298,7 +298,7 @@ FhZonesConfig = {
                 coords = vector3(-1600.0, -1350.0, 40.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -322,7 +322,7 @@ FhZonesConfig = {
                 coords = vector3(-1050.0, -900.0, 45.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -346,7 +346,7 @@ FhZonesConfig = {
                 coords = vector3(-700.0, -1600.0, 40.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -371,7 +371,7 @@ FhZonesConfig = {
                 coords = vector3(2400.0, -400.0, 25.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -395,7 +395,7 @@ FhZonesConfig = {
                 coords = vector3(2000.0, -450.0, 20.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -419,7 +419,7 @@ FhZonesConfig = {
                 coords = vector3(2850.0, -900.0, 20.0),
                 label = 'Raider camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -444,7 +444,7 @@ FhZonesConfig = {
                 coords = vector3(2250.0, 800.0, 90.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -468,7 +468,7 @@ FhZonesConfig = {
                 coords = vector3(2600.0, 1450.0, 120.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -492,7 +492,7 @@ FhZonesConfig = {
                 coords = vector3(2450.0, 650.0, 70.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -517,7 +517,7 @@ FhZonesConfig = {
                 coords = vector3(1380.0, 1380.0, 190.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -541,7 +541,7 @@ FhZonesConfig = {
                 coords = vector3(1850.0, 1500.0, 200.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -565,7 +565,7 @@ FhZonesConfig = {
                 coords = vector3(1500.0, 1150.0, 170.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -590,7 +590,7 @@ FhZonesConfig = {
                 coords = vector3(-1460.0, 980.0, 210.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -614,7 +614,7 @@ FhZonesConfig = {
                 coords = vector3(-1850.0, 1650.0, 230.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -638,7 +638,7 @@ FhZonesConfig = {
                 coords = vector3(-1150.0, 1250.0, 200.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -663,7 +663,7 @@ FhZonesConfig = {
                 coords = vector3(-930.0, 1120.0, 110.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -687,7 +687,7 @@ FhZonesConfig = {
                 coords = vector3(-430.0, 1020.0, 100.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -711,7 +711,7 @@ FhZonesConfig = {
                 coords = vector3(-600.0, 1500.0, 140.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -736,7 +736,7 @@ FhZonesConfig = {
                 coords = vector3(-1650.0, -900.0, 90.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -760,7 +760,7 @@ FhZonesConfig = {
                 coords = vector3(-1250.0, -950.0, 85.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -784,7 +784,7 @@ FhZonesConfig = {
                 coords = vector3(-2100.0, -780.0, 95.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -809,7 +809,7 @@ FhZonesConfig = {
                 coords = vector3(-2150.0, -1650.0, 130.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -833,7 +833,7 @@ FhZonesConfig = {
                 coords = vector3(-2000.0, -1850.0, 130.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -857,7 +857,7 @@ FhZonesConfig = {
                 coords = vector3(-2250.0, -1400.0, 140.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -882,7 +882,7 @@ FhZonesConfig = {
                 coords = vector3(-1900.0, -1950.0, 60.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -906,7 +906,7 @@ FhZonesConfig = {
                 coords = vector3(-2400.0, -2250.0, 70.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -930,7 +930,7 @@ FhZonesConfig = {
                 coords = vector3(-1650.0, -2600.0, 55.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -955,7 +955,7 @@ FhZonesConfig = {
                 coords = vector3(-3350.0, -2480.0, 75.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -979,7 +979,7 @@ FhZonesConfig = {
                 coords = vector3(-3900.0, -2400.0, 80.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1003,7 +1003,7 @@ FhZonesConfig = {
                 coords = vector3(-4200.0, -2600.0, 80.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1028,7 +1028,7 @@ FhZonesConfig = {
                 coords = vector3(-5100.0, -2600.0, 90.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1052,7 +1052,7 @@ FhZonesConfig = {
                 coords = vector3(-5800.0, -2800.0, 85.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1076,7 +1076,7 @@ FhZonesConfig = {
                 coords = vector3(-5400.0, -3200.0, 90.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1101,7 +1101,7 @@ FhZonesConfig = {
                 coords = vector3(-1800.0, -3200.0, 55.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1125,7 +1125,7 @@ FhZonesConfig = {
                 coords = vector3(-1450.0, -2700.0, 60.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1149,7 +1149,7 @@ FhZonesConfig = {
                 coords = vector3(-2050.0, -3150.0, 55.0),
                 label = 'Outlaw camp stash',
                 table = {
-                    { name = 'worn_rifle', chance = 1.0, amount = 1, condition = { 20, 45 } },
+                    { name = 'worn_rifle', chance = 1.0, amount = 1, quality = { 20, 45 } },
                     { name = 'small_safe', chance = 1.0, amount = 1 },
                     { name = 'gun_parts', chance = 0.8, amount = { 2, 3 } },
                 },
@@ -1310,7 +1310,7 @@ FhZonesConfig = {
         -- outlaws (Mountain Gang, outlaw): contraband / stolen goods
         outlaws = {
             T1 = {
-                { name = 'worn_rifle',     chance = 0.6, amount = 1, condition = { 20, 45 } },
+                { name = 'worn_rifle',     chance = 0.6, amount = 1, quality = { 20, 45 } },
                 { name = 'small_safe',     chance = 0.5, amount = 1 },
                 { name = 'gun_parts',      chance = 0.7, amount = { 2, 3 } },
                 { name = 'cigarettes',     chance = 0.6, amount = { 1, 2 } },
@@ -1318,18 +1318,18 @@ FhZonesConfig = {
                 { name = 'bandana',        chance = 0.4, amount = 1 },
             },
             T2 = {
-                { name = 'worn_rifle',                chance = 0.7, amount = 1, condition = { 20, 45 } },
+                { name = 'worn_rifle',                chance = 0.7, amount = 1, quality = { 20, 45 } },
                 { name = 'small_safe',                chance = 0.6, amount = 1 },
                 { name = 'gun_parts',                 chance = 0.8, amount = { 2, 4 } },
                 { name = 'money_clip',                chance = 0.5, amount = 1 },
                 { name = 'moonshine',                 chance = 0.5, amount = 1 },
-                { name = 'weapon_revolver_cattleman', chance = 0.4, amount = 1, condition = { 25, 50 } },
+                { name = 'weapon_revolver_cattleman', chance = 0.4, amount = 1, quality = { 25, 50 } },
                 { name = 'tool_lockpick',             chance = 0.4, amount = 1 },
             },
             T3 = {
                 { name = 'small_safe',               chance = 0.7, amount = 1 },
                 { name = 'money_clip',               chance = 0.6, amount = 1 },
-                { name = 'weapon_repeater_carbine',  chance = 0.4, amount = 1, condition = { 30, 60 } },
+                { name = 'weapon_repeater_carbine',  chance = 0.4, amount = 1, quality = { 30, 60 } },
                 { name = 'moonshine',                chance = 0.6, amount = { 1, 2 } },
                 { name = 'resource_gold_nugget',     chance = 0.5, amount = { 1, 2 } },
                 { name = 'blood_money_clip',         chance = 0.5, amount = 1 },
@@ -1340,7 +1340,7 @@ FhZonesConfig = {
         -- raiders (Swamp Gang, outlaw): contraband / stolen goods
         raiders = {
             T1 = {
-                { name = 'worn_rifle',     chance = 0.6, amount = 1, condition = { 20, 45 } },
+                { name = 'worn_rifle',     chance = 0.6, amount = 1, quality = { 20, 45 } },
                 { name = 'small_safe',     chance = 0.5, amount = 1 },
                 { name = 'gun_parts',      chance = 0.7, amount = { 2, 3 } },
                 { name = 'pipetobacco',    chance = 0.5, amount = 1 },
@@ -1348,18 +1348,18 @@ FhZonesConfig = {
                 { name = 'bandana',        chance = 0.4, amount = 1 },
             },
             T2 = {
-                { name = 'worn_rifle',                chance = 0.7, amount = 1, condition = { 20, 45 } },
+                { name = 'worn_rifle',                chance = 0.7, amount = 1, quality = { 20, 45 } },
                 { name = 'small_safe',                chance = 0.6, amount = 1 },
                 { name = 'gun_parts',                 chance = 0.8, amount = { 2, 4 } },
                 { name = 'money_clip',                chance = 0.5, amount = 1 },
                 { name = 'moonshine',                 chance = 0.5, amount = 1 },
-                { name = 'weapon_revolver_cattleman', chance = 0.4, amount = 1, condition = { 25, 50 } },
+                { name = 'weapon_revolver_cattleman', chance = 0.4, amount = 1, quality = { 25, 50 } },
                 { name = 'tool_lockpick',             chance = 0.4, amount = 1 },
             },
             T3 = {
                 { name = 'small_safe',                 chance = 0.7, amount = 1 },
                 { name = 'money_clip',                 chance = 0.6, amount = 1 },
-                { name = 'weapon_shotgun_doublebarrel', chance = 0.4, amount = 1, condition = { 30, 60 } },
+                { name = 'weapon_shotgun_doublebarrel', chance = 0.4, amount = 1, quality = { 30, 60 } },
                 { name = 'moonshine',                  chance = 0.6, amount = { 1, 2 } },
                 { name = 'resource_gold_nugget',       chance = 0.5, amount = { 1, 2 } },
                 { name = 'blood_money_clip',           chance = 0.5, amount = 1 },
@@ -1370,7 +1370,7 @@ FhZonesConfig = {
         -- desert_gang (Desert Gang, outlaw): contraband / stolen goods (own tables)
         desert_gang = {
             T1 = {
-                { name = 'worn_rifle',     chance = 0.6, amount = 1, condition = { 20, 45 } },
+                { name = 'worn_rifle',     chance = 0.6, amount = 1, quality = { 20, 45 } },
                 { name = 'small_safe',     chance = 0.5, amount = 1 },
                 { name = 'gun_parts',      chance = 0.7, amount = { 2, 3 } },
                 { name = 'cigarettes',     chance = 0.5, amount = 1 },
@@ -1378,18 +1378,18 @@ FhZonesConfig = {
                 { name = 'bandana',        chance = 0.5, amount = 1 },
             },
             T2 = {
-                { name = 'worn_rifle',                chance = 0.7, amount = 1, condition = { 20, 45 } },
+                { name = 'worn_rifle',                chance = 0.7, amount = 1, quality = { 20, 45 } },
                 { name = 'small_safe',                chance = 0.6, amount = 1 },
                 { name = 'gun_parts',                 chance = 0.8, amount = { 2, 4 } },
                 { name = 'money_clip',                chance = 0.5, amount = 1 },
                 { name = 'moonshine',                 chance = 0.4, amount = 1 },
-                { name = 'weapon_revolver_cattleman', chance = 0.5, amount = 1, condition = { 25, 50 } },
+                { name = 'weapon_revolver_cattleman', chance = 0.5, amount = 1, quality = { 25, 50 } },
                 { name = 'tool_lockpick',             chance = 0.3, amount = 1 },
             },
             T3 = {
                 { name = 'small_safe',              chance = 0.7, amount = 1 },
                 { name = 'money_clip',              chance = 0.6, amount = 1 },
-                { name = 'weapon_rifle_boltaction', chance = 0.4, amount = 1, condition = { 30, 60 } },
+                { name = 'weapon_rifle_boltaction', chance = 0.4, amount = 1, quality = { 30, 60 } },
                 { name = 'resource_gold_nugget',    chance = 0.5, amount = { 1, 2 } },
                 { name = 'resource_silver_bar',     chance = 0.5, amount = { 1, 2 } },
                 { name = 'blood_dollar',            chance = 0.5, amount = { 2, 4 } },

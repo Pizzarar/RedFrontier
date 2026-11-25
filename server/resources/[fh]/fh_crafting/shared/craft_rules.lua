@@ -3,7 +3,7 @@
 local M = {}
 
 M.STATION_TYPES = { gunsmith = true, reload = true, apothecary = true, cook = true }
-M.PART_VALUE = 20                       -- condition restored per gun_parts
+M.PART_VALUE = 20                       -- quality restored per gun_parts
 M.STAR_CAPS = { [1] = 60, [2] = 80, [3] = 100 }
 
 local function posInt(n) return type(n) == 'number' and n > 0 and n == math.floor(n) end
@@ -56,7 +56,7 @@ function M.validateRecipes(list)
     return #errs == 0, errs
 end
 
----Max condition for a star rating: 60/80/100. nil or invalid stars = 1 star.
+---Max quality for a star rating: 60/80/100. nil or invalid stars = 1 star.
 function M.restoreCap(stars)
     local s = tonumber(stars)
     if not s then return M.STAR_CAPS[1] end
@@ -65,11 +65,11 @@ function M.restoreCap(stars)
     return M.STAR_CAPS[s]
 end
 
----Returns newCondition, partsUsed, reason. reason: nil on success, 'no_condition', 'at_cap', 'no_parts'.
+---Returns newQuality, partsUsed, reason. reason: nil on success, 'no_quality', 'at_cap', 'no_parts'.
 ---Each part = +20, never past the cap; uses the fewest parts that reach the cap, or all available.
-function M.restore(condition, stars, partsAvailable)
-    local cond = tonumber(condition)
-    if not cond then return nil, 0, 'no_condition' end
+function M.restore(quality, stars, partsAvailable)
+    local cond = tonumber(quality)
+    if not cond then return nil, 0, 'no_quality' end
     local cap = M.restoreCap(stars)
     if cond >= cap then return cond, 0, 'at_cap' end
     local parts = math.floor(tonumber(partsAvailable) or 0)

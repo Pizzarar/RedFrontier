@@ -83,12 +83,12 @@ duplicate recipes are printed at start by `FhCraftRules.validateRecipes`.
 
 ## Restore caps (`shared/craft_rules.lua`)
 
-Used by `fh_gunsmith`; `gun_parts` restores 20 condition each (`PART_VALUE`).
+Used by `fh_gunsmith`; `gun_parts` restores 20 quality each (`PART_VALUE`).
 
 - Cap by star rating: 1 star = 60, 2 stars = 80, 3 stars = 100 (`STAR_CAPS`). Missing or invalid `stars` = 1 star;
   fractional ratings round and clamp to 1..3.
-- Parts needed = `ceil((cap - condition) / 20)`, capped by the parts held; the result never passes the cap. An item
-  already at or above its cap refuses with `at_cap`; no condition refuses `no_condition`; no parts refuses `no_parts`.
+- Parts needed = `ceil((cap - quality) / 20)`, capped by the parts held; the result never passes the cap. An item
+  already at or above its cap refuses with `at_cap`; no quality refuses `no_quality`; no parts refuses `no_parts`.
 
 ## Tonics (C4, `server/apothecary.lua`)
 

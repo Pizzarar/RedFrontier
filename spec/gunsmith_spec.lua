@@ -6,7 +6,7 @@ local R = dofile(here .. '../server/resources/[fh]/fh_crafting/shared/craft_rule
 local F = dofile(here .. '../server/resources/[fh]/fh_gunsmith/shared/restore_flow.lua')
 local Containers = dofile(here .. '../server/resources/[fh]/fh_core/shared/containers.lua')
 
-local function w(cond, stars) return { name = 'worn_rifle', info = { condition = cond, stars = stars } } end
+local function w(cond, stars) return { name = 'worn_rifle', info = { quality = cond, stars = stars } } end
 
 describe('gunsmith plan', function()
     it('fewest parts to reach the cap', function()
@@ -31,9 +31,13 @@ describe('gunsmith plan', function()
         local p, why = F.plan(w(10, 2), 0, R)
         eq(nil, p); eq('no_parts', why)
     end)
-    it('missing item / condition', function()
+    it('legacy condition-only item still plans from condition', function()
+        local p = F.plan({ name = 'worn_rifle', info = { condition = 45 } }, 5, R)
+        eq(60, p.to); eq(45, p.from)
+    end)
+    it('missing item / quality', function()
         eq('no_weapon', select(2, F.plan(nil, 5, R)))
-        eq('no_condition', select(2, F.plan({ info = {} }, 5, R)))
+        eq('no_quality', select(2, F.plan({ info = {} }, 5, R)))
     end)
 end)
 
@@ -64,7 +68,7 @@ local function mkDeps(o)
         d.setCalls[#d.setCalls + 1] = { ref = ref, slot = slot, expectName = expectName }
         if o.setWhy then return false, o.setWhy end
         if o.setFails then return false, 'write_failed' end
-        d.log[#d.log + 1] = 'set' .. info.condition; return true
+        d.log[#d.log + 1] = 'set' .. info.quality; return true
     end
     d.take = function(_, _, n)
         if o.takeWhy then return false, o.takeWhy end
@@ -79,6 +83,14 @@ describe('gunsmith flow', function()
         local ok, res = F.run(d, 1, 1)
         eq(true, ok); eq(80, res.to); eq(3, res.parts)
         eq('set80,take3', table.concat(d.log, ','))
+    end)
+    it('legacy condition-only item restores and ends with quality set', function()
+        local d = mkDeps({ item = { name = 'worn_rifle', info = { condition = 30, stars = 2 } } })
+        local written
+        local orig = d.setInfo
+        d.setInfo = function(r, s, info, n) written = written or info; return orig(r, s, info, n) end
+        local ok, res = F.run(d, 1, 1)
+        eq(true, ok); eq(80, res.to); eq(80, written.quality); eq(nil, written.condition)
     end)
     it('refuses with nothing open without touching anything', function()
         local d = mkDeps({ nothingOpen = true })

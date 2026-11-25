@@ -4,7 +4,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 
 lua54 'yes'
 
-description 'RedFrontier gunsmith (spec L5): /fh_restore raises weapon condition at a gunsmith station using gun_parts'
+description 'RedFrontier gunsmith (spec L5): /fh_restore raises weapon quality at a gunsmith station using gun_parts'
 
 shared_scripts {
     '@fh_crafting/shared/craft_rules.lua',
