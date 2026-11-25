@@ -199,7 +199,7 @@ local moneyHandlers = {
     set = handleSetMoney,
 }
 
--- FH (core M2-nit): citizenids with an ApplyMoneyItems in progress. Each item step commits and runs the money-item
+-- FH (core M2-nit): citizenids with an ApplyMoneyItems in progress (cid -> nesting depth). Each item step commits and runs the money-item
 -- sync, which used to re-read the half-moved items as the balance and send the HUD a change per step (and a +/- pair
 -- for a rolled-back add). While set, SynchronizeMoneyItems leaves the balance alone; player.lua's moveMoney syncs
 -- once afterwards and sends the one change event for the whole operation.
@@ -216,9 +216,13 @@ function ApplyMoneyItems(player, moneytype, amount, operation)
     local want = toUnits(moneytype, amount)
     if operation == 'remove' then want = before - want elseif operation == 'add' then want = before + want end
     local cid = player.PlayerData.citizenid
-    applying[cid] = true
+    -- depth counter, not a flag (core-09 N1): a nested AddMoney / RemoveMoney / SetMoney for the same cid (from a
+    -- SetPlayerData or log listener) must not re-enable the sync before the outer operation ends. pcall: every exit
+    -- decrements, nil at 0.
+    applying[cid] = (applying[cid] or 0) + 1
     local ran, result = pcall(handler, player, moneytype, amount)
-    applying[cid] = nil
+    local depth = (applying[cid] or 1) - 1
+    applying[cid] = depth > 0 and depth or nil
     if not ran then print(('^1[rsg-core] money items %s %s %s failed: %s^7'):format(operation, amount, moneytype, tostring(result))) end
     local done = ran and result == true
     local after = itemValue(player, moneytype)

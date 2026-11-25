@@ -76,14 +76,20 @@ local clipBusy = {} -- [src] = true while a clip is in flight (pay yields; one c
 -- rsg-core's Logout fires OnPlayerUnload, SAVES, then Wait(200)s with Players[src] still set: anything removed from or
 -- given to that in-memory character after the save is lost, and a credit on top of a clip the DB still holds would dupe.
 -- unloadCid[src] = citizenid from the unload event until a character loads on the src again (or it settles after a drop);
--- unloadSeq[src] counts marks so "an unload began while pay yielded" is visible even if the flag was cleared since.
+-- unloadSeq[src] = stamp of the latest mark, from one global counter that only grows, so "an unload began while pay
+-- yielded" is visible even if the flag was cleared since, and a stamp never repeats after the entry is dropped.
 local unloadCid, unloadSeq = {}, {}
+local unloadGen = 0
 local function markUnload(src, cid)
     src = tonumber(src)
     if not src or not cid then return end
     unloadCid[src] = cid
-    unloadSeq[src] = (unloadSeq[src] or 0) + 1
+    unloadGen = unloadGen + 1
+    unloadSeq[src] = unloadGen
 end
+-- Re-check delay after playerDropped (fh_economy's UNLOAD_SETTLE_MS): well past rsg-core's Logout Wait(200) and its
+-- drop-time save.
+local UNLOAD_SETTLE_MS = 5000
 local function unloadBlocks(src, cid) return unloadCid[src] ~= nil and unloadCid[src] == cid end
 
 local function giveBack(src, item)
@@ -202,11 +208,28 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     local pd = type(Player) == 'table' and Player.PlayerData
     if type(pd) == 'table' and tonumber(pd.source) then unloadCid[tonumber(pd.source)] = nil end
 end)
+-- Server ids are not reused soon, so a dropped src would keep its unload entries forever (core-09 N1). After the
+-- playerDropped native, drop them once rsg-core no longer has the marked character on the src (removed after its
+-- save) AND no clip is in flight there (its seq0 compare must keep seeing the mark); otherwise look again later, so
+-- the window never reopens. clipBusy is left to onClip, which releases it on every path: clearing it here let the
+-- settle run under a clip still yielding in pay.
+local function settle(src)
+    if unloadCid[src] == nil and unloadSeq[src] == nil then return end
+    local p = playerOf(src)
+    local cur = p and p.PlayerData and p.PlayerData.citizenid
+    if clipBusy[src] or (unloadCid[src] ~= nil and cur == unloadCid[src]) then
+        SetTimeout(UNLOAD_SETTLE_MS, function() settle(src) end)
+        return
+    end
+    unloadCid[src], unloadSeq[src] = nil, nil
+end
 AddEventHandler('playerDropped', function()
     local src = tonumber(source)
-    lastUse[src] = nil clipBusy[src] = nil
-    local p = src and playerOf(src)
+    if not src then return end
+    lastUse[src] = nil
+    local p = playerOf(src)
     if p and p.PlayerData then markUnload(src, p.PlayerData.citizenid) end
+    SetTimeout(UNLOAD_SETTLE_MS, function() settle(src) end)
 end)
 
 AddEventHandler('onResourceStart', function(res)

@@ -126,6 +126,8 @@ local function commit(c)
         end
     end
     c.P.Functions.SetPlayerData('items', c.items)
+    local hook = onCommit; onCommit = nil -- one-shot listener inside the commit (spec hook: a nested money op)
+    if hook then hook(c.P) end
 end
 
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(P) -- compat.lua RegisterPlayerMethods
@@ -446,6 +448,29 @@ T.describe('money items: one HUD money change per operation (core M2-nit)', func
         local ev = hudEvents(P, from)
         T.eq(1, #ev)
         T.same({ P.PlayerData.source, 'cash', 1, true }, ev[1])
+    end)
+end)
+
+T.describe('money items: nested money op keeps the sync suppressed (core-09 N1)', function()
+    T.it('a bloodmoney AddMoney fired inside a cash RemoveMoney: one cash hud event, the full amount, balances exact', function()
+        -- the nested op ends first: with a boolean flag it cleared the outer op's suppression, so its own and the
+        -- outer's later commits synced half-moved cash items to the HUD (a change per step)
+        local P = newPlayer({ slots = 8, items = { { 'dollar', 4, 1 }, { 'cent', 90, 2 } } })
+        local from = #clientEvents
+        local nested
+        onCommit = function(PP) nested = PP.Functions.AddMoney('bloodmoney', 1.00, 'spec nested') end
+        T.eq(true, P.Functions.RemoveMoney('cash', 2.95, 'spec'))
+        T.eq(true, nested, 'nested add ran and succeeded')
+        local cash = {}
+        for _, e in ipairs(hudEvents(P, from)) do if e[2] == 'cash' then cash[#cash + 1] = e end end
+        T.eq(1, #cash, 'one cash hud:client:OnMoneyChange')
+        T.same({ P.PlayerData.source, 'cash', 2.95, true }, cash[1])
+        T.eq(195, cents(P.PlayerData.money.cash))
+        T.eq(100, cents(P.PlayerData.money.bloodmoney))
+        sync(P)
+        T.eq(195, cents(P.PlayerData.money.cash), 'cash after the next sync')
+        T.eq(195, itemCents(P))
+        T.eq(100, itemCents(P, 'blood_dollar', 'blood_cent'))
     end)
 end)
 

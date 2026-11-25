@@ -13,6 +13,8 @@ local function boot(o)
     env.GetCurrentResourceName = function() return 'fh_core' end
     env.AddEventHandler = function(n, fn) w.handlers[n] = fn end
     env.CreateThread = function(fn) fn() end
+    w.timers = {}
+    env.SetTimeout = function(ms, fn) w.timers[#w.timers + 1] = { ms = ms, fn = fn } end
     env.GetPlayerPed = function() return 7 end
     env.GetEntityHealth = function() if o.health == 'nope' then error('no ped') end return o.health or 200 end
     env.print = function(...) w.logs[#w.logs + 1] = table.concat({ ... }, ' ') end
@@ -63,6 +65,21 @@ local function boot(o)
     assert(loadfile(SERVER, 't', env))()
     w.handlers.onResourceStart('fh_core')
     function w.use(src, name) w.useables[name](src, { name = name, slot = 1 }) end
+    function w.drop(src) env.source = src w.handlers.playerDropped() env.source = nil end
+    function w.tick() local t = w.timers w.timers = {} for _, x in ipairs(t) do x.fn() end end
+    -- internal maps, reached through the settle closure's upvalues (leak checks)
+    local function upv(fn, name, seen)
+        seen = seen or {}
+        if seen[fn] then return nil end
+        seen[fn] = true
+        for i = 1, 64 do
+            local n, v = debug.getupvalue(fn, i)
+            if not n then break end
+            if n == name then return v end
+            if type(v) == 'function' then local r = upv(v, name, seen) if r ~= nil then return r end end
+        end
+    end
+    function w.map(name) return upv(w.handlers.playerDropped, name) end
     return w
 end
 
@@ -222,6 +239,66 @@ case('heal: no health reading fails closed', function()
     local w = boot({ bag = bagOf('bandage'), health = 'nope' })
     w.use(1, 'bandage')
     assert(#w.events == 0 and #w.removed == 0)
+end)
+
+local function size(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+
+case('unload maps: cleared after drop + settle once rsg-core no longer holds the cid; kept (re-checked) while it does', function()
+    local w = boot({ bag = bagOf('money_clip', { amount = 9 }) })
+    w.handlers['RSGCore:Server:OnPlayerUnload'](1)
+    w.drop(1)
+    local cidMap, seqMap = w.map('unloadCid'), w.map('unloadSeq')
+    assert(cidMap and seqMap, 'maps reachable')
+    T.eq('CID1', cidMap[1]) assert(seqMap[1])
+    T.eq(1, #w.timers) T.eq(5000, w.timers[1].ms)
+    w.tick() -- rsg-core still has CID1 on src 1 (drop-time save yielding): keep the window, look again
+    T.eq('CID1', cidMap[1]) T.eq(1, #w.timers)
+    w.use(1, 'money_clip')
+    assert(#w.removed == 0 and #w.paid == 0, 'still fails closed before consume')
+    w.cid = nil -- rsg-core removed the player after its save
+    w.tick()
+    T.eq(0, size(cidMap)) T.eq(0, size(seqMap)) T.eq(0, #w.timers)
+end)
+
+case('unload maps: a drop with no character settles to nothing; the settle is a no-op when already clear', function()
+    local w = boot({ cid = false })
+    w.drop(1)
+    T.eq(0, size(w.map('unloadCid'))) T.eq(1, #w.timers)
+    w.tick()
+    T.eq(0, size(w.map('unloadSeq'))) T.eq(0, #w.timers)
+end)
+
+case('unload maps: seq untouched while a clip is in flight; cleared after it ends; no give-back, credit once', function()
+    local seqDuring
+    local w
+    w = boot({ bag = bagOf('money_clip', { amount = 9 }), payFails = true, duringPay = function(ww)
+        ww.drop(1)        -- disconnect while pay yields: marks the unload
+        ww.cid = nil      -- rsg-core removed the player after its save
+        local seq = ww.map('unloadSeq')[1]
+        ww.tick()         -- settle fires mid-pay: clipBusy -> keep everything, re-check later
+        seqDuring = ww.map('unloadSeq')[1]
+        assert(seq ~= nil and seqDuring == seq, 'seq kept while clipBusy')
+        assert(ww.map('clipBusy')[1] == true, 'playerDropped does not release the in-flight lock')
+        ww.use(1, 'money_clip') -- a second use during the yield is still locked out
+    end })
+    w.use(1, 'money_clip')
+    assert(seqDuring)
+    assert((w.gaveBack or 0) == 0 and #w.credited == 1 and w.credited[1].cid == 'CID1' and #w.removed == 1)
+    T.eq(nil, w.map('clipBusy')[1], 'lock released by onClip')
+    T.eq(1, #w.timers, 'the deferred settle is pending')
+    w.tick()
+    T.eq(0, size(w.map('unloadCid'))) T.eq(0, size(w.map('unloadSeq'))) T.eq(0, #w.timers)
+end)
+
+case('unload seq stamps never repeat after a settle cleared them (global counter)', function()
+    local w = boot()
+    w.handlers['RSGCore:Server:OnPlayerUnload'](1)
+    local first = w.map('unloadSeq')[1]
+    w.cid = nil w.drop(1) w.tick()
+    T.eq(nil, w.map('unloadSeq')[1])
+    w.cid = 'CID1'
+    w.handlers['RSGCore:Server:OnPlayerUnload'](1)
+    assert(w.map('unloadSeq')[1] > first)
 end)
 
 T.finish()
