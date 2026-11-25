@@ -7,14 +7,13 @@
 -- Scenario rows: hash form = TaskStartScenarioInPlaceHash(ped, joaat(name), 3000, true, 0, -1.0, false), the
 -- pattern rsg-core/client/progress.lua:45 uses; string form = lib.progressBar{anim={scenario=name}}, which
 -- ox_lib routes to TaskStartScenarioInPlace(ped, name, 0, ...) (ox_lib progress.lua:92).
--- Dict rows: hash form = RequestAnimDict + TaskPlayAnim + RemoveAnimDict (fh_inventory/client/main.lua:175 and
+-- Dict rows: hash form = RequestAnimDict + TaskPlayAnim + RemoveAnimDict (fh_inventory/client/main.lua:179 and
 -- rsg-core/client/progress.lua:49); string form = lib.progressBar{anim={dict=,clip=}}.
 -- Only the baseline row is proven in this repo (fh_inventory/client/main.lua:177). Every other name is a
 -- well-known RDR3 name, NOT confirmed by repo usage: candidate, unproven.
 -- No convar/flag gates this (see the plan Decided): always on, like the other spk_* spikes.
 
-local N_TASK_PLAY_ANIM = 0xEA47FE3719165B94 -- TASK_PLAY_ANIM (called by name below)
-local N_CLEAR_PED_TASKS = 0xE1EF3C1216AFF2CD -- CLEAR_PED_TASKS (called by name below)
+-- Natives are called by name: TASK_PLAY_ANIM 0xEA47FE3719165B94, CLEAR_PED_TASKS 0xE1EF3C1216AFF2CD.
 
 local PLAY_MS = 3000
 
@@ -73,7 +72,11 @@ local function playHash(g, i, row)
     else
         RequestAnimDict(row.dict)
         local t = GetGameTimer() + 3000
-        while not HasAnimDictLoaded(row.dict) and GetGameTimer() < t do Wait(50) end
+        while not HasAnimDictLoaded(row.dict) and GetGameTimer() < t and g == gen do Wait(50) end
+        if g ~= gen then
+            RemoveAnimDict(row.dict)
+            return false
+        end
         if not HasAnimDictLoaded(row.dict) then
             RemoveAnimDict(row.dict)
             say(('FAIL %s: dict did not load'):format(row.key))
@@ -95,13 +98,24 @@ local function playString(g, i, row)
     else
         anim = { dict = row.dict, clip = row.clip }
     end
-    lib.progressBar({
+    -- ox_lib sets invBusy before it requests the dict, and its requestAnimDict throws on a missing dict;
+    -- check first, and pcall + reset invBusy (as ox_lib progress.lua:156 does) so a throw can't leave it stuck.
+    if row.kind == 'dict' and not DoesAnimDictExist(row.dict) then
+        say(('FAIL %s (string): dict does not exist'):format(row.key))
+        return false
+    end
+    local ok, err = pcall(lib.progressBar, {
         duration = PLAY_MS,
         label = row.key .. ' (string form)',
         useWhileDead = false,
         canCancel = true,
         anim = anim,
     })
+    if not ok then
+        LocalPlayer.state.invBusy = false
+        say(('FAIL %s (string): %s'):format(row.key, tostring(err)))
+        return false
+    end
     if g == gen then ClearPedTasks(PlayerPedId()) end
     return g == gen
 end

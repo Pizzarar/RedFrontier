@@ -31,7 +31,7 @@ TEST: `ensure spk_anim`, then `/spk_anim list`, then `/spk_anim 1` .. `/spk_anim
 Repo grep (server/resources) found only these scenario names in use: the `WORLD_HUMAN_*` poses in rsg-character/client/charselect.lua (none are in the rows above) and the `scenario` handling in rsg-core and ox_lib progress. The only dict/clip pair in repo use is the baseline (plus a face dict in rsg-character/client/creator.lua:886 that is not relevant). Every other name comes from well-known RDR3 lists, not from repo evidence.
 
 ## Natives
-TASK_PLAY_ANIM — 0xEA47FE3719165B94 (called by name; repo use fh_inventory/client/main.lua:175)
+TASK_PLAY_ANIM — 0xEA47FE3719165B94 (called by name; repo use fh_inventory/client/main.lua:179)
 CLEAR_PED_TASKS — 0xE1EF3C1216AFF2CD (called by name; rsg-core/client/progress.lua:58)
 TaskStartScenarioInPlaceHash, TaskStartScenarioInPlace, RequestAnimDict, HasAnimDictLoaded, RemoveAnimDict, GET_HASH_KEY (`joaat`, 0xFD340785ADF8CFB7) — called by name; fh_core/docs/natives.md lists the anim-dict ones as "not looked up" and does not list the scenario natives, so their hashes are NOT cross-checked here (not guessed).
 All via natives the repo already calls by name (rsg-core/client/progress.lua, fh_inventory/client/main.lua).
