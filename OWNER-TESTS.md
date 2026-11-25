@@ -405,7 +405,7 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 
-Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hunting's `getTrophyComfort` (today step 6 shows the refusal). `<id>` is your server id (as in the fh_economy tests). Start from a character with no plot and an empty plot chest. Materials are taken from the plot chest, never from your pockets. If a `/giveitem` is refused as too heavy, give 20 at a time and move each batch into the chest.
+Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hunting's `getTrophyComfort` (today step 6 shows the refusal). `<id>` is your server id (as in the fh_economy tests). Start from a character with no plot and an empty plot chest. Materials are taken from your backpack first, the rest from the plot chest (H14b); until step 3h keep them in the chest, so the backpack has none. If a `/giveitem` is refused as too heavy, give 20 at a time and move each batch into the chest.
 
 1. Stand inside the plot circle at (-500, 750, 105) and run `/fh_claim`.
    Expected: `fh_claim: claimed plot heartlands_01`. Run it again: it refuses (you already own a plot).
@@ -434,8 +434,10 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
       Then `/givemoney <id> cash 100` and `/fh_build fence`.
       Expected: `fh_build: built fence tier 1 ($100, 15 lumber)`, cash $50, 0 lumber left.
    g. Item refund: give 40 lumber and 5 nails, move both into the chest, run `/fh_build cabin` (tier 2 needs 40 lumber + 20 nails).
-      Expected: `fh_build: fh_not_enough (not enough nails in your plot chest (materials are taken from the chest))`. The chest still has 40 lumber and 5 nails, cash is still $50.
-   h. DB: `SELECT kind, amount, reason FROM fh_ledger WHERE reason LIKE 'homestead%' ORDER BY id;`
+      Expected: `fh_build: fh_not_enough (not enough nails in your backpack and plot chest (taken from the backpack first, then the chest))`. The chest still has 40 lumber and 5 nails, cash is still $50.
+   h. From pockets, split refund (H14b): `/giveitem <id> nails 15` and leave them in your backpack (do not move them). Cash is still $50. Run `/fh_build cabin`.
+      Expected: `fh_build: fh_insufficient_funds (not enough cash)`. Your backpack has 15 nails again and the chest 40 lumber and 5 nails (each stack went back where it came from). The server console shows no `backpack refused` and no `ITEM LOST` line.
+   i. DB: `SELECT kind, amount, reason FROM fh_ledger WHERE reason LIKE 'homestead%' ORDER BY id;`
       Expected: exactly 7 rows, all `charge`, `homestead build`, amounts 150, 40, 60, 25, 80, 120, 100. No row for the refused attempts and no `homestead build refund` row.
       The server console shows no red errors and no `ITEM LOST` / `MONEY LOST` line.
    RESULT:
@@ -471,8 +473,9 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
 9. Unclaim a plot with no builds (you hold heartlands_01 from step 8d). Put 1 bread in the plot chest and run `/fh_unclaim`.
    Expected: `fh_unclaim: fh_chests_not_empty`. Take the bread back out of the chest and run `/fh_unclaim` again: `fh_unclaim: released plot heartlands_01`, no red errors in the server console.
    RESULT:
-10. Server restart. Claim heartlands_01 again with `/fh_claim` (step 9 left you without a plot). Make sure the plot chest holds at least 30 lumber and you have at least $210 cash. Run `/fh_build cabin`, then `/fh_build station_1`, put 1 bread in the chest, then stop the server, start it and rejoin.
+10. Server restart. Claim heartlands_01 again with `/fh_claim` (step 9 left you without a plot). Carry 25 lumber in your backpack, put exactly 5 lumber in the plot chest, and have at least $210 cash. Run `/fh_build cabin`, then `/fh_build station_1`, put 1 bread in the chest, then stop the server, start it and rejoin.
     Expected:
+    - Both builds succeed from pockets first (H14b): after the cabin your backpack has 5 lumber and the chest 5; after station_1 both have 0 lumber.
     - `/fh_claim` at the plot refuses (you still own it).
     - `/fh_build` shows `cabin 1/2 next: $400, 40 lumber, 20 nails` and `station_1 1/1 (max)`.
     - The cabin and workbench props are back.

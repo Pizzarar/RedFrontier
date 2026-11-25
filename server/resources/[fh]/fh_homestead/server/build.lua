@@ -1,14 +1,26 @@
 -- fh_homestead H2: build flow (server). `/fh_build <slot>` -> FhHomesteadBuild.build(src, slotId).
--- Contract (core B7): fh_core.removeItem(ref, item, n) all-or-nothing (fh_not_enough); fh_economy.charge(src, amount,
+-- Contract (core B7 + C3a): fh_core.removeItem(ref, item, n) all-or-nothing per call (fh_not_enough), on the plot chest
+-- and on the carried ref { type = 'backpack', id = src } (fh_player_offline, fh_bad_ref); fh_core.snapshot(backpack ref)
+-- to count what the player carries; fh_core.addItem(ref, ...) all-or-nothing (nothing added on a refusal); fh_economy.charge(src, amount,
 -- reason, region) debit (fh_insufficient_funds, ledger_failed, removemoney_refused, no_player, player_changed,
 -- fh_charge_busy); credits ONLY through fh_core.addItem (items) and fh_economy.credit (money). No other debit path.
 --
 -- Order (tier A: no dupes, no free builds, no lost items):
 --   0. ready gate (fh_not_ready), character, own plot, standing inside it, H1 rules (owner-only, next tier, prereqs)
---   1. take the materials from the plot's main chest (fh:chest:<plot>:1), one removeItem per item, sorted by name
+--   1. take the materials, items sorted by name: per item, what the player carries in the backpack section first (up to
+--      the need, counted by snapshot right before), the rest from the plot's main chest (fh:chest:<plot>:1); one
+--      removeItem per container per item, each recorded with its source in st.taken. Any take failing puts back
+--      everything taken so far (each to its source) and refuses with that take's reason: never a partial take.
+--      H14b guarded fallback: when the backpack ref is unusable (snapshot throws / export missing / refused, or the
+--      backpack removeItem throws or says fh_player_offline / fh_bad_ref), whatever was taken is put back and the take
+--      runs again from the plot chest only, exactly as before H14b.
+--      The backpack ref is by src: right before each backpack count/take the build's citizenid must still be the one
+--      loaded on src (nobody = offline -> fallback above; another character = player_changed, refused).
 --   2. charge the money (skipped when the tier costs $0)
 --   3. FhHomesteadSlots.setTier (writes only while fh_plots still says we own it)
---   Any failure after step 1 refunds exactly what was taken: items back into the same chest (addItem), money through
+--   Any failure after step 1 refunds exactly what was taken: each item stack back to the container it came from
+--   (addItem); a backpack stack the backpack refuses (offline, no room; nothing added) or whose character left src goes into plot chest 1
+--   instead, logged at warn, so it is never lost and never doubled; money through
 --   fh_economy.credit to the citizenid captured at build start (online -> paid now; offline or switched character ->
 --   queued in fh_pending_credit and paid on that character's next load). Each refund runs at most once and is checked;
 --   a failed refund is logged as `ITEM LOST` / `MONEY LOST` with citizenid, item/amount and the reason, and the call
@@ -18,7 +30,7 @@
 --   tier is already in the slot cache: setTier saved it and then threw in an event handler, so the build stands).
 -- Ownership: gen[plotId] moves on every unclaim; after each await the flow checks the same character still owns the
 --   same plot (no unclaim in between, also not unclaim + re-claim). If not: no build, full refund (items go back to the
---   chest they came from). H13: a build also holds FhHomesteadClaims.beginChestWrite for the plot, so an unclaim of it
+--   container they came from). H13: a build also holds FhHomesteadClaims.beginChestWrite for the plot, so an unclaim of it
 --   is refused 'fh_chest_busy' until the build is done; the unclaim paths stay checked as a backstop.
 -- Also here: build materials registered with fh_core (from this resource only), extra chests (chest_2/chest_3 slots)
 -- registered as fh_core `chest` containers when built and on load, and the client prop feed (client-local props).
@@ -49,6 +61,10 @@ local function citizenidOf(src)
 end
 
 local function chestRef(plotId, n) return { type = 'chest', id = plotRules.chestStashId(plotId, n or 1) } end
+local function bagRef(src) return { type = 'backpack', id = src } end
+
+-- backpack removeItem reasons that mean the ref itself is unusable (-> chest-only fallback), not a shortfall
+local BAG_DOWN = { fh_player_offline = true, fh_bad_ref = true }
 
 -- Same character, same plot, no unclaim since generation g was read. The plot may be a claim or a town lot (H9).
 local function stillOwns(cid, plotId, g)
@@ -75,21 +91,41 @@ end
 
 -- ---------------------------------------------------------------- refunds (each checked, each at most once)
 
----Put every taken item back into the chest it came from. st.taken is cleared first so nothing is refunded twice.
+---Put every taken item stack back into the container it came from (st.taken[i].from = 'bag' | 'chest'). A backpack
+---stack the backpack refuses (a clean false: all-or-nothing, nothing added), or whose character is no longer loaded on
+---src, goes into plot chest 1 instead. st.taken is
+---cleared first so nothing is refunded twice; logs are written after the loop so a log error cannot cut a refund short.
 local function refundItems(st, why)
     local taken = st.taken
     st.taken = {}
-    local all = true
+    local all, notes = true, {}
     for i = #taken, 1, -1 do
         local it = taken[i]
-        local ok, res, rwhy = pcall(function() return exports.fh_core:addItem(chestRef(st.plotId, 1), it.item, it.amount) end)
+        local fromBag = it.from == 'bag'
+        local stash = fromBag and ('backpack:' .. tostring(st.src)) or plotRules.chestStashId(st.plotId, 1)
+        local ok, res, rwhy
+        if fromBag and citizenidOf(st.src) ~= st.cid then
+            -- the backpack ref is by src: never refund into another character (switched) or a gone player
+            ok, res, rwhy = true, false, 'character not on src'
+        else
+            ok, res, rwhy = pcall(function()
+                return exports.fh_core:addItem(fromBag and bagRef(st.src) or chestRef(st.plotId, 1), it.item, it.amount)
+            end)
+        end
+        if ok and res ~= true and fromBag then
+            notes[#notes + 1] = { 'warn', ('build refund: backpack refused %d %s (%s); put into plot chest %s instead; citizenid=%s src=%s slot=%s build_error=%s')
+                :format(it.amount, it.item, tostring(rwhy), plotRules.chestStashId(st.plotId, 1), st.cid, tostring(st.src),
+                    st.slotId, tostring(why)) }
+            stash = plotRules.chestStashId(st.plotId, 1)
+            ok, res, rwhy = pcall(function() return exports.fh_core:addItem(chestRef(st.plotId, 1), it.item, it.amount) end)
+        end
         if not ok or res ~= true then
             all = false
-            log('error', ('ITEM LOST: build refund failed: citizenid=%s plot=%s slot=%s item=%s amount=%d stash=%s refund_error=%s build_error=%s')
-                :format(st.cid, st.plotId, st.slotId, it.item, it.amount, plotRules.chestStashId(st.plotId, 1),
-                    tostring(ok and rwhy or res), tostring(why)))
+            notes[#notes + 1] = { 'error', ('ITEM LOST: build refund failed: citizenid=%s plot=%s slot=%s item=%s amount=%d stash=%s refund_error=%s build_error=%s')
+                :format(st.cid, st.plotId, st.slotId, it.item, it.amount, stash, tostring(ok and rwhy or res), tostring(why)) }
         end
     end
+    for _, n in ipairs(notes) do log(n[1], n[2]) end
     return all
 end
 
@@ -161,6 +197,65 @@ end
 
 -- ---------------------------------------------------------------- build
 
+---How many of `item` the player carries in the backpack section; nil, why when the backpack ref is unusable.
+local function bagCount(src, item)
+    local ok, items, why = pcall(function() return exports.fh_core:snapshot(bagRef(src)) end)
+    if not ok then return nil, 'snapshot threw: ' .. tostring(items) end
+    if type(items) ~= 'table' then return nil, tostring(why or 'fh_no_container') end
+    local n = 0
+    for _, it in pairs(items) do
+        if type(it) == 'table' and it.name == item and type(it.amount) == 'number' then n = n + it.amount end
+    end
+    return n
+end
+
+---Take `n` of `item` from st's backpack ('bag') or plot chest 1 ('chest'), all-or-nothing; record it in st.taken.
+---@return boolean ok, string|nil reason, boolean|nil threw
+local function takeFrom(st, from, item, n)
+    local ref = from == 'bag' and bagRef(st.src) or chestRef(st.plotId, 1)
+    local ok, res, why = pcall(function() return exports.fh_core:removeItem(ref, item, n) end)
+    if not ok then return false, tostring(res), true end
+    if res ~= true then return false, type(why) == 'string' and why or 'fh_removeitem_failed' end
+    st.taken[#st.taken + 1] = { item = item, amount = n, from = from }
+    return true
+end
+
+---Step 1. Per item (sorted): backpack first up to the need (useBag), the rest from plot chest 1. Stops at the first
+---failure and leaves what was taken in st.taken for the caller to put back.
+---@return boolean ok, string|nil reason, any detail, string|nil bagDown  bagDown: the backpack ref is unusable
+local function takeMaterials(st, cost, g, useBag)
+    for _, it in ipairs(cost.items) do
+        if not stillOwns(st.cid, st.plotId, g) then return false, 'fh_no_plot' end
+        local fromBag = 0
+        if useBag then
+            -- the backpack ref is by src: checked right before the count + take (no await in between) that the same
+            -- character is still loaded there. Nobody loaded = offline (fallback); another character = player_changed.
+            local now = citizenidOf(st.src)
+            if not now then return false, nil, nil, 'fh_player_offline' end
+            if now ~= st.cid then return false, 'player_changed' end
+            local have, bwhy = bagCount(st.src, it.item)
+            if not have then return false, nil, nil, bwhy end
+            fromBag = math.min(have, it.amount)
+        end
+        if fromBag > 0 then
+            local ok, why, threw = takeFrom(st, 'bag', it.item, fromBag)
+            if not ok then
+                if threw or BAG_DOWN[why] then return false, nil, nil, why end
+                return false, why, it.item
+            end
+        end
+        if it.amount > fromBag then
+            local ok, why, threw = takeFrom(st, 'chest', it.item, it.amount - fromBag)
+            if threw then
+                log('warn', 'fh_core:removeItem failed: ' .. why)
+                return false, 'fh_removeitem_unavailable'
+            end
+            if not ok then return false, why, it.item end
+        end
+    end
+    return true
+end
+
 local function buildLocked(st, plot, slotId)
     local S, C = slots(), claims()
     local plotId, cid = st.plotId, st.cid
@@ -177,17 +272,16 @@ local function buildLocked(st, plot, slotId)
         return false, cwhy
     end
 
-    -- 1. materials from the plot chest (all-or-nothing per item; earlier items are refunded on a later shortfall)
-    for _, it in ipairs(cost.items) do
-        if not stillOwns(cid, plotId, g) then return abort(st, 'fh_no_plot') end
-        local okc, res, rwhy = pcall(function() return exports.fh_core:removeItem(chestRef(plotId, 1), it.item, it.amount) end)
-        if not okc then
-            log('warn', 'fh_core:removeItem failed: ' .. tostring(res))
-            return abort(st, 'fh_removeitem_unavailable')
-        end
-        if res ~= true then return abort(st, type(rwhy) == 'string' and rwhy or 'fh_removeitem_failed', it.item) end
-        st.taken[#st.taken + 1] = it
+    -- 1. materials: backpack first, then plot chest 1 (all-or-nothing across both; see the header). A backpack that is
+    -- unusable falls back to the chest-only take of before H14b, after putting back whatever was taken.
+    local took, why2, detail, bagDown = takeMaterials(st, cost, g, true)
+    if not took and bagDown then
+        log('warn', ('build %s/%s for %s: backpack unavailable (%s); taking materials from the plot chest only')
+            :format(plotId, slotId, cid, tostring(bagDown)))
+        if not refundItems(st, 'fh_backpack_unavailable') then return abort(st, 'fh_build_refund_failed') end
+        took, why2, detail = takeMaterials(st, cost, g, false)
     end
+    if not took then return abort(st, why2, detail) end
     if not stillOwns(cid, plotId, g) then return abort(st, 'fh_no_plot') end
 
     -- 2. money. Checked right before the call (no await in between): charge debits whoever is loaded on src.
@@ -367,7 +461,7 @@ local function reply(src, msg)
 end
 
 local HINT = {
-    fh_not_enough = 'not enough %s in your plot chest (materials are taken from the chest)',
+    fh_not_enough = 'not enough %s in your backpack and plot chest (taken from the backpack first, then the chest)',
     fh_charge_busy = 'another payment is in progress, try again in a moment',
     fh_build_busy = 'a build is already in progress, try again in a moment',
     fh_insufficient_funds = 'not enough cash',

@@ -117,7 +117,7 @@ Server to client (H2): `fh:homestead:slot_props` `(plot_id, props)` to everyone 
 
 `/fh_build <slot>` builds the next tier of a slot on the plot you own and stand in: a claim (`cabin`, `fence`,
 `station_1..3`, `trophy_wall`, `chest_2`, `chest_3`) or a town lot (`chest_2`, `station_1`; any other slot there is
-`fh_unknown_slot`). Materials come from that plot's own main chest. `/fh_build` with no slot lists every slot as `slot tier/max next: $money, n item` (or `(max)`).
+`fh_unknown_slot`). Materials come from your backpack first, the rest from that plot's own main chest (H14b). `/fh_build` with no slot lists every slot as `slot tier/max next: $money, n item` (or `(max)`).
 Success reply: `fh_build: built <slot> tier <n> ($<money>, <n> <item>, ...)`. Server-local entry point:
 `FhHomesteadBuild.build(src, slotId)` -> `true, tier, cost` or `false, reason, detail`.
 
@@ -126,9 +126,16 @@ Order (tier A: no dupes, no free builds, no lost items):
 1. Checks, nothing taken yet: slot cache loaded (`fh_not_ready`), slot id (`fh_unknown_slot`), character
    (`fh_no_character`), own a plot (`fh_no_plot`), ped (`fh_no_player`), standing inside the plot (`fh_not_in_plot`),
    lock (`fh_build_busy`), then the H1 rules (`fh_not_owner`, `fh_max_tier`, `fh_prereq_missing`, ...).
-2. Materials come out of the plot's main chest `fh:chest:<plot>:1` (NOT the player's inventory), one
-   `fh_core.removeItem` per item in name order, each all-or-nothing. A shortfall returns `fh_not_enough` with the item
-   name (`fh_build: fh_not_enough (not enough nails in your plot chest ...)`); items already taken go back first.
+2. Materials (H14b, "build from pockets"), per item in name order: what you carry in the backpack section
+   (`{ type = 'backpack', id = src }`, counted with `fh_core.snapshot` right before) first, up to the need, the rest
+   from the plot's main chest `fh:chest:<plot>:1`; one `fh_core.removeItem` per container per item, each
+   all-or-nothing. The hotbar (`equipped`) is not used. Any take failing puts back everything taken so far, each
+   stack into the container it came from, and the build is refused with that take's reason: never a partial take. A
+   shortfall returns `fh_not_enough` with the item name (`fh_build: fh_not_enough (not enough nails in your backpack
+   and plot chest ...)`). Right before each backpack count/take the build's character must still be the one loaded on
+   `src` (another one: `player_changed`). Guarded fallback: if the backpack ref is unusable (snapshot throws or is
+   missing or refused, or the backpack `removeItem` throws or says `fh_player_offline` / `fh_bad_ref`), whatever was
+   taken goes back and the take runs from the plot chest only, as before H14b (logged `backpack unavailable`).
 3. Money: `fh_economy.charge(src, money, 'homestead build', plot region)`, skipped when the tier costs $0. Right before
    it the flow checks the same character is still loaded on `src` (else `player_changed`). Any charge error
    (`fh_insufficient_funds`, `fh_charge_busy`, `ledger_failed`, `removemoney_refused`, `no_player`, `player_changed`,
@@ -136,8 +143,10 @@ Order (tier A: no dupes, no free builds, no lost items):
    `another payment is in progress, try again in a moment`.
 4. `FhHomesteadSlots.setTier` (writes only while `fh_plots` still says this character owns the plot).
 
-Refunds: any failure after step 2 puts back exactly what was taken. Items go back into the same chest with
-`fh_core.addItem`; money goes back with `fh_economy.credit(citizenid, amount, 'homestead build refund', region)` to
+Refunds: any failure after step 2 puts back exactly what was taken. Each item stack goes back into the container it
+came from with `fh_core.addItem` (all-or-nothing). A backpack stack the backpack refuses (player offline, no room), or
+whose character is no longer loaded on `src`, goes into plot chest 1 instead (logged at warn: `build refund: backpack
+refused <n> <item> (<why>); put into plot chest ...`), so it is never lost and never given twice; money goes back with `fh_economy.credit(citizenid, amount, 'homestead build refund', region)` to
 the citizenid captured when the build started (never by `src`). If that character is online it is paid at once (mode
 `paid`); if the player logged off or switched character since the charge, the money is queued in `fh_pending_credit`
 and paid on that character's next load (mode `pending`, logged at info level). Each refund runs at most once and is
@@ -249,8 +258,6 @@ an admin / console release of someone else's plot is not checked (the owner may 
 - Spill-on-unclaim: H13 refuses / force-clears instead of dropping a bag (no drop-bag spill). Residual: fh_core has no
   "close pane" call, so a chest pane opened before the unclaim and still open after the final sweep can still take an
   item into the released plot's stash. Follow-up: clear (and log) the stashes again on the next claim.
-- Build materials must be in the plot chest: fh_core `removeItem` works on registered world containers only, not on
-  the player's own inventory, so `/fh_build` cannot take lumber/nails from the pockets.
 - `lumber` ($3) and `nails` ($2) are bought at any trade post (fh_trade supplies, idea-716/719); admins can still `/giveitem` them.
 - Plots 2-4 coordinates (`heartlands_02..04`) are placeholders: TODO-verify in game. Slot prop offsets and the `p_chest01x` fallback model are also TODO-verify.
 - `fh_hunting:getTrophyComfort` is guarded (`GetResourceState` plus `pcall`): until Hunting merges, `placeTrophy` returns `fh_hunting_unavailable`.

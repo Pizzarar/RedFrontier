@@ -136,7 +136,17 @@ local function newWorld(wcfg)
         local cid = W.players[src]
         return cid and { PlayerData = { citizenid = cid } } or nil
     end } }
-    local function stash(ref) return ref.id end
+    -- carried ref { type = 'backpack', id = src } (C3a): W.chest['bag:<src>']; refused fh_player_offline while nobody is
+    -- loaded on src or W.bagOffline; W.bagThrows makes every backpack call throw, W.bagNoSnapshot the snapshot export
+    -- missing for it; W.bagAddRefuses refuses backpack adds (nothing added)
+    local function stash(ref) return ref.type == 'backpack' and ('bag:' .. tostring(ref.id)) or ref.id end
+    local function bagDown(ref)
+        if ref.type ~= 'backpack' then return nil end
+        if W.bagThrows then error('fh_core backpack gone') end
+        if type(ref.id) ~= 'number' then return 'fh_bad_ref' end
+        if W.bagOffline or not W.players[ref.id] then return 'fh_player_offline' end
+        return nil
+    end
     local X = {
         ['rsg-core'] = { GetCoreObject = function() return core end },
         fh_core = {
@@ -149,8 +159,11 @@ local function newWorld(wcfg)
             end,
             -- H13: unclaim reads (and on force empties) the plot stashes; W.chest[id] = { item = count }
             snapshot = function(_, ref)
+                if ref.type == 'backpack' and W.bagNoSnapshot then error('No such export snapshot in resource fh_core') end
+                local down = bagDown(ref)
+                if down then return nil, down end
                 local s = stash(ref)
-                if not (W.containers[s] or W.chest[s]) then return nil, 'fh_unknown_container' end
+                if ref.type ~= 'backpack' and not (W.containers[s] or W.chest[s]) then return nil, 'fh_unknown_container' end
                 local out, slot = {}, 0
                 for item, n in pairs(W.chest[s] or {}) do
                     if n > 0 then slot = slot + 1; out[slot] = { name = item, amount = n } end
@@ -164,6 +177,9 @@ local function newWorld(wcfg)
             removeItem = function(_, ref, item, n)
                 W.calls.removeItem = W.calls.removeItem + 1
                 if W.removeThrows then error('fh_core gone') end
+                local down = bagDown(ref)
+                if down then return false, down end
+                if ref.type == 'backpack' and W.bagRemoveOffline then return false, 'fh_player_offline' end
                 local s = stash(ref)
                 W.chest[s] = W.chest[s] or {}
                 if (W.chest[s][item] or 0) < n then return false, 'fh_not_enough' end
@@ -175,6 +191,9 @@ local function newWorld(wcfg)
                 W.calls.addItem = W.calls.addItem + 1
                 await('addItem')
                 if W.addRefuses then return false, W.addRefuses end
+                local down = bagDown(ref)
+                if down then return false, down end
+                if ref.type == 'backpack' and W.bagAddRefuses then return false, W.bagAddRefuses end
                 local s = stash(ref)
                 W.chest[s] = W.chest[s] or {}
                 W.chest[s][item] = (W.chest[s][item] or 0) + n
@@ -193,6 +212,10 @@ local function newWorld(wcfg)
                 await('charge')
                 W.cash[cid] = W.cash[cid] - amount
                 await('charged')
+                if W.chargeFailsLate then -- refused after a hold (the stub keeps the debit out: nothing was taken)
+                    W.cash[cid] = W.cash[cid] + amount
+                    return false, W.chargeFailsLate
+                end
                 return true, nil, 1
             end,
             pay = function(_, src, amount, reason, region)
@@ -277,6 +300,7 @@ local function newWorld(wcfg)
         return out
     end
     W.logged = function(pat) for _, m in ipairs(W.logs) do if m:find(pat) then return true end end return false end
+    W.bag = function(src) local s = 'bag:' .. (src or 1); W.chest[s] = W.chest[s] or {}; return W.chest[s] end
     W.chest1 = function(plotId) local s = PR.chestStashId(plotId or P1, 1); W.chest[s] = W.chest[s] or {}; return W.chest[s] end
     return W
 end
@@ -834,4 +858,146 @@ T.describe('H9 town lots: slots, stations, safety, plotInfo', function()
         T.eq(false, info.fenceBuilt); T.eq(P1 and p1.region, info.region); T.eq(p1.center.x, info.coords.x)
     end)
 end)
+-- ------------------------------------------------------------------------------------------- H14b build from pockets
+-- cabin tier 2 costs $400 + 40 lumber + 20 nails. Per item: backpack (W.bag) first, the rest from plot chest 1.
+T.describe('H14b build from pockets (backpack first, then plot chest 1)', function()
+    local function counts(W)
+        return { bag_lumber = W.bag().lumber or 0, bag_nails = W.bag().nails or 0,
+            chest_lumber = W.chest1().lumber or 0, chest_nails = W.chest1().nails or 0, cash = W.cash.A }
+    end
+    local function stocked(bag, chest)
+        local W = world({ cabin = 1 }, chest)
+        for k, v in pairs(bag or {}) do W.bag()[k] = v end
+        return W
+    end
+
+    case('split take: backpack first, the rest from the chest', function()
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        local ok, tier = W.build(1, 'cabin')
+        assert(ok == true and tier == 2, tostring(tier))
+        T.same({ bag_lumber = 0, bag_nails = 0, chest_lumber = 90, chest_nails = 35, cash = 600 }, counts(W))
+        T.eq(4, W.calls.removeItem); T.eq(0, W.calls.addItem)
+    end)
+    case('backpack only: the chest is not touched', function()
+        local W = stocked({ lumber = 50, nails = 25 }, { lumber = 100, nails = 50 })
+        assert(W.build(1, 'cabin'))
+        T.same({ bag_lumber = 10, bag_nails = 5, chest_lumber = 100, chest_nails = 50, cash = 600 }, counts(W))
+        T.eq(2, W.calls.removeItem); T.eq(0, W.calls.addItem)
+    end)
+    case('chest only (empty backpack): as before H14b, no backpack take', function()
+        local W = stocked({ water = 3 }, { lumber = 60, nails = 30 })
+        assert(W.build(1, 'cabin'))
+        T.same({ bag_lumber = 0, bag_nails = 0, chest_lumber = 20, chest_nails = 10, cash = 600 }, counts(W))
+        T.eq(3, W.bag().water); T.eq(2, W.calls.removeItem)
+    end)
+    case('a later take fails: everything taken goes back to its own source, refused with that reason, no charge', function()
+        -- second item short in both containers: lumber (bag 30 + chest 10) goes back, nails never taken
+        local W = stocked({ lumber = 30, nails = 2 }, { lumber = 100, nails = 3 })
+        local before = counts(W)
+        local ok, why, item = W.build(1, 'cabin')
+        assert(ok == false and why == 'fh_not_enough' and item == 'nails', tostring(why))
+        T.same(before, counts(W))
+        T.eq(0, W.calls.charge)
+        T.eq(4, W.calls.removeItem) -- lumber bag + chest, nails bag (2) ok, nails chest (18 of 3) refused
+        T.eq(3, W.calls.addItem)    -- nails bag 2, lumber chest 10, lumber bag 30: once each
+        -- chest part of the FIRST item short: its backpack part goes back to the backpack
+        local W2 = stocked({ lumber = 30 }, { lumber = 5, nails = 50 })
+        local before2 = counts(W2)
+        local ok2, why2, item2 = W2.build(1, 'cabin')
+        assert(ok2 == false and why2 == 'fh_not_enough' and item2 == 'lumber', tostring(why2))
+        T.same(before2, counts(W2))
+        T.eq(1, W2.calls.addItem); T.eq(0, W2.calls.charge)
+    end)
+    case('charge fails: each stack refunded once to its source, no credit; nothing lost or doubled', function()
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        local before = counts(W)
+        W.chargeFails = 'ledger_failed'
+        local ok, why = W.build(1, 'cabin')
+        assert(ok == false and why == 'ledger_failed', tostring(why))
+        T.same(before, counts(W))
+        T.eq(4, W.calls.removeItem); T.eq(4, W.calls.addItem); T.eq(0, W.calls.credit); T.eq(1, W.slots.getTiers(P1).cabin)
+    end)
+    case('backpack refund refused (no room / player offline): those stacks land in plot chest 1, logged', function()
+        -- online, no room in the backpack
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        W.chargeFails, W.bagAddRefuses = 'ledger_failed', 'fh_too_heavy'
+        local ok, why = W.build(1, 'cabin')
+        assert(ok == false and why == 'ledger_failed', tostring(why))
+        T.same({ bag_lumber = 0, bag_nails = 0, chest_lumber = 130, chest_nails = 55, cash = 1000 }, counts(W))
+        T.eq(6, W.calls.addItem) -- 2 chest stacks + 2 refused backpack stacks + 2 into the chest
+        assert(W.logged('backpack refused 30 lumber %(fh_too_heavy%); put into plot chest fh:chest:heartlands_01:1'))
+        assert(not W.logged('ITEM LOST'))
+        -- the player goes offline while the charge is in flight, the charge then fails
+        local W2 = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        W2.hold.charge, W2.chargeFailsLate = true, 'no_player'
+        local h = W2.start(function() return W2.build(1, 'cabin') end)
+        assert(not h.done)
+        W2.players[1] = nil
+        local ok2, why2 = W2.finish(h)
+        assert(ok2 == false and why2 == 'no_player', tostring(why2))
+        T.same({ bag_lumber = 0, bag_nails = 0, chest_lumber = 130, chest_nails = 55, cash = 1000 }, counts(W2))
+        assert(W2.logged('backpack refused 5 nails %(character not on src%)'))
+        assert(not W2.logged('ITEM LOST'))
+    end)
+    case('refund-once: the error path after an in-flow item refund puts nothing back a second time', function()
+        -- in-flow abort refunds every stack (backpack ones rerouted to the chest), then the reroute log throws ->
+        -- buildLocked errors -> the error path aborts again with st.taken already empty: no second addItem
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        W.hold.charge, W.chargeFailsLate = true, 'no_player'
+        local h = W.start(function() return W.build(1, 'cabin') end)
+        W.players[1] = nil
+        local realPrint = W.env.print
+        W.env.print = function(m)
+            if tostring(m):find('backpack refused') then error('console gone') end
+            return realPrint(m)
+        end
+        local ok, why = W.finish(h)
+        W.env.print = realPrint
+        assert(ok == false and why == 'fh_build_failed', tostring(why))
+        assert(W.logged('errored'), 'went through the error path')
+        T.eq(4, W.calls.addItem) -- 2 chest + 2 rerouted (nobody on src: no backpack add tried); the second abort added none
+        T.same({ bag_lumber = 0, bag_nails = 0, chest_lumber = 130, chest_nails = 55, cash = 1000 }, counts(W))
+        T.eq(0, W.calls.credit)
+    end)
+    for _, down in ipairs({ { 'fh_player_offline', 'bagOffline' }, { 'snapshot throws', 'bagThrows' },
+        { 'snapshot export missing', 'bagNoSnapshot' } }) do
+        case('backpack unusable at the count step (' .. down[1] .. '): chest-only path exactly as before', function()
+            local W = stocked({ lumber = 50, nails = 25 }, { lumber = 100, nails = 50 })
+            W[down[2]] = true
+            local ok, tier = W.build(1, 'cabin')
+            assert(ok == true and tier == 2, tostring(tier))
+            T.same({ bag_lumber = 50, bag_nails = 25, chest_lumber = 60, chest_nails = 30, cash = 600 }, counts(W))
+            T.eq(2, W.calls.removeItem); T.eq(0, W.calls.addItem)
+            assert(W.logged('backpack unavailable'))
+        end)
+    end
+    case('backpack fh_player_offline at a later take step: what was taken goes back, then chest-only', function()
+        -- lumber: bag 30 + chest 10 taken; nails: bag take refused fh_player_offline -> put back (the bag refund is
+        -- refused too, so the 30 lumber lands in the chest), then the chest-only take: 40 lumber + 20 nails
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        W.hold.removeItem = true
+        local h = W.start(function() return W.build(1, 'cabin') end)
+        assert(not h.done, 'suspended after the first backpack take')
+        W.bagRemoveOffline, W.bagAddRefuses = true, 'fh_player_offline'
+        local ok, tier = W.finish(h)
+        assert(ok == true and tier == 2, tostring(tier))
+        T.same({ bag_lumber = 0, bag_nails = 5, chest_lumber = 90, chest_nails = 30, cash = 600 }, counts(W))
+        -- conserved: 30 + 100 lumber before = 90 left + 40 used; 5 + 50 nails = 5 + 30 left + 20 used
+        assert(W.logged('backpack unavailable %(fh_player_offline%)'))
+        assert(not W.logged('ITEM LOST'))
+    end)
+    case('another character loaded on src mid-build: no backpack take or refund on them, player_changed', function()
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        W.hold.removeItem = true
+        local h = W.start(function() return W.build(1, 'cabin') end)
+        W.players[1] = 'B' -- same src, other character: their backpack is bag:1 in this stub
+        local ok, why = W.finish(h)
+        assert(ok == false and why == 'player_changed', tostring(why))
+        T.eq(0, W.bag().lumber); T.eq(5, W.bag().nails) -- B's backpack: nothing taken, A's lumber not given to B
+        T.eq(130, W.chest1().lumber); T.eq(50, W.chest1().nails)
+        T.eq(0, W.calls.charge); T.eq(1000, W.cash.A); T.eq(1000, W.cash.B)
+        assert(W.logged('backpack refused 30 lumber %(character not on src%)'))
+    end)
+end)
+
 T.finish()
