@@ -35,6 +35,26 @@ function M.shouldClear(active, key, stillPlaying)
     return key == nil or active.key == key
 end
 
+-- Sequence state across the requestAnimDict yield: S = M.newState(). Every claim/invalidate bumps seq, so an
+-- older begin() that resumes after a newer start or a stop sees it is stale and must not play.
+function M.newState() return { seq = 0, key = nil } end
+
+function M.claim(S, key)
+    S.seq = S.seq + 1
+    S.key = key
+    return { key = key, id = S.seq }
+end
+
+function M.isCurrent(S, token) return token ~= nil and S.seq == token.id and S.key == token.key end
+
+-- Invalidate the latest claim. key=nil matches any. Returns true only if something (pending or playing) matched.
+function M.invalidate(S, key)
+    if S.key == nil or (key ~= nil and S.key ~= key) then return false end
+    S.seq = S.seq + 1
+    S.key = nil
+    return true
+end
+
 if GetCurrentResourceName then
     FhAnimLogic = M
 else

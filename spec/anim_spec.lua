@@ -48,6 +48,33 @@ case('isOurs / shouldClear only for our active anim', function()
     assert(not logic.shouldClear(nil, 'skin', true), 'nothing active')
 end)
 
+case('seq: newer start cancels an older yielding begin (eat vs skin)', function()
+    local S = logic.newState()
+    local eat = logic.claim(S, 'eat')      -- play('eat') yields in requestAnimDict
+    local skin = logic.claim(S, 'skin')    -- start('skin') runs meanwhile
+    assert(not logic.isCurrent(S, eat), 'eat must not overwrite skin')
+    assert(logic.isCurrent(S, skin))
+end)
+
+case('seq: stop(key) cancels a yielding begin of that key only', function()
+    local S = logic.newState()
+    local craft = logic.claim(S, 'craft')
+    eq(false, logic.invalidate(S, 'skin'), 'other key: no-op')
+    assert(logic.isCurrent(S, craft))
+    eq(true, logic.invalidate(S, 'craft'), 'stop(craft)')
+    assert(not logic.isCurrent(S, craft), 'craft must not start after stop')
+    eq(false, logic.invalidate(S, 'craft'), 'nothing left to stop')
+    local again = logic.claim(S, 'craft')
+    assert(logic.isCurrent(S, again) and not logic.isCurrent(S, craft), 'stale token stays stale')
+end)
+
+case('post-yield guard re-check catches mount/death', function()
+    local ok, why = logic.guard({ mounted = true })
+    eq(false, ok); eq('mounted', why)
+    ok, why = logic.guard({ dead = true })
+    eq(false, ok); eq('dead', why)
+end)
+
 case('FXServer load path sets globals (stub GetCurrentResourceName)', function()
     GetCurrentResourceName = function() return 'fh_anim' end
     local r1 = dofile(res .. 'shared/anim_logic.lua')
