@@ -32,7 +32,7 @@ function M.nextRefillAt(lastRefillAt, cfg)
     local c = troughCfg(cfg)
     if not c or not num(c.cooldownSeconds) or c.cooldownSeconds < 0 then return nil end
     if lastRefillAt == nil then return 0 end
-    if not num(lastRefillAt) then return nil end
+    if not num(lastRefillAt) or lastRefillAt < 0 then return nil end
     return lastRefillAt + c.cooldownSeconds
 end
 
@@ -44,11 +44,12 @@ function M.canRefill(state, cfg)
     if state.inRadius ~= true then return false, 'fh_out_of_range' end
     local fb = state.feedbags
     if not num(fb) or fb < 1 then return false, 'fh_trough_empty' end
-    if not num(state.now) then return false, 'fh_cooldown' end
+    if not num(state.now) or state.now < 0 then return false, 'fh_cooldown' end
     local nxt = M.nextRefillAt(state.lastRefillAt, cfg)
     if nxt == nil then return false, 'fh_cooldown' end
     if state.now < nxt then return false, 'fh_cooldown' end
     return true, nil
 end
 
+if _G.GetCurrentResourceName then _G.FhTrough = M end
 return M
