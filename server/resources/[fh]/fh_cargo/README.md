@@ -125,12 +125,14 @@ Errors: `fh_no_player`, `fh_bad_tier`, `fh_no_price`, `fh_unknown_region`, `fh_n
 `removemoney_refused`, `ledger_failed`, ...), `fh_economy_unavailable`, `charge_refused`, `fh_charge_error`, `fh_buy_refunded`,
 `fh_refund_failed`, `fh_buy_error`.
 
-## Wagon post: buy / call / stow (roads-04 R17)
+## Wagon post: buy / call / stow (roads-04 R17, ui-inbox-03 I3)
 
-`/wagonpost` (client) opens an ox_lib stopgap menu at a trade post (the @ui screen comes later): **Buy a wagon** (tiers
-with price, owned / locked state), **Call <tier>** (owned tiers only) and **Stow my wagon**. Client -> server events
-`fh:cargo:menu_open` and `fh:cargo:menu_action { action = 'buy'|'call'|'stow', tier }`; the server answers with
-`fh:cargo:menu` (rows) and `fh:cargo:menu_result { ok, action, err, detail }`. Pure flow: `server/wagon_post.lua`.
+`/wagonpost` (client -> `fh:cargo:menu_open`) opens the `fh_ui` **`wagonyard`** screen at a trade post (replaces the
+R17 ox_lib stopgap): tiers with price, owned / locked state, **Buy** (unowned, unlocked), **Call** (owned), and **Stow
+my wagon**. Actions relay through `fh_ui` (`fh:cargo:ui_buy`, `fh:cargo:ui_call`, `fh:cargo:ui_stow`,
+`fh:cargo:ui_close`, using the relay's net `src`); `server/ui.lua` handles them via `FhCargoPost` and pushes fresh data
+plus an inline notice (`ok` or refusal text, preserving `err` / `detail`) via `fh:ui:update`. Pure flow:
+`server/wagon_post.lua` and `server/ui.lua` (`spec/cargo_post_spec.lua`, `spec/cargo_ui_spec.lua`).
 
 - **Proximity is server-side**: the post comes from `exports.fh_trade:nearestPost(src)` (same radius + region gate as
   selling, from the ped coords the server reads). fh_trade is a soft dependency (it depends on fh_cargo): not started =

@@ -440,6 +440,9 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 37. Locked jobs offer. Stand at a jobs board as a tier 1 player in a region that posts a tier 2+ contract (or `/fh_ui_demo jobs`).
     Expected: the locked job shows in the list greyed but readable with "Needs tier 2" and has no Accept button (nothing to click); the demo also shows a "Not available yet" row (Rail freight run) with no Accept; open jobs still have Accept.
     RESULT:
+38. Wagon yard screen (ui-inbox-03 I3). Run `/fh_ui_demo wagonyard`, then Esc. Then stand at a trade post and run `/wagonpost` (full buy/call/stow economy and rep-gate flow: see `## Roads` steps 36-46).
+    Expected: `/fh_ui_demo wagonyard` shows "Valentine Trade Post", Cart ($150, Owned · Out, Call disabled), Wagon ($600, Buy), Freight ($1800, greyed `Locked (needs higher regional standing)`, Buy disabled), `Stow my wagon` and `Close`; Enter does nothing; Esc closes and controls return. At a trade post `/wagonpost` opens the live `wagonyard` screen (no ox_lib menu). Run `grep -rn "lib.registerContext\|lib.showContext" server/resources/[fh]/fh_cargo`: no matches.
+    RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 
@@ -1412,39 +1415,39 @@ Prereqs (all must be merged before this card is meaningful):
 
 ### roads-04: owned wagons + farm supplies
 
-Run as a NON-admin player (no `/fh_wagon`). Money = your cash. Prices: t1 $150, t2 $600, t3 $1800 (`fh_cargo` `Config.Prices`). Menu command: `/wagonpost` (ox_lib menu; the server reads your position, nothing positional comes from the client). Rep state coming in: after step 34 heartlands rep is 400 (tier 3) (33 restored it to 100, 34 added 300; step 35 does not touch rep). Step 36 sets it back to a clean tier 1 first.
+Run as a NON-admin player (no `/fh_wagon`). Money = your cash. Prices: t1 $150, t2 $600, t3 $1800 (`fh_cargo` `Config.Prices`). Screen command: `/wagonpost` (opens the `fh_ui` `wagonyard` screen; the server reads your position, nothing positional comes from the client; actions relay via `fh:ui:action` -> `fh:cargo:ui_buy` / `ui_call` / `ui_stow`). Rep state coming in: after step 34 heartlands rep is 400 (tier 3) (33 restored it to 100, 34 added 300; step 35 does not touch rep). Step 36 sets it back to a clean tier 1 first.
 36. Prepare a clean tier 1 for the rep-gate steps. From the server console: `fh_rep_region <yourId> heartlands -400` (delta: rep 400 -> 0 = tier 1). Stand at the Valentine trade post, note your cash, run `/wagonpost`.
-   Expected: menu titled with the post label, options: Buy a wagon, Stow my wagon (disabled, no wagon out). No Call rows yet (nothing owned).
+   Expected: `fh_ui` `wagonyard` screen titled with the post label, showing Cart ($150, Buy), Wagon ($600, Locked, Buy disabled), Freight ($1800, Locked, Buy disabled), Stow my wagon (disabled, no wagon out), and Close. No Call buttons yet (nothing owned).
    RESULT:
-37. Buy t1. Menu -> Buy a wagon -> Cart ($150).
-   Expected: notify "Wagon bought."; cash drops by exactly $150; one `fh_ledger` charge row `wagon_buy`; the menu now shows `Call Cart` and Cart as `(owned)`.
+37. Buy t1. Click Buy on Cart ($150).
+   Expected: inline notice "Wagon bought."; cash drops by exactly $150; one `fh_ledger` charge row `wagon_buy`; Cart refreshes to Owned with a Call button.
    RESULT:
-38. Call t1 and load cargo. Menu -> Call Cart.
-   Expected: "Wagon on its way."; a cart spawns ahead of you (wait for it to arrive; acting early says "Your wagon is still arriving."). Put an item in it (load cargo from your backpack as in the M4 steps).
+38. Call t1 and load cargo. Click Call on Cart.
+   Expected: inline notice "Wagon on its way."; a cart spawns ahead of you (wait for it to arrive; acting early says "Your wagon is still arriving."). Put an item in it (load cargo from your backpack as in the M4 steps).
    RESULT:
-39. Drive off, come back, Stow. Drive the cart away and back into the post area, run `/wagonpost`, Stow my wagon.
-   Expected: "Wagon stowed. Cargo kept."; the cart entity despawns.
+39. Drive off, come back, Stow. Drive the cart away and back into the post area, run `/wagonpost`, click Stow my wagon.
+   Expected: inline notice "Wagon stowed. Cargo kept."; the cart entity despawns.
    RESULT:
-40. Cargo survives. `/wagonpost` -> Call Cart again.
+40. Cargo survives. `/wagonpost` -> click Call on Cart again.
    Expected: the cart returns carrying the same cargo from step 38 (stash id `fh:wagon:<citizenid>:t1` is deterministic).
    RESULT:
-41. Buy again. Stow, then `/wagonpost` -> Buy a wagon: the Cart row is disabled ("Owned"). Also force it from the console client with `TriggerServerEvent('fh:cargo:menu_action', {action='buy', tier='t1'})`.
-   Expected: "You already own that wagon."; cash unchanged (or charged then refunded, with a `wagon_buy_refund` credit row, if two buys raced). No second row.
+41. Buy again. Stow, then `/wagonpost`: the Cart row shows Owned (Call button, no Buy button). Also force it from the client console with `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='buy', payload={tier='t1'}})`.
+   Expected: inline notice "You already own that wagon."; cash unchanged (or charged then refunded, with a `wagon_buy_refund` credit row, if two buys raced). No second row.
    RESULT:
-42. Stow far from the post. Call the cart, drive it more than ~10 m beyond the post radius, walk back to the post (or stay at the post), `/wagonpost` -> Stow my wagon.
-   Expected: "Your wagon is too far from the post." The wagon stays out, cargo untouched.
+42. Stow far from the post. Call the cart, drive it more than ~10 m beyond the post radius, walk back to the post (or stay at the post), `/wagonpost` -> click Stow my wagon.
+   Expected: inline notice "Your wagon is too far from the post." The wagon stays out, cargo untouched.
    RESULT:
 43. Away from any post. Leave every trade post (200+ m), run `/wagonpost`.
-   Expected: no menu; error "Stand at a trade post first." (`fh_not_at_post`). The same applies to a forced `fh:cargo:menu_action`.
+   Expected: no screen opens; chat error "Stand at a trade post first." (`fh_not_at_post`). The same refusal applies to a forced `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='buy', payload={tier='t1'}})`.
    RESULT:
-44. t2 refused at tier 1. At the Valentine post with heartlands rep 0 (tier 1) open the menu -> Buy a wagon -> Wagon (t2).
-   Expected: row shows "Locked: ..." and is disabled; a forced buy returns "You have not earned that wagon yet." (`fh_locked`); cash unchanged, no charge row. Rep before: 0 = tier 1.
+44. t2 refused at tier 1. At the Valentine post with heartlands rep 0 (tier 1) run `/wagonpost` and inspect Wagon (t2).
+   Expected: row is greyed out with "Locked (needs higher regional standing)" and Buy is disabled; a forced buy via `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='buy', payload={tier='t2'}})` is refused (`tier_too_low` / `fh_locked`); cash unchanged, no charge row. Rep before: 0 = tier 1.
    RESULT:
-45. t2 allowed at tier 2. From the server console: `fh_rep_region <yourId> heartlands 100` (delta: rep 0 -> 100 = tier 2). Menu -> Buy a wagon -> Wagon ($600; make sure you have the cash).
-   Expected: "Wagon bought."; cash drops $600; `Call Wagon` appears. Rep after: 100 = tier 2.
+45. t2 allowed at tier 2. From the server console: `fh_rep_region <yourId> heartlands 100` (delta: rep 0 -> 100 = tier 2). `/wagonpost` -> click Buy on Wagon ($600; make sure you have the cash).
+   Expected: inline notice "Wagon bought."; cash drops $600; Wagon refreshes to Owned with a Call button. Rep after: 100 = tier 2.
    RESULT:
-46. One live wagon rule. With the cart from step 40 still out, menu -> Call Wagon (t2). (The Call rows are greyed out while a wagon is live, so force it if needed: `TriggerServerEvent('fh:cargo:menu_action', {action='call', tier='t2'})`.)
-   Expected: refused "You already have a wagon out. Stow it first." (`fh_wagon_live`, detail t1). Nothing replaces the cart and no cargo is lost. Stow the cart, then Call Wagon: the t2 wagon spawns (it also still passes the `wagon_t2` rep gate).
+46. One live wagon rule. With the cart from step 40 still out, `/wagonpost`: Call buttons are disabled while a wagon is live, so force it from the client console with `TriggerServerEvent('fh:ui:action', {screen='wagonyard', action='call', payload={tier='t2'}})`.
+   Expected: refused "You already have a wagon out. Stow it first." (`fh_wagon_live`, detail t1). Nothing replaces the cart and no cargo is lost. Stow the cart, then click Call on Wagon: the t2 wagon spawns (it also still passes the `wagon_t2` rep gate).
    RESULT:
 47. Farm supplies. At a post run `/tradebuy carrot 2`, `/tradebuy potato 2`, `/tradebuy corn 2` (or the `/tradepost` screen).
    Expected: each buy costs $3 per unit ($6 per command), the items land in the backpack (one `trade_buy:<item>` charge row each). No sell price for them anywhere.

@@ -21,6 +21,7 @@ M.screens = {
     trapper     = 'hunting',   -- trapper sell screen (fh_hunting owns it)
     tailor      = 'tailor',    -- tailor / general-store clothing catalog (fh_tailor owns it)
     wardrobe    = 'tailor',    -- owned outfits, worn look, saved slots (fh_tailor owns it)
+    wagonyard   = 'cargo',     -- trade-post wagon yard: buy / call / stow (fh_cargo owns it)
 }
 
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
@@ -34,6 +35,7 @@ M.actions = {
     trapper    = { sell = true, close = true },
     tailor     = { buy = true, close = true },
     wardrobe   = { equip = true, save = true, wear = true, close = true },
+    wagonyard  = { buy = true, call = true, stow = true, close = true },
 }
 
 -- Screens that may ask for a client-local mirror preview (fh_tailor owns the apply). No server round trip, no authority.

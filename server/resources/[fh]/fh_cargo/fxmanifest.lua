@@ -17,6 +17,7 @@ server_scripts {
     'server/wagon_buy.lua',
     'server/wagon_post.lua',
     'server/main.lua',
+    'server/ui.lua',
 }
 
 client_scripts {

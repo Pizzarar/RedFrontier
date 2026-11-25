@@ -135,6 +135,15 @@ M.fixtures = {
         maxItems = 3,
         maxSaved = 4,
     },
+    wagonyard = {
+        post = { id = 'valentine_post', label = 'Valentine Trade Post', region = 'heartlands' },
+        live = { id = 'demo:t1', tier = 't1' },
+        tiers = {
+            { key = 't1', label = 'Cart',    price = 150,  owned = true },
+            { key = 't2', label = 'Wagon',   price = 600,  owned = false },
+            { key = 't3', label = 'Freight', price = 1800, owned = false, locked = true, reason = 'tier_too_low' },
+        },
+    },
 }
 
 -- Tiny schema: field -> type, with '?' suffix for optional. 'table[]' / '<name>[]' nested lists via {list=schema}.
@@ -200,6 +209,13 @@ S.wardrobe = {
     worn = 'table?', -- { outfit, items }; absent before the starter set is granted
     saved = 'table', -- sparse { [slot] = { label, outfit, items, valid } }
     fitted = 'boolean', maxItems = 'number', maxSaved = 'number',
+}
+S.wagonyard = {
+    notice = 'string?', notice_kind = 'string?', err = 'string?', detail = 'string?',
+    post = { obj = { id = 'string', label = 'string', region = 'string' } },
+    live = 'table?', -- { id, tier } when a wagon is currently out
+    tiers = { list = { key = 'string', label = 'string', price = 'number', owned = 'boolean',
+        locked = 'boolean?', reason = 'string?' } },
 }
 M.schemas = S
 

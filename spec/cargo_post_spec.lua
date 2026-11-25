@@ -189,7 +189,7 @@ local function boot(o)
     local env = setmetatable({
         exports = exportsT, MySQL = MySQL, lib = { addCommand = function() end },
         GetCurrentResourceName = function() return 'fh_cargo' end, GetResourceState = function() return 'started' end,
-        RegisterNetEvent = function(name, fn) E.handlers[name] = fn end, AddEventHandler = function() end,
+        RegisterNetEvent = function(name, fn) E.handlers[name] = fn end, AddEventHandler = function(name, fn) E.handlers[name] = fn end,
         CreateThread = function() end, Wait = function() end, TriggerEvent = function() end,
         TriggerClientEvent = function(name, src, payload) E.client[#E.client + 1] = { name = name, src = src, payload = payload } end,
         GetPlayers = function() return {} end, GetConvar = function() return 'true' end,
@@ -203,18 +203,24 @@ local function boot(o)
     env._G = env
     env.source = 7
     for _, p in ipairs({ CARGO .. 'shared/cargo_rules.lua', CARGO .. 'config.lua', CARGO .. 'server/wagon_buy.lua',
-        CARGO .. 'server/wagon_post.lua', CARGO .. 'server/main.lua' }) do
+        CARGO .. 'server/wagon_post.lua', CARGO .. 'server/main.lua', CARGO .. 'server/ui.lua' }) do
         local fh = assert(io.open(p, 'rb')); local s = fh:read('a'); fh:close()
         assert(load(s, '@' .. p, 't', env))()
     end
-    function E.act(action, tier) env.source = 7 E.client = {} E.handlers['fh:cargo:menu_action']({ action = action, tier = tier }) return E.client[#E.client].payload end
+    function E.act(action, tier)
+        E.client = {}
+        E.handlers['fh:cargo:ui_' .. action]({ src = 7, screen = 'wagonyard', action = action, payload = tier and { tier = tier } or {} })
+        local sent = E.client[#E.client]
+        local d = sent and sent.payload and sent.payload.data or {}
+        return { ok = d.notice_kind == 'ok', err = d.err, detail = d.detail, data = d, event = sent and sent.name or nil }
+    end
     return E
 end
 
-case('wiring: buy via menu charges the post region; call then stow keeps the container', function()
+case('wiring: buy via wagonyard charges the post region; call then stow keeps the container', function()
     local E = boot()
     local r = E.act('buy', 't1')
-    T.eq(true, r.ok); T.eq('heartlands', E.charges[1].region)
+    T.eq('fh:ui:update', r.event); T.eq(true, r.ok); T.eq('heartlands', E.charges[1].region)
     r = E.act('call', 't1')
     T.eq(true, r.ok); T.eq('wagon', E.spawns[1].kind); T.eq('CID1:t1', E.spawns[1].owner.id)
     r = E.act('call', 't1')
@@ -243,14 +249,17 @@ case('wiring: stow refused when the wagon is far; call refused unowned and away 
     T.eq(true, E.act('call', 't1').ok, 'a failed spawn request is not a live wagon')
 end)
 
-case('wiring: bad payloads ignored, menu event returns rows', function()
+case('wiring: bad payloads ignored, menu_open opens wagonyard screen', function()
     local E = boot({ rows = { { citizenid = 'CID1', tier = 't1' } } })
     E.client = {}
-    E.handlers['fh:cargo:menu_action']({ action = 'rm -rf', tier = 't1' })
-    E.handlers['fh:cargo:menu_action']({ action = 'buy', tier = 5 })
-    E.handlers['fh:cargo:menu_action']('x')
+    E.handlers['fh:cargo:ui_buy']({ src = 7, screen = 'wagonyard', action = 'buy', payload = { tier = 5 } })
+    E.handlers['fh:cargo:ui_buy']({ src = 7, screen = 'tradepost', action = 'buy', payload = { tier = 't1' } })
+    E.handlers['fh:cargo:ui_buy']({ screen = 'wagonyard', action = 'buy', payload = { tier = 't1' } })
+    E.handlers['fh:cargo:ui_buy']('x')
     T.eq(0, #E.client)
     E.handlers['fh:cargo:menu_open']()
-    T.eq('fh:cargo:menu', E.client[1].name); T.eq(true, E.client[1].payload.tiers[1].owned)
+    T.eq('fh:ui:open', E.client[1].name)
+    T.eq('wagonyard', E.client[1].payload.screen)
+    T.eq(true, E.client[1].payload.data.tiers[1].owned)
 end)
 T.finish()

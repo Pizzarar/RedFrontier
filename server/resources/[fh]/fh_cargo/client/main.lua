@@ -43,54 +43,7 @@ AddEventHandler('onClientResourceStop', function(res)
     if res == GetCurrentResourceName() then capped = {} end
 end)
 
--- ---------------------------------------------------------------- R17: wagon post menu (ox_lib stopgap, @ui screen later)
--- /wagonpost asks the server for the menu; the server checks the player stands in a trade post and replies with the rows.
--- Every action goes back as { action, tier } only: post, region, ownership and price are all decided server-side.
-local MSG = {
-    fh_not_at_post = 'Stand at a trade post first.', fh_not_owned = 'You do not own that wagon.',
-    fh_wagon_live = 'You already have a wagon out. Stow it first.', fh_no_wagon = 'You have no wagon out.',
-    fh_wagon_far = 'Your wagon is too far from the post.', fh_wagon_not_ready = 'Your wagon is still arriving.',
-    fh_busy = 'One moment...', fh_buy_busy = 'One moment...', fh_already_owned = 'You already own that wagon.',
-    fh_locked = 'You have not earned that wagon yet.', fh_db_error = 'The wagon ledger is unavailable.',
-}
-
+-- ---------------------------------------------------------------- R17 / ui-inbox-03 I3: wagon yard (fh_ui `wagonyard`)
+-- /wagonpost asks the server to open the fh_ui `wagonyard` screen; the server checks the player stands in a trade post
+-- (exports.fh_trade:nearestPost) and opens/updates the screen. All actions relay through fh_ui (fh:cargo:ui_buy/call/stow).
 RegisterCommand('wagonpost', function() TriggerServerEvent('fh:cargo:menu_open') end, false)
-
-local function act(action, tier) TriggerServerEvent('fh:cargo:menu_action', { action = action, tier = tier }) end
-
-RegisterNetEvent('fh:cargo:menu', function(data)
-    if type(data) ~= 'table' or type(data.tiers) ~= 'table' then return end
-    local buy, call = {}, {}
-    for _, t in ipairs(data.tiers) do
-        local price = tonumber(t.price) or 0
-        if t.owned then
-            call[#call + 1] = { title = ('Call %s'):format(tostring(t.label)), icon = 'horse',
-                onSelect = function() act('call', t.key) end }
-        end
-        buy[#buy + 1] = {
-            title = ('%s%s'):format(tostring(t.label), t.owned and ' (owned)' or ''),
-            description = t.owned and 'Owned' or (t.locked and ('Locked: ' .. tostring(t.reason)) or ('$' .. price)),
-            disabled = t.owned == true or t.locked == true,
-            onSelect = function() act('buy', t.key) end,
-        }
-    end
-    local opts = {
-        { title = 'Buy a wagon', menu = 'fh_cargo_buy', icon = 'coins' },
-        { title = 'Stow my wagon', icon = 'warehouse', disabled = data.live == nil, onSelect = function() act('stow') end },
-    }
-    for i, c in ipairs(call) do c.disabled = data.live ~= nil; table.insert(opts, i, c) end -- keeps t1,t2,t3 order above Buy/Stow
-    lib.registerContext({ id = 'fh_cargo_buy', title = 'Buy a wagon', menu = 'fh_cargo_post', options = buy })
-    lib.registerContext({ id = 'fh_cargo_post', title = tostring(data.post and data.post.label or 'Wagons'), options = opts })
-    lib.showContext('fh_cargo_post')
-end)
-
-RegisterNetEvent('fh:cargo:menu_result', function(r)
-    if type(r) ~= 'table' then return end
-    if r.ok then
-        lib.notify({ title = 'Wagons', type = 'success', description = ({ buy = 'Wagon bought.', call = 'Wagon on its way.',
-            stow = 'Wagon stowed. Cargo kept.' })[r.action] or 'Done.' })
-    else
-        local e = tostring(r.err)
-        lib.notify({ title = 'Wagons', type = 'error', description = MSG[e] or e })
-    end
-end)

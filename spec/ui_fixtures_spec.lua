@@ -5,7 +5,7 @@ local case = T.it
 local R = dofile(here .. '../server/resources/[fh]/fh_ui/shared/relay.lua')
 local F = dofile(here .. '../server/resources/[fh]/fh_ui/shared/fixtures.lua')
 
-local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial', trapper = 'hunting', tailor = 'tailor', wardrobe = 'tailor' }
+local expectLane = { heat = 'heat', insurance = 'death', jobs = 'quests', journal = 'quests', dialogue = 'quests', station = 'homestead', fence = 'fence', tradepost = 'trade', fieldguide = 'tutorial', trapper = 'hunting', tailor = 'tailor', wardrobe = 'tailor', wagonyard = 'cargo' }
 local passive = { heat = true }
 
 case('every fixture validates against its schema', function()
@@ -15,7 +15,7 @@ case('every fixture validates against its schema', function()
         local ok, errs = F.validate(screen, data)
         assert(ok, screen .. ': ' .. table.concat(errs or {}, '; '))
     end
-    T.eq(12, n)
+    T.eq(13, n)
 end)
 case('schema checker rejects bad data', function()
     local bad = { title = 'x', fee = 'free', delay_minutes = 1 }
@@ -111,6 +111,23 @@ case('tailor/wardrobe fixtures: lane tailor, per-screen allowlists, negatives', 
     T.same({ action = 'open', screen = 'tailor' }, F.parseDemo({ 'tailor' }))
     T.same({ action = 'open', screen = 'wardrobe' }, F.parseDemo({ 'wardrobe' }))
     assert(F.fixtures.tailor.rows[1].owned and F.fixtures.tailor.rows[4].min_tier > F.fixtures.tailor.tier)
+end)
+
+case('wagonyard fixture: lane cargo, per-screen allowlist, negatives', function()
+    local w = F.fixtures.wagonyard
+    T.eq('cargo', R.screens.wagonyard)
+    assert(not R.passive.wagonyard)
+    for _, a in ipairs({ 'buy', 'call', 'stow', 'close' }) do
+        assert(R.validate({ screen = 'wagonyard', action = a, payload = {} }), 'wagonyard must allow ' .. a)
+    end
+    for _, a in ipairs({ 'sell', 'equip', 'give', 'abandon' }) do
+        assert(not R.validate({ screen = 'wagonyard', action = a, payload = {} }), 'wagonyard must reject ' .. a)
+    end
+    T.eq('fh:cargo:ui_buy', select(2, R.relay(R.newLimiter(), 7, { screen = 'wagonyard', action = 'buy', payload = { tier = 't2' } }, 0)))
+    T.eq('fh:cargo:ui_call', select(2, R.relay(R.newLimiter(), 7, { screen = 'wagonyard', action = 'call', payload = { tier = 't1' } }, 0)))
+    T.eq('fh:cargo:ui_stow', select(2, R.relay(R.newLimiter(), 7, { screen = 'wagonyard', action = 'stow', payload = {} }, 0)))
+    T.same({ action = 'open', screen = 'wagonyard' }, F.parseDemo({ 'wagonyard' }))
+    assert(w.tiers[1].owned == true and w.tiers[2].owned == false and not w.tiers[2].locked and w.tiers[3].locked == true)
 end)
 
 T.finish()

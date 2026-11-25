@@ -426,29 +426,15 @@ local function postMenu(src)
     return data
 end
 
-RegisterNetEvent('fh:cargo:menu_open', function()
-    local src = source
-    if postThrottled(src) then return end
-    local data, err = postMenu(src)
-    if not data then return TriggerClientEvent('fh:cargo:menu_result', src, { ok = false, err = err }) end
-    TriggerClientEvent('fh:cargo:menu', src, data)
-end)
-
--- payload = { action = 'buy'|'call'|'stow', tier = 't1'..'t3' }. Validated here and again in FhCargoPost; the post and
--- region are server-derived, nothing positional is read from the client.
-RegisterNetEvent('fh:cargo:menu_action', function(payload)
-    local src = source
-    if type(payload) ~= 'table' or postThrottled(src) then return end
-    local action, tier = payload.action, payload.tier
-    if action ~= 'buy' and action ~= 'call' and action ~= 'stow' then return end
-    if action ~= 'stow' and (type(tier) ~= 'string' or #tier > 16) then return end
-    local ok, res, detail
-    if action == 'buy' then ok, res, detail = FhCargoPost.buy(cfg, rules, postDeps, postLocks, src, tier)
-    elseif action == 'call' then ok, res, detail = FhCargoPost.call(cfg, rules, postDeps, postLocks, src, tier)
-    else ok, res, detail = FhCargoPost.stow(cfg, rules, postDeps, postLocks, src) end
-    TriggerClientEvent('fh:cargo:menu_result', src, { ok = ok, action = action, err = (not ok) and res or nil,
-        detail = (not ok) and detail or nil, tier = type(res) == 'table' and res.tier or nil })
-end)
+-- Internal host API consumed by server/ui.lua (fh_ui `wagonyard` screen handlers). All authority (post proximity,
+-- region, price, ownership, one-live-wagon rule, stow reach) stays inside FhCargoPost and postDeps.
+FhCargoPostApi = {
+    menu      = postMenu,
+    buy       = function(src, tier) return FhCargoPost.buy(cfg, rules, postDeps, postLocks, src, tier) end,
+    call      = function(src, tier) return FhCargoPost.call(cfg, rules, postDeps, postLocks, src, tier) end,
+    stow      = function(src) return FhCargoPost.stow(cfg, rules, postDeps, postLocks, src) end,
+    throttled = postThrottled,
+}
 
 AddEventHandler('playerDropped', function() lastPostReq[source] = nil end)
 

@@ -44,6 +44,7 @@ Send with `TriggerClientEvent('fh:ui:open', src, { screen = 'insurance', data = 
 | `tailor` | `tailor` | interactive |
 | `wardrobe` | `tailor` | interactive |
 | `trapper` | `hunting` | interactive |
+| `wagonyard` | `cargo` | interactive |
 
 Action must match `^[a-z_]{1,32}$`. Payload must be a table of plain data (strings, finite numbers, booleans, nested
 tables with string/number keys), <= 2048 bytes estimated, depth <= 4. Rate limit: token bucket per player, 5/s, burst 10.
@@ -203,8 +204,17 @@ array <= 16 ids) and only for an open screen, then raises the LOCAL client event
 `app.js` posts `ready` on load and Lua then closes whatever it thought was open). Client export `isOpen(screen)` lets
 fh_tailor's watchdog detect a vanished screen. fh_tailor reverts the preview on all of those (its README, "Mirror preview").
 
+### wagonyard (owner `cargo`)
+`open/update` data = fh_cargo `FhCargoPost.menu`: `{ post = { id, label, region }, live? = { id, tier }, tiers = { { key, label, price, owned, locked?, reason? } }, notice?, notice_kind?, err?, detail? }`.
+Shows each wagon tier with label, price, and locked ("Locked (needs ...)") / owned state. Unowned unlocked rows have
+**Buy**; owned rows have **Call** (disabled while a wagon is out); footer has **Stow my wagon** (disabled when no wagon
+is out) and **Close**. A notice-only update keeps the rows. Actions: `buy` `{ tier }`, `call` `{ tier }`, `stow` `{}`,
+`close` `{}` (relays `fh:cargo:ui_buy` / `fh:cargo:ui_call` / `fh:cargo:ui_stow` / `fh:cargo:ui_close`; allowlisted in
+`M.actions`). fh_cargo opens the screen from `/wagonpost` (`fh:cargo:menu_open`) and answers each action with
+`fh:ui:update` + `notice`.
+
 ### Dev demo (fixtures)
-`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost|fieldguide|trapper|tailor|wardrobe>` opens that screen with `shared/fixtures.lua` data for the caller;
+`/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost|fieldguide|trapper|tailor|wardrobe|wagonyard>` opens that screen with `shared/fixtures.lua` data for the caller;
 `/fh_ui_demo close [screen]` closes. Gated by the command ACE `command.fh_ui_demo` (same pattern as fh_homestead). Fixture actions relay to
 lanes that do not exist yet and are simply unhandled.
 
