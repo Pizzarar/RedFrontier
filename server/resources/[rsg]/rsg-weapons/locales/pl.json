@@ -1,0 +1,21 @@
+{
+    "cl_weapon_degraded": "Twoja broń jest zepsuta!",
+    "cl_weapon_broken_hint": "Użyj zestawu naprawczego broni, aby ją naprawić.",
+    "cl_repairing_weapon": "Naprawianie broni",
+    "cl_repair_cancelled": "Naprawa anulowana. Zestaw nie został zużyty.",
+    "cl_no_weapon_found": "Nie znaleziono broni",
+    "cl_no_weapon_found_desc": "Nie masz uszkodzonej broni do naprawy",
+    "cl_item_need": "Potrzebny przedmiot",
+    "cl_item_need_desc": "Potrzebujesz zestawu naprawczego broni!",
+    "cl_ammo_max": "Osiągnięto maksymalną ilość amunicji!",
+    "cl_infinite_ammo_title": "Nieskończona amunicja",
+    "cl_infinite_ammo_on": "Nieskończona amunicja włączona.",
+    "cl_infinite_ammo_off": "Nieskończona amunicja wyłączona.",
+    "cl_no_weapon_in_hand": "Nie trzymasz żadnej broni.",
+    "cl_dual_wield_full": "Masz już broń w obu rękach",
+    "cl_dual_wield_failed": "Nie można wyposażyć broni",
+    "sv_weapon_repair": "Napraw broń",
+    "sv_weapon_repaired": "Naprawiono: %s",
+    "sv_weapon_not_damaged": "Ta broń nie wymaga naprawy",
+    "sv_no_permission": "Nie masz uprawnień do użycia tej komendy."
+}

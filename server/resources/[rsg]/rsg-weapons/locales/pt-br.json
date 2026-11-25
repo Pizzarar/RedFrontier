@@ -1,0 +1,21 @@
+{
+    "cl_weapon_degraded": "Sua arma está quebrada!",
+    "cl_weapon_broken_hint": "Use um kit de reparo de armas para consertá-la.",
+    "cl_repairing_weapon": "Reparando arma",
+    "cl_repair_cancelled": "Reparo cancelado. Seu kit não foi usado.",
+    "cl_no_weapon_found": "Nenhuma arma encontrada",
+    "cl_no_weapon_found_desc": "Você não tem armas danificadas para reparar",
+    "cl_item_need": "Item necessário",
+    "cl_item_need_desc": "Você precisa de um kit de reparo de armas!",
+    "cl_ammo_max": "Munição máxima atingida!",
+    "cl_infinite_ammo_title": "Munição infinita",
+    "cl_infinite_ammo_on": "Munição infinita ativada.",
+    "cl_infinite_ammo_off": "Munição infinita desativada.",
+    "cl_no_weapon_in_hand": "Você não está segurando uma arma.",
+    "cl_dual_wield_full": "Você já tem uma arma em cada mão",
+    "cl_dual_wield_failed": "Não foi possível equipar a arma",
+    "sv_weapon_repair": "Reparar arma",
+    "sv_weapon_repaired": "%s reparada",
+    "sv_weapon_not_damaged": "Esta arma não precisa de reparo",
+    "sv_no_permission": "Você não tem permissão para usar este comando."
+}

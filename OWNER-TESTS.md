@@ -1249,3 +1249,23 @@ teleports straight to any claim/lot/camp/post/town/ambush id with a ground snap.
 9. Plot check (H16). As an admin, stand near the claims you want checked (the ground probe only sees streamed-in ground) and run `/fh_plotcheck all` once.
    Expected: chat shows a summary (`N plot(s): X ok, Y warn, Z fail` plus up to 8 problem ids and a pointer to the console); the server console has one block per claim and town lot with ground z vs config z, water at center, overlap at max radius and nearest town. `/fh_plotcheck <plotId>` prints that block in chat. A plot far from you reads `ground: NOT FOUND`: run `/fh_plotcheck <plotId>` next to it. Fix every `BAD` / `YES` / overlap line in `config.lua`. A non-admin gets the command refused.
    RESULT:
+
+## Weapon and ammo use (core-08 P1)
+
+TODO-verify. `rsg-weapons` and `rsg-ammo` (Rexshack-RedM, vendored unmodified) are new, so a clean boot and a live client are the only proof. Needs a looted or given revolver and ammo box.
+
+1. Boot the server. Check the console for `Started resource rsg-weapons` and `rsg-ammo` and no `[rsg-ammo] database setup failed` line.
+   Expected: both start after fh_inventory, no script errors.
+   RESULT:
+2. Get a revolver and ammo (loot a cache, or `fh_give <id> weapon_revolver_cattleman 1` and `fh_give <id> ammo_box_revolver 2`). Open the inventory and use the revolver.
+   Expected: the revolver is drawn into your hand (holster/hand slot), no error notification.
+   RESULT:
+3. Use `ammo_box_revolver`.
+   Expected: a short progress bar, one box is consumed, and the revolver gains 12 rounds (cylinder reloads, ammo shows). Using a rifle box with only a revolver does not crash.
+   RESULT:
+4. Holster by using the revolver again from the inventory.
+   Expected: the revolver goes away and stays in the inventory.
+   RESULT:
+5. Draw it again, fire a few shots, log out to the character screen and back in.
+   Expected: the revolver is back in the inventory and re-equipped, with the remaining ammo count restored (rsg-ammo `player_ammo`).
+   RESULT:
