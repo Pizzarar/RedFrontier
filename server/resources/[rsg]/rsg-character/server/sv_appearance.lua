@@ -5,6 +5,7 @@ RSGCore = exports['rsg-core']:GetCoreObject()
 CreatorSessions = {}   -- [src] = { cid = number|nil, isNew = bool, created = bool }
 local assignedBuckets = {} -- [src] = bucket this resource put the player in
 local previousBuckets = {} -- [src] = bucket the player was in before this resource moved them
+local pendingStarterItems = {} -- [citizenid] = true until their first spawn grants RSG.StarterItems
 
 local MAX_JSON_SIZE = 32768
 
@@ -152,6 +153,10 @@ RegisterNetEvent('rsg-character:server:SaveSkin', function(skin, clothes)
     CreatorSessions[src] = nil
     RSG.ResetBucket(src)
     TriggerEvent('rsg-character:server:appearanceSaved', src, citizenid, isNew)
+    -- The creator's ped still wears whatever the client left on it (empty clothes = underwear). Send the final
+    -- skin + clothes so the default outfit substituted above reaches the client for the first spawn — exactly like
+    -- LoadSkinForSource does for returning characters (the spawn flow waits for ApplySkin before it proceeds).
+    TriggerClientEvent('rsg-character:client:ApplySkin', src, skin, clothes)
     TriggerClientEvent('rsg-character:client:OpenSpawnSelect', src, nil, isNew)
 
     local identityFields = RSG.WebhookIdentityFields(src)
@@ -345,13 +350,11 @@ RegisterNetEvent('rsg-multicharacter:server:createCharacter', function(newData)
         return
     end
 
-    for _, entry in ipairs(RSG.StarterItems or {}) do
-        local itemName, amount = entry.item, tonumber(entry.amount) or 1
-        if itemName and amount > 0 and RSGCore.Shared.Items[itemName] then
-            exports['rsg-inventory']:AddItem(src, itemName, amount, nil, nil, 'rsg-character:starter-items')
-            TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[itemName], 'add', amount)
-        end
-    end
+    -- Starter items are granted on the first spawn (RSGCore:Server:OnPlayerLoaded below), not here: granting
+    -- now fires the add-item toasts while the player is still in the creator. Deferring the whole grant (not just
+    -- the toast) keeps the item boxes to one per item, at the right time. Keyed by citizenid (not src) so a
+    -- disconnect mid-creation does not lose them.
+    pendingStarterItems[Player.PlayerData.citizenid] = true
 
     TriggerEvent('rsg-character:server:characterCreated', src, Player.PlayerData.citizenid, cid)
 
@@ -368,4 +371,27 @@ RegisterNetEvent('rsg-multicharacter:server:createCharacter', function(newData)
             identityFields[2],
         },
     })
+end)
+
+-- Starter items for a brand-new character are granted on their first spawn (after creation), so the add-item
+-- toasts appear in-world instead of over the creator. AddItem already fires its own `rsg-inventory:client:ItemBox`,
+-- so nothing else is needed here; the grant is the mirror of what createCharacter used to do inline.
+local function GrantStarterItems(src)
+    for _, entry in ipairs(RSG.StarterItems or {}) do
+        local itemName, amount = entry.item, tonumber(entry.amount) or 1
+        if itemName and amount > 0 and RSGCore.Shared.Items[itemName] then
+            exports['rsg-inventory']:AddItem(src, itemName, amount, nil, nil, 'rsg-character:starter-items')
+        end
+    end
+end
+
+-- First spawn after character creation: flush the pending starter items (and their item-box toasts) once.
+RegisterNetEvent('RSGCore:Server:OnPlayerLoaded', function()
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+    local citizenid = Player.PlayerData.citizenid
+    if not pendingStarterItems[citizenid] then return end
+    pendingStarterItems[citizenid] = nil
+    GrantStarterItems(src)
 end)
