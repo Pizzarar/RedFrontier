@@ -3,7 +3,9 @@
 -- notify/objective export; ox_lib notify is the fallback).
 
 local function notify(text)
-    lib.notify({ title = 'Tutorial', description = text, type = 'inform' })
+    -- 'inform' is accepted (ox_lib notify.lua maps it to 'info'); the real fix for the missed first step is the
+    -- explicit 10s duration, so the notify is not gone before the player has spawned and looked.
+    lib.notify({ title = 'Tutorial', description = text, type = 'inform', duration = 10000 })
 end
 
 -- GPS "waypoint": RDR3 has no SET_NEW_WAYPOINT native, so the yellow route is drawn with the MAP multi-route

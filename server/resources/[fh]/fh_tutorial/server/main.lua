@@ -9,6 +9,7 @@
 local T = FhTutorial
 
 local srcOf = {}    -- citizenid -> src (online characters)
+local spawned = {}  -- src -> citizenid whose spawn-time OnPlayerLoaded was handled (idempotency + prompt gate)
 local lastLoad = {} -- src -> game time (ms) of the character's load; survival buffs are restored on load
 
 local function core() return exports['rsg-core']:GetCoreObject() end
@@ -36,10 +37,19 @@ end)
 -- One client event carries the text, the GPS waypoint (nil = clear the route) and an optional ack: for an
 -- informational step with no player action, the client reports the step's check after `after_ms` on screen.
 local function sendPrompt(src, text, waypoint, ack)
+    -- Nothing is shown until the character has actually spawned (a notify sent from the creator is hidden behind it).
+    if not spawned[src] then return end
     TriggerClientEvent('fh:tutorial:prompt', src, {
         text = text,
         waypoint = waypoint and { x = waypoint.x, y = waypoint.y, z = waypoint.z, label = waypoint.label } or nil,
         ack = ack,
+    })
+    -- The notify alone is easy to miss; also put the step in chat so a first-day player cannot lose it. rsg-chat is
+    -- a soft dependency: if it is not running, this line is simply dropped (the notify still shows).
+    TriggerClientEvent('chat:addMessage', src, {
+        color = { 255, 200, 60 },
+        multiline = false,
+        args = { 'Tutorial', text },
     })
 end
 
@@ -164,19 +174,37 @@ RegisterCommand('tutorial', function(src, args)
 end, false)
 
 -- ------------------------------------------------------------------ lifecycle
+-- RSGCore:Server:PlayerLoaded fires when the Player object is created (rsg-core/server/player.lua:462). For a NEW
+-- character rsg-character reaches Login from inside the creator (rsg-multicharacter:server:createCharacter), so this
+-- is still the creator, not the spawned game world. Track the src/citizenid mapping and the survival load-time here,
+-- but do NOT auto-start or prompt yet: a notify sent now is hidden behind the creator, and the greeting's 2.5s ack
+-- would advance the tutorial before the player ever spawns (the "new character got no tutorial" playtest bug).
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     local d = Player and Player.PlayerData
     if not (d and type(d.source) == 'number' and type(d.citizenid) == 'string') then return end
-    local src, cid = d.source, d.citizenid
+    srcOf[d.citizenid] = d.source
+    lastLoad[d.source] = GetGameTimer()
+end)
+
+-- RSGCore:Server:OnPlayerLoaded is the net event rsg-character's client fires once the character is actually in the
+-- game world (client/spawn.lua:111, after the spawn teleport). That is when a first-load prompt is visible: auto-start
+-- a never-seen character here, or re-show an in-flight step for a returning one.
+RegisterNetEvent('RSGCore:Server:OnPlayerLoaded', function()
+    local src = source
+    local cid = citizenidOf(src)
+    if not cid then return end
+    -- Client-triggered, so make it idempotent per loaded character: a spammed/faked repeat is ignored. The flag is
+    -- set BEFORE the DB read yields, so concurrent repeats cannot both start; forget() clears it on unload/relog.
+    if spawned[src] == cid then return end
+    spawned[src] = cid
     srcOf[cid] = src
-    lastLoad[src] = GetGameTimer()
     local record = loadRecord(cid)
     if T.shouldAutoStart(record) then
         local ok = false
         if questsReady() then ok = exports.fh_quests:start(src, T.QUEST_ID) end
         -- Persist only after a successful start; otherwise retry on the next load (a failed start must not
         -- permanently burn the one auto-start).
-        if ok == true then saveRecord(cid, false) end
+        if ok == true then saveRecord(cid, false) else spawned[src] = nil end
     else
         -- Returning character: started/step events are not replayed on load, so show the in-flight step again.
         -- (The greeting has no player action; without this a relog during it would wait for /tutorial.) Retry
@@ -202,6 +230,7 @@ local function forget(src)
         if s == src then srcOf[cid] = nil end
     end
     lastLoad[src] = nil
+    spawned[src] = nil
 end
 AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) forget(src) end)
 AddEventHandler('playerDropped', function() forget(tonumber(source)) end)
@@ -212,6 +241,6 @@ CreateThread(function()
     for _, id in ipairs(GetPlayers()) do
         local src = tonumber(id)
         local cid = citizenidOf(src)
-        if cid then srcOf[cid] = src end
+        if cid then srcOf[cid] = src; spawned[src] = cid end -- already in the world
     end
 end)

@@ -8,8 +8,9 @@ The intro tutorial (plan guide-02, `@guide`), built on the fh_quests API. One qu
 - `shared/tutorial.lua`: pure step bodies + the build/persistence decisions, specced in `spec/tutorial_spec.lua`.
 - `server/main.lua`: registers the quest, auto-starts it on a new character's first load, advances the non-event steps
   through `fh_quests.talk`, and backs `/tutorial`, `/tutorial skip`, `/tutorial restart`.
-- `client/main.lua`: shows prompts via `ox_lib` notify, draws the step's GPS route, reports the client-check signals,
-  and acknowledges the greeting after it has been on screen.
+- `client/main.lua`: shows prompts via `ox_lib` notify (10s, `type 'info'`), draws the step's GPS route, reports the
+  client-check signals, and acknowledges the greeting after it has been on screen. The server also echoes every prompt
+  into chat (`chat:addMessage`), so the text is not lost when the notify fades.
 
 ## Flow (steps)
 
@@ -78,15 +79,18 @@ advances.
 ## Events
 
 - Consumes (server): `fh:quests:started`, `fh:quests:step`, `fh:quests:completed` (prompt routing),
-  `fh:buffs:applied` (survival step), `fh:cargo:wagon_spawned` (cargo step), `RSGCore:Server:PlayerLoaded` /
-  `RSGCore:Server:OnPlayerUnload` / `playerDropped` (lifecycle; on load it re-shows an in-flight run's current
-  prompt), `onResourceStart` (register/re-register).
+  `fh:buffs:applied` (survival step), `fh:cargo:wagon_spawned` (cargo step), `RSGCore:Server:PlayerLoaded`
+  (src/citizenid routing + survival load-time; the Player object is created, a new character is still in the
+  creator), `RSGCore:Server:OnPlayerLoaded` (net event from rsg-character after the spawn teleport: auto-start a
+  never-seen character / re-show an in-flight step; handled once per loaded character, prompts are dropped until
+  it has run), `RSGCore:Server:OnPlayerUnload` / `playerDropped` (forget), `onResourceStart` (register/re-register).
 - Consumes (client, net): `fh:tutorial:prompt` (prompt + waypoint), `rsg-inventory:client:open` (inventory + stash),
   `fh:trade:menu`, `fh_gunsmith:conditionChanged`, `fh:ui:open` (jobs + fence) — the client-check signals.
 - Emits (client -> server, net): `fh:tutorial:check`
   `check = 'greeting'|'inventory'|'stash'|'trade'|'gunsmith'|'jobs'|'fence'`.
 - Emits (server -> client, net): `fh:tutorial:prompt` `{ text, waypoint = { x, y, z, label } | nil,
-  ack = { check, after_ms } | nil }`.
+  ack = { check, after_ms } | nil }`, and `chat:addMessage` `{ color, multiline, args = { 'Tutorial', text } }`
+  (soft dependency on rsg-chat).
 
 ## Dependencies and start order
 
