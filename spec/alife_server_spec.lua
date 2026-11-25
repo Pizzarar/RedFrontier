@@ -166,6 +166,9 @@ local function boot(preKvp, ambush)
         assert(load(src, '@' .. p, 't', env))()
     end
     run(R .. 'fh_core/shared/regions.lua')
+    -- regions.lua carries world-03 H ambush nodes; strip them all so `ambush` (or nil = no ambush data anywhere) is
+    -- the only ambush data the rules see, as alife_rules_spec's fixtureRegions does.
+    for _, r in pairs(env.FhRegions.regions) do r.ambush = nil end
     if ambush then
         for rid, list in pairs(ambush) do env.FhRegions.regions[rid].ambush = list end
     end
@@ -305,7 +308,7 @@ T.describe('fh_alife server wiring (stubbed server)', function()
     end)
 
     T.it('B2 a region with no ambush data is a clean no-op (sweep does nothing)', function()
-        local B = boot() -- real FhRegions: no ambush data anywhere
+        local B = boot() -- real FhRegions, ambush stripped: no ambush data anywhere
         B.squads.sweep()
         T.eq(0, count(B.spawns))
         T.eq(0, #B.despawns)
@@ -375,7 +378,7 @@ T.describe('fh_alife server wiring (stubbed server)', function()
     end)
 
     T.it('/alife lists squads by goal, node and strength; prints "no ambush nodes" for empty regions', function()
-        -- no ambush data: every camp region prints "<region>: no ambush nodes"
+        -- no ambush data (stripped): every camp region prints "<region>: no ambush nodes"
         local B0 = boot()
         B0.commands.alife(1, {}, 'alife')
         local msg0
