@@ -1067,23 +1067,26 @@ Prereqs (all must be merged before this card is meaningful):
 
 ### M6: rep-gated wagon tiers + T2 freight (roads-02 R8/R9)
 
-25. Wagon rep gate at tier 1. With heartlands rep at tier 1 (0-99; a fresh character is 0), run `/fh_wagon t2`, then `/fh_wagon t3`.
-   Expected: both refused `fh_wagon: tier_too_low`. `/fh_wagon t1` still spawns a cart. (R8: t2/t3 gate on fh_progression `canUnlock('wagon_t2'|'wagon_t3')`, heartlands tier 2 / tier 3.)
+25. Wagon rep gate at tier 1. With heartlands rep 0 (tier 1, a fresh character), run `/fh_wagon t2`, then `/fh_wagon t3`.
+   Expected: both refused `fh_wagon: tier_too_low`. `/fh_wagon t1` still spawns a cart. (R8: t2/t3 gate on fh_progression `canUnlock('wagon_t2'|'wagon_t3')`, heartlands tier 2 / tier 3.) Rep stays 0 = tier 1.
    RESULT:
-26. Raise heartlands rep to tier 2, then tier 3. From the server console: `fh_rep_region <serverId> <region> <delta>` (fh_progression admin command, `server/main.lua`; a delta, not an absolute set — tier 2 = rep 100, tier 3 = rep 400). Run `fh_rep_region <yourId> heartlands 100`.
-   Expected: `/fh_wagon t2` now spawns; `/fh_wagon t3` still `fh_wagon: tier_too_low`. Then `fh_rep_region <yourId> heartlands 300` (rep 400 = tier 3): `/fh_wagon t3` spawns.
+26. T2 offers + tier 1 accept. From the server console: `fh_trade_shortage scarlett_meadows trade_salt 0.5`, then open the quest board at the heartlands (Valentine) post.
+   Expected: a `[T2] Freight: 15x Salt Sack to scarlett_meadows` offer lists after the T1 offers (`Freight: 10x Salt Sack to scarlett_meadows`); route heartlands -> scarlett_meadows (~2405 m), no `allowSameRegion` needed. Every `[T2]` offer is `locked = true` (shown to everyone; the real gate is at accept). Still at rep 0 = tier 1, accepting the `[T2]` offer is refused `fh_locked` (T2 gate = fh_progression `canUnlock('contracts_t2')`, heartlands tier 2). Rep stays 0 = tier 1.
    RESULT:
-27. T2 freight offers on the board. From the server console: `fh_trade_shortage scarlett_meadows trade_salt 0.5`, then open the quest board at the heartlands (Valentine) post.
-   Expected: a `[T2] Freight: 15x Salt Sack to scarlett_meadows` offer lists after the T1 offers (`Freight: 10x Salt Sack to scarlett_meadows`); route heartlands -> scarlett_meadows (~2405 m), no `allowSameRegion` needed. Every `[T2]` offer is `locked = true` (shown to everyone; the real gate is at accept). At tier 1, accepting the `[T2]` offer is refused `fh_locked`.
+27. Raise heartlands rep to tier 2. From the server console: `fh_rep_region <yourId> heartlands 100` (a delta, not an absolute set — fh_progression admin command, `server/main.lua`; rep 0 -> 100 = tier 2).
+   Expected: `/fh_wagon t2` now spawns; `/fh_wagon t3` still `fh_wagon: tier_too_low`. Rep now 100 = tier 2.
    RESULT:
-28. T2 accept gate on tier + wagon. At tier 2 (`fh_rep_region <yourId> heartlands 100`), stand within 8 m of your wagon and accept the `[T2]` offer.
-   Expected: with a t1 cart beside you (`/fh_wagon t1`) -> `fh_freight_wagon_too_small`; with a t2 wagon (`/fh_wagon t2`) -> accepted, qty 15 (10-30) salt appears in the wagon, pay ≈ 3x the matching T1 offer (`payMultiple` 3, hard cap 4x), rep delta 4 (T1 2).
+28. T2 accept gate on the wagon tier. At rep 100 = tier 2, stand within 8 m of your wagon and accept the `[T2]` offer.
+   Expected: with a t1 cart beside you (`/fh_wagon t1`) -> `fh_freight_wagon_too_small`; with a t2 wagon (`/fh_wagon t2`) -> accepted, qty 15 (10-30) salt appears in the wagon, pay ≈ 3x the matching T1 offer (`payMultiple` 3, hard cap 4x), rep delta 4 (T1 2). Rep stays 100 = tier 2.
    RESULT:
-29. Rep drop keeps a live wagon; respawn is gated. With the t2 wagon from step 28 live, drop rep to tier 1: `fh_rep_region <yourId> heartlands -100`.
-   Expected: the live t2 wagon stays and is still loadable (the gate runs only at spawn). Re-spawn it (`/fh_wagon t2` again, which replaces it) -> `fh_wagon: tier_too_low`. Restore rep (`fh_rep_region <yourId> heartlands 100`): `/fh_wagon t2` spawns again.
+29. Raise heartlands rep to tier 3. `fh_rep_region <yourId> heartlands 300` (delta: rep 100 -> 400 = tier 3).
+   Expected: `/fh_wagon t3` spawns. Rep now 400 = tier 3.
    RESULT:
-30. fh_progression stopped (fail closed). `stop fh_progression`.
-   Expected: `/fh_wagon t2` and `/fh_wagon t3` -> `fh_wagon: fh_locked`; accepting a `[T2]` offer -> `fh_locked`. `/fh_wagon t1` still spawns and a T1 offer still accepts. `ensure fh_progression` to restore.
+30. Rep drop keeps a live wagon; respawn is gated. With the t2 wagon from step 28 live, drop rep to tier 1: `fh_rep_region <yourId> heartlands -400` (delta: rep 400 -> 0 = tier 1).
+   Expected: the live t2 wagon stays and is still loadable (the gate runs only at spawn). Re-spawn it (`/fh_wagon t2` again, which replaces it) -> `fh_wagon: tier_too_low`. Restore rep: `fh_rep_region <yourId> heartlands 100` (delta: rep 0 -> 100 = tier 2): `/fh_wagon t2` spawns again. Rep now 100 = tier 2.
+   RESULT:
+31. fh_progression stopped (fail closed). `stop fh_progression`.
+   Expected: `/fh_wagon t2` and `/fh_wagon t3` -> `fh_wagon: fh_locked`; accepting a `[T2]` offer -> `fh_locked`. `/fh_wagon t1` still spawns and a T1 offer still accepts. `ensure fh_progression` to restore. (Rep is 100 = tier 2, but with fh_progression down every gated spawn/accept fails closed.)
    RESULT:
 
 ## A-life: camp ownership (fh_alife, fh_zones)
