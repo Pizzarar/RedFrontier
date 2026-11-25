@@ -144,7 +144,7 @@ local function sell(src, post, item, amount)
         if not removed then return false, why end
         local total = P.sell(cfg, state, post.region, item, amount, t) or preview -- items are gone: pay what was quoted
         markDirty(post.region, item)
-        local okc, paid, perr, mode = pcall(function() return exports.fh_economy:credit(citizenid, total, 'trade_sell:' .. item, post.region) end)
+        local okc, paid, perr = pcall(function() return exports.fh_economy:credit(citizenid, total, 'trade_sell:' .. item, post.region) end)
         if not okc or not paid then
             -- Items are already gone and fh_core has no player-refund export (addItem is world containers only).
             log('ALERT credit failed after removing %dx%s from %s (src %d) (%s): owed $%d', amount, item, citizenid, src,

@@ -46,7 +46,6 @@ local function boot(opts)
     local p1 = env.FhTradeConfig.posts[1]
     assert(p1 and p1.x, 'no resolved post')
     post = { x = p1.x, y = p1.y, z = p1.z }
-    local nextSrc = 100
     B.sell = function(src)
         B.lastSrc = src
         B.handlers['fh:trade:ui_sell']({ src = src, screen = 'tradepost', action = 'sell', payload = { item = 'trade_salt', amount = 3 } })

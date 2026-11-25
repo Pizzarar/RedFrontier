@@ -18,7 +18,7 @@ Regional trade prices, shortages, trade-post selling and supplies buying (spec L
 - `exports.fh_trade:listGoods()` -> `{ [item] = { label, base } }`
 
 ## Events
-- Emits (server): `fh:trade:sold` `{ src, region, post, item, amount, total }` after a paid sale; `fh:trade:bought` (same shape) after a paid and granted buy. Emits (to the client): `fh:trade:menu` (now also `supplies = { { item, label, price } }`, `maxBuy`), `fh:trade:sold`, `fh:trade:bought`.
+- Emits (server): `fh:trade:sold` `{ src, region, post, item, amount, total }` after a paid sale; `fh:trade:bought` (same shape) after a paid and granted buy; `fh:trade:owed` `{ src, citizenid, region, item, amount, owed }` when the payout `credit` failed after the goods were removed (fix by hand). Emits (to the client): `fh:trade:menu` (now also `supplies = { { item, label, price } }`, `maxBuy`), `fh:trade:sold`, `fh:trade:bought`.
 - Consumes (from clients, server re-validates everything): `fh:trade:menu`; the fh_ui `tradepost` screen actions relayed as `fh:trade:ui_sell` / `fh:trade:ui_buy` (payload `{item, amount}`; src comes from the relay, not the payload).
 
 ## Selling
@@ -43,7 +43,7 @@ Sequence (all-or-nothing, one trade per player at a time; the busy lock is share
 `server/migrations/0013_fh_trade.sql`: `fh_trade_prices (region_id, item, shortage, saturation, updated_at)`, PK (region_id, item). Dirty rows flush every `saveMs` and on resource stop; load decays to "now". After the load, `initialShortages` (config) are seeded only for a region/item with no row at all (`P.seedShortages`), then saved; a row whose shortage was cleared to 0 is never re-seeded. If the load fails, nothing is seeded.
 
 ## Tests
-`~/.venvs/rf/bin/python tools/run-specs.py spec/trade_prices_spec.lua spec/trade_supplies_spec.lua spec/freight_spec.lua spec/freight_server_spec.lua`
+`~/.venvs/rf/bin/python tools/run-specs.py spec/trade_prices_spec.lua spec/trade_supplies_spec.lua spec/freight_spec.lua spec/freight_server_spec.lua spec/trade_sell_spec.lua`
 
 ## TODO(B7 @core)
 `fh_core:removeItem` and `fh_core:registerItems` ship with @core B7. Until then the resource logs "not available yet", goods are not registered, and every sale is refused (`Trading is not available yet.`). If `credit` fails after the items were removed there is no player refund export: it logs `ALERT ... owed $N` and emits `fh:trade:owed`.
