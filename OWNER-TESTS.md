@@ -980,9 +980,8 @@ the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff 
 has an in-game source: `lumber`, `nails`, `lead`, `casings`, `resource_gunpowder` and the `herb_*` items (ginseng,
 oregano, red sage, wild mint) are bought at trade posts (idea-716/719, on main); `gun_parts` drops from the outlaw camp
 (idea-717, on main); the four herbs can also be gathered from wild patches (the "Herb gathering" card below). Fill every
-`RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`. The campfire cooking recipes (the "Cooking" card below) are the
-exception: `raw_meat` now comes from skinning an animal (@hunting, idea-914), while `carrot`/`potato`/`corn` have no
-in-game source until the @roads supplies cards (idea-915), so use `fh_give` for those until then.
+`RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`. The campfire cooking recipes (the "Cooking" card below) have in-game sources too: `raw_meat` comes from skinning an animal
+(@hunting, idea-914) and `carrot`/`potato`/`corn` are bought at a trade post (@roads, idea-915, $3 each via `/tradebuy`).
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `quality` between 20 and 45 in its item info (M1 "Worn Rifle
@@ -1083,8 +1082,8 @@ Preconditions: a campfire you can stand at: build one on your own plot (`/fh_bui
 to the homestead `campfire`. Inputs: `raw_meat` comes from skinning (idea-914 landed): every huntable animal gives meat
 after the pelt, 2 from a bulky animal (rabbit, fox, coyote, deer, boar, wolf) or 3 from a cargo animal (bear, bison, elk,
 moose, alligator; needs a wagon within 8 m). It goes backpack -> saddlebag -> wagon; with no room the pelt still succeeds,
-the meat is skipped and you see `Raw meat could not be stowed (no room).` `carrot`, `potato` and `corn` have no source until @roads adds them to the supplies list
-(idea-915); give those with `fh_give <yourId> <item> <n>` until then. All output items (`cooked_meat`, `stew`, `stew_veg`) already exist in rsg-core.
+the meat is skipped and you see `Raw meat could not be stowed (no room).` `carrot`, `potato` and `corn` are trade-post supplies (idea-915): at any trade post run
+`/tradebuy <item> <n>` ($3 each, no sell price; or use the `/tradepost` screen). `fh_give <yourId> <item> <n>` stays a shortcut only. All output items (`cooked_meat`, `stew`, `stew_veg`) already exist in rsg-core.
 
 1. Cook meat. Get `raw_meat` by skinning a rabbit (2 Raw Meat; `fh_give <yourId> raw_meat 1` is only a shortcut), stand at the campfire, run `/fh_craft cook_meat`.
    Expected: chat `Done: Cook meat.`; 1 Raw Meat gone, 1 Cooked Meat in the backpack.
@@ -1092,18 +1091,15 @@ the meat is skipped and you see `Raw meat could not be stowed (no room).` `carro
 2. Eat the cooked meat from the inventory.
    Expected: the item is consumed and `Well Fed` shows in the buff HUD (a shorter buff than stew: scale 0.5).
    RESULT:
-3. Cook stew. Skin a rabbit for 2 `raw_meat` (or `fh_give <yourId> raw_meat 2`), then `fh_give` `carrot 1`, `potato 1`, then `/fh_craft cook_stew`.
+3. Cook stew. Skin a rabbit for 2 `raw_meat` (or `fh_give <yourId> raw_meat 2`), then at a trade post run `/tradebuy carrot 1` and `/tradebuy potato 1` ($3 each; `fh_give` is only a shortcut), then at the campfire `/fh_craft cook_stew`.
    Expected: `Done: Cook stew.`; the 4 inputs are gone and 1 Stew is in the backpack. Eating it shows `Well Fed`
    (full-length, scale 1.0).
    RESULT:
-4. Cook vegetable stew. `fh_give <yourId> carrot 1`, `potato 1`, `corn 1`, then `/fh_craft cook_stew_veg`.
+4. Cook vegetable stew. At a trade post run `/tradebuy carrot 1`, `/tradebuy potato 1`, `/tradebuy corn 1` ($3 each; `fh_give` is only a shortcut), then at the campfire `/fh_craft cook_stew_veg`.
    Expected: `Done: Cook vegetable stew.`; 1 Vegetable Stew in the backpack; eating it shows `Well Fed` (scale 0.85).
    RESULT:
 5. Failure path: with no `raw_meat` run `/fh_craft cook_meat`; and away from any campfire run it with meat in the pack.
    Expected: `Missing: 1x raw_meat (have 0)` and `You need to be at the right station.`; nothing is consumed.
-   RESULT:
-6. (Once idea-915 lands) Replace the veg `fh_give` with the real source: buy carrot/potato/corn at a trade post.
-   Expected: the same results as steps 1-4 with no `fh_give` (raw_meat already comes from skinning).
    RESULT:
 
 ## Survival (fh_survival, plan survival-01, S1-S5 combined)
