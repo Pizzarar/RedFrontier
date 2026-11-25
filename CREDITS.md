@@ -11,5 +11,6 @@ Implemented RedM server base — Thanks to these projects:
 - Implemented the friend allowlist (B-access) on rsg-core's ACE whitelist — Thanks to rsg-core by Rexshack-RedM
 - Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game World
 - Implemented weapon/ammo use — Thanks to rsg-weapons by Rexshack-RedM (weapon, throwable and knife use; rsg-ammo by Rexshack-RedM opens the ammo boxes and saves ammo)
+- Implemented catalog-style tailor/general-store clothing progression — Thanks to Red Dead Redemption 2 (single-player tailors and catalogs) by Rockstar Games (design idea only; no assets or text copied)
 
 See server/VENDORED.md for exact versions.
