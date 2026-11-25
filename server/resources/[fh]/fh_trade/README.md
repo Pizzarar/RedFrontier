@@ -26,7 +26,7 @@ Server checks the player stands within a post's `radius`, validates item/amount,
 Goods are registered by this resource with `fh_core.registerItems` at start (and when fh_core restarts).
 
 ## Buying supplies (`shared/supplies.lua`, pure, `spec/trade_supplies_spec.lua`)
-Every post sells `FhTradeConfig.supplies` (item -> flat whole-dollar price per unit, unlimited stock, max `maxBuyPerTx` per request). Buying never reads or writes the price model (no shortage, saturation or wobble). Today: lumber $3, nails $2, lead $2, casings $2, resource_gunpowder $3, herb_american_ginseng / herb_oregano / herb_red_sage / herb_wild_mint $3 (just above each item's `value_base`).
+Every post sells `FhTradeConfig.supplies` (item -> flat whole-dollar price per unit, unlimited stock, max `maxBuyPerTx` per request). Buying never reads or writes the price model (no shortage, saturation or wobble). Today: lumber $3, nails $2, lead $2, casings $2, resource_gunpowder $3, herb_american_ginseng / herb_oregano / herb_red_sage / herb_wild_mint $3, carrot / potato / corn $3 (cooking inputs, idea-915; no sell price anywhere, so no buy-to-sell loop) (just above each item's `value_base`).
 
 Sequence (all-or-nothing, one trade per player at a time; the busy lock is shared with selling and released on every path, pcall-guarded):
 1. Server checks the post radius (as selling), the item is in `supplies`, amount is a whole number 1..`maxBuyPerTx`.

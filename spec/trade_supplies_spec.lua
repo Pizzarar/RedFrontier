@@ -45,9 +45,19 @@ it('validate: price x amount, unknown item and bad amounts refused', function()
     eq(300, (S.validate(CFG, 'lumber', 100)), 'max amount ok')
 end)
 
-it('real config: the 9 supplies are listed with positive whole-dollar prices, separate from trade goods', function()
+it('carrot/potato/corn: priced above every sell value, so buy -> sell is never a profit loop (idea-915)', function()
+    for _, item in ipairs({ 'carrot', 'potato', 'corn' }) do
+        local price = FhTradeConfig.supplies[item]
+        assert(price and price >= 1, item .. ' not in supplies')
+        assert(not FhTradeConfig.goods[item], item .. ' is a trade good (sellable via the price model)')
+        local g = FhTradeConfig.goods[item]
+        assert(not g or price > g.value_base, item .. ' price not above value_base')
+    end
+end)
+
+it('real config: the 12 supplies are listed with positive whole-dollar prices, separate from trade goods', function()
     local want = { 'lumber', 'nails', 'lead', 'casings', 'resource_gunpowder', 'herb_american_ginseng', 'herb_oregano',
-        'herb_red_sage', 'herb_wild_mint' }
+        'herb_red_sage', 'herb_wild_mint', 'carrot', 'potato', 'corn' }
     local n = 0
     for _ in pairs(FhTradeConfig.supplies) do n = n + 1 end
     eq(#want, n, 'supplies count')
@@ -58,7 +68,7 @@ it('real config: the 9 supplies are listed with positive whole-dollar prices, se
         assert(not FhTradeConfig.goods[item], item .. ' is also a trade good (would mix with the price model)')
     end
     assert(FhTradeConfig.maxBuyPerTx and FhTradeConfig.maxBuyPerTx >= 1, 'maxBuyPerTx')
-    eq('casings', S.list(FhTradeConfig)[1].item, 'list sorted')
+    eq('carrot', S.list(FhTradeConfig)[1].item, 'list sorted')
 end)
 
 -- ---------------------------------------------------------------- happy path

@@ -15,9 +15,8 @@ dofile(fh .. 'fh_hunting/config.lua')   -- MeatItem / MeatPerSize (idea-914 skin
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
 -- idea-716/719 landed: lumber, nails, lead, casings, resource_gunpowder and the 4 herbs are FhTradeConfig.supplies;
 -- gun_parts (idea-717) is zone loot (core-05 K1). raw_meat landed through idea-914 (fh_hunting skin grant).
--- The veg cooking inputs (crafting-03 C10a) still wait on idea-915.
+-- The veg cooking inputs (carrot, potato, corn) landed through idea-915 (FhTradeConfig.supplies, roads-04 R18).
 local PENDING = {
-    carrot = 'idea-915', potato = 'idea-915', corn = 'idea-915', -- @roads supplies (plan crafting-03)
 }
 
 -- External sources (outside [fh]). An entry needs a CONFIRMED in-game way to obtain the item (a gatherer, shop or
