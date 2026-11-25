@@ -61,9 +61,12 @@ with a message and nothing is charged (`rules.parsePoints`).
   always released (success, refusal, early return, error), and only after any refund resolved.
 - **Persisted or refunded**: the heat reset is written with `MySQL.query.await`; the payoff succeeds only once that
   write landed. If the write fails (memory is rolled back) or anything after the charge throws, the exact charged
-  amount is credited back with `exports.fh_economy:pay(src, amount, refundReason, region_id)` (same region as the
-  charge) while the lock is still held -> `fh_payoff_refunded`. If that also fails -> `fh_payoff_refund_failed` +
-  ERROR log. A refund needs the player online (fh_economy `no_player`), so a drop mid-payoff can end there.
+  amount is credited back to the **captured citizenid** with
+  `exports.fh_economy:credit(citizenid, amount, refundReason, region_id)` (same region as the charge) while the lock is
+  still held -> `fh_payoff_refunded`. Because `credit` is keyed by citizenid, a player drop mid-payoff queues a
+  `'pending'` credit to the original character (paid on next load) and a character switch still credits the original
+  character rather than the new one. If `credit` itself fails (refused, throws, or `fh_economy` stopped) ->
+  `fh_payoff_refund_failed` + loud `[fh_heat] ERROR payoff ... REFUND FAILED` log (no silent loss).
   Other heat changes (gains, decay, admin set) stay fire-and-forget writes.
 - If the player dropped while the payoff yielded, its cache entry is cleared afterwards (all payoff changes are
   persisted), unless the character is online again.
@@ -79,6 +82,12 @@ Pure decisions: `shared/roadblock_rules.lua` (specced in `spec/roadblock_rules_s
 `server/roadblocks.lua`; hostile AI: `client/main.lua`. Config: `FhHeatConfig.roadblock / ambush / chase`.
 
 Law encounters (roadblock / ambush / chase) skip players inside their own town lot (fh_homestead `lawSafeAt`).
+
+**Faction spawn resolution (`FhRoadblockRules.factionConfig`).** Each table (`roadblock`, `ambush`, `chase`) resolves
+ped config in order: (1) explicit `factions[id]` row, (2) canonical id via `FhRegions.getFaction(id)` (`alias_of`, e.g.
+`rhodes_law` -> `lawmen`), (3) `byKind[faction.kind]` (`law` / `outlaw`, e.g. `desert_gang` -> `byKind.outlaw`). Neutral
+factions with no explicit row (e.g. `traders`, `rail_mining`, `settlers`, `bounty_hunters`) and unknown ids do not spawn
+roadblocks/ambushes/chases (logged once per encounter kind + faction, no throw).
 
 **Roadblock (always on).** When a player's level for a faction RISES onto or past `roadblock.minLevel` (`wanted`) the
 server picks the chokepoint nearest the player (preferring chokepoints of the player's region, within

@@ -189,6 +189,28 @@ function M.lawSafeBlocks(lookup, coords, citizenid)
     return plot
 end
 
+---Resolve the spawn config row for `factionId` in a roadblock / ambush / chase config table.
+---Order:
+---  1. Explicit faction id row: `blockCfg.factions[factionId]`
+---  2. Canonical id via `regions.getFaction(factionId)` (`alias_of`, e.g. rhodes_law -> lawmen): `blockCfg.factions[f.id]`
+---  3. Fallback by faction `kind` (`law` | `outlaw`): `blockCfg.byKind[f.kind]`
+---Neutral factions with no explicit row (and unknown faction ids) return nil, never throw.
+---@param blockCfg table|nil
+---@param factionId string|nil
+---@param regions table|nil
+---@return table|nil fcfg, string|nil matchedBy  ('id' | 'alias' | 'kind')
+function M.factionConfig(blockCfg, factionId, regions)
+    if type(blockCfg) ~= 'table' or type(factionId) ~= 'string' or factionId == '' then return nil end
+    local factions = type(blockCfg.factions) == 'table' and blockCfg.factions or nil
+    if factions and factions[factionId] then return factions[factionId], 'id' end
+    local f = type(regions) == 'table' and type(regions.getFaction) == 'function' and regions.getFaction(factionId) or nil
+    if type(f) ~= 'table' then return nil end
+    if factions and f.id and f.id ~= factionId and factions[f.id] then return factions[f.id], 'alias' end
+    local byKind = type(blockCfg.byKind) == 'table' and blockCfg.byKind or nil
+    if byKind and f.kind and byKind[f.kind] then return byKind[f.kind], 'kind' end
+    return nil
+end
+
 if GetCurrentResourceName then
     FhRoadblockRules = M
 else

@@ -19,7 +19,7 @@ FhHeatConfig = {
     -- Bounty payoff: money per heat point, rounded up per payoff. Charged through fh_economy.charge.
     bountyPerPoint = 4,
     payoffReason = 'heat_bounty',
-    refundReason = 'heat_bounty_refund', -- fh_economy.pay credit when the heat reset fails after the charge
+    refundReason = 'heat_bounty_refund', -- fh_economy.credit refund (by citizenid) when the heat reset fails after the charge
 }
 
 -- ---------------------------------------------------------------- R6: roadblocks (always on), night ambush + chase (gated)
@@ -43,11 +43,16 @@ FhHeatConfig.roadblock = {
         { id = 'rh_south_road',      region = 'scarlett_meadows', coords = { x = 1300.0, y = -1450.0, z = 76.0 }, heading = 0.0,   unverified = true },
         { id = 'rh_east_road',       region = 'scarlett_meadows', coords = { x = 1450.0, y = -1300.0, z = 76.0 }, heading = 90.0,  unverified = true },
     },
+    -- Resolution order (FhRoadblockRules.factionConfig): factions[id] -> factions[alias_of] -> byKind[kind].
+    -- Neutral factions without an explicit row (and unknown ids) do not spawn encounters.
     factions = {
-        outlaws    = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
-        lawmen     = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-        raiders    = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
-        rhodes_law = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaws = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
+        lawmen  = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        raiders = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
+    },
+    byKind = {
+        law    = { model = 's_m_m_valdeputy_01',   count = 4, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaw = { model = 'g_m_m_unibanditos_01', count = 4, weapon = 'WEAPON_REPEATER_CARBINE' },
     },
 }
 
@@ -56,10 +61,13 @@ FhHeatConfig.ambush = {
     enabled = true, minLevel = 'hunted', nightFrom = 21, nightTo = 5, -- game hours, wraps midnight
     cooldownSeconds = 900, radius = 60.0, despawnMinutes = 5,
     factions = {
-        outlaws    = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
-        lawmen     = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-        raiders    = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
-        rhodes_law = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaws = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
+        lawmen  = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        raiders = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
+    },
+    byKind = {
+        law    = { model = 's_m_m_valdeputy_01',   count = 5, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaw = { model = 'g_m_m_unibanditos_01', count = 5, weapon = 'WEAPON_REPEATER_CARBINE' },
     },
 }
 
@@ -68,9 +76,12 @@ FhHeatConfig.chase = {
     enabled = true, minLevel = 'hunted', cooldownSeconds = 900, despawnMinutes = 5, behind = 80.0,
     horseModel = 'a_c_horse_morgan_bay',
     factions = {
-        outlaws    = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
-        lawmen     = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
-        raiders    = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
-        rhodes_law = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaws = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
+        lawmen  = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        raiders = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
+    },
+    byKind = {
+        law    = { model = 's_m_m_valdeputy_01',   count = 3, weapon = 'WEAPON_REVOLVER_CATTLEMAN' },
+        outlaw = { model = 'g_m_m_unibanditos_01', count = 3, weapon = 'WEAPON_REPEATER_CARBINE' },
     },
 }

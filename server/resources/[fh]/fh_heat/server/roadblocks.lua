@@ -58,6 +58,18 @@ local function lawSafeBlocked(src, cid, x, y, z)
     return true
 end
 
+local noConfigLogged = {} -- "kind\0faction" -> true: log once per kind + faction when no spawn row resolves
+local function resolveFactionConfig(kind, blockCfg, faction)
+    local fcfg = rules.factionConfig(blockCfg, faction, regions)
+    if fcfg then return fcfg end
+    local key = tostring(kind) .. '\0' .. tostring(faction)
+    if not noConfigLogged[key] then
+        noConfigLogged[key] = true
+        log('%s: no ped config for faction %s (skipping spawn)', tostring(kind), tostring(faction))
+    end
+    return nil
+end
+
 -- ---------------------------------------------------------------- group lifecycle
 
 local function clearGroup(g, reason)
@@ -113,8 +125,8 @@ local function tryRoadblock(src, cid, faction, oldLevel, level)
     local rc = cfg.roadblock
     if not rc or rc.enabled == false then return end
     if not rules.crossedUp(cfg.thresholds, oldLevel, level, rc.minLevel) then return end
-    local fcfg = rc.factions and rc.factions[faction]
-    if not fcfg then return log('roadblock: no ped config for faction %s', tostring(faction)) end
+    local fcfg = resolveFactionConfig('roadblock', rc, faction)
+    if not fcfg then return end
     local x, y, z = playerPos(src)
     if not x then return end
     if lawSafeBlocked(src, cid, x, y, z) then return end
@@ -156,9 +168,10 @@ local function tryAmbush(src, cid, faction, level, quiet)
         if why == 'gated' and not quiet then log('%s', msg) end
         return
     end
-    local fcfg = ac.factions and ac.factions[faction]
+    local fcfg = resolveFactionConfig('ambush', ac, faction)
+    if not fcfg then return end
     local x, y, z = playerPos(src)
-    if not fcfg or not x then return end
+    if not x then return end
     if lawSafeBlocked(src, cid, x, y, z) then return end
     local plan = rules.ringPlan(fcfg, x, y, z, ac.radius, math.random(0, 359))
     local g = newGroup('ambush', src, cid, faction, ac.despawnMinutes)
@@ -188,7 +201,7 @@ local function tryChase(src, cid, faction, level, quiet)
         if why == 'gated' and not quiet then log('%s', msg) end
         return
     end
-    local fcfg = cc.factions and cc.factions[faction]
+    local fcfg = resolveFactionConfig('chase', cc, faction)
     if not fcfg then return end
     if lawSafeBlocked(src, cid, x, y, z) then return end
     local rad = math.rad(GetEntityHeading(ped))

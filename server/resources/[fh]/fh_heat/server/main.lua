@@ -170,12 +170,18 @@ local function payoff(src, faction, points)
             end
             return a, b
         end,
-        -- post-charge failure: credit the exact amount back (fh_economy.pay, same region). Runs under the lock.
+        -- post-charge failure: credit the exact amount back by captured citizenid (fh_economy.credit, same region),
+        -- so a player drop queues a pending credit and a character switch still credits the original citizenid.
+        -- Runs under the lock.
         refund = function(amount)
             if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
-            local ok, a, b = pcall(function() return exports.fh_economy:pay(src, amount, cfg.refundReason, region) end)
+            local ok, a, b, mode = pcall(function() return exports.fh_economy:credit(cid, amount, cfg.refundReason, region) end)
             if not ok then return false, 'fh_economy_error: ' .. tostring(a) end
-            return a, b
+            if not a then return false, b end
+            if mode == 'pending' then
+                log('refund queued (pending) cid=%s faction=%s amount=%s', tostring(cid), faction, tostring(amount))
+            end
+            return true, nil, mode
         end,
         -- subtract the points paid from the CURRENT heat so heat gained during the (yielding) charge is not wiped.
         -- Awaited write: the payoff succeeds only once the reset is persisted.

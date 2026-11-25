@@ -28,7 +28,7 @@ end
 -- tag = fh_heat:<kind>:<faction>:<index>[:<role>]
 local function parseTag(tag)
     if type(tag) ~= 'string' then return nil end
-    local kind, faction, idx, role = tag:match('^fh_heat:(%a+):(%w+):(%d+):?(%a*)$')
+    local kind, faction, idx, role = tag:match('^fh_heat:(%a+):([%w_]+):(%d+):?(%a*)$')
     return kind, faction, tonumber(idx), role ~= '' and role or nil
 end
 
@@ -36,7 +36,7 @@ FH.on('fh:spawn:adopted', function(d)
     if type(d) ~= 'table' or d.kind ~= 'ped' then return end
     local kind, faction, _, role = parseTag(d.tag)
     if not kind or not d.entity or not DoesEntityExist(d.entity) then return end
-    local block = cfg[kind] and cfg[kind].factions and cfg[kind].factions[faction]
+    local block = FhRoadblockRules.factionConfig(cfg[kind], faction, FhRegions)
     setupPed(d.entity, block and block.weapon or nil, kind == 'roadblock')
 end)
 

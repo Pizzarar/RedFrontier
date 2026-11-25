@@ -139,4 +139,56 @@ case('lawSafeBlocks: own lot blocks; nil lookup / throw / nil result / stranger 
     assert(R.lawSafeBlocks(function() return nil end, coords, 'CID1') == nil)
 end)
 
+case('factionConfig: id hit, alias_of hit, kind fallback, neutral -> nil, unknown -> nil', function()
+    local regions = require('regions')
+    local cfgEnv = setmetatable({}, { __index = _G })
+    local cfgPath = here .. '../server/resources/[fh]/fh_heat/config.lua'
+    local fh = assert(io.open(cfgPath, 'rb')); local src = fh:read('a'); fh:close()
+    assert(load(src, '@' .. cfgPath, 't', cfgEnv))()
+    local heatCfg = cfgEnv.FhHeatConfig
+
+    for _, tableName in ipairs({ 'roadblock', 'ambush', 'chase' }) do
+        local tbl = heatCfg[tableName]
+        -- 1. id hit
+        local row, how = R.factionConfig(tbl, 'outlaws', regions)
+        T.eq('id', how, tableName .. ' outlaws matched by id')
+        T.eq('g_m_m_unibanditos_01', row.model)
+        row, how = R.factionConfig(tbl, 'lawmen', regions)
+        T.eq('id', how, tableName .. ' lawmen matched by id')
+        T.eq('s_m_m_valdeputy_01', row.model)
+        -- 2. alias_of hit (rhodes_law -> lawmen via regions.getFaction)
+        row, how = R.factionConfig(tbl, 'rhodes_law', regions)
+        T.eq('alias', how, tableName .. ' rhodes_law matched by alias')
+        T.eq(tbl.factions.lawmen, row)
+        -- 3. kind fallback (desert_gang has kind='outlaw', not hardcoded in factions)
+        row, how = R.factionConfig(tbl, 'desert_gang', regions)
+        T.eq('kind', how, tableName .. ' desert_gang matched by kind')
+        T.eq(tbl.byKind.outlaw, row)
+        -- 4. neutral factions -> nil (no spawn)
+        for _, nf in ipairs({ 'rail_mining', 'settlers', 'traders', 'bounty_hunters' }) do
+            row, how = R.factionConfig(tbl, nf, regions)
+            assert(row == nil and how == nil, tableName .. ' neutral ' .. nf .. ' -> nil')
+        end
+        -- 5. unknown faction id -> nil (no throw)
+        row, how = R.factionConfig(tbl, 'no_such_faction', regions)
+        assert(row == nil and how == nil, tableName .. ' unknown -> nil')
+    end
+
+    -- Explicit id row wins over alias_of and byKind; law kind fallback works when no id row exists
+    local custom = {
+        factions = { rhodes_law = { model = 'custom_rhodes', count = 2 } },
+        byKind = { law = { model = 'generic_law', count = 3 }, outlaw = { model = 'generic_outlaw', count = 3 } },
+    }
+    local r1, h1 = R.factionConfig(custom, 'rhodes_law', regions)
+    T.eq('id', h1); T.eq('custom_rhodes', r1.model)
+    local r2, h2 = R.factionConfig(custom, 'lawmen', regions)
+    T.eq('kind', h2); T.eq('generic_law', r2.model)
+
+    -- Bad / missing args -> nil, never throw
+    assert(R.factionConfig(nil, 'outlaws', regions) == nil)
+    assert(R.factionConfig(custom, nil, regions) == nil)
+    assert(R.factionConfig(custom, '', regions) == nil)
+    assert(R.factionConfig(custom, 'desert_gang', nil) == nil)
+end)
+
 T.finish()
