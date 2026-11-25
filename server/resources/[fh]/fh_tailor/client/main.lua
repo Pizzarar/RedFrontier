@@ -169,6 +169,28 @@ FH.thread(function()
     end
 end)
 
+-- ---------------------------------------------------------------- saddlebag outfit pane button (ui-saddlebag-pane)
+-- fh_inventory (core-10 I3) renders registered pane buttons and fires the LOCAL client event fh_inventory:paneButton on a click. The click only asks the server to open the wardrobe screen: the same guarded fh:tailor:open_wardrobe event as [G]
+-- (open throttle in server/ui.lua, range guard in actWardrobe stay authoritative; out of range = a refusal notice).
+local PANE_BUTTON_ID = 'fh_tailor_wardrobe'
+
+local function registerPaneButton()
+    local ok, res = pcall(function()
+        return exports.fh_inventory:registerPaneButton({ id = PANE_BUTTON_ID, label = 'Wardrobe', pane = 'saddlebag' })
+    end)
+    return ok and res == true
+end
+registerPaneButton() -- no-op when fh_inventory is not started yet (the start handler below registers then)
+
+-- Registrations live until fh_inventory restarts, so register again whenever it (re)starts.
+FH.on('onClientResourceStart', function(res)
+    if res == 'fh_inventory' then registerPaneButton() end
+end)
+
+FH.on('fh_inventory:paneButton', function(p)
+    if type(p) == 'table' and p.id == PANE_BUTTON_ID then TriggerServerEvent('fh:tailor:open_wardrobe') end
+end)
+
 -- ---------------------------------------------------------------- interaction points
 
 -- Tailor stops per enabled region: [E] catalog, [G] wardrobe. Both only ask the server to open the fh_ui screen.

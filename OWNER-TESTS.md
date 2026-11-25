@@ -434,6 +434,9 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
 35. Wardrobe actions. Select an owned outfit, Add an owned item, click `Wear`. Then click `Save here` on `Slot 1`, change the look, and click `Wear` on `Slot 1`.
     Expected: Wear equips the selection (applies to the ped when `Config.FittedOutfits` is on). Slot 1 now shows its label and pieces (no `Empty`); `Wear` on the slot restores that saved look. Slot numbers show as integers (`Slot 1`, never `Slot 1.0`). Wardrobe Preview and `Stop preview` revert like step 33.
     RESULT:
+36. Saddlebag Wardrobe button. Set `set fh_saddlebag_pane true` in `server/server.cfg` (or leave it false: then there is one pane and the button shows on it), restart, open your inventory with your horse beside you. Click `Wardrobe` on the Saddlebag pane, first at a tailor stop (or your own homestead plot), then 20+ m from any stop. Then `restart fh_inventory` and check the button is still there.
+    Expected: at a stop/own plot the Wardrobe screen opens (same as step 34). Away from any stop nothing opens and chat shows the not-at-wardrobe refusal (this is the chosen range rule: the saddlebag button does not bypass the stop/homestead check). After `restart fh_inventory` the button is back without relogging. No F8 errors with `fh_inventory` stopped.
+    RESULT:
 
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 

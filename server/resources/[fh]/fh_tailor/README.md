@@ -115,6 +115,12 @@ For @ui's mirror screen. Local and cosmetic: nothing is saved or sent to the ser
     `actStock` / `actWardrobe` (range guard: `out_of_range` / `not_at_wardrobe`; a refusal shows `message(code)` in chat and opens nothing).
   - Callbacks: `fh:tailor:worn` (player's worn look when `FittedOutfits` is on), `fh:tailor:own_plots`.
   - Net events (server -> client): `fh:tailor:apply` `{ outfit, items }`.
+- **Saddlebag pane button**: on client start, and again whenever `fh_inventory` (re)starts (`onClientResourceStart`), the
+  client calls `exports.fh_inventory:registerPaneButton({ id = 'fh_tailor_wardrobe', label = 'Wardrobe', pane = 'saddlebag' })`
+  (core-10 I3; failures are swallowed, so it is safe when `fh_inventory` is down). A click arrives as the client event
+  `fh_inventory:paneButton` `{ id, pane }`; only our id is handled, and it sends the same `fh:tailor:open_wardrobe` as `[G]`.
+  No range exemption: `actWardrobe` is unchanged, so outside a tailor stop or your homestead the screen does not open and
+  the player gets the `not_at_wardrobe` chat notice.
 - **Mirror preview (`client/preview.lua` guard)**: the fh_ui `tailor` / `wardrobe` Preview buttons reach fh_tailor as the
   LOCAL client event `fh:ui:preview` `{ screen, look }` (fh_ui shape-checks the look; the server is never involved), then
   `previewLook`. A preview is always reverted (`revertLook`) when:
