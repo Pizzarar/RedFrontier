@@ -2,6 +2,8 @@
 -- idea-902: hunt_request offer keys are region-scoped ('hunt_<region_id>_<animal>_<N>star'), so two regions that
 -- offer the same animal/stars give distinct, independently completable jobs; and rows saved under the old unscoped
 -- key ('<animal>_<N>star') are re-keyed on load without losing progress, double-claiming or double-paying.
+-- idea-902b: matching is region-scoped too (where.region_id = the offer's region; fh_hunting emits the selling
+-- trapper's region): a sale completes only the job of its own region; re-keyed legacy jobs keep their unscoped where.
 -- Pure parts (builder, jobs.migrateLegacy / migratedId, ledger reason) first, then the server load path (main.lua +
 -- api.lua over a stubbed oxmysql that keeps rows, a ledger and transactions).
 local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
@@ -98,7 +100,9 @@ describe('quests hunt rekey: region-scoped hunt_request keys', function()
         eq(NEW_HL, Jobs.questId('hunt_request', hl.key))
         eq(NEW_SM, Jobs.questId('hunt_request', sm.key))
         eq('heartlands', hl.region_id); eq('scarlett_meadows', sm.region_id)
-        same(hl.where, sm.where) -- the same pelt matches both; only the id/region/rewards are per region
+        -- idea-902b: same animal/quality predicates, but each offer matches only sales in its own region
+        same({ quality = { min = 3 }, animal = { eq = 'elk' }, region_id = { eq = 'heartlands' } }, hl.where)
+        same({ quality = { min = 3 }, animal = { eq = 'elk' }, region_id = { eq = 'scarlett_meadows' } }, sm.where)
     end)
 
     it('both can be held at once and completed independently, each with its own reward, reason and cooldown', function()
@@ -124,8 +128,8 @@ describe('quests hunt rekey: region-scoped hunt_request keys', function()
         states[NEW_HL] = R.finish(states[NEW_HL], T0 + 11)
         local _, err = accept('heartlands', states, T0 + 20)
         eq('fh_quest_cooldown', err)
-        ch = I.feed({ [NEW_SM] = defSm }, { [NEW_SM] = states[NEW_SM] }, 'fh:hunting:pelt_sold', sold(), T0 + 30,
-            function() return hook end)
+        ch = I.feed({ [NEW_SM] = defSm }, { [NEW_SM] = states[NEW_SM] }, 'fh:hunting:pelt_sold',
+            sold({ region_id = 'scarlett_meadows' }), T0 + 30, function() return hook end)
         eq(1, #ch)
         eq('done', ch[1].after.status)
         eq('quest:' .. NEW_SM, R.reason(defSm))
@@ -133,26 +137,61 @@ describe('quests hunt rekey: region-scoped hunt_request keys', function()
         assert(states[NEW_HL].cooldown_until ~= ch[1].after.cooldown_until, 'separate cooldowns')
     end)
 
-    it('one sale while both are held credits each job once (same as overlapping offers within one region)', function()
-        local states = {}
-        local defHl = assert(accept('heartlands', states))
-        local defSm = assert(accept('scarlett_meadows', states))
-        local ch = I.feed({ [NEW_HL] = defHl, [NEW_SM] = defSm }, states, 'fh:hunting:pelt_sold', sold(), T0 + 10,
-            function() return hook end)
-        eq(2, #ch)
-        local reasons = {}
+    -- idea-902b: fh_hunting emits pelt_sold with the selling trapper's region (fh_hunting/shared/sell.lua:218-221).
+    local function feedBoth(states, defs, payload, now, reasonOf)
+        local ch = I.feed(defs, states, 'fh:hunting:pelt_sold', payload, now, function() return hook end)
+        local done = {}
         for _, c in ipairs(ch) do
-            eq('done', c.after.status)
+            states[c.quest_id] = c.after
+            if c.after.status == 'done' then done[#done + 1] = c.quest_id end
             for _, fx in ipairs(c.effects) do
-                if fx.type == 'reward' then reasons[#reasons + 1] = fx.reason end
+                if fx.type == 'reward' then eq('quest:' .. ((reasonOf or {})[c.quest_id] or c.quest_id), fx.reason) end
             end
         end
-        table.sort(reasons)
-        same({ 'quest:' .. NEW_HL, 'quest:' .. NEW_SM }, reasons)
+        table.sort(done)
+        return done
+    end
+
+    it('both held: a sale in A completes only A; a later sale in B completes only B', function()
+        local states = {}
+        local defs = { [NEW_HL] = assert(accept('heartlands', states)), [NEW_SM] = assert(accept('scarlett_meadows', states)) }
+        same({ NEW_HL }, feedBoth(states, defs, sold({ region_id = 'heartlands' }), T0 + 10))
+        eq('done', states[NEW_HL].status); eq('active', states[NEW_SM].status)
+        -- another heartlands sale changes nothing (A is done, B is not in heartlands)
+        same({}, feedBoth(states, defs, sold({ region_id = 'heartlands' }), T0 + 20))
+        eq('active', states[NEW_SM].status)
+        same({ NEW_SM }, feedBoth(states, defs, sold({ region_id = 'scarlett_meadows' }), T0 + 30))
+        eq('done', states[NEW_SM].status)
+        eq(1, states[NEW_HL].progress.completions); eq(1, states[NEW_SM].progress.completions)
+    end)
+
+    it('a sale in a third region, or a pelt_sold without region_id, completes no scoped job', function()
+        local states = {}
+        local defs = { [NEW_HL] = assert(accept('heartlands', states)), [NEW_SM] = assert(accept('scarlett_meadows', states)) }
+        same({}, feedBoth(states, defs, sold({ region_id = 'bayou_nwa' }), T0 + 10))
+        local p = sold(); p.region_id = nil
+        same({}, feedBoth(states, defs, p, T0 + 20))
+        eq('active', states[NEW_HL].status); eq('active', states[NEW_SM].status)
+        eq(0, states[NEW_HL].progress.count); eq(0, states[NEW_SM].progress.count)
+    end)
+
+    it('a legacy (unscoped) job still completes once on a sale in any region, then never again', function()
+        local st = assert(Jobs.migrateLegacy(legacyState(), OPTS))
+        eq(nil, st.progress.job.where.region_id, 'stored where stays unscoped (decided)')
+        local def = assert(Jobs.def(st.progress.job, { regions = regions.regions, events = events() }))
+        local states, defs = { [def.id] = st }, { [def.id] = def }
+        local noRegion = sold(); noRegion.region_id = nil
+        same({ NEW_HL }, feedBoth(states, defs, noRegion, T0, { [NEW_HL] = OLD_ID })) -- keeps its old ledger reason
+        eq(3, states[NEW_HL].progress.completions)
+        same({}, feedBoth(states, defs, sold({ region_id = 'scarlett_meadows' }), T0 + 5))
+        eq(3, states[NEW_HL].progress.completions, 'completes once')
+        -- next accept builds a fresh (scoped) snapshot from the live offer
+        states[NEW_HL] = R.finish(states[NEW_HL], T0 + 6)
+        assert(accept('heartlands', states, T0 + 3700))
+        same({ eq = 'heartlands' }, states[NEW_HL].progress.job.where.region_id)
     end)
 end)
 
--- ---------------------------------------------------------------- migration (pure)
 describe('quests hunt rekey: legacy rows (jobs.migrateLegacy)', function()
     it('legacyId: only unscoped hunt_request keys are legacy', function()
         local jt, key = Jobs.legacyId(OLD_ID, regions.regions)
@@ -442,6 +481,8 @@ describe('quests hunt rekey: server load path (persisted re-key)', function()
         -- the other region's same animal/stars is its own job: accept, complete, paid under its own id + region
         local ok2, err2, qid = S.exports.acceptOffer(1, S.offerId('scarlett_meadows'))
         eq(true, ok2, tostring(err2)); eq(NEW_SM, qid)
+        S.emit('fh:hunting:pelt_sold', sold({ region_id = 'heartlands' })) -- wrong region: scoped job untouched
+        eq('active', S.row(ME, NEW_SM).status); eq(2, #S.economy)
         S.emit('fh:hunting:pelt_sold', sold({ region_id = 'scarlett_meadows' }))
         eq('done', S.row(ME, NEW_SM).status)
         eq(4, #S.economy)

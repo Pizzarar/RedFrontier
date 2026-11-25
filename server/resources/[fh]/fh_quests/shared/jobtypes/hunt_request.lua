@@ -31,8 +31,11 @@ JT.registerBuilder('hunt_request', function(region_id, d)
             title = ('Pelt wanted: %d-star %s'):format(stars, animal),
             text = ('Sell a %d-star or better %s pelt.'):format(stars, animal),
             on = 'fh:hunting:pelt_sold',
-            -- pelt_sold always carries `animal` (fh_hunting sell.lua, Q0b): both quality and animal must match.
-            where = { quality = { min = stars }, animal = { eq = animal } },
+            -- pelt_sold always carries `animal` (fh_hunting sell.lua, Q0b) and the region of the trapper it was sold
+            -- at (hunting-03 C1, sell.lua:218-221): quality, animal and region must all match (idea-902b), so a sale
+            -- completes only the job of the region it was made in. A payload without region_id never credits.
+            -- Jobs accepted before idea-902b keep their snapshotted (unscoped) where until accepted again.
+            where = { quality = { min = stars }, animal = { eq = animal }, region_id = { eq = region_id } },
             rewards = JT.rewards(region_id, money, 1), region_id = region_id, animal = animal, stars = stars,
             min_tier = JT.minTier(h.min_tier ~= nil and h.min_tier or h[4]),
         }

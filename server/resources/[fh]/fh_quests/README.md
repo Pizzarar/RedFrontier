@@ -246,22 +246,24 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
 
 | Type | Offer `on` / `where` | Advances when | Offer-only fields |
 |---|---|---|---|
-| `hunt_request` | `fh:hunting:pelt_sold`, `where = { quality = { min = N }, animal = { eq = X } }` | a pelt of animal X and quality >= N is sold by the job holder | `animal`, `stars` |
+| `hunt_request` | `fh:hunting:pelt_sold`, `where = { quality = { min = N }, animal = { eq = X }, region_id = { eq = <offer region> } }` | a pelt of animal X and quality >= N is sold by the job holder at a trapper in the offer's region | `animal`, `stars` |
 | `camp_clear` | `fh:zones:camp_cleared`, `where = { camp_id = X }` | the camp is cleared and the holder is in `payload.participants` | `camp_id` |
 | `bounty` | `fh:quests:bounty_down` (a type event, local server only) | the watched wanted NPC dies; completes the job | `name`, `model`, `coords`, `heading` |
 
 - **`hunt_request`:** `animal` is required: fh_hunting's `pelt_sold` always carries it (Q0b), so a pelt of another
   animal, or a payload without `animal`, never credits the job. The offer key is region-scoped,
   `hunt_<region_id>_<animal>_<N>star` (idea-902; quest id `job:hunt_request:hunt_heartlands_wolf_2star`), so two
-  regions offering the same animal/stars could never share a quest id, cooldown or ledger reason. Matching is NOT
-  region-scoped: fh_hunting has one trapper (heartlands, `fh_hunting/config.lua:36-42`) and every `pelt_sold` carries
-  its region, so a region match would make every other region's hunt jobs uncompletable. One qualifying sale therefore
-  credits every hunt job the player holds that it matches (as `deer_1star` / `deer_2star` in one region always did).
-  **Content rule:** each (animal, stars) pair appears in at most one region's `hunt` data, so a sale can never
-  complete the same hunt in several regions at once (guard: `quests_content` "each hunt (animal, stars) pair appears
-  in at most one region"; remove it when fh_hunting has per-region trappers and hunt matching is region-scoped,
-  idea-902 follow-up). Rows saved under the old key `<animal>_<N>star` are re-keyed on load (Persistence, "Legacy job
-  ids"); their stored `where` stays unscoped.
+  regions offering the same animal/stars never share a quest id, cooldown or ledger reason. **Matching is
+  region-scoped** (idea-902b): `where.region_id = { eq = <offer region> }`, and fh_hunting's `pelt_sold.region_id` is
+  the region of the trapper the pelt was sold at (one trapper per region, `fh_hunting/data/legendaries/<region>.lua`
+  `trapper`; emit at `fh_hunting/shared/sell.lua:218-221`; a disabled region's trapper refuses `fh_region_closed`).
+  So a sale completes only the hunt jobs of its own region, and a `pelt_sold` without `region_id` never credits one.
+  Within a region one sale still credits every held job it matches (`deer_1star` / `deer_2star`). Every region with
+  hunt data has a trapper (guard: `quests_content` "every region with hunt offers has an fh_hunting trapper").
+  A job whose region is later disabled cannot be completed until it is re-enabled (abandon it). Rows saved under the
+  old key `<animal>_<N>star` are re-keyed on load (Persistence, "Legacy job ids"); their stored `where`, like that of
+  any job accepted before idea-902b, stays unscoped until the job is accepted again (it completes once, on a matching
+  sale in any region).
 - **`camp_clear`:** credit comes from the `participants` list (core idea-614, landed): fh_zones sends the citizenids
   of the players within `activationRadius` when the camp clears (an empty table when there are none), and each of them
   is credited. An empty list credits nobody.
@@ -604,7 +606,7 @@ The ordered quests checklist is `OWNER-TESTS.md`, section `## Q5: quests (fh_que
 
 1. Boot with `ensure fh_quests` after `fh_hunting`: no `[fh_quests]` error lines and no `fh_quest_state missing`.
 2. `/jobs` opens the board with 3-5 Heartlands offers (hunt requests, the camp, wanted NPCs).
-3. Accept a hunt request, sell a pelt of its quality: it completes and pays once (ledger `quest:job:hunt_request:<key>`).
+3. Accept a hunt request, sell a pelt of its quality at that region's trapper: it completes and pays once (ledger `quest:job:hunt_request:<key>`).
 4. Accept a bounty: the wanted NPC spawns; relog and a fresh one spawns; disconnect and it despawns, freeing the offer.
 5. Talk to Hale, Marrow and Whitlock from within 5 m (further is `fh_too_far`); givers stay frozen, cannot be killed and do not flee.
 

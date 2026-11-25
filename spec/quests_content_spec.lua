@@ -75,39 +75,29 @@ describe('quests content: keys and coverage', function()
             end
         end
     end)
-    -- Content guard (idea-902): pelt_sold matching is not region-scoped (fh_hunting has one trapper, heartlands,
-    -- fh_hunting/config.lua:36-42), so one sale credits every held hunt job it matches. Keep each (animal, stars)
-    -- pair in at most one region so a sale cannot complete the same hunt in several regions at once.
-    -- Remove when fh_hunting has per-region trappers and hunt matching is region-scoped (idea-902 follow-up).
-    it('each hunt (animal, stars) pair appears in at most one region', function()
-        local function dupes(data)
-            local seen, out = {}, {}
-            local ids = {}
-            for id in pairs(data) do ids[#ids + 1] = id end
-            table.sort(ids)
-            for _, id in ipairs(ids) do
-                for _, h in ipairs(data[id].hunt or {}) do
-                    local pair = ('%s/%s'):format(tostring(h[1]), tostring(h[2]))
-                    if seen[pair] and seen[pair] ~= id then
-                        out[#out + 1] = pair .. ' in ' .. seen[pair] .. ' and ' .. id
-                    end
-                    seen[pair] = seen[pair] or id
-                end
+    -- idea-902b: hunt_request matches pelt_sold.region_id = the offer's region, and fh_hunting emits the region of the
+    -- trapper the pelt was sold at (fh_hunting/shared/sell.lua:218-221, trapper list sell.lua:64-77). A region with hunt
+    -- offers but no trapper would make those jobs uncompletable, so every region with hunt data must have one.
+    it('every region with hunt offers has an fh_hunting trapper (scoped hunt jobs stay completable)', function()
+        _G.FhHuntingWagon = _G.FhHuntingWagon or dofile(fh .. 'fh_hunting/shared/wagon.lua')
+        local hcfg = dofile(fh .. 'fh_hunting/config.lua')
+        local sell = dofile(fh .. 'fh_hunting/shared/sell.lua')
+        local legendaries = dofile(fh .. 'fh_hunting/shared/legendaries.lua')
+        local trapperOf = {}
+        for _, t in ipairs(sell.trappers(hcfg, legendaries)) do trapperOf[t.region_id] = t end
+        local enabledWithHunt = 0
+        for id, d in pairs(JT.DATA) do
+            if #(d.hunt or {}) > 0 then
+                assert(trapperOf[id], id .. ' has hunt offers but no fh_hunting trapper')
+                assert(type(trapperOf[id].coords) == 'table', id .. ' trapper has no coords')
+                if regions.isEnabled(id) then enabledWithHunt = enabledWithHunt + 1 end
             end
-            return out
         end
-        -- JT.DATA holds every data/regions/*.lua (one file per FhRegions id, loaded by the jobtypes spec loader)
-        local files = 0
-        for id in pairs(regions.regions) do
-            local f = io.open(fh .. 'fh_quests/data/regions/' .. id .. '.lua', 'r')
-            if f then f:close(); files = files + 1; assert(JT.DATA[id], id .. ' data file not loaded') end
+        for _, id in ipairs({ 'heartlands', 'scarlett_meadows', 'bayou_nwa', 'great_plains' }) do
+            assert(regions.isEnabled(id), id .. ' enabled'); assert(trapperOf[id], id .. ' trapper')
+            assert(#JT.offers('hunt_request', id) > 0, id .. ' has hunt offers')
         end
-        local loaded = 0
-        for _ in pairs(JT.DATA) do loaded = loaded + 1 end
-        eq(files, loaded, 'every data/regions file checked')
-        same({}, dupes(JT.DATA))
-        -- the guard itself catches a shared pair
-        eq(1, #dupes({ a = { hunt = { { 'elk', 3, 1 } } }, b = { hunt = { { 'elk', 3, 2 }, { 'elk', 2, 1 } } } }))
+        eq(4, enabledWithHunt)
     end)
     it('every region (enabled or not) builds one offer per data entry, for every job type', function()
         for id, d in pairs(JT.DATA) do
