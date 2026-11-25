@@ -9,6 +9,7 @@ The first time a new character loads, a short guide starts. It walks you through
 | `/tutorial` | show the current step and re-set its waypoint |
 | `/tutorial skip` | stop the tutorial for this character (survives relog) |
 | `/tutorial restart` | start it again from the first step |
+| `/guide [id]` | open the read-only in-game Field Guide (optionally jumping to a topic id, e.g. `/guide hunting`) |
 
 ## The twelve steps
 
@@ -50,6 +51,12 @@ re-starts unless you ask it to.
 | `fence` | client check `fh:ui:open` screen `fence` | `fh_fence/client/main.lua:17` |
 | `family` | `talk` npc `npc_hale` | `fh_quests/shared/givers.lua:5` |
 
+## Field Guide
+
+Type `/guide` any time to open the read-only in-game Field Guide (through [UI](fh_ui.md)). It has one short page for
+every system in this wiki, with key controls and the matching wiki path. Switching pages happens client-side with no
+server round trip, and `/guide <id>` jumps straight to that topic.
+
 ## Good to know
 
 - It is completely optional and never blocks anything — the [family questlines](quests.md) don't wait for it.
@@ -65,6 +72,7 @@ Sources:
 - `server/resources/[fh]/fh_tutorial/config.lua`
 - `server/resources/[fh]/fh_tutorial/README.md`
 - `server/resources/[fh]/fh_tutorial/shared/tutorial.lua`
+- `server/resources/[fh]/fh_tutorial/shared/field_guide.lua`
 - `server/resources/[fh]/fh_tutorial/server/main.lua`
 - `server/resources/[fh]/fh_tutorial/client/main.lua`
 - `server/resources/[fh]/fh_quests/README.md`

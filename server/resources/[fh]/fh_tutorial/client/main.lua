@@ -1,6 +1,6 @@
 -- fh_tutorial client (guide-02): show the tutorial prompts through ox_lib notify, draw the step's GPS route to its
--- waypoint, and report the client-check signals to the server. No VO, no cutscenes, no fh_ui screens (fh_ui has no
--- notify/objective export; ox_lib notify is the fallback).
+-- waypoint, report the client-check signals to the server, and open the read-only Field Guide screen via /guide. No
+-- VO or cutscenes (tutorial prompts use ox_lib notify; /guide opens fh_ui's `fieldguide` screen locally).
 
 local function notify(text)
     -- 'inform' is accepted (ox_lib notify.lua maps it to 'info'); the real fix for the missed first step is the
@@ -74,3 +74,17 @@ FH.onNet('fh:ui:open', function(data)
         TriggerServerEvent('fh:tutorial:check', 'fence')
     end
 end)
+
+-- Read-only Field Guide (/guide [id]): opened locally with no server round trip. Close is relayed by fh_ui as
+-- `fh:tutorial:ui_close`, which needs no server state in fh_tutorial.
+RegisterCommand('guide', function(_, args)
+    if type(FhFieldGuide) ~= 'table' or type(FhFieldGuide.entries) ~= 'table' then return end
+    local selected = type(args) == 'table' and type(args[1]) == 'string' and args[1] ~= '' and args[1]:lower() or nil
+    TriggerEvent('fh:ui:open', {
+        screen = 'fieldguide',
+        data = {
+            entries = FhFieldGuide.entries,
+            selected = selected,
+        },
+    })
+end, false)

@@ -112,6 +112,9 @@ Resource: `fh_tutorial` (plan guide-02), built on fh_quests (quest `tutorial_int
 16. Never blocking. Skip the tutorial at step 1 (new character again, or `/tutorial restart` then `/tutorial skip`) and do the claim, a sale and Ruth Hale's quest normally.
    Expected: all of them work exactly as without the tutorial; no step is refused because the tutorial is skipped or incomplete.
    RESULT:
+17. Field Guide (`/guide`). Run `/guide`; click several topics in the left list; press `Esc` (or Close); then run `/guide hunting`.
+   Expected: `/guide` opens the read-only `fh_ui` Field Guide panel with one entry per system page, controls, and a plain-text `Wiki: docs/wiki/systems/...` footer; clicking titles switches pages client-side; `Esc` / Close closes the panel and restores camera/movement; `/guide hunting` opens directly to `Hunting & Pelts`. TODO-verify-in-game: needs `fh_ui` with the `fieldguide` screen merged.
+   RESULT:
 
 ## B4c: spawn-request contract (fh_core)
 

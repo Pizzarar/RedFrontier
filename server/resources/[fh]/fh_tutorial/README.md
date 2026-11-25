@@ -6,11 +6,13 @@ The intro tutorial (plan guide-02, `@guide`), built on the fh_quests API. One qu
 
 - `config.lua`: `FhTutorialConfig.order` — the step order, by stable step id. Reordering the intro is a config edit.
 - `shared/tutorial.lua`: pure step bodies + the build/persistence decisions, specced in `spec/tutorial_spec.lua`.
+- `shared/field_guide.lua`: `FhFieldGuide` — read-only Field Guide entries (one per `docs/wiki/systems/*.md` page), specced in `spec/fieldguide_spec.lua` and linted by `tools/check-wiki.py`.
 - `server/main.lua`: registers the quest, auto-starts it on a new character's first load, advances the non-event steps
   through `fh_quests.talk`, and backs `/tutorial`, `/tutorial skip`, `/tutorial restart`.
 - `client/main.lua`: shows prompts via `ox_lib` notify (10s, `type 'info'`), draws the step's GPS route, reports the
   client-check signals, and acknowledges the greeting after it has been on screen. The server also echoes every prompt
-  into chat (`chat:addMessage`), so the text is not lost when the notify fades.
+  into chat (`chat:addMessage`), so the text is not lost when the notify fades. `/guide [id]` opens the `fh_ui`
+  `fieldguide` screen locally.
 
 ## Flow (steps)
 
@@ -61,6 +63,7 @@ advances.
 | `/tutorial` | show the current step's prompt and re-set its waypoint |
 | `/tutorial skip` | stop the tutorial: persist `skipped`, abandon an active run |
 | `/tutorial restart` | clear `skipped`, abandon an active run, then start again |
+| `/guide [id]` | open the read-only Field Guide screen (`fh_ui` `fieldguide`, client-local, optional topic `id`) |
 
 ## Persistence
 
@@ -86,6 +89,9 @@ advances.
   it has run), `RSGCore:Server:OnPlayerUnload` / `playerDropped` (forget), `onResourceStart` (register/re-register).
 - Consumes (client, net): `fh:tutorial:prompt` (prompt + waypoint), `rsg-inventory:client:open` (inventory + stash),
   `fh:trade:menu`, `fh_gunsmith:conditionChanged`, `fh:ui:open` (jobs + fence) — the client-check signals.
+- Emits (client-local): `fh:ui:open` `{ screen = 'fieldguide', data = { entries = FhFieldGuide.entries, selected = id? } }`
+  when `/guide [id]` is run (no server round trip; `fh_ui` relays `fh:tutorial:ui_close` on close, which requires no
+  server state in `fh_tutorial`).
 - Emits (client -> server, net): `fh:tutorial:check`
   `check = 'greeting'|'inventory'|'stash'|'trade'|'gunsmith'|'jobs'|'fence'`.
 - Emits (server -> client, net): `fh:tutorial:prompt` `{ text, waypoint = { x, y, z, label } | nil,
@@ -107,10 +113,11 @@ namespace): `CLEAR_GPS_MULTI_ROUTE` `0x9E0AB9AAEE87CE28`, `START_GPS_MULTI_ROUTE
 
 ## Tests
 
-`~/.venvs/rf/bin/python tools/run-specs.py spec/tutorial_spec.lua` — validates the def, checks the config order and
-unknown/mandatory-id handling, walks the step machine to done, and covers skip/restart/persistence plus progress
-surviving a reorder. Syntax: `~/.venvs/rf/bin/python tools/run-specs.py --syntax
-"server/resources/[fh]/fh_tutorial"`.
+`~/.venvs/rf/bin/python tools/run-specs.py spec/tutorial_spec.lua spec/fieldguide_spec.lua` — validates the def, checks
+the config order and unknown/mandatory-id handling, walks the step machine to done, covers skip/restart/persistence plus
+progress surviving a reorder, and validates `FhFieldGuide` structure and 1:1 coverage of `docs/wiki/systems/*.md`.
+`python3 -I tools/check-wiki.py` checks wiki links and `field_guide.lua` coverage. Syntax:
+`~/.venvs/rf/bin/python tools/run-specs.py --syntax "server/resources/[fh]/fh_tutorial"`.
 
 ## In-game checklist (unverified)
 
@@ -123,3 +130,5 @@ surviving a reorder. Syntax: `~/.venvs/rf/bin/python tools/run-specs.py --syntax
    advance the matching step.
 4. A finished tutorial never re-starts on its own (fh_tutorial_state row), and never blocks the family quests.
 5. Reordering `FhTutorialConfig.order` and relogging does not move an in-flight character to a different step.
+6. `/guide` opens the read-only Field Guide screen (clicking topics switches client-side; `/guide hunting` opens directly
+   to Hunting & Pelts; `Esc` or Close releases focus).
