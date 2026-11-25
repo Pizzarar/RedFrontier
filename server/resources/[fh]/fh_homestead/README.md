@@ -144,9 +144,12 @@ Order (tier A: no dupes, no free builds, no lost items):
 4. `FhHomesteadSlots.setTier` (writes only while `fh_plots` still says this character owns the plot).
 
 Refunds: any failure after step 2 puts back exactly what was taken. Each item stack goes back into the container it
-came from with `fh_core.addItem` (all-or-nothing). A backpack stack the backpack refuses (player offline, no room), or
-whose character is no longer loaded on `src`, goes into plot chest 1 instead (logged at warn: `build refund: backpack
-refused <n> <item> (<why>); put into plot chest ...`), so it is never lost and never given twice; money goes back with `fh_economy.credit(citizenid, amount, 'homestead build refund', region)` to
+came from with `fh_core.addItem` (all-or-nothing). A backpack stack the backpack refuses with a reason known to leave
+it unchanged (player offline, no room, the rules veto; list `BAG_ADD_UNCHANGED` in `server/build.lua`), or whose
+character is no longer loaded on `src`, goes into plot chest 1 instead (logged at warn once that add succeeded:
+`build refund: backpack refused <n> <item> (<why>); put into plot chest ...`). Any other backpack refusal
+(`fh_inventory_error`: fh_inventory may have thrown after committing the add) or a throw is logged `ITEM LOST` and
+never rerouted, so a stack is never given twice; money goes back with `fh_economy.credit(citizenid, amount, 'homestead build refund', region)` to
 the citizenid captured when the build started (never by `src`). If that character is online it is paid at once (mode
 `paid`); if the player logged off or switched character since the charge, the money is queued in `fh_pending_credit`
 and paid on that character's next load (mode `pending`, logged at info level). Each refund runs at most once and is

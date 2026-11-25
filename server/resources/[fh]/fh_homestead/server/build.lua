@@ -19,8 +19,10 @@
 --   2. charge the money (skipped when the tier costs $0)
 --   3. FhHomesteadSlots.setTier (writes only while fh_plots still says we own it)
 --   Any failure after step 1 refunds exactly what was taken: each item stack back to the container it came from
---   (addItem); a backpack stack the backpack refuses (offline, no room; nothing added) or whose character left src goes into plot chest 1
---   instead, logged at warn, so it is never lost and never doubled; money through
+--   (addItem). A backpack stack the backpack refuses with a reason known to leave it unchanged (offline, no room, the
+--   rules veto: BAG_ADD_UNCHANGED), or whose character left src, goes into plot chest 1 instead (warn logged once that
+--   add succeeded); any other backpack refusal (fh_inventory_error: may have landed after the commit) or a throw is
+--   logged ITEM LOST and never rerouted, so nothing is doubled; money through
 --   fh_economy.credit to the citizenid captured at build start (online -> paid now; offline or switched character ->
 --   queued in fh_pending_credit and paid on that character's next load). Each refund runs at most once and is checked;
 --   a failed refund is logged as `ITEM LOST` / `MONEY LOST` with citizenid, item/amount and the reason, and the call
@@ -66,6 +68,21 @@ local function bagRef(src) return { type = 'backpack', id = src } end
 -- backpack removeItem reasons that mean the ref itself is unusable (-> chest-only fallback), not a shortfall
 local BAG_DOWN = { fh_player_offline = true, fh_bad_ref = true }
 
+-- backpack addItem refusals that are known to leave the backpack unchanged, so the stack may go to plot chest 1
+-- instead. Any other reason (fh_inventory_error: fh_inventory's FhAddItem can throw AFTER its Commit, so the item may
+-- already be in the backpack; fh_refused; anything unknown) fails closed: logged ITEM LOST, never rerouted (no dupe).
+--   fh_core addItem pre-checks (fh_core/server/inventory.lua addItem, inv): fh_unknown_container, fh_bad_ref,
+--     fh_player_offline, fh_bad_item_name, fh_bad_amount, fh_bad_info, fh_inventory_down (fh_inventory not started)
+--   fh_inventory FhAddItem before AddTo (fh_inventory/server/fh_api.lua): not_fh_core, fh_unknown_item
+--   AddTo veto / AddToRaw refusals, before any slot is written (fh_inventory/server/main.lua): fh_size_class,
+--     fh_too_heavy, fh_no_slot, fh_bad_slot, fh_slot_taken, invalid_item, too_heavy, no_space
+local BAG_ADD_UNCHANGED = {
+    fh_unknown_container = true, fh_bad_ref = true, fh_player_offline = true, fh_bad_item_name = true,
+    fh_bad_amount = true, fh_bad_info = true, fh_inventory_down = true, not_fh_core = true, fh_unknown_item = true,
+    fh_size_class = true, fh_too_heavy = true, fh_no_slot = true, fh_bad_slot = true, fh_slot_taken = true,
+    invalid_item = true, too_heavy = true, no_space = true,
+}
+
 -- Same character, same plot, no unclaim since generation g was read. The plot may be a claim or a town lot (H9).
 local function stillOwns(cid, plotId, g)
     local c = claims()
@@ -92,9 +109,10 @@ end
 -- ---------------------------------------------------------------- refunds (each checked, each at most once)
 
 ---Put every taken item stack back into the container it came from (st.taken[i].from = 'bag' | 'chest'). A backpack
----stack the backpack refuses (a clean false: all-or-nothing, nothing added), or whose character is no longer loaded on
----src, goes into plot chest 1 instead. st.taken is
----cleared first so nothing is refunded twice; logs are written after the loop so a log error cannot cut a refund short.
+---stack the backpack refuses with a reason known to leave it unchanged (BAG_ADD_UNCHANGED), or whose character is no
+---longer loaded on src (no add tried), goes into plot chest 1 instead; any other refusal or a throw is ITEM LOST (the
+---outcome is unknown: rerouting could duplicate). st.taken is cleared first so nothing is refunded twice; logs are
+---written after the loop so a log error cannot cut a refund short.
 local function refundItems(st, why)
     local taken = st.taken
     st.taken = {}
@@ -103,21 +121,28 @@ local function refundItems(st, why)
         local it = taken[i]
         local fromBag = it.from == 'bag'
         local stash = fromBag and ('backpack:' .. tostring(st.src)) or plotRules.chestStashId(st.plotId, 1)
-        local ok, res, rwhy
+        local ok, res, rwhy, untried
         if fromBag and citizenidOf(st.src) ~= st.cid then
             -- the backpack ref is by src: never refund into another character (switched) or a gone player
-            ok, res, rwhy = true, false, 'character not on src'
+            ok, res, rwhy, untried = true, false, 'character not on src', true
         else
             ok, res, rwhy = pcall(function()
                 return exports.fh_core:addItem(fromBag and bagRef(st.src) or chestRef(st.plotId, 1), it.item, it.amount)
             end)
         end
-        if ok and res ~= true and fromBag then
-            notes[#notes + 1] = { 'warn', ('build refund: backpack refused %d %s (%s); put into plot chest %s instead; citizenid=%s src=%s slot=%s build_error=%s')
-                :format(it.amount, it.item, tostring(rwhy), plotRules.chestStashId(st.plotId, 1), st.cid, tostring(st.src),
-                    st.slotId, tostring(why)) }
+        if ok and res ~= true and fromBag and (untried or BAG_ADD_UNCHANGED[rwhy]) then
+            local bagWhy = rwhy
             stash = plotRules.chestStashId(st.plotId, 1)
             ok, res, rwhy = pcall(function() return exports.fh_core:addItem(chestRef(st.plotId, 1), it.item, it.amount) end)
+            if ok and res == true then
+                notes[#notes + 1] = { 'warn', ('build refund: backpack refused %d %s (%s); put into plot chest %s instead; citizenid=%s src=%s slot=%s build_error=%s')
+                    :format(it.amount, it.item, tostring(bagWhy), stash, st.cid, tostring(st.src), st.slotId, tostring(why)) }
+            else
+                rwhy = ('backpack refused (%s), then plot chest: %s'):format(tostring(bagWhy), tostring(ok and rwhy or res))
+                ok, res = true, false
+            end
+        elseif ok and res ~= true and fromBag then
+            rwhy = tostring(rwhy) .. ' (outcome unknown: may already be in the backpack; not rerouted)'
         end
         if not ok or res ~= true then
             all = false

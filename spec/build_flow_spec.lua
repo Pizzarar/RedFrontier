@@ -180,6 +180,8 @@ local function newWorld(wcfg)
                 local down = bagDown(ref)
                 if down then return false, down end
                 if ref.type == 'backpack' and W.bagRemoveOffline then return false, 'fh_player_offline' end
+                -- the backpack changed between the snapshot count and the take (stale count)
+                if ref.type == 'backpack' and W.bagRemoveShort == item then return false, 'fh_not_enough' end
                 local s = stash(ref)
                 W.chest[s] = W.chest[s] or {}
                 if (W.chest[s][item] or 0) < n then return false, 'fh_not_enough' end
@@ -194,6 +196,7 @@ local function newWorld(wcfg)
                 local down = bagDown(ref)
                 if down then return false, down end
                 if ref.type == 'backpack' and W.bagAddRefuses then return false, W.bagAddRefuses end
+                if ref.type ~= 'backpack' and W.chestAddRefuses then return false, W.chestAddRefuses end
                 local s = stash(ref)
                 W.chest[s] = W.chest[s] or {}
                 W.chest[s][item] = (W.chest[s][item] or 0) + n
@@ -958,6 +961,39 @@ T.describe('H14b build from pockets (backpack first, then plot chest 1)', functi
         T.eq(4, W.calls.addItem) -- 2 chest + 2 rerouted (nobody on src: no backpack add tried); the second abort added none
         T.same({ bag_lumber = 0, bag_nails = 0, chest_lumber = 130, chest_nails = 55, cash = 1000 }, counts(W))
         T.eq(0, W.calls.credit)
+    end)
+    case('snapshot says enough, the backpack take then says fh_not_enough: full rollback, refused, no chest top-up', function()
+        local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+        local before = counts(W)
+        W.bagRemoveShort = 'nails'
+        local ok, why, item = W.build(1, 'cabin')
+        assert(ok == false and why == 'fh_not_enough' and item == 'nails', tostring(why))
+        T.same(before, counts(W))
+        T.eq(3, W.calls.removeItem) -- lumber bag + chest, nails bag refused; the nails share is NOT taken from the chest
+        T.eq(2, W.calls.addItem); T.eq(0, W.calls.charge)
+        assert(not W.logged('backpack unavailable'), 'a shortfall is not the chest-only fallback')
+    end)
+    for _, code in ipairs({ 'fh_inventory_error', 'fh_refused', 'some_new_reason' }) do
+        case('backpack refund refused ' .. code .. ' (outcome unknown): ITEM LOST, never rerouted to the chest', function()
+            -- fh_inventory_error: FhAddItem can throw after its Commit, so the stack may already be in the backpack
+            local W = stocked({ lumber = 30, nails = 5 }, { lumber = 100, nails = 50 })
+            W.chargeFails, W.bagAddRefuses = 'ledger_failed', code
+            local ok, why = W.build(1, 'cabin')
+            assert(ok == false and why == 'fh_build_refund_failed', tostring(why))
+            T.eq(100, W.chest1().lumber); T.eq(50, W.chest1().nails) -- chest stacks back; no backpack share added there
+            T.eq(4, W.calls.addItem) -- 2 chest + 2 backpack tries, no reroute
+            assert(W.logged('ITEM LOST: build refund failed: citizenid=A plot=heartlands_01 slot=cabin item=lumber amount=30 stash=backpack:1 refund_error=' .. code .. ' %(outcome unknown'))
+            assert(W.logged('ITEM LOST: build refund failed: citizenid=A plot=heartlands_01 slot=cabin item=nails amount=5 stash=backpack:1'))
+            assert(not W.logged('put into plot chest'))
+        end)
+    end
+    case('backpack refused and the chest add fails too: ITEM LOST, no "put into plot chest" warn', function()
+        local W = stocked({ lumber = 30 }, { lumber = 100, nails = 50 })
+        W.chargeFails, W.bagAddRefuses, W.chestAddRefuses = 'ledger_failed', 'fh_too_heavy', 'fh_no_slot'
+        local ok, why = W.build(1, 'cabin')
+        assert(ok == false and why == 'fh_build_refund_failed', tostring(why))
+        assert(W.logged('ITEM LOST: build refund failed: citizenid=A plot=heartlands_01 slot=cabin item=lumber amount=30 stash=fh:chest:heartlands_01:1 refund_error=backpack refused %(fh_too_heavy%), then plot chest: fh_no_slot'))
+        assert(not W.logged('put into plot chest'), 'the warn is written only after the chest add succeeded')
     end)
     for _, down in ipairs({ { 'fh_player_offline', 'bagOffline' }, { 'snapshot throws', 'bagThrows' },
         { 'snapshot export missing', 'bagNoSnapshot' } }) do
