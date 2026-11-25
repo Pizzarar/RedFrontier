@@ -999,17 +999,17 @@ coordinates, and adjust the config. Patches are invisible except for the prompt 
 
 Preconditions: a campfire you can stand at: build one on your own plot (`/fh_build station_2`, needs 5 `lumber`), or
 `fh_dev 1` and the dev cook station (-289.0, 805.0, 119.0, placeholder). Cooking uses the `cook` station type, which maps
-to the homestead `campfire`. Inputs: `raw_meat` has no in-game source until @hunting lands the skinning grant (idea-914),
-and `carrot`, `potato` and `corn` have none until @roads adds them to the supplies list (idea-915). Until then give them
-with `fh_give <yourId> <item> <n>`. All output items (`cooked_meat`, `stew`, `stew_veg`) already exist in rsg-core.
+to the homestead `campfire`. Inputs: `raw_meat` comes from skinning (idea-914 landed: skinning a size 2/3 animal grants it;
+a small animal gives none). `carrot`, `potato` and `corn` have no source until @roads adds them to the supplies list
+(idea-915); give those with `fh_give <yourId> <item> <n>` until then. All output items (`cooked_meat`, `stew`, `stew_veg`) already exist in rsg-core.
 
-1. Cook meat. `fh_give <yourId> raw_meat 1`, stand at the campfire, run `/fh_craft cook_meat`.
+1. Cook meat. Get `raw_meat` by skinning a size 2 or 3 animal (`fh_give <yourId> raw_meat 1` is only a shortcut), stand at the campfire, run `/fh_craft cook_meat`.
    Expected: chat `Done: Cook meat.`; 1 Raw Meat gone, 1 Cooked Meat in the backpack.
    RESULT:
 2. Eat the cooked meat from the inventory.
    Expected: the item is consumed and `Well Fed` shows in the buff HUD (a shorter buff than stew: scale 0.5).
    RESULT:
-3. Cook stew. `fh_give <yourId> raw_meat 2`, `carrot 1`, `potato 1`, then `/fh_craft cook_stew`.
+3. Cook stew. Skin for 2 `raw_meat` (or `fh_give <yourId> raw_meat 2`), then `fh_give` `carrot 1`, `potato 1`, then `/fh_craft cook_stew`.
    Expected: `Done: Cook stew.`; the 4 inputs are gone and 1 Stew is in the backpack. Eating it shows `Well Fed`
    (full-length, scale 1.0).
    RESULT:
@@ -1019,8 +1019,8 @@ with `fh_give <yourId> <item> <n>`. All output items (`cooked_meat`, `stew`, `st
 5. Failure path: with no `raw_meat` run `/fh_craft cook_meat`; and away from any campfire run it with meat in the pack.
    Expected: `Missing: 1x raw_meat (have 0)` and `You need to be at the right station.`; nothing is consumed.
    RESULT:
-6. (Once idea-914/915 land) Replace `fh_give` with the real sources: skin an animal for raw_meat, buy the veg at a trade post.
-   Expected: the same results as steps 1-4 with no `fh_give`.
+6. (Once idea-915 lands) Replace the veg `fh_give` with the real source: buy carrot/potato/corn at a trade post.
+   Expected: the same results as steps 1-4 with no `fh_give` (raw_meat already comes from skinning).
    RESULT:
 
 ## Survival (fh_survival, plan survival-01, S1-S5 combined)

@@ -10,12 +10,13 @@ dofile(fh .. 'fh_homestead/config.lua')   -- outside CfxLua there is no vector3:
 dofile(fh .. 'fh_trade/config.lua')
 dofile(fh .. 'fh_zones/config.lua')
 dofile(fh .. 'fh_crafting/config.lua')  -- herbPatches (idea-720 herb gathering, plan crafting-02 C9)
+dofile(fh .. 'fh_hunting/config.lua')   -- MeatItem / MeatPerSize (idea-914 skin grant, H8); pure data, no natives
 
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
 -- idea-716/719 landed: lumber, nails, lead, casings, resource_gunpowder and the 4 herbs are FhTradeConfig.supplies;
--- gun_parts (idea-717) is zone loot (core-05 K1). Cooking inputs (crafting-03 C10a) wait on idea-914/915.
+-- gun_parts (idea-717) is zone loot (core-05 K1). raw_meat landed through idea-914 (fh_hunting skin grant).
+-- The veg cooking inputs (crafting-03 C10a) still wait on idea-915.
 local PENDING = {
-    raw_meat = 'idea-914', -- @hunting skin grant (plan crafting-03)
     carrot = 'idea-915', potato = 'idea-915', corn = 'idea-915', -- @roads supplies (plan crafting-03)
 }
 
@@ -69,6 +70,14 @@ end
 for _, patch in ipairs(FhCraftingConfig.herbPatches or {}) do
     if type(patch) == 'table' and type(patch.herb) == 'string' then sources[patch.herb] = 'herb gathering' end
 end
+-- Skinning (idea-914, H8): the grant item is read from fh_hunting config (not hardcoded), and counts as a source
+-- only if some size class grants a positive amount.
+local meatItem = type(FhHuntingConfig) == 'table' and FhHuntingConfig.MeatItem
+if type(meatItem) == 'string' then
+    for _, n in pairs(FhHuntingConfig.MeatPerSize or {}) do
+        if type(n) == 'number' and n > 0 then sources[meatItem] = 'hunting skin grant' break end
+    end
+end
 for item in pairs(EXTERNAL) do sources[item] = sources[item] or 'external' end
 
 it('addSupplies handles item->{price=} and region->{item=price} shapes (fake config)', function()
@@ -89,6 +98,13 @@ it('source configs loaded (so the PENDING checks cannot go silent)', function()
         'FhZonesConfig.camps missing or empty: renamed?')
     assert(type(FhCraftingConfig) == 'table' and type(FhCraftingConfig.herbPatches) == 'table'
         and #FhCraftingConfig.herbPatches > 0, 'FhCraftingConfig.herbPatches missing or empty: renamed?')
+end)
+
+it('skinning (idea-914) sources the cooking meat via fh_hunting MeatItem', function()
+    assert(type(FhHuntingConfig) == 'table' and type(FhHuntingConfig.MeatItem) == 'string'
+        and type(FhHuntingConfig.MeatPerSize) == 'table', 'FhHuntingConfig.MeatItem/MeatPerSize missing: renamed?')
+    assert(inputs[FhHuntingConfig.MeatItem], 'MeatItem ' .. FhHuntingConfig.MeatItem .. ' is not a recipe input: cooking recipes renamed?')
+    assert(sources[FhHuntingConfig.MeatItem] == 'hunting skin grant', 'MeatItem not sourced by skinning (MeatPerSize all zero?)')
 end)
 
 it('herb gathering (idea-720) sources the four herbs', function()
