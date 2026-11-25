@@ -25,6 +25,7 @@ server_scripts {
     'shared/sell.lua',
     'shared/trophies.lua',
     'shared/chain.lua',
+    'shared/coats.lua',
     'server/main.lua',
 }
 

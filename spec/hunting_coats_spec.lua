@@ -1,0 +1,85 @@
+-- Run from repo root: `lua spec/hunting_coats_spec.lua` (or via tools/run-specs.py).
+-- Legendary coat grants (shared/coats.lua) with a fake fh_tailor.grant.
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+local describe, it, eq, same = T.describe, T.it, T.eq, T.same
+local base = here .. '../server/resources/[fh]/fh_hunting/'
+local Coats = dofile(base .. 'shared/coats.lua')
+
+local function world(w)
+    w = w or {}
+    local W = { calls = {}, logs = {}, available = true, results = {} }
+    for k, v in pairs(w) do W[k] = v end
+    W.coats = Coats.new({
+        available = function() return W.available end,
+        grant = function(cid, id, src)
+            W.calls[#W.calls + 1] = { cid = cid, id = id, src = src }
+            local r = W.results[id]
+            if r == 'throw' then error('boom') end
+            if r then return false, r end
+            return true, 'granted'
+        end,
+        log = function(m) W.logs[#W.logs + 1] = m end,
+    })
+    return W
+end
+
+describe('coat ids', function()
+    it('follow the convention and the source matches the tailor pattern', function()
+        local m, f = Coats.ids('legendary_bear')
+        eq(m, 'coat_legendary_bear_male'); eq(f, 'coat_legendary_bear_female')
+        eq(Coats.source('legendary_bear'), 'hunting:legendary:legendary_bear')
+        eq(Coats.source('legendary_bear'):match('^[%w_:%-%.]+$') ~= nil, true)
+    end)
+    it('reject invalid legendary ids', function()
+        eq(Coats.ids(nil), nil); eq(Coats.ids('a b'), nil); eq(Coats.source(5), nil)
+    end)
+end)
+
+describe('grantFor', function()
+    it('completing grants both ids with the right source', function()
+        local W = world()
+        eq(W.coats.grantFor('CID1', 'legendary_bear'), 2)
+        same(W.calls, {
+            { cid = 'CID1', id = 'coat_legendary_bear_male', src = 'hunting:legendary:legendary_bear' },
+            { cid = 'CID1', id = 'coat_legendary_bear_female', src = 'hunting:legendary:legendary_bear' } })
+    end)
+    it('wrong_sex is ignored silently', function()
+        local W = world({ results = { coat_x_female = 'wrong_sex' } })
+        eq(W.coats.grantFor('CID1', 'x'), 2); eq(#W.logs, 0)
+    end)
+    it('unknown_entry does not break and logs once per id', function()
+        local W = world({ results = { coat_x_male = 'unknown_entry', coat_x_female = 'unknown_entry' } })
+        eq(W.coats.grantFor('CID1', 'x'), 2); eq(#W.logs, 2)
+        eq(W.coats.grantFor('CID2', 'x'), 2); eq(#W.logs, 2)
+    end)
+    it('a throwing grant is caught', function()
+        local W = world({ results = { coat_x_male = 'throw' } })
+        eq(W.coats.grantFor('CID1', 'x'), 2); eq(#W.calls, 2)
+    end)
+    it('fh_tailor missing is a silent no-op', function()
+        local W = world({ available = false })
+        eq(W.coats.grantFor('CID1', 'x'), 0); eq(#W.calls, 0); eq(#W.logs, 0)
+    end)
+end)
+
+describe('backfill', function()
+    it('grants only completed chains', function()
+        local W = world()
+        local done = W.coats.backfill('CID1', { 'a', 'b', 'c' }, function(_, id) return id ~= 'b' end)
+        same(done, { 'a', 'c' }); eq(#W.calls, 4)
+        eq(W.calls[1].id, 'coat_a_male'); eq(W.calls[3].id, 'coat_c_male')
+    end)
+    it('no completed chains, or fh_tailor missing: no calls', function()
+        local W = world()
+        same(W.coats.backfill('CID1', { 'a' }, function() return false end), {}); eq(#W.calls, 0)
+        local W2 = world({ available = false })
+        same(W2.coats.backfill('CID1', { 'a' }, function() return true end), {}); eq(#W2.calls, 0)
+    end)
+    it('a throwing completed-check skips that chain only', function()
+        local W = world()
+        same(W.coats.backfill('CID1', { 'a', 'b' }, function(_, id) if id == 'a' then error('x') end return true end), { 'b' })
+    end)
+end)
+
+T.finish()

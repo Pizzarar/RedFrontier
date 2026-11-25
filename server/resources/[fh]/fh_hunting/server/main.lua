@@ -267,6 +267,13 @@ end)
 
 local chain
 
+-- Legendary coats (shared/coats.lua): fh_tailor is optional; missing/stopped = silent no-op.
+local coats = FhHuntingCoats.new({
+    available = function() return GetResourceState('fh_tailor') == 'started' end,
+    grant = function(cid, id, source) return exports.fh_tailor:grant(cid, id, source) end,
+    log = function(msg) print(('^3[fh_hunting] %s^7'):format(msg)) end,
+})
+
 local function chainNotify(src, kind, msg)
     TriggerClientEvent('ox_lib:notify', src, { title = 'Legendary Hunt', description = msg, type = kind })
 end
@@ -412,11 +419,23 @@ AddEventHandler('fh:hunting:pelt_skinned', function(payload)
     if not e then return end
     local ok, why = chain.onSkinned(payload.citizenid, e.id)
     if ok then
+        coats.grantFor(payload.citizenid, e.id)
         -- Push step 5 (complete) to the client so the trapper prompt flips back to "Sell pelts" immediately.
         if type(payload.src) == 'number' and payload.src > 0 then pushChainState(payload.src, payload.citizenid) end
     elseif why ~= 'fh_chain_not_spawned' then
         print(('^3[fh_hunting] chain complete refused for %s: %s^7'):format(payload.citizenid, tostring(why)))
     end
+end)
+
+AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
+    local cid = type(Player) == 'table' and type(Player.PlayerData) == 'table' and Player.PlayerData.citizenid
+    if type(cid) ~= 'string' or cid == '' then return end
+    local ids = {}
+    for _, e in ipairs(legendaries.list) do ids[#ids + 1] = e.id end
+    coats.backfill(cid, ids, function(c, id)
+        local st = chain.state(c, id)
+        return st ~= nil and st.completed == true
+    end)
 end)
 
 AddEventHandler('playerDropped', function()
