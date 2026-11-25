@@ -57,6 +57,13 @@ local function claimedSet()
     return claimed
 end
 
+-- Server-decided (fh:ui:show_ids -> fh_core canSeeIds); false when the callback fails, so players never see more.
+local function showIds()
+    if not (lib and lib.callback) then return false end
+    local ok, v = pcall(function() return lib.callback.await('fh:ui:show_ids', false) end)
+    return ok and v == true
+end
+
 local function setDest(place)
     if dest then RemoveBlip(dest) end
     dest = Citizen.InvokeNative(BLIP_ADD_FOR_COORDS, BLIP_STYLE, place.x + 0.0, place.y + 0.0, place.z + 0.0)
@@ -69,13 +76,14 @@ end
 
 local function run(query)
     local player = playerPos()
+    local ids = showIds()
     local places = P.gather(sources(), { claimed = claimedSet(), isEnabled = FhRegions and FhRegions.isEnabled })
 
     if (query or ''):gsub('%s+', '') == '' then
         local rows = P.list(places, player)
         if #rows == 0 then return chat('/where: no places known') end
         for _, r in ipairs(rows) do
-            chat(('%s%s (%s)%s'):format(r.label, P.tag(r), r.id, r.dist and (' — ' .. ('%d m'):format(math.floor(r.dist + 0.5))) or ''))
+            chat(('%s%s'):format(P.line(r, ids), r.dist and (' — ' .. ('%d m'):format(math.floor(r.dist + 0.5))) or ''))
         end
         return
     end
@@ -87,7 +95,7 @@ local function run(query)
         if why == 'none' then return chat('/where: no place of that kind') end
         return chat('/where: unknown place "' .. query .. '"')
     end
-    chat(('%s%s (%s): %s'):format(place.label, P.tag(place), place.id, distText(place, player)))
+    chat(('%s: %s'):format(P.line(place, ids), distText(place, player)))
     setDest(place)
 end
 

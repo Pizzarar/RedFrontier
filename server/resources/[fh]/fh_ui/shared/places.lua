@@ -61,6 +61,18 @@ function M.tag(place)
     return ''
 end
 
+---" [id]" suffix for admin/fh_dev views (world-04 M); '' when show is false. showIds is decided by the server.
+function M.idTag(place, show)
+    if show and type(place) == 'table' and place.id ~= nil then return ' [' .. tostring(place.id) .. ']' end
+    return ''
+end
+
+---A /where line label: players get "label (id)" exactly as before; with showIds it is "label [id]" (id first-class for fh_tp).
+function M.line(place, showIds)
+    if showIds then return place.label .. M.tag(place) .. M.idTag(place, true) end
+    return ('%s%s (%s)'):format(place.label, M.tag(place), place.id)
+end
+
 local function push(places, id, kind, label, x, y, z, region, verified)
     local p = { id = id, kind = kind, label = label, x = x, y = y, z = z }
     if region ~= nil then p.region = region end

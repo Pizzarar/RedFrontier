@@ -45,6 +45,9 @@ local function boot(opts)
     env.ExecuteCommand = function(cmd) w.exec[#w.exec + 1] = cmd end
     local cv = opts.convars or { fh_dev = '1', fh_dev_autoadmin = '1' }
     env.GetConvar = function(k, d) return cv[k] or d end
+    env.GetConvarInt = function(k, d) return tonumber(cv[k]) or d end
+    w.exported = {}
+    env.exports = function(name, fn) w.exported[name] = fn end
     env.GetResourceState = function() return 'missing' end -- rsg-core whitelist off: grant path only
     env.AddEventHandler = function(name, fn) w.handlers[name] = fn end
     env.lib = { addCommand = function(name, _, fn) w.cmds[name] = fn end }
@@ -157,6 +160,17 @@ case('fh_allow: persisted to access.txt even when allowlist.cfg io fails (error 
     assert(w.has('could not read ' .. SRV_DIR .. '/allowlist.cfg: Permission denied'))
     local w2 = boot({ store = w.files[A.STORE_FILE] })
     T.same({ A.principalLine(OWNER, A.ADMIN_GROUP), A.principalLine(FRIEND, A.ALLOW_GROUP) }, w2.exec)
+end)
+
+case('world-04 M: canSeeIds is server-decided: admin ACE or fh_dev=1, never a bare player', function()
+    local admin = boot({ convars = { fh_dev = '0' }, aces = { [5] = { command = true } } })
+    local can = admin.exported.canSeeIds
+    T.eq(true, can(5))   -- holds the admin ACE
+    T.eq(false, can(6))  -- plain player, fh_dev off
+    T.eq(false, can(nil))
+    T.eq(false, can(0))  -- console has no client to show it to
+    local dev = boot({ convars = { fh_dev = '1' } })
+    T.eq(true, dev.exported.canSeeIds(6)) -- fh_dev=1 shows ids to everyone
 end)
 
 T.finish()

@@ -32,6 +32,12 @@ local function walkIndex()
     return walkPlaces, walkById
 end
 
+-- world-04 M: ids in tour messages for admins / fh_dev (server-decided in access.lua, exports.fh_core:canSeeIds).
+local function idTag(src, place)
+    local ok, show = pcall(function() return exports.fh_core:canSeeIds(src) end)
+    return FhPlaceResolver.idTag(place, ok and show == true)
+end
+
 local tours = {} -- [src] = { region, order, index }
 
 AddEventHandler('playerDropped', function()
@@ -134,15 +140,15 @@ lib.addCommand('fh_tour', {
             return reply(src, ('fh_tour: %s complete (%d places)'):format(t.region, #t.order))
         end
         if not teleportPlace(src, place) then return reply(src, 'fh_tour: fh_no_player') end
-        return reply(src, ('fh_tour: %d/%d %s (%s)'):format(t.index, #t.order, place.label or place.id, place.kind))
+        return reply(src, ('fh_tour: %d/%d %s%s (%s)'):format(t.index, #t.order, place.label or place.id, idTag(src, place), place.kind))
     end
     if not FhRegions.getRegion(p.region) then return reply(src, 'fh_tour: fh_unknown_region') end
     local order = FhPlaceResolver.tour(walkIndex(), p.region)
     if #order == 0 then return reply(src, ('fh_tour: %s has no unverified places'):format(p.region)) end
     tours[src] = { region = p.region, order = order, index = 1 }
     if not teleportPlace(src, order[1]) then return reply(src, 'fh_tour: fh_no_player') end
-    reply(src, ('fh_tour: %s — 1/%d %s (%s) [fh_tour next]'):format(p.region, #order, order[1].label or order[1].id,
-        order[1].kind))
+    reply(src, ('fh_tour: %s — 1/%d %s%s (%s) [fh_tour next]'):format(p.region, #order, order[1].label or order[1].id,
+        idTag(src, order[1]), order[1].kind))
 end)
 
 lib.addCommand('fh_mark', {

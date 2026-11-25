@@ -30,6 +30,12 @@ lib.callback.register('fh:ui:plot_claims', function()
     return list
 end)
 
+-- world-04 M: /where shows place ids to admins / fh_dev. The decision is fh_core's (exports.fh_core:canSeeIds, server-side).
+lib.callback.register('fh:ui:show_ids', function(src)
+    local ok, show = pcall(function() return exports.fh_core:canSeeIds(src) end)
+    return ok and show == true
+end)
+
 -- Dev demo (U3): `fh_ui_demo <screen|close [screen]>` opens a fixture screen for the caller. Gated by the command ACE (same pattern as fh_homestead's fh_unclaim); console has no client.
 local fx = FhUiFixtures
 local function reply(src, msg)

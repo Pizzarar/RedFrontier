@@ -229,6 +229,12 @@ function M.recordWalkMark(deps, record, cap)
     return out
 end
 
+---" [id]" suffix for admin/fh_dev views (world-04 M, fh_tour); '' when show is false or the place has no id.
+function M.idTag(place, show)
+    if show and type(place) == 'table' and place.id ~= nil then return ' [' .. tostring(place.id) .. ']' end
+    return ''
+end
+
 if GetCurrentResourceName then
     FhPlaceResolver = M
 else

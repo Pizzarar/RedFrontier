@@ -179,3 +179,13 @@ lib.addCommand('fh_allow', {
         reply(src, 'fh_allow: ' .. id .. ' allowed until restart (could not save fh_core/' .. R.STORE_FILE .. ')')
     end
 end)
+
+-- world-04 M: may this player see place ids in /where and fh_tour? Decided here, on the server: an admin (holds
+-- R.ADMIN_ACE) or any player while convar fh_dev == 1. The client only receives the answer; it never supplies it.
+local function canSeeIds(src)
+    src = tonumber(src)
+    if not src then return false end
+    if GetConvarInt('fh_dev', 0) == 1 then return true end
+    return src > 0 and IsPlayerAceAllowed(src, R.ADMIN_ACE) == true
+end
+exports('canSeeIds', canSeeIds)

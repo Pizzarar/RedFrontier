@@ -271,4 +271,15 @@ case('gather labels a camp with its name, else "Outlaw camp"; unverified tag sur
     T.eq(' (unverified)', P.tag(byId.unnamed))
 end)
 
+case('world-04 M: line() keeps the player label byte-identical; showIds gives "label [id]"', function()
+    local pl = { id = 'heartlands_02', label = 'Cotorra Bend claim', verified = false }
+    T.eq('Cotorra Bend claim (unverified) (heartlands_02)', P.line(pl, false))
+    T.eq('Cotorra Bend claim (unverified) (heartlands_02)', P.line(pl, nil))
+    T.eq('Cotorra Bend claim (unverified) [heartlands_02]', P.line(pl, true))
+    T.eq('Cotorra Bend claim [heartlands_02]', P.line({ id = 'heartlands_02', label = 'Cotorra Bend claim' }, true))
+    T.eq('', P.idTag(pl, false))
+    T.eq(' [heartlands_02]', P.idTag(pl, true))
+    T.eq('', P.idTag(nil, true))
+end)
+
 T.finish()

@@ -257,4 +257,12 @@ it('recordWalkMark rejects missing deps', function()
     eq('fh_mark_bad_deps', e)
 end)
 
+it('world-04 M: fh_tour id tag only when shown', function()
+    local place = { id = 'heartlands_02', label = 'Cotorra Bend claim' }
+    eq('', FhPlaceResolver.idTag(place, false))
+    eq('', FhPlaceResolver.idTag(place, nil))
+    eq(' [heartlands_02]', FhPlaceResolver.idTag(place, true))
+    eq('', FhPlaceResolver.idTag(nil, true))
+end)
+
 T.finish()
