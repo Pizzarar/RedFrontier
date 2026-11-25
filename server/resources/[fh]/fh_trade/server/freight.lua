@@ -1,6 +1,7 @@
 -- fh_trade freight contracts (roads R4): a fh_quests job type. Thin wiring over shared/freight.lua (specced).
 -- Uses fh_core §4 exports + fh_cargo exports (+ its shared TIERS, read-only) only. T2 contracts (roads-02 R9) are
--- gated at accept by fh_progression canUnlock (soft dependency, fail closed) and by the wagon's tier. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
+-- gated at accept by fh_progression getTier in the origin region + canUnlock (roads-03 R13; soft dependency, fail
+-- closed) and by the wagon's tier. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
 -- and the fh_quests engine pays (engine.apply, exactly once). NOT runtime-tested (no Cfx key).
 -- Natives: GetCurrentResourceName, GetResourceState, GetPlayerPed, GetEntityCoords, CreateThread, Wait.
 local cfg = FhTradeConfig
@@ -91,15 +92,27 @@ local function takeCargo(c)
     return true
 end
 
--- ---------------------------------------------------------------- T2 gates (roads-02 R9)
+-- ---------------------------------------------------------------- tier gates (roads-02 R9, roads-03 R13)
 
----Per-player contract-tier gate: T1 always passes; T2 needs fh_progression canUnlock(contracts_t2) == true.
----Soft dependency, fail closed: not started / throws / anything but true -> 'fh_locked'. canUnlock may yield.
-local function tierUnlocked(src, tier)
-    local id = F.unlockFor(cfg, tier)
-    if not id then return true end
-    local ok, why = F.checkUnlock(GetResourceState, function() return exports.fh_progression:canUnlock(src, id) end)
-    if not ok then log('T2 contract refused for src %s: %s (%s)', tostring(src), id, tostring(why)) return false, 'fh_locked' end
+---Per-player contract-tier gate. T1 always passes. A gated tier (F.gateFor) needs BOTH, in this order:
+---  1. regional: fh_progression getTier(src, origin_region) >= gate.minRegionTier (rep in the offer's origin region);
+---  2. global kill switch: fh_progression canUnlock(src, gate.unlock) == true.
+---Soft dependency, fail closed: not started / missing export / throws / non-number / anything but true -> 'fh_locked'.
+---Both exports may yield (rep reads), so the character is re-checked after each: swapped -> 'fh_no_player'.
+---`originRegion` must be validateOffer-checked (bound to the offer key). R14 (T3) only adds a TIER_GATES row.
+local function tierUnlocked(src, citizenid, tier, originRegion)
+    local gate = F.gateFor(cfg, tier)
+    if not gate then return true end
+    local ok, why = F.checkRegionTier(GetResourceState,
+        function() return exports.fh_progression:getTier(src, originRegion) end, gate.minRegionTier)
+    if citizenidOf(src) ~= citizenid then return false, 'fh_no_player' end
+    if not ok then
+        log('T%s contract refused for src %s: needs tier %s in %s (%s)', tostring(tier), tostring(src), tostring(gate.minRegionTier), tostring(originRegion), tostring(why))
+        return false, 'fh_locked'
+    end
+    ok, why = F.checkUnlock(GetResourceState, function() return exports.fh_progression:canUnlock(src, gate.unlock) end)
+    if citizenidOf(src) ~= citizenid then return false, 'fh_no_player' end
+    if not ok then log('T%s contract refused for src %s: %s (%s)', tostring(tier), tostring(src), gate.unlock, tostring(why)) return false, 'fh_locked' end
     return true
 end
 
@@ -139,9 +152,8 @@ local function accept(src, offer)
         if (contracts[citizenid] or {})[offer.key] then return false, 'fh_freight_active' end
         if countActive(citizenid) >= (fcfg.maxActivePerPlayer or 2) then return false, 'fh_freight_too_many' end
         local tier = F.tierOf(offer)
-        local unlocked, lerr = tierUnlocked(src, tier)
+        local unlocked, lerr = tierUnlocked(src, citizenid, tier, offer.from_region) -- from_region: key-bound origin
         if not unlocked then return false, lerr end
-        if tier ~= 1 and citizenidOf(src) ~= citizenid then return false, 'fh_no_player' end -- canUnlock can yield
         local ref = exports.fh_cargo:nearestWagon(src, nil, fcfg.acceptReach or 8.0)
         local wagonId = wagonIdOfRef(ref)
         if not wagonId then return false, 'fh_freight_no_wagon' end

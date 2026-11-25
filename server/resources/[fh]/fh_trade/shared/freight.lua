@@ -44,11 +44,28 @@ function M.tierOf(offer)
     return offer.tier
 end
 
+---Contract-tier gates (roads-03 R13): a tier N contract needs fh_progression getTier(src, origin_region) >= minRegionTier
+---(regional rep opens that region's board) AND the global canUnlock(src, unlock) kill switch. Both must pass. T1 has
+---no entry, so it is never gated. A tier's `freight.t<N>.unlock` overrides its default unlock id. R14 (T3) adds
+---`[3] = { unlock = 'contracts_t3', minRegionTier = 3 }`.
+M.TIER_GATES = {
+    [2] = { unlock = M.T2_UNLOCK, minRegionTier = 2 },
+}
+
+---Gate of a contract tier { unlock, minRegionTier }, or nil when the tier is ungated (T1). Fresh table per call.
+function M.gateFor(cfg, tier)
+    local g = M.TIER_GATES[tier]
+    if not g then return nil end
+    local f = type(cfg) == 'table' and type(cfg.freight) == 'table' and cfg.freight or {}
+    local t = type(tier) == 'number' and f['t' .. tier] or nil
+    local unlock = type(t) == 'table' and type(t.unlock) == 'string' and t.unlock ~= '' and t.unlock or g.unlock
+    return { unlock = unlock, minRegionTier = g.minRegionTier }
+end
+
 ---fh_progression unlock id gating a tier, or nil (T1 is never gated).
 function M.unlockFor(cfg, tier)
-    if tier ~= 2 then return nil end
-    local t = t2cfg(cfg)
-    return t and t.unlock or M.T2_UNLOCK
+    local g = M.gateFor(cfg, tier)
+    return g and g.unlock or nil
 end
 
 ---Smallest wagon tier number (fh_cargo TIERS[*].tier) a contract tier needs. T1: 1 (any wagon).
@@ -236,10 +253,10 @@ local function t2Offers(cfg, d, fromRegion, to, dist, list, out)
                     local label = good.label or s.item
                     out[#out + 1] = {
                         key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true, unlock = M.unlockFor(cfg, 2),
-                        min_wagon_tier = M.minWagonTier(cfg, 2),
+                        min_region_tier = M.gateFor(cfg, 2).minRegionTier, min_wagon_tier = M.minWagonTier(cfg, 2),
                         title = ('[T2] Freight: %dx %s to %s'):format(qty, label, to),
-                        text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier 2 for T2 contracts and a wagon (t2) or bigger.')
-                            :format(qty, label, fromRegion, to, math.floor(dist)),
+                        text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier %d in %s and a wagon (t2) or bigger.')
+                            :format(qty, label, fromRegion, to, math.floor(dist), M.gateFor(cfg, 2).minRegionTier, fromRegion),
                         region_id = fromRegion, from_region = fromRegion, to_region = to,
                         item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = deadline, cooldown_min = cooldown,
                         rewards = { money = reward, rep = { region_id = to, delta = t.repDelta or d.repDelta } },
@@ -311,6 +328,9 @@ function M.validateOffer(cfg, offer, isKnownRegion, regions)
     if type(offer.from_region) ~= 'string' or type(offer.to_region) ~= 'string' then return false, 'bad_region' end
     if isKnownRegion and not (isKnownRegion(offer.from_region) and isKnownRegion(offer.to_region)) then return false, 'bad_region' end
     if offer.from_region == offer.to_region and not d.allowSameRegion then return false, 'same_region' end
+    -- R13: region_id is the origin the tier gate reads. It is bound to from_region (and from_region to the key below),
+    -- so a forged region_id cannot move the gate to another region. Gated tiers must carry it.
+    if offer.region_id ~= nil and offer.region_id ~= offer.from_region then return false, 'bad_region' end
     local dests = M.resolveDestinations(cfg, regions)
     local excluded = excludeSet(cfg.freight)
     if excluded[offer.from_region] or not dests[offer.to_region] then return false, 'no_destination' end
@@ -319,6 +339,7 @@ function M.validateOffer(cfg, offer, isKnownRegion, regions)
     if tier ~= 1 and tier ~= 2 then return false, 'bad_tier' end
     local t = t2cfg(cfg)
     if tier == 2 and not t then return false, 'bad_tier' end
+    if M.gateFor(cfg, tier) and offer.region_id ~= offer.from_region then return false, 'bad_region' end
     if offer.key ~= M.offerKey(offer.from_region, offer.to_region, offer.item, tier) or #M.questId(offer.key) > 64 then return false, 'bad_key' end
     if tier == 1 then
         if not int(offer.qty) or offer.qty < d.minQty or offer.qty > d.maxQty then return false, 'bad_qty' end
@@ -374,6 +395,19 @@ function M.checkUnlock(getState, canUnlock)
     local ok, res, why = pcall(canUnlock)
     if not ok then return false, 'threw' end
     if res ~= true then return false, type(why) == 'string' and why or 'denied' end
+    return true
+end
+
+---Fail-closed regional tier gate (roads-03 R13, soft dep on fh_progression). `getState` = GetResourceState, `getTier` =
+---function() returning exports.fh_progression:getTier(src, origin_region), `need` = the gate's minRegionTier.
+---@return boolean ok, string? why  why = 'not_started'|'threw'|'bad_value'|'tier_too_low' (callers refuse 'fh_locked')
+function M.checkRegionTier(getState, getTier, need)
+    local okS, st = pcall(getState, 'fh_progression')
+    if not okS or st ~= 'started' then return false, 'not_started' end
+    local ok, t = pcall(getTier)
+    if not ok then return false, 'threw' end
+    if not finite(t) or not finite(need) then return false, 'bad_value' end
+    if t < need then return false, 'tier_too_low' end
     return true
 end
 

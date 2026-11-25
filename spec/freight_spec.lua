@@ -635,4 +635,59 @@ case('R12 real config: resolves destinations from FhRegions posts, >= 3 region p
     T.eq(c.freight.t2.maxOffers, n2, 'T2 board cap holds with all 15 regions')
 end)
 
+-- ---------------------------------------------------------------- regional tier gate (roads-03 R13)
+
+case('R13 gateFor: T1 ungated; T2 = contracts_t2 + region tier 2; t2.unlock override; unknown tiers ungated-by-table', function()
+    T.eq(nil, F.gateFor(cfgT2(), 1))
+    T.same({ unlock = 'contracts_t2', minRegionTier = 2 }, F.gateFor(cfgT2(), 2))
+    T.same({ unlock = 'contracts_t2', minRegionTier = 2 }, F.gateFor(cfgNew(), 2), 'default unlock without t2 config')
+    T.eq('my_switch', F.gateFor(cfgT2({ t2 = t2With({ unlock = 'my_switch' }) }), 2).unlock)
+    T.eq('contracts_t2', F.gateFor(cfgT2({ t2 = t2With({ unlock = '' }) }), 2).unlock, 'empty override ignored')
+    F.gateFor(cfgT2(), 2).minRegionTier = 1
+    T.eq(2, F.gateFor(cfgT2(), 2).minRegionTier, 'gateFor hands out a copy; TIER_GATES cannot be mutated through it')
+end)
+
+case('R13 checkRegionTier: tier 1/2/3 vs need 2; not started; getState throws; getTier throws; non-number', function()
+    local started = function() return 'started' end
+    local function tier(t) return function() return t end end
+    T.eq('tier_too_low', select(2, F.checkRegionTier(started, tier(1), 2)))
+    assert(F.checkRegionTier(started, tier(2), 2)); assert(F.checkRegionTier(started, tier(3), 2))
+    T.eq('tier_too_low', select(2, F.checkRegionTier(started, tier(2), 3)), 'T3 shape: tier 2 < 3')
+    local called = false
+    T.eq('not_started', select(2, F.checkRegionTier(function() return 'stopped' end, function() called = true return 3 end, 2)))
+    T.eq(false, called, 'getTier must not be called while fh_progression is not started')
+    T.eq('not_started', select(2, F.checkRegionTier(function() error('native gone') end, tier(3), 2)))
+    T.eq('not_started', select(2, F.checkRegionTier(nil, tier(3), 2)))
+    T.eq('threw', select(2, F.checkRegionTier(started, function() error('No such export getTier') end, 2)))
+    for _, v in ipairs({ '3', true, 0 / 0, math.huge }) do
+        T.eq('bad_value', select(2, F.checkRegionTier(started, tier(v), 2)), 'non-number ' .. tostring(v))
+    end
+    T.eq('bad_value', select(2, F.checkRegionTier(started, tier(nil), 2)), 'nil')
+    T.eq('bad_value', select(2, F.checkRegionTier(started, tier(3), nil)), 'missing need fails closed')
+end)
+
+case('R13 offers carry region_id = origin + tier + min_region_tier; T2 text names the origin region', function()
+    local list = F.generate(cfgT2(), 'heartlands', SH)
+    for _, o in ipairs(list) do T.eq('heartlands', o.region_id); assert(o.tier == 1 or o.tier == 2) end
+    local o = t2of(list)
+    T.eq(2, o.min_region_tier); assert(o.text:find('tier 2 in heartlands', 1, true), o.text)
+end)
+
+case('R13 validateOffer binds region_id to the key-bound origin (no gate dodging)', function()
+    local c = cfgT2()
+    local list = F.generate(c, 'heartlands', SH)
+    local o2, o1 = copy(t2of(list)), copy(list[1])
+    assert(F.validateOffer(c, o2, known)); assert(F.validateOffer(c, o1, known))
+    local x = copy(o2); x.region_id = 'dunes'
+    T.eq('bad_region', select(2, F.validateOffer(c, x, known)), 'forged region_id on T2')
+    x = copy(o2); x.region_id = nil
+    T.eq('bad_region', select(2, F.validateOffer(c, x, known)), 'gated tier must carry region_id')
+    x = copy(o2); x.region_id = 'dunes'; x.from_region = 'dunes'; x.to_region = 'heartlands'
+    T.eq('bad_key', select(2, F.validateOffer(c, x, known)), 'moving the origin breaks the key binding')
+    x = copy(o1); x.region_id = 'dunes'
+    T.eq('bad_region', select(2, F.validateOffer(c, x, known)), 'forged region_id on T1')
+    x = copy(o1); x.region_id = nil
+    assert(F.validateOffer(c, x, known), 'T1 without region_id is still fine (never gated)')
+end)
+
 T.finish()
