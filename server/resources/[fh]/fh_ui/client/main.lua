@@ -55,6 +55,10 @@ FH.onNet('fh:ui:update', function(p)
     send('update', p.screen, p.data)
 end)
 
+-- Character switch/unload: clear the heat widget so the previous character's heat never lingers at select. The next
+-- fh_heat RSGCore:Server:PlayerLoaded re-opens it with the fresh character's data.
+FH.onNet('RSGCore:Client:OnPlayerUnload', function() closeScreen({ screen = 'heat' }) end)
+
 -- NUI -> server. The server validates; nothing is trusted from here.
 RegisterNUICallback('action', FH.wrap(function(body, cb)
     cb('ok')

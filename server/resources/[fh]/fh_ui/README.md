@@ -86,8 +86,9 @@ Fed by `fh:death:bags` plus the `fh:death:bags` callback fetch at start. `open/u
   buffs widget lists active buffs with `--` instead of a time.
 
 ### heat (passive)
-`open/update` data `{ factions = { { id, label, level (0-100), tier } }, lay_low = { active, seconds_left? } }`. Producer (future
-`fh_heat`) re-sends via `fh:ui:update` on `fh:heat:changed`. No actions.
+`open/update` data `{ factions = { { id, label, level (0-100), tier } }, lay_low = { active, seconds_left? } }`. Producer
+`fh_heat` sends `fh:ui:open` (passive, no focus) on player load and re-sends on `fh:heat:changed`; the widget hides when
+every faction level is 0 or the list is empty. No actions.
 
 ### survival (passive HUD, idea-854)
 Fed by fh_ui's own client listener on `fh:survival:state` (no lane code calls `fh:ui:open` for it; fh_survival emits

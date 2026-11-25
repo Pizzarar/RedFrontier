@@ -207,14 +207,15 @@ exports('level', level)
 exports('payoff', payoff)
 
 -- ---------------------------------------------------------------- heat HUD (@ui, plan T3)
--- Read-only: builds the fh_ui `heat` screen data from getAll(src) (pure: shared/heat_hud.lua) and pushes it to ONE
--- player via fh:ui:update (the passive-widget path fh_ui's README names). No state is mutated, no heat value or rule
--- changes, and nothing is saved (idea-669: no fire-and-forget writes). Other players' heat is never sent.
+-- Read-only: builds the fh_ui `heat` screen data from getAll(src) (pure: shared/heat_hud.lua) and opens it for ONE
+-- player via fh:ui:open. `open` is the passive-widget path (relay.passive.heat, so no NUI focus) and it also unhides
+-- #screen-heat, which fh:ui:update alone does not. No state is mutated, no heat value or rule changes, and nothing is
+-- saved (idea-669: no fire-and-forget writes). Other players' heat is never sent.
 local function pushHeatHud(src)
     if not (type(src) == 'number' and src > 0) then return end
     local all = getAll(src)
     if not all then return end -- no character (console, or dropped mid-yield)
-    TriggerClientEvent('fh:ui:update', src, { screen = 'heat', data = FhHeatHud.build(all, regions.factions) })
+    TriggerClientEvent('fh:ui:open', src, { screen = 'heat', data = FhHeatHud.build(all, regions.factions) })
 end
 
 -- Every change (gains, decay, admin set, bounty payoff) re-pushes that player's own heat HUD.
