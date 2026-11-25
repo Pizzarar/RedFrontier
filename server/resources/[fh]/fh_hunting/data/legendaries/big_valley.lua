@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_copperhide_deer', label = 'Legendary Copperhide Deer Pelt', value = 19, weight = 6000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_copperhide_deer', label = 'Legendary Copperhide Deer Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Big Valley Trapper', coords = { x = -1814.0, y = -440.0, z = 120.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -1814.0, y = -440.0, z = 120.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

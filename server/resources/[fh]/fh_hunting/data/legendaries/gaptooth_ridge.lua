@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_sandveil_fox', label = 'Legendary Sandveil Fox Pelt', value = 11, weight = 3500,
         image = 'resource_pelt_fox.png' },
     trophy = { item = 'trophy_legendary_sandveil_fox', label = 'Legendary Sandveil Fox Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Gaptooth Ridge Trapper', coords = { x = -5514.0, y = -2928.0, z = 90.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -5514.0, y = -2928.0, z = 90.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

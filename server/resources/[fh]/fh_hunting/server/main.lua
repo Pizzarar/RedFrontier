@@ -201,6 +201,8 @@ end
 
 local trapper = FhHuntingSell.new({
     cfg = cfg, animals = animals, price = price,
+    trappers = FhHuntingSell.trappers(cfg, FhHuntingLegendaries), -- one per region (data/legendaries), heartlands falls back to cfg.Trapper
+    isEnabled = function(rid) return FhRegions.isEnabled(rid) end,
     deps = {
         citizenid = citizenidOf, playerCoords = playerCoords, snapshot = snapshotOf, removeItem = removeItem,
         addItem = addItem, pay = paySrc,
@@ -233,7 +235,7 @@ RegisterNetEvent('fh:hunting:sell_open', function()
     if sellThrottled(src, 'open') then return end
     local rows, err = trapper.list(src)
     if not rows then return notify(src, 'error', FhHuntingSell.message(err)) end
-    TriggerClientEvent('fh:ui:open', src, { screen = 'trapper', data = FhHuntingSell.screenData(cfg, rows) })
+    TriggerClientEvent('fh:ui:open', src, { screen = 'trapper', data = FhHuntingSell.screenData(cfg, rows, nil, nil, (trapper.at(src) or {}).label) })
 end)
 
 -- fh_ui `trapper` screen (T2). Sell actions arrive as the server event fh_ui relays (`fh:hunting:ui_sell`, one table
@@ -257,7 +259,7 @@ AddEventHandler('fh:hunting:ui_sell', function(ev)
             notice, kind = FhHuntingSell.message(res), 'error'
         end
     end
-    local data = FhHuntingSell.screenData(cfg, trapper.list(src), notice, kind)
+    local data = FhHuntingSell.screenData(cfg, trapper.list(src), notice, kind, (trapper.at(src) or {}).label)
     TriggerClientEvent('fh:ui:update', src, { screen = 'trapper', data = data })
 end)
 

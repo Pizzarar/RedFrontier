@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_embercoat_coyote', label = 'Legendary Embercoat Coyote Pelt', value = 11, weight = 4000,
         image = 'resource_pelt_coyote.png' },
     trophy = { item = 'trophy_legendary_embercoat_coyote', label = 'Legendary Embercoat Coyote Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Tall Trees Trapper', coords = { x = -1795.0, y = -1600.0, z = 150.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -1795.0, y = -1600.0, z = 150.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

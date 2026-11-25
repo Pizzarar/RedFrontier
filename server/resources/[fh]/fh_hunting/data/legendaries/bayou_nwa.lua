@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_mossback_gator', label = 'Legendary Mossback Gator Pelt', value = 73, weight = 25000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_mossback_gator', label = 'Legendary Mossback Gator Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Bayou Nwa Trapper', coords = { x = 2175.0, y = -1120.0, z = 25.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = 2175.0, y = -1120.0, z = 25.0 }, -- TODO-verify-in-game
         price = 25,

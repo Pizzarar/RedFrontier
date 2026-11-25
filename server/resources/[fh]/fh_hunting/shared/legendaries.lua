@@ -20,6 +20,9 @@
 --   pelt   { item = 'pelt_<id>', label, value (> 0, 2-star base before multipliers), weight (> 0), image }
 --                          pelt.value rule: round(plain species value * 4/3), the bear's 45 -> 60 ratio (owner tunes after playtest).
 --   trophy { item = 'trophy_<id>', label, comfort (>= 0), image?, weight?, description? }
+--   trapper { label, coords {x,y,z} }  optional. The region's trapper: it buys pelts there (shared/sell.lua, pays and emits
+--                          pelt_sold with THIS region_id) and hosts the rumour, so when set rumour.coords is replaced by
+--                          trapper.coords. A region with no trapper has no trapper (heartlands falls back to config Trapper).
 --   rumour { coords {x,y,z}, price (>= 0), label (the "[E] ..." prompt text), range? (m), text? (paid notice) }
 --   markers { [2] = { id?, label, coords, radius? }, [3] = { ... } }  clue 2 (track) and clue 3 (carcass)
 --   spawn  { coords {x,y,z,heading?} }
@@ -93,10 +96,20 @@ function M.validate(raw, regionId, plain)
     if t.weight ~= nil and (not finite(t.weight) or t.weight <= 0) then return nil, 'bad trophy weight' end
     if t.description ~= nil and not str(t.description) then return nil, 'bad trophy description' end
 
+    local trapper
+    if raw.trapper ~= nil then
+        local tr = raw.trapper
+        if type(tr) ~= 'table' or not str(tr.label) then return nil, 'bad trapper label' end
+        local tc = coords(tr.coords)
+        if not tc then return nil, 'bad trapper coords' end
+        trapper = { label = tr.label, coords = tc }
+    end
+
     local r = raw.rumour
     if type(r) ~= 'table' then return nil, 'bad rumour' end
     local rc = coords(r.coords)
     if not rc then return nil, 'bad rumour coords' end
+    if trapper then rc = { x = trapper.coords.x, y = trapper.coords.y, z = trapper.coords.z } end -- the trapper hosts it
     if not finite(r.price) or r.price < 0 or not str(r.label) then return nil, 'bad rumour price/label' end
     if r.range ~= nil and (not finite(r.range) or r.range <= 0) then return nil, 'bad rumour range' end
     if r.text ~= nil and not str(r.text) then return nil, 'bad rumour text' end
@@ -123,6 +136,7 @@ function M.validate(raw, regionId, plain)
         pelt = { item = p.item, label = p.label, value = p.value, weight = p.weight, image = p.image },
         trophy = { item = t.item, label = t.label, comfort = t.comfort, image = t.image, weight = t.weight,
             description = t.description },
+        trapper = trapper,
         rumour = { coords = rc, price = r.price, label = r.label, range = r.range, text = r.text },
         markers = markers,
         spawn = { coords = sc },

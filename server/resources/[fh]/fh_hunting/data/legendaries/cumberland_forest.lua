@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_greyhowl_wolf', label = 'Legendary Greyhowl Wolf Pelt', value = 27, weight = 8000,
         image = 'resource_pelt_wolf.png' },
     trophy = { item = 'trophy_legendary_greyhowl_wolf', label = 'Legendary Greyhowl Wolf Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Cumberland Forest Trapper', coords = { x = -810.0, y = 1340.0, z = 130.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -810.0, y = 1340.0, z = 130.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

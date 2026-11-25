@@ -12,6 +12,8 @@ return {
     pelt = { item = 'pelt_legendary_bear', label = 'Legendary Bear Pelt', value = 60, weight = 30000,
         image = 'legendary_bear_pelt.png' },
     trophy = { item = 'trophy_legendary_bear', label = 'Legendary Bear Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it). Heartlands = the config.lua Trapper fallback.
+    trapper = { label = 'Trapper', coords = { x = -299.0, y = 792.0, z = 118.2 } },
     rumour = {
         coords = { x = -299.0, y = 792.0, z = 118.2 },
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

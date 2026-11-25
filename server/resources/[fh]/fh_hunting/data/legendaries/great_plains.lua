@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_dusthorn_bison', label = 'Legendary Dusthorn Bison Pelt', value = 53, weight = 30000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_dusthorn_bison', label = 'Legendary Dusthorn Bison Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Great Plains Trapper', coords = { x = -865.0, y = -1335.0, z = 44.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -865.0, y = -1335.0, z = 44.0 }, -- TODO-verify-in-game
         price = 25,

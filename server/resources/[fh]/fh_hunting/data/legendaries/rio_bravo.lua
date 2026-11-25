@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_canyonback_boar', label = 'Legendary Canyonback Boar Pelt', value = 16, weight = 6000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_canyonback_boar', label = 'Legendary Canyonback Boar Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Rio Bravo Trapper', coords = { x = -2000.0, y = -3000.0, z = 55.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -2000.0, y = -3000.0, z = 55.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

@@ -152,10 +152,10 @@ end)
 
 -- ---------------------------------------------------------------- H3 trapper
 
--- Sell prompt at the trapper (cfg.Trapper). E asks the server (fh:hunting:sell_open), which opens the fh_ui `trapper`
+-- Sell prompt at each enabled region's trapper (data/legendaries/<region>.lua `trapper`; heartlands falls back to cfg.Trapper). E asks the server (fh:hunting:sell_open), which opens the fh_ui `trapper`
 -- screen with the rows it computed itself; the server re-checks range, container, item and price on every sale.
 local CONTEXT_KEY = 0xCEFD9220 -- INPUT_CONTEXT (E). UNVERIFIED
-local tp = cfg.Trapper
+local tp = cfg.Trapper -- PromptDistance and the heartlands fallback position
 
 -- ---------------------------------------------------------------- H4 legendary chains (plan hunting-02)
 
@@ -220,16 +220,36 @@ for _, e in ipairs(active) do
     end
 end
 
--- Rumour points (clue 1). A rumour within the trapper's prompt distance is hosted by the trapper prompt below (the
--- Legendary Bear); every other legendary gets its own point in its region.
+-- Trappers (one per enabled region): { region_id, label, coords, rumours = { entries hosted here } }. A disabled region
+-- gets no point and no prompt (the server refuses its sells with fh_region_closed anyway).
 local function near(a, b, r)
     local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
     return dx * dx + dy * dy + dz * dz <= r * r
 end
-local trapperRumours = {}
+local trappers, byRegion, hostless = {}, {}, {}
 for _, e in ipairs(active) do
-    if near(e.rumour.coords, tp.coords, tp.PromptDistance) then
-        trapperRumours[#trapperRumours + 1] = e
+    if e.trapper then
+        local t = { region_id = e.region_id, label = e.trapper.label, coords = e.trapper.coords, rumours = { e } }
+        trappers[#trappers + 1] = t
+        byRegion[e.region_id] = t
+    else
+        hostless[#hostless + 1] = e
+    end
+end
+-- config Trapper = the heartlands fallback when heartlands is enabled and its data file has no trapper
+if tp and tp.region_id and not byRegion[tp.region_id] and L and L.isEnabled(tp.region_id) then
+    local t = { region_id = tp.region_id, label = tp.label, coords = tp.coords, rumours = {} }
+    trappers[#trappers + 1] = t
+    byRegion[tp.region_id] = t
+end
+-- An entry with no trapper keeps a rumour point of its own, or rides a trapper prompt it stands within reach of.
+for _, e in ipairs(hostless) do
+    local host
+    for _, t in ipairs(trappers) do
+        if near(e.rumour.coords, t.coords, tp.PromptDistance) then host = t; break end
+    end
+    if host then
+        host.rumours[#host.rumours + 1] = e
     else
         FH.thread(function()
             local c = e.rumour.coords
@@ -252,42 +272,46 @@ for _, e in ipairs(active) do
     end
 end
 
----The trapper-hosted legendary whose rumour is for sale now (chain at step 1), or nil.
-local function trapperRumour()
-    for _, e in ipairs(trapperRumours) do
+---The hosted legendary whose rumour is for sale at this trapper now (chain at step 1), or nil.
+local function trapperRumour(t)
+    for _, e in ipairs(t.rumours) do
         if chainSteps[e.id] == 1 then return e end
     end
     return nil
 end
-local trapperPoint
-FH.thread(function()
-    trapperPoint = lib.points.new({
-        coords = vec3(tp.coords.x, tp.coords.y, tp.coords.z), distance = tp.PromptDistance,
-    })
-    function trapperPoint:onEnter() trapperPoint:render() end
-    function trapperPoint:onExit() hideText() end
-    function trapperPoint:render()
-        -- A hosted chain at step 1: the trapper has its rumour to sell. Otherwise E sells pelts.
-        local e = trapperRumour()
-        showText(e and ('[E] ' .. e.rumour.label) or '[E] Sell pelts')
-    end
-    function trapperPoint:nearby()
-        trapperPoint:render() -- keep the prompt in sync with the chain steps
-        if IsControlJustReleased(0, CONTEXT_KEY) then
-            local e = trapperRumour()
-            if e then
-                TriggerServerEvent('fh:hunting:chain_rumour', { legendary = e.id })
-            else
-                TriggerServerEvent('fh:hunting:sell_open')
+local trapperPoints = {}
+for _, t in ipairs(trappers) do
+    FH.thread(function()
+        local point = lib.points.new({
+            coords = vec3(t.coords.x, t.coords.y, t.coords.z), distance = tp.PromptDistance,
+        })
+        trapperPoints[#trapperPoints + 1] = point
+        function point:onEnter() point:render() end
+        function point:onExit() hideText() end
+        function point:render()
+            -- A hosted chain at step 1: this trapper has its rumour to sell. Otherwise E sells pelts.
+            local e = trapperRumour(t)
+            showText(e and ('[E] ' .. e.rumour.label) or '[E] Sell pelts')
+        end
+        function point:nearby()
+            point:render() -- keep the prompt in sync with the chain steps
+            if IsControlJustReleased(0, CONTEXT_KEY) then
+                local e = trapperRumour(t)
+                if e then
+                    TriggerServerEvent('fh:hunting:chain_rumour', { legendary = e.id })
+                else
+                    TriggerServerEvent('fh:hunting:sell_open')
+                end
             end
         end
-    end
-end)
+    end)
+end
 
 FH.on('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     hideText()
-    if trapperPoint then trapperPoint:remove(); trapperPoint = nil end
+    for _, p in ipairs(trapperPoints) do p:remove() end
+    trapperPoints = {}
     for _, p in ipairs(chainPoints) do p:remove() end
     chainPoints = {}
 end)

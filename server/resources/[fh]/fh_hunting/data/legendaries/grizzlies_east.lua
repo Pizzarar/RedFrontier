@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_frostmane_moose', label = 'Legendary Frostmane Moose Pelt', value = 67, weight = 32000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_frostmane_moose', label = 'Legendary Frostmane Moose Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Grizzlies East Trapper', coords = { x = 1675.0, y = 1900.0, z = 200.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = 1675.0, y = 1900.0, z = 200.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

@@ -20,6 +20,7 @@ M.distance = distance
 local MESSAGES = {
     fh_no_player = 'No character loaded.',
     fh_too_far = 'Go to the trapper to sell.',
+    fh_region_closed = 'The trapper here is not buying yet.',
     fh_bad_request = 'That sale is not valid.',
     fh_no_container = 'You need your saddlebag or a wagon nearby.',
     fh_no_item = 'That pelt is no longer there.',
@@ -57,12 +58,30 @@ function M.soldNotice(res)
     return ('Sold %s (%d star%s) for $%d.'):format(res.label, res.stars, res.stars == 1 and '' or 's', res.price)
 end
 
+---The trapper list: { region_id, label, coords } for every registry entry with a `trapper` (data/legendaries/<region>.lua),
+---in registry order, plus the config Trapper as the heartlands fallback when heartlands has none. Pure; enabling is
+---checked by the caller (T.trappers / the client), never here.
+function M.trappers(cfg, registry)
+    local out, seen = {}, {}
+    for _, e in ipairs(registry and registry.list or {}) do
+        if type(e.trapper) == 'table' and not seen[e.region_id] then
+            seen[e.region_id] = true
+            out[#out + 1] = { region_id = e.region_id, label = e.trapper.label, coords = e.trapper.coords }
+        end
+    end
+    local t = cfg and cfg.Trapper
+    if t and t.region_id and not seen[t.region_id] then
+        out[#out + 1] = { region_id = t.region_id, label = t.label or 'Trapper', coords = t.coords }
+    end
+    return out
+end
+
 ---Build the fh:ui open/update data for the trapper screen. rows = T.list's output (nil on a refusal, e.g. walked out
 ---of range, so the screen keeps its last rows and only the notice changes); notice/notice_kind are the inline sale
 ---result and are only included when non-nil.
 ---@return table { title, rows?, notice?, notice_kind? }
-function M.screenData(cfg, rows, notice, notice_kind)
-    local data = { title = cfg.Trapper and cfg.Trapper.label or 'Trapper' }
+function M.screenData(cfg, rows, notice, notice_kind, title)
+    local data = { title = title or (cfg.Trapper and cfg.Trapper.label) or 'Trapper' }
     if rows ~= nil then data.rows = rows end
     if notice ~= nil then
         data.notice = notice
@@ -81,11 +100,12 @@ end
 ---  pay(src, amount, reason, region_id) -> ok, err
 ---  emit(name, payload)       -> server-only TriggerEvent
 ---  log(msg)                  -> optional
----} }
+---}, trappers? = list (M.trappers; default { cfg.Trapper }), isEnabled? = fn(region_id) -> boolean (default: all enabled) }
 function M.new(opts)
     local cfg, animals, price, deps = opts.cfg, opts.animals, opts.price, opts.deps
     local T = { busy = {} }
-    local trapper = cfg.Trapper
+    local trappers = opts.trappers or M.trappers(cfg, nil)
+    local isEnabled = opts.isEnabled or function() return true end
 
     -- A pelt row's stars: legendary pelts are fixed; otherwise info.stars must be 1..3.
     local function starsOf(animal, item)
@@ -95,19 +115,40 @@ function M.new(opts)
         return s
     end
 
+    ---The trapper the player stands at: the nearest one in SellRange whose region is enabled. A disabled-region
+    ---trapper in range (and no enabled one) refuses fh_region_closed; nothing in range is fh_too_far.
+    ---@return table|nil pc, table|string trapperOrReason
     local function near(src)
         local pc = deps.playerCoords(src)
-        local d = pc and distance(pc, trapper.coords)
-        if not d or d > trapper.SellRange then return nil end
-        return pc
+        if not pc then return nil, 'fh_too_far' end
+        local range = cfg.Trapper and cfg.Trapper.SellRange or 4.0
+        local best, bestD, closed
+        for _, t in ipairs(trappers) do
+            local d = distance(pc, t.coords)
+            if d and d <= range then
+                if isEnabled(t.region_id) then
+                    if not bestD or d < bestD then best, bestD = t, d end
+                else
+                    closed = true
+                end
+            end
+        end
+        if best then return pc, best end
+        return nil, closed and 'fh_region_closed' or 'fh_too_far'
+    end
+
+    ---The enabled trapper the player stands at (its label titles the UI screen), or nil.
+    function T.at(src)
+        local pc, t = near(src)
+        return pc and t or nil
     end
 
     ---Sellable pelts in the player's saddlebag and a nearby wagon, for the UI. Never trusted by sell().
     ---@return table|nil rows, string|nil err  rows = { { container, slot, item, animal, stars, price } }
     function T.list(src)
         if not deps.citizenid(src) then return nil, 'fh_no_player' end
-        local pc = near(src)
-        if not pc then return nil, 'fh_too_far' end
+        local pc, trapper = near(src)
+        if not pc then return nil, trapper end
         local rows = {}
         for _, kind in ipairs({ 'saddlebag', 'wagon' }) do
             local ref = deps.refFor(kind, src, pc)
@@ -136,8 +177,8 @@ function M.new(opts)
         if not cid then return false, 'fh_no_player' end
         local req, perr = M.parseRequest(payload)
         if not req then return false, perr end
-        local pc = near(src)
-        if not pc then return false, 'fh_too_far' end
+        local pc, trapper = near(src)
+        if not pc then return false, trapper end
         local ref = deps.refFor(req.container, src, pc)
         if not ref then return false, 'fh_no_container' end
         local items = deps.snapshot(ref)

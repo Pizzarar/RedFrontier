@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_brackhide_boar', label = 'Legendary Brackhide Boar Pelt', value = 16, weight = 4000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_brackhide_boar', label = 'Legendary Brackhide Boar Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Bluewater Marsh Trapper', coords = { x = 2300.0, y = -600.0, z = 20.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = 2300.0, y = -600.0, z = 20.0 }, -- TODO-verify-in-game
         price = 25,

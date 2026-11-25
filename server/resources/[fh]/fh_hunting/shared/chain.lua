@@ -225,6 +225,7 @@ function M.new(opts)
             local s = get(cid, e.id)
             if s.completed then return false, 'fh_chain_complete' end
             if s.spawned or s.step > M.STEP_RUMOUR then return false, 'fh_chain_rumour_done' end
+            -- the region's trapper hosts the rumour (the loader sets rumour.coords = trapper.coords)
             local d = M.distance(coords, e.rumour.coords)
             if not d or d > (e.rumour.range or (cfg and cfg.LegendaryRumourRange) or 4.0) then
                 return false, 'fh_chain_too_far'

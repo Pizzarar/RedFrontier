@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_saltbrush_buck', label = 'Legendary Saltbrush Buck Pelt', value = 19, weight = 6000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_saltbrush_buck', label = 'Legendary Saltbrush Buck Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Hennigans Stead Trapper', coords = { x = -2275.0, y = -2485.0, z = 60.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -2275.0, y = -2485.0, z = 60.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

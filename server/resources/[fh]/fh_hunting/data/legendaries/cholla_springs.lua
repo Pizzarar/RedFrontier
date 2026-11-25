@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_cinderjaw_coyote', label = 'Legendary Cinderjaw Coyote Pelt', value = 11, weight = 4000,
         image = 'resource_pelt_coyote.png' },
     trophy = { item = 'trophy_legendary_cinderjaw_coyote', label = 'Legendary Cinderjaw Coyote Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Cholla Springs Trapper', coords = { x = -3703.0, y = -2573.0, z = 70.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -3703.0, y = -2573.0, z = 70.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

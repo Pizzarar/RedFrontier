@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_coalhorn_moose', label = 'Legendary Coalhorn Moose Pelt', value = 67, weight = 30000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_coalhorn_moose', label = 'Legendary Coalhorn Moose Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Roanoke Ridge Trapper', coords = { x = 2975.0, y = 600.0, z = 38.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = 2975.0, y = 600.0, z = 38.0 }, -- TODO-verify-in-game
         price = 25,

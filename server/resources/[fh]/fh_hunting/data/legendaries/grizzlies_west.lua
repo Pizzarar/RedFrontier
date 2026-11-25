@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_palehorn_elk', label = 'Legendary Palehorn Elk Pelt', value = 51, weight = 24000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_palehorn_elk', label = 'Legendary Palehorn Elk Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Grizzlies West Trapper', coords = { x = -1300.0, y = 1600.0, z = 240.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = -1300.0, y = 1600.0, z = 240.0 }, -- TODO-verify-in-game
         price = 25, -- fh_economy amount, reason 'hunting:rumour', ledger region = this file's region

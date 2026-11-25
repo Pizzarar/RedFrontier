@@ -11,6 +11,8 @@ return {
     pelt = { item = 'pelt_legendary_redclay_stag', label = 'Legendary Red Clay Stag Pelt', value = 19, weight = 4000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_redclay_stag', label = 'Legendary Red Clay Stag Trophy', comfort = 25 },
+    -- The region's trapper: sells pelts and hosts the rumour (rumour.coords follows it).
+    trapper = { label = 'Scarlett Meadows Trapper', coords = { x = 1265.0, y = -1305.0, z = 77.0 } }, -- TODO-verify-in-game
     rumour = {
         coords = { x = 1265.0, y = -1305.0, z = 77.0 }, -- TODO-verify-in-game
         price = 25,
