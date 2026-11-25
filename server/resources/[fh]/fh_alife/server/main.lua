@@ -4,6 +4,7 @@
 -- TriggerEvent / TriggerClientEvent (fh_core/docs/natives.md, unverified in-game). NOT runtime-tested (no Cfx key).
 local cfg = FhAlifeConfig
 local rules = FhAlifeRules
+local raidRules = FhAlifeRaidRules -- a-life-03 claim raids (shared/raid_rules.lua); server side in server/raids.lua
 local regions = FhRegions
 
 local KVP_KEY = 'fh_alife_state'
@@ -32,12 +33,18 @@ local function load()
         log('bad KVP state, starting fresh: %s', tostring(t))
         return
     end
-    local s, err = rules.deserialize(t)
+    -- a-life-03 C2: raids are checked against the claims only once fh_homestead's claim cache has loaded (a non-empty
+    -- claimedPlots). Before that, pass nil: live raids are kept and raid_rules.tick cancels any whose plot is gone.
+    local plots, claims = FhAlifeHomestead.plots()
+    local s, err, dropped = raidRules.deserialize(t, ctx, (plots and claims > 0) and plots or nil)
     if not s then
         log('deserialize failed (%s), starting fresh', tostring(err))
         return
     end
     state = s
+    for _, e in ipairs(dropped or {}) do
+        log('load: dropped %s %s (%s)', tostring(e.type), tostring(e.squad_id), tostring(e.reason))
+    end
     local nOwners, nSquads = 0, 0
     for _ in pairs(state.owners) do nOwners = nOwners + 1 end
     for _ in pairs(state.squads) do nSquads = nSquads + 1 end
@@ -78,7 +85,23 @@ FhAlifeServer = {
     ctx = ctx,
     getState = function() return state end, -- state is reassigned by load()
     save = save,
+    -- rng = nil: raids.lua uses math.random unless a test sets FhAlifeServer.rng(lo, hi).
+    -- raidStep / raidCommand / raidNotify / raidCenter / raidOwnerOnline: set by server/raids.lua (a-life-03 C2).
 }
+
+---One sim step: FhAlifeRules.tick(ctx, state, 1), then the claim-raid step right after it (server/raids.lua runs
+---FhAlifeRaidRules.tick on the same state), then the camp effects. A raid error is logged and never stops the sim.
+---@return integer effects  camp effects + raid effects
+local function step()
+    local effects = rules.tick(ctx, state, 1)
+    local nRaid = 0
+    if FhAlifeServer.raidStep then
+        local ok, n = pcall(FhAlifeServer.raidStep)
+        if ok then nRaid = tonumber(n) or 0 else log('raid step error: %s', tostring(n)) end
+    end
+    applyEffects(effects)
+    return #effects + nRaid
+end
 
 -- ---------------------------------------------------------------- exports (FIXED API CONTRACT)
 
@@ -104,13 +127,12 @@ end)
 CreateThread(function()
     while true do
         Wait(math.floor((cfg.tickSeconds or 60) * 1000))
-        local effects = rules.tick(ctx, state, 1)
-        applyEffects(effects)
+        step()
         save()
     end
 end)
 
--- ---------------------------------------------------------------- admin commands (/alife, /alife tick [n])
+-- ---------------------------------------------------------------- admin commands (/alife, /alife tick [n], /alife raid)
 
 local function split(raw)
     local out = {}
@@ -142,7 +164,10 @@ local function statusLine()
         parts[#parts + 1] = ('%s=%s%s'):format(id, owner or 'none', rules.isLawHeld(ctx, state, id) and '(law)' or '')
     end
     local sqs = {}
-    for _, sq in pairs(state.squads) do sqs[#sqs + 1] = squadLine(sq) end
+    for _, sq in pairs(state.squads) do
+        -- a-life-03: raid squads print their claim line (raid_rules.describeRaid)
+        sqs[#sqs + 1] = sq.goal == raidRules.GOAL and raidRules.describeRaid(ctx, sq) or squadLine(sq)
+    end
     table.sort(sqs)
     for _, s in ipairs(sqs) do parts[#parts + 1] = s end
     -- Ambush nodes per region (rules.describeAmbush prints "<region>: no ambush nodes" for a region with none).
@@ -157,7 +182,7 @@ local function statusLine()
 end
 
 lib.addCommand('alife', {
-    help = 'A-Life camp sim: /alife (status) | /alife tick [n]',
+    help = 'A-Life camp sim: /alife (status) | /alife tick [n] | /alife raid <plotId>',
     restricted = 'group.admin',
 }, function(src, args, raw)
     local a = split(raw)
@@ -165,10 +190,14 @@ lib.addCommand('alife', {
         local n = tonumber(a[2])
         if not n or n < 1 then n = 1 end
         n = math.min(math.floor(n), 1000)
-        local effects = rules.tick(ctx, state, n)
-        applyEffects(effects)
+        local total = 0
+        for _ = 1, n do total = total + step() end -- one step at a time: the raid step runs after every tick
         save()
-        return reply(src, ('Advanced A-Life %d tick(s) -> %d effect(s).'):format(n, #effects))
+        return reply(src, ('Advanced A-Life %d tick(s) -> %d effect(s).'):format(n, total))
+    end
+    if a[1] == 'raid' then
+        if not FhAlifeServer.raidCommand then return reply(src, 'A-Life raids are not loaded.') end
+        return reply(src, FhAlifeServer.raidCommand(a[2]))
     end
     reply(src, 'A-Life: ' .. statusLine())
 end)

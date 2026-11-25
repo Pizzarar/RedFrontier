@@ -34,3 +34,4 @@ useable|weapon_gun_oil  # KNOWN-H2 owner: core, see audit H2
 
 # -- vendored rsg-loading ships an empty html/music/ dir, so `files { 'html/music/*' }` matches 0 files --
 manifest|rsg-loading:html/music/*  # owner: core; vendored rsg-loading (Rexshack-RedM) empty html/music/ dir; not a load break
+events|fh:alife:raid_repelled  # published for a-life-04/quests; no consumer yet (fh_core/docs/events.md)

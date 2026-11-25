@@ -12,6 +12,7 @@ shared_scripts {
     '@fh_core/shared/place_resolver.lua', -- FhPlaceResolver (resolves @fh_zones/config.lua camps at load)
     '@fh_zones/config.lua',        -- FhZonesConfig camp list (fh_zones must be started first)
     '@fh_zones/shared/camp_rules.lua', -- FhCampRules.safeParticipants (squad_wiped participants, as camp_cleared)
+    '@fh_homestead/shared/plot_rules.lua', -- FhPlotRules.chestStashId/dist (a-life-03 raids; pure file, no dependency)
     'config.lua',
     'shared/alife_rules.lua',
     'shared/raid_rules.lua',  -- FhAlifeRaidRules (a-life-03 claim raids; needs FhAlifeRules)
@@ -19,8 +20,10 @@ shared_scripts {
 }
 
 server_scripts {
+    'server/homestead.lua', -- FhAlifeHomestead: soft fh_homestead link (read before main.lua's boot load)
     'server/main.lua',
     'server/squads.lua',    -- uses FhAlifeServer from main.lua
+    'server/raids.lua',     -- a-life-03 claim raids: FhAlifeServer.raidStep/raidCommand + steal (fh_core containers)
     'server/contracts.lua', -- uses FhAlifeContracts (shared) + FhAlifeServer.getState
 }
 

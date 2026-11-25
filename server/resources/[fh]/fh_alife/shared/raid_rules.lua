@@ -339,7 +339,7 @@ function M.pickSteal(ctx, items, rng)
         local keys = {}
         for k in pairs(items) do
             local n = tonumber(k)
-            if n and n == math.floor(n) then keys[#keys + 1] = { k = k, n = n } end
+            if finite(n) and n == math.floor(n) then keys[#keys + 1] = { k = k, n = n } end
         end
         table.sort(keys, function(a, b) return a.n < b.n end)
         for _, kk in ipairs(keys) do

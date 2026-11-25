@@ -66,6 +66,7 @@ FhAlifeConfig = {
         stealStacks = 2,
         stealMaxFraction = 0.5,
         raidRadius = 60.0,      -- metres: owner "home" at arrival (server/C2 reads it). TODO-verify-in-game.
+        bootGraceTicks = 3,     -- server: raid steps skipped after start while fh_homestead shows 0 claims (cache load)
     },
 
     -- Camp-ownership shortage effects. `item` is the region's initialShortages good (fh_trade config).

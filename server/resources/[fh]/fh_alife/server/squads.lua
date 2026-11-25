@@ -6,7 +6,12 @@
 -- Natives: GetPlayers, GetPlayerPed, GetEntityCoords, GetEntityHealth, NetworkGetEntityFromNetworkId,
 -- DoesEntityExist, GetPedSourceOfDeath; all UNVERIFIED in game (no Cfx key yet). Spawn contract: fh_core README
 -- "Spawn contract". Credit (squad_wiped participants) resolves citizenids via rsg-core exactly like fh_zones camp_cleared.
-local rules = FhAlifeRules
+-- a-life-03 C2: claim-raid squads (goal 'raid') in phase 'fight' have their own spawn branch: they materialise at the
+-- claim's coords (FhAlifeServer.raidCenter, server/raids.lua) with owner tag FhAlifeRaidRules.OWNER_TAG while the
+-- claim owner is online, with no player-proximity check, and despawn as soon as the owner drops or the fight phase
+-- ends. The death watch routes every kill through FhAlifeRaidRules.onSquadKill (it wraps FhAlifeRules.onSquadKill),
+-- which adds raid_repelled when a raid squad is wiped -> fh:alife:raid_repelled.
+local raidRules = FhAlifeRaidRules
 local server = FhAlifeServer
 local ctx = server.ctx
 
@@ -19,8 +24,11 @@ local function setting(k, d)
 end
 local AMBUSH_RADIUS = setting('ambushRadius', 45.0) -- a player this close to a held node materialises its squad
 local PED_MODEL = setting('pedModel', 'g_m_m_unibanditos_01')
+-- raid squads: credit radius around the claim at wipe = claimRaids.raidRadius (the same "owner home" radius)
+local RAID_RADIUS = (FhAlifeConfig and FhAlifeConfig.claimRaids and tonumber(FhAlifeConfig.claimRaids.raidRadius)) or 60.0
 
-local squads = {} -- squadId -> { squadId, peds = { [i] = { reqId, netId, dead, failed } } }
+-- squadId -> { squadId, kind = 'ambush'|'raid', center = {x,y,z}, radius, peds = { [i] = { reqId, netId, dead, failed } } }
+local squads = {}
 
 local function dist2d(ax, ay, bx, by)
     local dx, dy = ax - bx, ay - by
@@ -47,12 +55,12 @@ local function playerNear(node, positions)
     return false
 end
 
-local function requestPed(squadId, rec, i, node, heading)
+local function requestPed(squadId, rec, i, node, heading, ownerKind)
     local entry = { reqId = nil, netId = nil, dead = false, failed = false }
     rec.peds[i] = entry
     local id, err = exports.fh_core:requestSpawn({
         kind = 'ped', model = PED_MODEL, coords = vector4(node.x, node.y, node.z, heading),
-        owner = { kind = 'alife_squad', id = squadId },
+        owner = { kind = ownerKind, id = squadId },
         tag = ('fh_alife:%s:%d'):format(squadId, i),
     }, {
         near = vector3(node.x, node.y, node.z),
@@ -76,14 +84,20 @@ local function requestPed(squadId, rec, i, node, heading)
     entry.reqId = id
 end
 
-local function materialise(squadId, sq, node)
-    local rec = { squadId = squadId, peds = {} }
+-- kind 'ambush': node = the ambush node, owner tag 'alife_squad'. kind 'raid': node = the claim center {x,y,z} (no
+-- id), owner tag raidRules.OWNER_TAG. Peds stand on the point, spread by heading. TODO-verify-in-game for raids: the
+-- claim center may sit on the house; an offset ring needs a ground-z source first.
+local function materialise(squadId, sq, node, kind)
+    kind = kind or 'ambush'
+    local rec = { squadId = squadId, kind = kind, center = { x = node.x, y = node.y, z = node.z },
+        radius = kind == 'raid' and RAID_RADIUS or AMBUSH_RADIUS, peds = {} }
     squads[squadId] = rec
+    local ownerKind = kind == 'raid' and raidRules.OWNER_TAG or 'alife_squad'
     local n = math.max(1, math.floor(sq.strength or 0))
     for i = 1, n do
-        requestPed(squadId, rec, i, node, (360 / n) * (i - 1))
+        requestPed(squadId, rec, i, node, (360 / n) * (i - 1), ownerKind)
     end
-    log('squad %s materialised at %s (%d peds)', squadId, tostring(node.id), n)
+    log('squad %s (%s) materialised at %s (%d peds)', squadId, kind, tostring(node.id or sq.plot), n)
 end
 
 local function despawnSquad(squadId, reason)
@@ -121,10 +135,12 @@ local function citizenidOf(src)
     return ok and cid or nil
 end
 
----Citizenids credited for a wipe: every player whose ped is within ambushRadius of the node now (presence, via
----FhCampRules.safeParticipants — the same filter fh_zones uses for camp_cleared), plus any player whose ped killed a
----squad member (GetPedSourceOfDeath) even from outside the radius. Deduped; {} on any lookup failure, never nil.
-local function wipeParticipants(squadId, rec, node)
+---Citizenids credited for a wipe: every player whose ped is within rec.radius of rec.center now (ambush: ambushRadius
+---of the node; raid: claimRaids.raidRadius of the claim) (presence, via FhCampRules.safeParticipants — the same filter
+---fh_zones uses for camp_cleared), plus any player whose ped killed a squad member (GetPedSourceOfDeath) even from
+---outside the radius. Deduped; {} on any lookup failure, never nil.
+local function wipeParticipants(squadId, rec)
+    local node = rec.center
     local killers = {}
     for _, p in ipairs(rec.peds) do if p.killer then killers[p.killer] = true end end
     local extra = {}
@@ -143,7 +159,7 @@ local function wipeParticipants(squadId, rec, node)
     end
     local list, err
     if FhCampRules and FhCampRules.safeParticipants then
-        list, err = FhCampRules.safeParticipants(vector3(node.x, node.y, node.z), AMBUSH_RADIUS, gather)
+        list, err = FhCampRules.safeParticipants(vector3(node.x, node.y, node.z), rec.radius or AMBUSH_RADIUS, gather)
     else
         list, err = {}, 'FhCampRules missing'
     end
@@ -157,8 +173,9 @@ local function wipeParticipants(squadId, rec, node)
     return out
 end
 
--- One pass of the death watch: each dead ped takes 1 off the squad's strength (FhAlifeRules.onSquadKill); when the
--- squad is wiped, the survivors are despawned and fh:alife:squad_wiped is emitted.
+-- One pass of the death watch: each dead ped takes 1 off the squad's strength (FhAlifeRaidRules.onSquadKill, which
+-- wraps FhAlifeRules.onSquadKill for every squad); when the squad is wiped, the survivors are despawned and
+-- fh:alife:squad_wiped is emitted, plus fh:alife:raid_repelled (once, same participants) for a raid squad.
 local function checkDeaths(squadId, rec)
     local state = server.getState()
     for _, entry in ipairs(rec.peds) do
@@ -167,23 +184,43 @@ local function checkDeaths(squadId, rec)
         if dead then
             entry.dead = true
             entry.killer = killerOf(e)
-            local effects, err = rules.onSquadKill(ctx, state, squadId)
+            local effects, err = raidRules.onSquadKill(ctx, state, squadId)
             if err then return end -- squad already gone (e.g. pruned): stop
             server.save()
-            for _, e in ipairs(effects) do
-                if e.type == 'squad_wiped' then
-                    -- Canonical payload (fh_core/docs/events.md): snake_case like fh:zones:camp_cleared.
-                    local node = ctx.graph.nodes[e.node]
-                    TriggerEvent('fh:alife:squad_wiped', { squad_id = e.squad_id, node_id = e.node,
-                        region_id = e.region_id, faction = e.faction, goal = e.goal, camp_id = e.camp_id,
-                        label = e.label,
-                        participants = node and wipeParticipants(squadId, rec, node) or {} })
-                    despawnSquad(squadId, 'wiped')
-                    return
+            local wiped, participants = false, nil
+            for _, ef in ipairs(effects) do
+                if ef.type == 'squad_wiped' or ef.type == 'raid_repelled' then
+                    participants = participants or wipeParticipants(squadId, rec)
                 end
+                if ef.type == 'squad_wiped' then
+                    wiped = true
+                    -- Canonical payload (fh_core/docs/events.md): snake_case like fh:zones:camp_cleared.
+                    TriggerEvent('fh:alife:squad_wiped', { squad_id = ef.squad_id, node_id = ef.node,
+                        region_id = ef.region_id, faction = ef.faction, goal = ef.goal, camp_id = ef.camp_id,
+                        label = ef.label, participants = participants })
+                elseif ef.type == 'raid_repelled' then
+                    TriggerEvent('fh:alife:raid_repelled', { plot_id = ef.plot_id, region_id = ef.region_id,
+                        faction = ef.faction, camp_id = ef.camp_id, squad_id = ef.squad_id,
+                        participants = participants })
+                    if server.raidNotify then pcall(server.raidNotify, ef) end
+                end
+            end
+            if wiped then
+                despawnSquad(squadId, 'wiped')
+                return
             end
         end
     end
+end
+
+---A raid squad that should stand at its claim now: phase 'fight', not cancelled, owner online (raids.lua's cache,
+---cleared on playerDropped), and claim coords known. @return table|nil center {x,y,z}
+local function raidFightCenter(sq)
+    if sq.goal ~= raidRules.GOAL or sq.phase ~= 'fight' or sq.cancelled then return nil end
+    if not (server.raidOwnerOnline and server.raidOwnerOnline(sq.citizenid)) then return nil end
+    local c = server.raidCenter and server.raidCenter(sq)
+    if type(c) == 'table' and tonumber(c.x) and tonumber(c.y) and tonumber(c.z) then return c end
+    return nil
 end
 
 -- ---------------------------------------------------------------- sweep (materialise / despawn / death watch)
@@ -191,14 +228,27 @@ end
 local function sweep()
     local state = server.getState()
     local positions = playerPositions()
-    -- squads that left the state or left 'hold' despawn (their surviving strength stays in state)
+    -- squads that left the state, left 'hold' (ambush) or left a live fight (raid) despawn (their surviving strength
+    -- stays in state). Raid fight squads have their own branch: never swept as "not ambush".
     do
         local gone = {}
-        for squadId in pairs(squads) do
+        for squadId, rec in pairs(squads) do
             local sq = state.squads[squadId]
-            if not sq or sq.goal ~= 'ambush' or sq.phase ~= 'hold' then gone[#gone + 1] = squadId end
+            local keep
+            if rec.kind == 'raid' then keep = sq ~= nil and raidFightCenter(sq) ~= nil
+            else keep = sq ~= nil and sq.goal == 'ambush' and sq.phase == 'hold' end
+            if not keep then gone[#gone + 1] = squadId end
         end
-        for _, squadId in ipairs(gone) do despawnSquad(squadId, 'left_node') end
+        for _, squadId in ipairs(gone) do
+            despawnSquad(squadId, squads[squadId].kind == 'raid' and 'raid_over' or 'left_node')
+        end
+    end
+    -- raid fight: materialise at the claim (no player-proximity check: the owner was home when it arrived)
+    for squadId, sq in pairs(state.squads) do
+        if not squads[squadId] then
+            local c = raidFightCenter(sq)
+            if c then materialise(squadId, sq, c, 'raid') end
+        end
     end
     -- materialise a held squad when a player is within ambushRadius, else despawn it
     for squadId, sq in pairs(state.squads) do

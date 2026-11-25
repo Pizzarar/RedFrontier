@@ -445,7 +445,7 @@ case('a-life-02 v2 and a-life-01 v1 saves still load (no raids, no cooldowns)', 
     eq(nil, err); same({}, eff); eq(4, st.squads.sq1.strength); same({}, st.raidCooldowns)
     eq(3, R.serialize(st).version)
     -- a loaded old save raids normally
-    same({ 'raid_warned' }, types(R.tick(ctx, stateWith({ HEART[2] }), { plots = { p1 = claim('A') },
+    same({ 'raid_warned' }, types(R.tick(ctx, st, { plots = { p1 = claim('A') },
         online = { A = true } }, seq(1, 3))))
 end)
 

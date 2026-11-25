@@ -8,7 +8,7 @@ local T = dofile(here .. 'support/fh_prelude.lua')
 local R = here .. '../server/resources/[fh]/'
 
 -- Minimal JSON (encode/decode) for the KVP round-trip: the spec runs under plain Lua 5.4 (no CfxLua `json` global).
--- Handles the state shape (objects, strings, integers, booleans, null); no arrays are needed by fh_alife state.
+-- Handles the state shape (objects, arrays, strings, integers, booleans, null); an empty table encodes as [].
 local Json = {}
 do
     local esc = { ['"'] = '\\"', ['\\'] = '\\\\', ['\b'] = '\\b', ['\f'] = '\\f', ['\n'] = '\\n', ['\r'] = '\\r',
@@ -85,6 +85,19 @@ do
                 end
                 return t
             end
+            if c == '[' then -- arrays (an empty Lua table encodes as [])
+                pos = pos + 1
+                local t = {}
+                skip()
+                if s:sub(pos, pos) == ']' then pos = pos + 1 return t end
+                while true do
+                    t[#t + 1] = val()
+                    skip()
+                    local d = s:sub(pos, pos); pos = pos + 1
+                    if d == ']' then break end
+                end
+                return t
+            end
             if c == '"' then return str() end
             if c == 't' then pos = pos + 4 return true end
             if c == 'f' then pos = pos + 5 return false end
@@ -100,13 +113,29 @@ end
 ---{ [regionId] = { ambush node entries } } overlaid onto FhRegions before the rules build the node graph. Returns a
 ---probe table with captured exports, handlers, commands, KVP writes, cross-resource calls and squad spawn/despawn
 ---records (the stubbed fh_core adopts each spawn synchronously with a fake netId).
-local function boot(preKvp, ambush)
+local function boot(preKvp, ambush, opts)
     local B = {
         exported = {}, handlers = {}, commands = {}, broadcasts = {}, flipped = {}, heatCalls = {},
         shortageCalls = {}, printed = {}, kvp = preKvp or {},
         spawns = {}, despawns = {}, wiped = {}, healths = {}, nextReq = 1,
         players = {}, playerPeds = {}, pedCoords = {}, cids = {}, killers = {},
+        -- a-life-03 C2: fh_homestead claims (plotId -> plotInfo facts), fh_core containers (id -> slot -> item),
+        -- container op log, failure knobs, raid_repelled events, resource states (default 'started').
+        plots = {}, containers = {}, invLog = {}, failAdd = {}, failRemove = {}, noFit = {}, bags = {},
+        repelled = {}, resState = {},
     }
+    local function copy(t)
+        if type(t) ~= 'table' then return t end
+        local o = {}
+        for k, v in pairs(t) do o[k] = copy(v) end
+        return o
+    end
+    local function sortedPlotIds()
+        local ids = {}
+        for id in pairs(B.plots) do ids[#ids + 1] = id end
+        table.sort(ids)
+        return ids
+    end
     local exportsT = setmetatable({
         -- fh_heat is stubbed as a spy: fh_alife must NOT call addSource (camp_clear heat is fh_heat's own job).
         fh_heat = { addSource = function(_, src, faction, key)
@@ -125,6 +154,60 @@ local function boot(preKvp, ambush)
                 return id
             end,
             despawn = function(_, id) B.despawns[#B.despawns + 1] = id B.spawns[id] = nil end,
+            -- container API (fh_core/server/inventory.lua): stash ids -> slot maps; removeItem/addItem all-or-nothing
+            snapshot = function(_, ref)
+                local c = B.containers[ref.id]
+                if not c then return nil, 'fh_no_container' end
+                return copy(c)
+            end,
+            canFit = function(_, ref, name, amount)
+                if not B.containers[ref.id] then return false, 'fh_no_container' end
+                if B.noFit[ref.id] then return false, B.noFit[ref.id] end
+                return true
+            end,
+            removeItem = function(_, ref, name, amount)
+                B.invLog[#B.invLog + 1] = { 'remove', ref.id, name, amount }
+                local c = B.containers[ref.id]
+                if not c then return false, 'fh_unknown_container' end
+                if B.failRemove[ref.id] then return false, B.failRemove[ref.id] end
+                local have = 0
+                for _, it in pairs(c) do if it.name == name then have = have + it.amount end end
+                if have < amount then return false, 'fh_not_enough' end
+                local slots = {}
+                for slot, it in pairs(c) do if it.name == name then slots[#slots + 1] = slot end end
+                table.sort(slots)
+                local left = amount
+                for _, slot in ipairs(slots) do
+                    local take = math.min(left, c[slot].amount)
+                    c[slot].amount = c[slot].amount - take
+                    if c[slot].amount == 0 then c[slot] = nil end
+                    left = left - take
+                    if left == 0 then break end
+                end
+                return true
+            end,
+            addItem = function(_, ref, name, amount, info)
+                B.invLog[#B.invLog + 1] = { 'add', ref.id, name, amount }
+                local c = B.containers[ref.id]
+                if not c then return false, 'fh_unknown_container' end
+                if B.failAdd[ref.id] then return false, B.failAdd[ref.id] end
+                for _, it in pairs(c) do
+                    if it.name == name then it.amount = it.amount + amount return true end
+                end
+                local slot = 1
+                while c[slot] do slot = slot + 1 end
+                c[slot] = { name = name, amount = amount, info = copy(info) }
+                return true
+            end,
+            createDropBag = function(_, coords, items, opts)
+                B.bags[#B.bags + 1] = { coords = coords, items = copy(items), opts = opts }
+                return 'drop:' .. #B.bags
+            end,
+        },
+        -- fh_homestead (soft dependency): claimedPlots + plotInfo from B.plots
+        fh_homestead = {
+            claimedPlots = function() return sortedPlotIds() end,
+            plotInfo = function(_, id) return copy(B.plots[id]) end,
         },
         -- rsg-core: src -> citizenid via B.cids (the lookup fh_zones also uses for camp_cleared participants).
         ['rsg-core'] = { GetCoreObject = function() return { Functions = { GetPlayer = function(src)
@@ -133,7 +216,7 @@ local function boot(preKvp, ambush)
     local env = setmetatable({
         exports = exportsT,
         GetCurrentResourceName = function() return 'fh_alife' end,
-        GetResourceState = function() return 'started' end,
+        GetResourceState = function(name) return B.resState[name] or 'started' end,
         GetPlayers = function() return B.players end,
         GetPlayerPed = function(src) return B.playerPeds[src] or 0 end,
         GetEntityCoords = function(e) return B.pedCoords[e] end,
@@ -147,6 +230,7 @@ local function boot(preKvp, ambush)
         TriggerEvent = function(name, payload)
             if name == 'fh:alife:camp_flipped' then B.flipped[#B.flipped + 1] = payload end
             if name == 'fh:alife:squad_wiped' then B.wiped[#B.wiped + 1] = payload end
+            if name == 'fh:alife:raid_repelled' then B.repelled[#B.repelled + 1] = payload end
             local h = B.handlers[name]
             if h then h(payload) end
         end,
@@ -175,11 +259,16 @@ local function boot(preKvp, ambush)
     run(R .. 'fh_core/shared/place_resolver.lua')
     run(R .. 'fh_zones/config.lua')
     run(R .. 'fh_zones/shared/camp_rules.lua')
+    run(R .. 'fh_homestead/shared/plot_rules.lua')
     run(R .. 'fh_alife/config.lua')
     run(R .. 'fh_alife/shared/alife_rules.lua')
     run(R .. 'fh_alife/shared/raid_rules.lua') -- fxmanifest order: reads the FhAlifeRules global
+    if opts and opts.beforeLoad then opts.beforeLoad(B) end
+    run(R .. 'fh_alife/server/homestead.lua')
     run(R .. 'fh_alife/server/main.lua')
     run(R .. 'fh_alife/server/squads.lua')
+    run(R .. 'fh_alife/server/raids.lua')
+    B.env = env
     B.cfg = env.FhAlifeConfig
     B.rules = env.FhAlifeRules
     B.raidRules = env.FhAlifeRaidRules
@@ -399,6 +488,260 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         local msg
         for _, b in ipairs(B.broadcasts) do if b[1] == 1 then msg = b[2].args[2] end end
         assert(msg and msg:find('sq1 ambush@Dakota bend x2 hold', 1, true), 'squad line: ' .. tostring(msg))
+    end)
+
+    -- ---------------------------------------------------------------- a-life-03 C2: claim raids (server/raids.lua)
+    -- Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game World.
+
+    local CLAIM_AT = { x = 1000.0, y = 1000.0, z = 50.0 }
+    local CHEST = 'fh:chest:p1:1'
+    local STASH = 'fh:camp:heartlands_t1_01' -- first outlaw-held heartlands camp = the raiding camp
+    local function lo(a) return a end -- server rng: odds roll 1 (hit), min strength, first stack, take 1
+
+    local function claimFacts(owner, extra)
+        local p = { class = 'claim', raidable = true, lawSafe = false, owner = owner,
+            coords = { x = CLAIM_AT.x, y = CLAIM_AT.y, z = CLAIM_AT.z }, region = 'heartlands', fenceBuilt = false }
+        for k, v in pairs(extra or {}) do p[k] = v end
+        return p
+    end
+
+    ---Boot with claim p1 owned by CID1 (player 1, ped 101). home = the ped stands at the claim, else 5 km away.
+    local function raidBoot(home, kvp, opts)
+        local B = boot(kvp, nil, opts)
+        B.server.rng = lo
+        B.plots.p1 = claimFacts('CID1')
+        B.containers[CHEST] = { [1] = { name = 'bread', amount = 4 }, [2] = { name = 'rope', amount = 2, info = { q = 1 } } }
+        B.containers[STASH] = {}
+        B.players = { '1' }
+        B.playerPeds[1] = 101
+        B.cids[1] = 'CID1'
+        B.pedCoords[101] = home and { x = CLAIM_AT.x + 5, y = CLAIM_AT.y, z = CLAIM_AT.z }
+            or { x = CLAIM_AT.x + 5000, y = CLAIM_AT.y, z = CLAIM_AT.z }
+        return B
+    end
+
+    local function toOwner(B)
+        local out = {}
+        for _, b in ipairs(B.broadcasts) do if b[1] == 1 then out[#out + 1] = b[2].args[2] end end
+        return out
+    end
+    local function said(B, needle)
+        for _, m in ipairs(toOwner(B)) do if m:find(needle, 1, true) then return m end end
+        return nil
+    end
+    local function total(c, name)
+        local n = 0
+        for _, it in pairs(c or {}) do if it.name == name then n = n + it.amount end end
+        return n
+    end
+    local function raids(B) return B.raidRules.listRaids(B.server.getState()) end
+    local function spawnList(B)
+        local out = {}
+        for _, s in pairs(B.spawns) do out[#out + 1] = s end
+        return out
+    end
+
+    T.it('C2 schedule: /alife tick 6 runs the raid step after every tick (warn at tick 1, steal at tick 6)', function()
+        local B = raidBoot(false)
+        B.commands.alife(1, {}, 'alife tick 1')
+        local st = B.server.getState()
+        T.eq(1, #raids(B), 'raid planned on the first step')
+        local sq = raids(B)[1]
+        T.eq('warn', sq.phase); T.eq('p1', sq.plot); T.eq('heartlands_t1_01', sq.from); T.eq(6, sq.etaTick)
+        assert(said(B, 'are heading for your claim (~5 min)'), 'warning notice to the owner: ' .. table.concat(toOwner(B), ' / '))
+        -- 5 more ticks in ONE command: arrival at tick 6 only happens if R.tick ran after each single step
+        B.commands.alife(1, {}, 'alife tick 5')
+        T.eq(6, st.tick)
+        T.eq('return', sq.phase); T.eq('steal', sq.mode)
+        assert(said(B, 'took from your chest: 1x bread, 1x rope'), 'itemised steal notice')
+    end)
+
+    T.it('C2 steal: remove-then-add per pick through fh_core; chest + stash totals conserved, info kept', function()
+        local B = raidBoot(false)
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.same({ { 'remove', CHEST, 'bread', 1 }, { 'add', STASH, 'bread', 1 },
+            { 'remove', CHEST, 'rope', 1 }, { 'add', STASH, 'rope', 1 } }, B.invLog)
+        T.eq(3, total(B.containers[CHEST], 'bread')); T.eq(1, total(B.containers[STASH], 'bread'))
+        T.eq(1, total(B.containers[CHEST], 'rope')); T.eq(1, total(B.containers[STASH], 'rope'))
+        local rope
+        for _, it in pairs(B.containers[STASH]) do if it.name == 'rope' then rope = it end end
+        T.same({ q = 1 }, rope.info, 'picked stack info carried to the stash')
+        T.eq(0, #B.bags)
+    end)
+
+    T.it('C2 steal: a refused add puts the items back in the chest (no loss, no dup)', function()
+        local B = raidBoot(false)
+        B.failAdd[STASH] = 'fh_too_heavy'
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.same({ { 'remove', CHEST, 'bread', 1 }, { 'add', STASH, 'bread', 1 }, { 'add', CHEST, 'bread', 1 },
+            { 'remove', CHEST, 'rope', 1 }, { 'add', STASH, 'rope', 1 }, { 'add', CHEST, 'rope', 1 } }, B.invLog)
+        T.eq(4, total(B.containers[CHEST], 'bread')); T.eq(2, total(B.containers[CHEST], 'rope'))
+        T.eq(0, total(B.containers[STASH], 'bread')); T.eq(0, total(B.containers[STASH], 'rope'))
+        T.eq(0, #B.bags)
+        assert(said(B, 'found nothing to take'), 'owner told nothing was taken')
+        local logged = false
+        for _, l in ipairs(B.printed) do if l:find('returned to ' .. CHEST, 1, true) then logged = true end end
+        assert(logged, 'rollback logged')
+    end)
+
+    T.it('C2 steal: add refused by stash AND chest -> drop bag at the claim (never destroyed)', function()
+        local B = raidBoot(false)
+        B.failAdd[STASH], B.failAdd[CHEST] = 'fh_too_heavy', 'fh_too_heavy'
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.eq(2, #B.bags)
+        T.same({ { name = 'bread', amount = 1 } }, B.bags[1].items)
+        T.same({ { name = 'rope', amount = 1, info = { q = 1 } } }, B.bags[2].items)
+        T.eq(CLAIM_AT.x, B.bags[1].coords.x); T.eq('CID1', B.bags[1].opts.owner)
+        T.eq(3, total(B.containers[CHEST], 'bread')); T.eq(0, total(B.containers[STASH], 'bread'))
+    end)
+
+    T.it('C2 steal: a refused remove never adds (no duplication); a full stash is never touched', function()
+        local B = raidBoot(false)
+        B.failRemove[CHEST] = 'fh_refused'
+        B.commands.alife(1, {}, 'alife tick 6')
+        for _, op in ipairs(B.invLog) do T.eq('remove', op[1], 'no add after a refused remove') end
+        T.eq(4, total(B.containers[CHEST], 'bread')); T.eq(0, total(B.containers[STASH], 'bread'))
+        local B2 = raidBoot(false)
+        B2.noFit[STASH] = 'fh_too_heavy'
+        B2.commands.alife(1, {}, 'alife tick 6')
+        T.eq(0, #B2.invLog, 'canFit refused: no remove at all')
+    end)
+
+    T.it('C2 steal: missing camp stash (fh_zones down) skips the steal with a notice, chest untouched', function()
+        local B = raidBoot(false)
+        B.containers[STASH] = nil
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.eq(0, #B.invLog)
+        T.eq(4, total(B.containers[CHEST], 'bread'))
+        assert(said(B, 'rode off empty-handed'), 'skip notice')
+        T.eq('steal', raids(B)[1].mode, 'raid still rides home')
+    end)
+
+    T.it('C2 fight: owner home -> squad spawns at the claim with owner tag alife_raid and is not swept away', function()
+        local B = raidBoot(true)
+        B.commands.alife(1, {}, 'alife tick 6')
+        local sq = raids(B)[1]
+        T.eq('fight', sq.phase)
+        assert(said(B, 'The raiders are at your claim'), 'fight notice')
+        B.squads.sweep()
+        local sp = spawnList(B)
+        T.eq(sq.strength, #sp, 'one ped per strength point')
+        for _, s in ipairs(sp) do
+            T.eq('alife_raid', s.spec.owner.kind); T.eq(sq.id, s.spec.owner.id)
+            T.eq(CLAIM_AT.x, s.spec.coords.x); T.eq(CLAIM_AT.y, s.spec.coords.y)
+        end
+        B.squads.sweep()
+        T.eq(0, #B.despawns, 'raid fight squads have their own branch: the non-ambush sweep leaves them')
+        T.eq(sq.strength, #spawnList(B), 'no double spawn')
+        -- the fight ends (fightTicks) -> withdrew -> peds despawn
+        B.commands.alife(1, {}, 'alife tick ' .. B.cfg.claimRaids.fightTicks)
+        T.eq('return', sq.phase)
+        assert(said(B, 'pulled back'), 'withdraw notice')
+        B.squads.sweep()
+        T.eq(0, #spawnList(B), 'withdrawn squad despawned')
+        T.eq(0, #B.wiped); T.eq(0, #B.repelled)
+    end)
+
+    T.it('C2 repelled: wiping the raid squad emits squad_wiped + raid_repelled once (same participants)', function()
+        local B = raidBoot(true)
+        B.commands.alife(1, {}, 'alife tick 6')
+        local sq = raids(B)[1]
+        local strength = sq.strength
+        B.squads.sweep()
+        for _, s in pairs(B.spawns) do B.healths[s.netId] = 0 end
+        B.squads.sweep()
+        B.squads.sweep()
+        T.eq(1, #B.wiped); T.eq(1, #B.repelled, 'raid_repelled exactly once')
+        T.same({ plot_id = 'p1', region_id = 'heartlands', faction = 'outlaws', camp_id = 'heartlands_t1_01',
+            squad_id = sq.id, participants = { 'CID1' } }, B.repelled[1])
+        T.same(B.wiped[1].participants, B.repelled[1].participants)
+        T.eq('raid', B.wiped[1].goal)
+        T.eq(nil, B.server.getState().squads[sq.id], 'squad gone from state')
+        T.eq(strength, B.rules.getPressure(B.server.getState(), 'heartlands', 'outlaws'), 'regionPressure added')
+        assert(said(B, 'drove the raiders off'), 'repel notice')
+        B.commands.alife(1, {}, 'alife tick 20')
+        T.eq(1, #B.repelled, 'no second repel after later ticks')
+    end)
+
+    T.it('C2 logoff mid-fight: peds despawn on playerDropped, next tick cancels the raid, no respawn', function()
+        local B = raidBoot(true)
+        B.commands.alife(1, {}, 'alife tick 6')
+        local sq = raids(B)[1]
+        B.squads.sweep()
+        assert(#spawnList(B) > 0, 'fight squad up')
+        B.players, B.playerPeds[1] = {}, nil
+        B.env.source = 1
+        B.handlers.playerDropped()
+        B.squads.sweep()
+        T.eq(0, #spawnList(B), 'despawned within one sweep of the logoff')
+        B.commands.alife(0, {}, 'alife tick 1')
+        T.eq('return', sq.phase); T.eq('owner_offline', sq.cancelled)
+        B.squads.sweep()
+        T.eq(0, #spawnList(B), 'a cancelled raid never re-materialises')
+        T.eq(0, #B.invLog, 'nothing stolen')
+    end)
+
+    T.it('C2 logoff during the warning cancels the raid; nothing is stolen at the old arrival tick', function()
+        local B = raidBoot(false)
+        B.commands.alife(1, {}, 'alife tick 1')
+        local sq = raids(B)[1]
+        B.players = {}
+        B.commands.alife(0, {}, 'alife tick 1')
+        T.eq('owner_offline', sq.cancelled); T.eq('return', sq.phase)
+        B.commands.alife(0, {}, 'alife tick 4')
+        T.eq(0, #raids(B), 'rode home and removed')
+        T.eq(0, #B.invLog)
+    end)
+
+    T.it('C2 /alife raid <plotId>: forces a raid (admin); /alife lists it via describeRaid; refusals reply', function()
+        local B = raidBoot(true)
+        B.commands.alife(1, {}, 'alife raid p1')
+        local sq = raids(B)[1]
+        assert(sq and sq.phase == 'warn', 'forced raid in warn')
+        assert(said(B, 'Raid started: ' .. sq.id .. ' raid p1 by outlaws'), 'admin reply')
+        assert(said(B, 'are heading for your claim'), 'owner warned')
+        assert(B.kvp.fh_alife_state, 'saved')
+        B.commands.alife(1, {}, 'alife')
+        assert(said(B, B.raidRules.describeRaid(B.server.ctx, sq)), '/alife lists the raid line')
+        B.commands.alife(1, {}, 'alife raid p1')
+        assert(said(B, 'Raid on p1 refused: fh_alife_raid_live'), 'second force refused')
+        B.commands.alife(1, {}, 'alife raid nope')
+        assert(said(B, 'No such claim: nope'), 'unknown plot')
+        B.plots.lot = claimFacts('CID1', { class = 'town_lot', raidable = false, lawSafe = true })
+        B.commands.alife(1, {}, 'alife raid lot')
+        assert(said(B, 'Raid on lot refused: fh_alife_not_raidable'), 'town lot never raided')
+        T.eq(1, #raids(B))
+    end)
+
+    T.it('C2 no homestead -> no raids; town lots never raided by the schedule', function()
+        local B = raidBoot(false)
+        B.resState.fh_homestead = 'missing'
+        B.commands.alife(1, {}, 'alife tick 10')
+        T.eq(0, #raids(B))
+        local B2 = raidBoot(false)
+        B2.plots.p1 = claimFacts('CID1', { class = 'town_lot', raidable = false, lawSafe = true })
+        B2.commands.alife(1, {}, 'alife tick 10')
+        T.eq(0, #raids(B2))
+    end)
+
+    T.it('C2 boot: a live raid loaded from KVP survives while claims are not loaded yet (boot grace)', function()
+        local B0 = raidBoot(true)
+        B0.commands.alife(1, {}, 'alife raid p1')
+        local saved = B0.kvp.fh_alife_state
+        -- reboot: fh_homestead started but its claim cache is still empty
+        local B = boot({ fh_alife_state = saved }, nil)
+        B.server.rng = lo
+        T.eq(1, #raids(B), 'not dropped at load (plots not passed to deserialize)')
+        B.players = { '1' }; B.playerPeds[1] = 101; B.cids[1] = 'CID1'
+        B.pedCoords[101] = { x = CLAIM_AT.x, y = CLAIM_AT.y, z = CLAIM_AT.z }
+        B.commands.alife(1, {}, 'alife tick ' .. B.cfg.claimRaids.bootGraceTicks)
+        T.eq(nil, raids(B)[1].cancelled, 'not cancelled during the grace')
+        B.plots.p1 = claimFacts('CID1') -- claims loaded
+        B.commands.alife(1, {}, 'alife tick 1')
+        T.eq(nil, raids(B)[1].cancelled)
+        -- loaded at boot with claims ready: a raid whose plot is gone is dropped by deserialize
+        local B2 = boot({ fh_alife_state = saved }, nil, { beforeLoad = function(b) b.plots.other = claimFacts('X') end })
+        T.eq(0, #raids(B2), 'plots passed once claims are loaded: missing plot dropped')
     end)
 end)
 
