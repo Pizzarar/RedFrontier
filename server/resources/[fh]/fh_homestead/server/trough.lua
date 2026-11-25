@@ -249,7 +249,15 @@ local function refillLocked(st)
         'INSERT INTO fh_plot_trough (plot_id, last_refill_at) SELECT ?, ? FROM fh_plots WHERE plot_id = ? AND citizenid = ?'
         .. ' ON DUPLICATE KEY UPDATE last_refill_at = VALUES(last_refill_at)',
         { st.plotId, now(), st.plotId, st.cid })
-    if not okw or (tonumber(affected) or 0) < 1 then
+    local saved = okw and (tonumber(affected) or 0) >= 1
+    if okw and not saved then
+        -- 0 affected rows is ambiguous: ON DUPLICATE KEY UPDATE reports 0 when the value is unchanged (same second,
+        -- cooldownSeconds 0, clock step back), but the ownership-guarded SELECT also inserts 0 rows for a lost plot.
+        -- Re-read the row: it exists with this timestamp only if the write really took.
+        local okq, rows = pcall(MySQL.query.await, 'SELECT last_refill_at FROM fh_plot_trough WHERE plot_id = ?', { st.plotId })
+        saved = okq and type(rows) == 'table' and rows[1] ~= nil and tonumber(rows[1].last_refill_at) == now()
+    end
+    if not saved then
         log('warn', ('trough refill %s: could not record the refill (%s); putting the feedbag back')
             :format(st.plotId, tostring(okw and ('affected ' .. tostring(affected)) or affected)))
         st.taken = false

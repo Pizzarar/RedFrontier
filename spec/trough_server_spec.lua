@@ -61,6 +61,7 @@ local function newWorld(db, refillOn)
             if W.fail.refillWrite then error('db down') end
             if W.db.plots[p[3]] ~= p[4] then return 0 end
             W.db.refill[p[1]] = p[2]
+            if W.fail.refillUnchanged then return 0 end -- MySQL: 0 affected when the value is unchanged
             return 1
         elseif sql:find('^DELETE FROM fh_plot_trough') then
             W.db.refill[p[1]] = nil
@@ -240,6 +241,14 @@ T.describe('refill on mount', function()
         local W2 = world(true, W.db); W2.trough().feedbag = 2; W2.peds[1] = at(p1)
         W2.now = T0 + 10
         T.same({ false, 'fh_cooldown', n = 2 }, r(W2.TR.refill(1)))
+    end)
+    case('affected=0 with no error (value unchanged) is a success: refill goes through, no refund', function()
+        local W = world(true); W.trough().feedbag = 3; W.peds[1] = at(p1)
+        W.fail.refillUnchanged = true
+        local add0 = W.calls.addItem; assert(W.refill(1))
+        T.eq(2, W.trough().feedbag); T.eq(T0, W.db.refill[P1])
+        T.eq('fh:homestead:trough_refilled', W.client[#W.client].name)
+        T.eq(add0, W.calls.addItem)
     end)
     case('empty trough = no refill (and no cooldown recorded)', function()
         local W = world(true); W.peds[1] = at(p1)
