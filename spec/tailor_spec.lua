@@ -364,7 +364,7 @@ case('buy: full B7 error map passes through, nothing taken, claim removed; every
     local codes = { 'charge_unavailable', 'not_ready', 'tailor_busy', 'tailor_error', 'db_failed', 'unknown_shop',
         'unknown_entry', 'out_of_range', 'earned_only', 'not_stocked', 'wrong_sex', 'tier_too_low', 'tier_unavailable',
         'already_owned', 'not_owned', 'not_outfit', 'not_item', 'too_many_items', 'duplicate_item', 'bad_slot',
-        'empty_slot', 'bad_label', 'invalid_citizenid', 'unknown_citizenid', 'invalid_source' }
+        'empty_slot', 'bad_label', 'not_at_wardrobe', 'invalid_citizenid', 'unknown_citizenid', 'invalid_source' }
     for _, code in ipairs(codes) do assert(logic.messages[code], 'no message for ' .. code) end
     eq('Refused: weird', logic.message('weird'))
 end)
@@ -492,6 +492,9 @@ case('grant: refusals', function()
     same({ false, 'unknown_entry' }, { run(W.C.grant, 'C1', 'nope', 'x') })
     same({ false, 'invalid_source' }, { run(W.C.grant, 'C1', 'hat', '') })
     same({ false, 'invalid_source' }, { run(W.C.grant, 'C1', 'hat', ('x'):rep(33)) })
+    same({ false, 'invalid_source' }, { run(W.C.grant, 'C1', 'hat', 'buy') })
+    same({ false, 'invalid_source' }, { run(W.C.grant, 'C1', 'hat', 'starter') })
+    assert(not owns(W, 'C1', 'hat'), 'reserved sources must not insert')
     same({ false, 'unknown_citizenid' }, { run(W.C.grant, 'ZZ9', 'hat', 'x') })
     same({ false, 'wrong_sex' }, { run(W.C.grant, 'C2', 'pelt_coat', 'hunting:x') })
     W.fail.citizenSex = true
@@ -576,6 +579,18 @@ case('load: DB read failure -> db_failed, nothing cached', function()
     eq(nil, W.C.entries.C1)
 end)
 
+case('load: player drops or switches during grantStarter -> refused, nothing cached', function()
+    local W = world(fixture())
+    W.hooks.grantStarter = function() W.srcs[1] = nil end
+    same({ false, 'no_player' }, { run(W.C.load, 1) })
+    eq(nil, W.C.entries.C1, 'dropped player must not be cached after grantStarter')
+
+    local W2 = world(fixture())
+    W2.hooks.grantStarter = function() W2.srcs[1] = 'C3' end
+    same({ false, 'player_changed' }, { run(W2.C.load, 1) })
+    eq(nil, W2.C.entries.C1, 'switched player must not be cached after grantStarter')
+end)
+
 -- ---------------------------------------------------------------- equip + wardrobe
 
 case('equip: validates ownership, sex, kinds and counts; persists and emits', function()
@@ -647,6 +662,39 @@ case('item list encoding round-trips', function()
     same({}, logic.decodeItems(''))
     same({}, logic.decodeItems(nil))
     eq('male', logic.sexOf(0)); eq('female', logic.sexOf(1)); eq(nil, logic.sexOf(nil)); eq(nil, logic.sexOf(2))
+end)
+
+-- ---------------------------------------------------------------- T2 client apply + menu helpers
+
+case('resolveApply: flag off applies nothing; flag on resolves preset and item components', function()
+    local c = fixture()
+    eq(nil, logic.resolveApply(c, { outfit = 'starter_m', items = { 'hat' } }), 'flag off -> nil')
+    c.FittedOutfits = true
+    eq(nil, logic.resolveApply(c, nil))
+    eq(nil, logic.resolveApply(c, { outfit = 'nope', items = {} }))
+    eq(nil, logic.resolveApply(c, { outfit = 'hat', items = {} }), 'item is not an outfit')
+    same({ outfit = 'starter_m', preset = 1, components = {} }, logic.resolveApply(c, { outfit = 'starter_m' }))
+    same({ outfit = 'ranch_m', preset = 3, components = { 1234, 'gloves_hash' } },
+        logic.resolveApply(c, { outfit = 'ranch_m', items = { 'hat', 'gloves', 'nope', 'ranch_m' } }))
+end)
+
+case('toggleItem: add, remove, cap, no mutation', function()
+    local start = { 'hat' }
+    local next1, act1 = logic.toggleItem(start, 'gloves', 2)
+    eq('added', act1); same({ 'hat', 'gloves' }, next1); same({ 'hat' }, start, 'input untouched')
+    local next2, act2 = logic.toggleItem(next1, 'bandana', 2)
+    eq('full', act2); eq(nil, next2)
+    local next3, act3 = logic.toggleItem(next1, 'hat', 2)
+    eq('removed', act3); same({ 'gloves' }, next3)
+end)
+
+case('formatPrice and withinDistance', function()
+    eq('$12', logic.formatPrice(12))
+    eq('$12.50', logic.formatPrice(12.5))
+    eq('$0', logic.formatPrice(nil))
+    eq(true, logic.withinDistance({ x = 0, y = 0, z = 0 }, { x = 3, y = 4, z = 0 }, 5))
+    eq(false, logic.withinDistance({ x = 0, y = 0, z = 0 }, { x = 3, y = 4, z = 1 }, 5))
+    eq(false, logic.withinDistance(nil, { x = 0, y = 0, z = 0 }, 5))
 end)
 
 T.finish()

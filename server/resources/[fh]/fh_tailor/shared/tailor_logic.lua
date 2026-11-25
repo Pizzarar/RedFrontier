@@ -26,9 +26,11 @@ function M.validCitizenid(s)
     return type(s) == 'string' and #s <= 50 and s:match('^[%w_%-]+$') ~= nil and s:match('^%d+$') == nil
 end
 
----Grant source tag, e.g. 'hunting:legendary_bear' or 'quests:q_marshal_3'.
+local RESERVED_SOURCES = { buy = true, starter = true }
+
+---Grant source tag, e.g. 'hunting:legendary_bear' or 'quests:q_marshal_3'. Refuses internal sources ('buy', 'starter').
 function M.validSource(s)
-    return type(s) == 'string' and #s <= M.MAX_SOURCE and s:match('^[%w_:%-%.]+$') ~= nil
+    return type(s) == 'string' and #s <= M.MAX_SOURCE and not RESERVED_SOURCES[s] and s:match('^[%w_:%-%.]+$') ~= nil
 end
 
 ---Price in whole cents (5, 5.0, 12.5, 1.13), > 0. Same idea as fh_economy toCents: no sub-cent part.
@@ -280,6 +282,7 @@ M.messages = {
     bad_slot = 'There is no such wardrobe slot.',
     empty_slot = 'That wardrobe slot is empty.',
     bad_label = 'That name is not allowed.',
+    not_at_wardrobe = 'You need to be at a tailor or your homestead wardrobe.',
     -- grant (other resources)
     invalid_citizenid = 'Invalid character id.',
     unknown_citizenid = 'No such character.',
@@ -289,6 +292,61 @@ M.messages = {
 ---@return string text
 function M.message(code)
     return M.messages[code] or ('Refused: ' .. tostring(code))
+end
+
+-- ---------------------------------------------------------------- client apply + menu helpers
+
+---Resolve a worn look into the ped apply plan ({ outfit, preset, components }) when cfg.FittedOutfits is on.
+---When FittedOutfits is off (or the look is missing/invalid), returns nil so the client applies nothing.
+---@return table|nil plan { outfit = id, preset = int, components = { hash|name, ... } }
+function M.resolveApply(cfg, look)
+    if type(cfg) ~= 'table' or cfg.FittedOutfits ~= true then return nil end
+    if type(look) ~= 'table' or type(look.outfit) ~= 'string' then return nil end
+    local catalog = cfg.catalog
+    if type(catalog) ~= 'table' then return nil end
+    local o = catalog[look.outfit]
+    if type(o) ~= 'table' or o.kind ~= 'outfit' or not (isInt(o.preset) and o.preset >= 0) then return nil end
+    local components = {}
+    if type(look.items) == 'table' then
+        for _, id in ipairs(look.items) do
+            local e = type(id) == 'string' and catalog[id] or nil
+            if type(e) == 'table' and e.kind == 'item' and (isInt(e.component) or isStr(e.component)) then
+                components[#components + 1] = e.component
+            end
+        end
+    end
+    return { outfit = look.outfit, preset = o.preset, components = components }
+end
+
+---Toggle a single item id in a worn items list without mutating the input.
+---@return string[]|nil nextItems, string action ('removed' | 'added' | 'full')
+function M.toggleItem(items, itemId, maxItems)
+    local out, removed = {}, false
+    for _, id in ipairs(items or {}) do
+        if id == itemId then
+            removed = true
+        else
+            out[#out + 1] = id
+        end
+    end
+    if removed then return out, 'removed' end
+    if #out >= (maxItems or 0) then return nil, 'full' end
+    out[#out + 1] = itemId
+    return out, 'added'
+end
+
+---Format a price for display in menus ($12 or $12.50).
+function M.formatPrice(price)
+    if not isNum(price) then return '$0' end
+    if price == math.floor(price) then return ('$%d'):format(price) end
+    return ('$%.2f'):format(price)
+end
+
+---3D distance check between two { x, y, z } tables / vectors.
+function M.withinDistance(a, b, radius)
+    if a == nil or b == nil or not isNum(radius) or radius < 0 then return false end
+    local dx, dy, dz = (a.x or 0) - (b.x or 0), (a.y or 0) - (b.y or 0), (a.z or 0) - (b.z or 0)
+    return (dx * dx + dy * dy + dz * dz) <= (radius * radius)
 end
 
 if _G.GetCurrentResourceName then _G.FhTailorLogic = M end

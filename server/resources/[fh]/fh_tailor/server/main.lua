@@ -39,6 +39,34 @@ local function inRange(src, shop)
     return #(GetEntityCoords(ped) - vector3(c.x, c.y, c.z)) <= shop.radius
 end
 
+---True when the player is within range of any tailor shop OR their own claimed homestead (claim / town_lot).
+---References fh_homestead read-only via its public exports; never edits fh_homestead.
+local function inWardrobeRange(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return false end
+    local pos = GetEntityCoords(ped)
+    for _, shop in pairs(cfg.shops) do
+        local c = shop.coords
+        if #(pos - vector3(c.x, c.y, c.z)) <= shop.radius then return true end
+    end
+    if GetResourceState('fh_homestead') == 'started' then
+        local cid = citizenOf(src)
+        if cid then
+            local rad = cfg.homesteadWardrobeRadius or 35.0
+            for _, class in ipairs({ 'claim', 'town_lot' }) do
+                local okP, plotId = pcall(function() return exports.fh_homestead:getPlot(cid, class) end)
+                if okP and type(plotId) == 'string' then
+                    local okI, info = pcall(function() return exports.fh_homestead:plotInfo(plotId) end)
+                    if okI and type(info) == 'table' and info.coords and logic.withinDistance(pos, info.coords, rad) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function tierOf(src, region_id)
     local okT, tier = pcall(function() return exports.fh_progression:getTier(src, region_id) end)
     if not okT or type(tier) ~= 'number' then return nil end
@@ -131,11 +159,31 @@ local core = FhTailorCore.new(cfg, logic, {
 })
 
 -- ---------------------------------------------------------------- lifecycle
+local function pushApply(src)
+    if not cfg.FittedOutfits then return end
+    local ok, view = core.getWardrobe(src)
+    if ok and type(view) == 'table' and type(view.worn) == 'table' then
+        TriggerClientEvent('fh:tailor:apply', src, view.worn)
+    end
+end
+
 local function onLoaded(src)
     while not ready do Wait(250) end
     local ok, err = core.load(src)
-    if not ok then log(('load src=%s failed: %s'):format(tostring(src), tostring(err))) end
+    if not ok then
+        log(('load src=%s failed: %s'):format(tostring(src), tostring(err)))
+        return
+    end
+    pushApply(src)
 end
+
+-- Push newly equipped looks to the owning client whenever equip / wearSaved succeeds (flag-gated).
+AddEventHandler('fh:tailor:equipped', function(ev)
+    if not cfg.FittedOutfits then return end
+    if type(ev) == 'table' and type(ev.src) == 'number' and type(ev.outfit_id) == 'string' then
+        TriggerClientEvent('fh:tailor:apply', ev.src, { outfit = ev.outfit_id, items = ev.items or {} })
+    end
+end)
 
 -- Server-only event (rsg-core/server/player.lua Login); passes the Player object. Starter set is granted here (once).
 AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
@@ -183,6 +231,82 @@ CreateThread(function()
         local src = tonumber(id)
         if src and citizenOf(src) then CreateThread(function() onLoaded(src) end) end
     end
+end)
+
+-- ---------------------------------------------------------------- client callbacks + net events (T2 stopgap menus)
+-- Server validates everything (shop, range, wardrobe location, ownership, sex, tier, slot, label): client sends ids only.
+
+lib.callback.register('fh:tailor:worn', function(src)
+    if not cfg.FittedOutfits then return nil end
+    local ok, view = core.getWardrobe(src)
+    if not ok or type(view) ~= 'table' then return nil end
+    return view.worn
+end)
+
+lib.callback.register('fh:tailor:stock', function(src, shopId)
+    local shop = type(shopId) == 'string' and cfg.shops[shopId] or nil
+    if not shop then return false, 'unknown_shop' end
+    if not inRange(src, shop) then return false, 'out_of_range' end
+    return core.getStock(src, shopId)
+end)
+
+lib.callback.register('fh:tailor:wardrobe', function(src)
+    if not inWardrobeRange(src) then return false, 'not_at_wardrobe' end
+    return core.getWardrobe(src)
+end)
+
+RegisterNetEvent('fh:tailor:buy', function(payload)
+    local src = source
+    local shopId = type(payload) == 'table' and payload.shop_id or nil
+    local entryId = type(payload) == 'table' and payload.entry_id or nil
+    local ok, res = core.buy(src, shopId, entryId)
+    TriggerClientEvent('fh:tailor:result', src, {
+        action = 'buy', ok = ok, code = (not ok) and res or nil,
+        shop_id = shopId, entry_id = entryId,
+        price = ok and res.price or nil, unverified = ok and res.unverified or nil,
+    })
+end)
+
+RegisterNetEvent('fh:tailor:equip', function(payload)
+    local src = source
+    if not inWardrobeRange(src) then
+        return TriggerClientEvent('fh:tailor:result', src, { action = 'equip', ok = false, code = 'not_at_wardrobe' })
+    end
+    local outfitId = type(payload) == 'table' and payload.outfit_id or nil
+    local itemIds = type(payload) == 'table' and payload.items or nil
+    local ok, res = core.equip(src, outfitId, itemIds)
+    TriggerClientEvent('fh:tailor:result', src, {
+        action = 'equip', ok = ok, code = (not ok) and res or nil,
+        outfit_id = ok and res.outfit or nil,
+    })
+end)
+
+RegisterNetEvent('fh:tailor:save_outfit', function(payload)
+    local src = source
+    if not inWardrobeRange(src) then
+        return TriggerClientEvent('fh:tailor:result', src, { action = 'save_outfit', ok = false, code = 'not_at_wardrobe' })
+    end
+    local slot = type(payload) == 'table' and payload.slot or nil
+    local label = type(payload) == 'table' and payload.label or nil
+    local outfitId = type(payload) == 'table' and payload.outfit_id or nil
+    local itemIds = type(payload) == 'table' and payload.items or nil
+    local ok, err = core.saveOutfit(src, slot, label, outfitId, itemIds)
+    TriggerClientEvent('fh:tailor:result', src, {
+        action = 'save_outfit', ok = ok, code = (not ok) and err or nil, slot = slot,
+    })
+end)
+
+RegisterNetEvent('fh:tailor:wear_saved', function(payload)
+    local src = source
+    if not inWardrobeRange(src) then
+        return TriggerClientEvent('fh:tailor:result', src, { action = 'wear_saved', ok = false, code = 'not_at_wardrobe' })
+    end
+    local slot = type(payload) == 'table' and payload.slot or nil
+    local ok, res = core.wearSaved(src, slot)
+    TriggerClientEvent('fh:tailor:result', src, {
+        action = 'wear_saved', ok = ok, code = (not ok) and res or nil,
+        slot = slot, outfit_id = ok and res.outfit or nil,
+    })
 end)
 
 -- ---------------------------------------------------------------- exports (contract: README.md)

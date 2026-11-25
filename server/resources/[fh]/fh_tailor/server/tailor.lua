@@ -86,6 +86,9 @@ function M.new(cfg, logic, deps)
             else
                 log('WARNING starter grant failed: citizenid=%s (retried on next load)', cid)
             end
+            -- grantStarter yields: re-check the player before caching entries[cid] or evicting another entry on src
+            local live2, why2 = aliveFn(src, cid)()
+            if not live2 then return nil, why2 end
         elseif state == false or state.starter_at == nil then
             log('WARNING starter skipped, character sex unknown: citizenid=%s (retried on next load)', cid)
         end

@@ -35,7 +35,7 @@ local ALLOW = {
     'SetEntityCoords',
     'SetEntityHeading',
     'SetEntityInvincible', 'SetModelAsNoLongerNeeded', 'SetPedCanRagdoll', 'SetPedCombatAttributes',
-    'SetPedFleeAttributes', 'SetPedRelationshipGroupHash', 'SetRelationshipBetweenGroups',
+    'SetPedFleeAttributes', 'SetPedOutfitPreset', 'SetPedRelationshipGroupHash', 'SetRelationshipBetweenGroups',
     'TaskCombatHatedTargetsAroundPed', 'TaskFollowToOffsetOfEntity', 'TaskPlayAnim', 'Wait',
     -- CfxLua / CFX runtime builtins
     'AddEventHandler', 'CreateThread', 'Entity', 'GetConvarInt', 'GetCurrentResourceName', 'GetGamePool',

@@ -9,10 +9,12 @@ tailors and catalogs) by Rockstar Games (design idea only; no assets or text cop
 
 ## Status
 
-- T1 (this): pure logic + server. Catalog, per-shop stock, ownership, buy, grant, starter set, equip, saved outfits.
-- `Config.FittedOutfits = false` until the @spikes S1 probe passes. Off: everything above works and persists; nothing
-  is applied to the ped (T2 client apply, ox_lib menus).
-- Config ships one placeholder starter outfit per sex and one placeholder shop. Real catalog content is T3.
+- T1: pure logic + server. Catalog, per-shop stock, ownership, buy, grant, starter set, equip, saved outfits.
+- T2 (this): client apply behind `Config.FittedOutfits`, tailor stops per town, and stopgap `ox_lib` shop + wardrobe
+  menus (replaced by the @ui catalog screen in T4).
+- `Config.FittedOutfits = false` until the @spikes S1 probe passes. Off: everything above works and persists; the
+  client applies nothing to the ped, so `rsg-character` stays unchanged.
+- Config ships tailor stops per town and one placeholder starter outfit per sex. Real catalog content is T3.
 
 ## Data
 
@@ -51,13 +53,36 @@ All return `ok, result`: on failure `false, code` (see Codes). Every refusal of 
 
 `grant` is for rewards from other systems (@hunting, @quests). It accepts **any catalog id**, not only `earned_only`
 ones, so a quest can also reward an outfit that shops sell (lead decision, progression-03 T1). `source` is a short tag,
-`[%w_:.-]`, at most 32 chars, e.g. `hunting:legendary_bear`. The entry must fit the character's sex (pass the sex
+`[%w_:.-]`, at most 32 chars, e.g. `hunting:legendary_bear`; internal sources `buy` and `starter` are refused
+(`invalid_source`). The entry must fit the character's sex (pass the sex
 variant), else `wrong_sex`. A granted row is never removed by a refused buy (a refusal only deletes its own `buy` row).
 
 **`charge_unavailable` keeps the outfit** (lead decision, same rule as fh_hands: never charge twice). When the
 fh_economy export throws, it is unknown whether money moved. The buy returns `true, { ..., unverified = true }`, the
 ownership row stays, and the server logs an `ALERT` line with citizenid, entry, price and shop; the fh_ledger charge
 row tells an admin whether it was paid. At worst the clothes were free; the player is never charged a second time.
+
+## Client apply and stopgap menus (T2)
+
+- **Client apply (`client/main.lua`)**: listens to `rsg-character:client:ApplySkin`, `RSGCore:Client:OnPlayerLoaded`,
+  `playerSpawned` and `fh:tailor:apply`. When `Config.FittedOutfits = true`, re-applies the character's saved outfit
+  preset via `SetPedOutfitPreset` and layers any worn single-item components (`ApplyShopItemToPed` +
+  `UpdatePedVariation`), overriding `rsg-character` clothes without editing `rsg-character`. When `Config.FittedOutfits`
+  is `false`, the client applies nothing.
+- **Tailor stops (`config.lua`)**: per-town stops (`valentine_general`, `emerald_ranch_general`, `rhodes_general`,
+  `lagras_general`, `saint_denis_tailor`, `blackwater_tailor`, plus disabled-region towns). Client prompts are gated on
+  `FhRegions.isEnabled(shop.region_id)`. Press `[E]` at a tailor stop to open the stopgap `ox_lib` menu (Browse Catalog
+  / Open Wardrobe).
+- **Homestead wardrobe**: references `fh_homestead` read-only (`fh:homestead:plots` callback on the client,
+  `getPlot` + `plotInfo` exports on the server; `fh_homestead` is never edited). Press `[G]` near a homestead chest to
+  open the Wardrobe menu (uses `[G]` so `fh_homestead`'s `[E]` chest prompt is untouched).
+- **Client-server contract** (server validates everything; client sends only ids):
+  - Callbacks: `fh:tailor:worn` (player's worn look when `FittedOutfits` is on), `fh:tailor:stock` (`shopId`, range
+    checked), `fh:tailor:wardrobe` (tailor or own homestead range checked).
+  - Net events (client -> server): `fh:tailor:buy` `{ shop_id, entry_id }`, `fh:tailor:equip` `{ outfit_id, items }`,
+    `fh:tailor:save_outfit` `{ slot, label, outfit_id, items }`, `fh:tailor:wear_saved` `{ slot }`.
+  - Net events (server -> client): `fh:tailor:result` `{ action, ok, code?, ... }` (client shows `message(code)` on
+    errors), `fh:tailor:apply` `{ outfit, items }`.
 
 ## Bus events (server, `TriggerEvent`)
 
@@ -73,7 +98,7 @@ row tells an admin whether it was paid. At worst the clothes were free; the play
 - Shop: `not_ready`, `tailor_busy`, `tailor_error`, `db_failed`, `unknown_shop`, `unknown_entry`, `out_of_range`,
   `earned_only`, `not_stocked`, `wrong_sex`, `tier_too_low`, `tier_unavailable`, `already_owned`.
 - Wardrobe: `not_owned`, `not_outfit`, `not_item`, `too_many_items`, `duplicate_item`, `bad_slot`, `empty_slot`,
-  `bad_label`.
+  `bad_label`, `not_at_wardrobe`.
 - Grant: `invalid_citizenid`, `unknown_citizenid`, `invalid_source`.
 
 ## Money rules (Tier A)
