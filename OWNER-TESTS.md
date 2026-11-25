@@ -956,6 +956,17 @@ All unverified in-game. Table of legendaries: `fh_hunting/README.md`, section Le
 
    RESULT:
 
+### hunting-03 regional trappers and legendary coats (fh_hunting)
+
+All unverified in game. Table of trappers and coat rules: `fh_hunting/README.md`, sections Regional trappers and Legendary coats. Coat catalog entries come from @progression (without them the grant logs `unknown_entry` once).
+
+1. **Each enabled region's trapper.** Visit the trapper in heartlands, scarlett_meadows, bayou_nwa and great_plains (coords in the README table). Expected: blip and `[E]` prompt at the spot. If not, stand where it should be, read your coords and adjust `trapper.coords` in `data/legendaries/<region>.lua`.
+2. **Regional sale.** Sell a pelt at a non-heartlands trapper (e.g. scarlett_meadows). Expected: paid, and the ledger/quest shows that region: `SELECT reason, region_id FROM fh_ledger ORDER BY id DESC LIMIT 1;` gives `hunting:pelt` / `scarlett_meadows`.
+3. **Disabled region.** Stand at a disabled region's trapper coords (e.g. hennigans_stead). Expected: no trapper blip or prompt; a forged sell there is refused ("The trapper here is not buying yet.").
+4. **Coat on completion.** Finish a legendary hunt (e.g. the bear). Expected: the matching coat (`coat_legendary_bear_male` or `_female`, for your character's sex) appears in the tailor wardrobe. Relog: no duplicate grant, and no error in the server log beyond a single `unknown_entry` line if the catalog entry is missing.
+
+   RESULT:
+
 ### H7 skinned animals leave the spawn lifecycle (fh_hunting)
 
 1. Adopt a hunting animal through fh_core (e.g. the legendary bear after buying the rumour), kill and skin it. Expected: the pelt is granted as usual, and the server log shows no further `requestSpawn` retries for that animal (fh_core no longer tracks the request).

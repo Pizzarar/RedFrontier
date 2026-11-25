@@ -110,6 +110,39 @@ All coordinates are unverified in game (`TODO-verify-in-game` in each file). A r
 
 **Gate.** While a legendary's region is disabled, the rumour, both markers and the spawn refuse with `fh_chain_region_closed` ("There is no legendary hunt here."), and the client draws no prompt or marker there. A chain in progress freezes: its state is kept as it is (not reset) and resumes when the region is enabled again. Each character has one chain per legendary, so two hunts in two regions can run at once.
 
+## Regional trappers (hunting-03 C1)
+
+Each `data/legendaries/<region>.lua` carries a `trapper = { label, coords }` field; the trapper sells pelts and hosts that region's rumour. Heartlands falls back to `Config.Trapper` (same coords). The list is built by `shared/sell.lua` (`M.trappers`).
+
+| region | enabled | trapper label | coords (x, y, z) |
+|---|---|---|---|
+| heartlands | yes | Trapper | -299, 792, 118.2 |
+| scarlett_meadows | yes | Scarlett Meadows Trapper | 1265, -1305, 77 TODO-verify-in-game |
+| bayou_nwa | yes | Bayou Nwa Trapper | 2175, -1120, 25 TODO-verify-in-game |
+| great_plains | yes | Great Plains Trapper | -865, -1335, 44 TODO-verify-in-game |
+| big_valley | no | Big Valley Trapper | -1814, -440, 120 TODO-verify-in-game |
+| bluewater_marsh | no | Bluewater Marsh Trapper | 2300, -600, 20 TODO-verify-in-game |
+| cholla_springs | no | Cholla Springs Trapper | -3703, -2573, 70 TODO-verify-in-game |
+| cumberland_forest | no | Cumberland Forest Trapper | -810, 1340, 130 TODO-verify-in-game |
+| gaptooth_ridge | no | Gaptooth Ridge Trapper | -5514, -2928, 90 TODO-verify-in-game |
+| grizzlies_east | no | Grizzlies East Trapper | 1675, 1900, 200 TODO-verify-in-game |
+| grizzlies_west | no | Grizzlies West Trapper | -1300, 1600, 240 TODO-verify-in-game |
+| hennigans_stead | no | Hennigans Stead Trapper | -2275, -2485, 60 TODO-verify-in-game |
+| rio_bravo | no | Rio Bravo Trapper | -2000, -3000, 55 TODO-verify-in-game |
+| roanoke_ridge | no | Roanoke Ridge Trapper | 2975, 600, 38 TODO-verify-in-game |
+| tall_trees | no | Tall Trees Trapper | -1795, -1600, 150 TODO-verify-in-game |
+
+A trapper shows (prompt, blip) and buys only while its region is enabled (`FhRegions.isEnabled`, read live). A sale within range of a trapper in a closed region refuses `fh_region_closed` ("The trapper here is not buying yet."); out of range of every trapper refuses `fh_too_far`. A sale pays and records `pelt_sold.region_id` (and the `fh_economy:pay` ledger region) for the trapper you stand at, not always heartlands.
+
+## Legendary coats (hunting-03 C2)
+
+Completing a legendary chain grants two `fh_tailor` wardrobe entries: `coat_<legendary_id>_male` and `coat_<legendary_id>_female` (e.g. `coat_legendary_bear_male`), via `exports.fh_tailor:grant(citizenid, id, source)`. The source tag is `hunting:<legendary id minus legendary_>`, e.g. `hunting:bear` (the longer `hunting:legendary:<id>` form exceeded fh_tailor's 32-char source cap). The grant fires on the completion transition only (`shared/coats.lua`, wired in `server/main.lua`).
+
+- `wrong_sex` (the entry for the other sex) is expected from one of the two calls and is ignored.
+- Any other refusal (`unknown_entry`, `invalid_source`, ...) is logged once per (coat id, code) and never breaks completion. `unknown_entry` is expected until @progression adds the catalog ids.
+- Login backfill: one query for the character's completed chains, then a grant per legendary (idempotent, so no duplicates on relog).
+- `fh_tailor` missing or stopped is a silent no-op.
+
 ## Legendary bear (H4)
 
 One Legendary Bear hunt per character, a three-clue chain inside the Heartlands (the same chain runs for every legendary in the table above; the steps below use the bear as the example). The state machine is pure
