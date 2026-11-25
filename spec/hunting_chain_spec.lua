@@ -340,4 +340,38 @@ describe('chainState (readState, read-only export for @quests)', function()
     end)
 end)
 
+describe('chainState FXServer runtime path', function()
+    local dir = base .. 'shared/'
+    local function withRuntime(fn)
+        local saved = { GetCurrentResourceName = GetCurrentResourceName, FhHuntingChain = FhHuntingChain,
+            exports = exports, MySQL = MySQL, FhHuntingLegendaries = FhHuntingLegendaries }
+        GetCurrentResourceName = function() return 'fh_hunting' end
+        local ok, err = pcall(fn)
+        for k, v in pairs(saved) do _G[k] = v end
+        GetCurrentResourceName = saved.GetCurrentResourceName
+        if not ok then error(err, 0) end
+    end
+    it('chain.lua exposes FhHuntingChain.readState as a function', function()
+        withRuntime(function()
+            FhHuntingChain = nil
+            dofile(dir .. 'chain.lua')
+            eq('function', type(FhHuntingChain.readState))
+        end)
+    end)
+    it('chain_export.lua registers chainState and it answers', function()
+        withRuntime(function()
+            FhHuntingChain = nil
+            dofile(dir .. 'chain.lua')
+            local reg = {}
+            exports = function(name, fn) reg[name] = fn end
+            FhHuntingLegendaries = Chain.legendaries()
+            MySQL = { query = { await = function() return { { step = 3, completed = 0 } } end } }
+            dofile(base .. 'server/chain_export.lua')
+            eq('function', type(reg.chainState))
+            eq(3, reg.chainState('CID1', Chain.CHAIN_ID))
+            eq(nil, reg.chainState('CID1', 'nope'))
+        end)
+    end)
+end)
+
 T.finish()

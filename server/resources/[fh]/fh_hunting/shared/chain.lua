@@ -329,10 +329,7 @@ function M.new(opts)
     return C
 end
 
-if GetCurrentResourceName then
-    FhHuntingChain = M
-else
-    -- Read-only public view for other resources (exports.fh_hunting:chainState). Pure: deps = { byId = legendary registry
+-- Read-only public view for other resources (exports.fh_hunting:chainState). Pure: deps = { byId = legendary registry
 -- by id, query(cid, chainId) -> rows (may throw), log(msg) }. Reads the persisted row only: it never touches the chain
 -- cache (so it cannot create a default state) and emits nothing. nil = no row / unknown chain / bad args / query error
 -- (the error is logged once per process).
@@ -356,5 +353,8 @@ function M.readState(deps, citizenid, chainId)
     return st.step
 end
 
-return M
+if GetCurrentResourceName then
+    FhHuntingChain = M
+else
+    return M
 end

@@ -28,6 +28,7 @@ server_scripts {
     'shared/coats.lua',
     'server/main.lua',
     'server/trappers_export.lua',
+    'server/chain_export.lua',
 }
 
 -- Legendary data files (one per FhRegions id), read by shared/legendaries.lua on both sides; never run as scripts.
