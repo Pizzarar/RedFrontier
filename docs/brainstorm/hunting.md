@@ -25,6 +25,7 @@
 - S4 spk_pelt GO → consider PeltQualitySource='native'.
 
 ## In flight
+- 2026-11-25 Hun2: hunting-lows (idea-1025 trapper loader warn/error, idea-1027 backfill DB-error log) PASS 0/0/1 1494cc2 (rn-2026511db6eb, Review-Gemini). Low queued idea-1040.
 - 2026-11-25 Hun2: hunting-03 COMPLETE. C3 docs PASS 0/0/0 e2c9b0b (rn-40c2867f9aed, Review-Gemini). C1 db3e791, C2 c9f7829. Lows idea-1025/1027 in review on hunting-lows.
 - 2026-11-25 Hun2: hunting-03 C2 legendary coats PASS 0/0/1 e5bfc39 (rn-4225ea3d7cc5, Review-Gemini) after FAIL 1/0/0 6b1449c (dup main.lua block, fixed). Source tag hunting:<id minus legendary_>. C3 docs PASS 0/0/0 e2c9b0b, next slot.
 - 2026-11-25 Hun2: hunting-03 C1 regional trappers PASS 0/0/2 136acf5 (rn-8f9ca307dddf, Review-Gemini). C2 coats FAIL 1/1/2 7dc61c6 (source >32 chars, N+1 backfill) -> fixing.
