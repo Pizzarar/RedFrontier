@@ -13,9 +13,9 @@ end
 
 M.DEFAULT_MAX_DIST = 3.0
 -- Built station props are ground-snapped client-side (fh_homestead/client/main.lua), while s.coords holds the config z-hint.
--- Match fh_core FhConfig.Access.SnapToleranceAbove / SnapToleranceBelow (20.0 m).
-M.SNAP_ABOVE = 20.0
-M.SNAP_BELOW = 20.0
+-- Match fh_core FhConfig.Access.SnapToleranceAbove / SnapToleranceBelow (13.5 m: SNAP_TOLERANCE 10.0 + 3.5 m headroom).
+M.SNAP_ABOVE = 13.5
+M.SNAP_BELOW = 13.5
 
 local function snappedDist(stationCoords, playerCoords)
     if not validCoords(stationCoords) or not validCoords(playerCoords) then return nil end

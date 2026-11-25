@@ -174,6 +174,17 @@ fails because of a bad model/coords, note the value that worked. `set fh_spike_g
    RESULT:
 7. (Gated path) While the outlaws are alive and you are the only player, quit and rejoin.
    Expected: console `owner <id> dropped, despawned and re-requested`; after you return the outlaws come back hostile (once each, not doubled); killing them still clears the camp.
+
+### CHEST-COORDS (core-09 R1, owner-gated)
+
+Verify the ground coordinates of each enabled outlaw camp stash (`fh_zones/config.lua`, currently `verified = false`) so the unverified z-hints can be replaced with real ground coords and flipped to `verified = true`:
+
+1. For each enabled outlaw camp (`heartlands_t1_01`, `heartlands_t1_02`, `heartlands_t1_03`, `heartlands_t2_01`, `scarlett_meadows_t1_01`, `scarlett_meadows_t1_02`, `scarlett_meadows_t2_01`, `bayou_nwa_t1_01`, `bayou_nwa_t1_02`, `bayou_nwa_t1_03`, `bayou_nwa_t2_01`, `great_plains_t1_01`, `great_plains_t1_02`, `great_plains_t2_01`):
+   - Run `/fh_tp <camp_id>` (or ride to the camp) and stand on solid ground at the desired stash spot.
+   - Run `/fh_where` (admin command; prints `vector3(x, y, z) heading=...` in chat and the server console).
+   - Paste `<camp_id>: <fh_where output>` below.
+   RESULT:
+
 ## B6c: soft death (fh_death)
 
 Server console lines start with `[fh_death]`. Needs the `fh_death_drops` table (`server/migrations/0004_death.sql`,

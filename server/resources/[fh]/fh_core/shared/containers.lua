@@ -46,8 +46,8 @@ function M.defaults(containerType)
     return { slots = c.slots, maxWeight = c.maxWeight }
 end
 
-M.DEFAULT_SNAP_ABOVE = 20.0
-M.DEFAULT_SNAP_BELOW = 20.0
+M.DEFAULT_SNAP_ABOVE = 13.5
+M.DEFAULT_SNAP_BELOW = 13.5
 
 ---Reach distance in metres for a type (per-type override, else Access.InteractDistance).
 function M.interactDistance(containerType)

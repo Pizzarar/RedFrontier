@@ -94,4 +94,136 @@ case('markUnsnapped: logs each id exactly once until reset', function()
     T.eq(true, G.markUnsnapped('heartlands_01'))
 end)
 
+-- Static scan: every groundZAt() call in server/resources/[fh] that affects placement/reach must be clamped through
+-- FhGroundSnap.snapZ(..., FhGroundSnap.SNAP_TOLERANCE). Only the definition itself and the read-only /fh_plotcheck
+-- admin diagnostic (which reports raw ground delta vs config z) are exempt.
+local function stripComments(src)
+    local out, i, n = {}, 1, #src
+    while i <= n do
+        local c = src:sub(i, i)
+        local cmtEq = src:match('^%-%-%[(=*)%[', i)
+        if cmtEq then
+            local close = ']' .. cmtEq .. ']'
+            local j = src:find(close, i + 2 + #cmtEq, true)
+            out[#out + 1] = ' '
+            i = j and (j + #close) or (n + 1)
+        elseif src:sub(i, i + 1) == '--' then
+            local j = src:find('\n', i + 2, true)
+            out[#out + 1] = '\n'
+            i = j and (j + 1) or (n + 1)
+        elseif c == '"' or c == "'" then
+            local q, j = c, i + 1
+            while j <= n do
+                if src:sub(j, j) == '\\' then j = j + 2
+                elseif src:sub(j, j) == q then j = j + 1; break
+                else j = j + 1 end
+            end
+            out[#out + 1] = src:sub(i, j - 1)
+            i = j
+        else
+            out[#out + 1] = c
+            i = i + 1
+        end
+    end
+    return table.concat(out)
+end
+
+local function listFhLua(root)
+    local tmp = os.tmpname()
+    os.execute("find '" .. root .. "' -name '*.lua' -type f 2>/dev/null > '" .. tmp .. "'")
+    local files = {}
+    local f = io.open(tmp, 'r')
+    if f then
+        for line in f:lines() do
+            if line:match('%.lua$') then files[#files + 1] = line end
+        end
+        f:close()
+    end
+    os.remove(tmp)
+    table.sort(files)
+    return files
+end
+
+local function findMatchingParen(s, openPos)
+    local depth = 0
+    for i = openPos, #s do
+        local ch = s:sub(i, i)
+        if ch == '(' then depth = depth + 1
+        elseif ch == ')' then
+            depth = depth - 1
+            if depth == 0 then return i end
+        end
+    end
+    return nil
+end
+
+case('static scan: no raw groundZAt reaches a reach/placement decision across [fh]', function()
+    local root = here .. '../server/resources/[fh]'
+    local files = listFhLua(root)
+    assert(#files > 0, 'no [fh] lua files found')
+    local clampedCount, diagCount = 0, 0
+    local rawViolations = {}
+    for _, path in ipairs(files) do
+        local f = assert(io.open(path, 'r'))
+        local src = stripComments(f:read('*a'))
+        f:close()
+        local pos = 1
+        while true do
+            local a, b = src:find('groundZAt%s*%(', pos)
+            if not a then break end
+            local before = src:sub(math.max(1, a - 200), a - 1)
+            local callEnd = findMatchingParen(src, b)
+            local callBody = callEnd and src:sub(b + 1, callEnd - 1) or ''
+            if before:match('function%s+FhSnap%.%s*$') then
+                -- definition in fh_core/client/ground_snap.lua
+            elseif path:match('fh_homestead/client/main%.lua$') and callBody:match("^%s*'plotcheck:'") then
+                -- read-only admin diagnostic (/fh_plotcheck): reports raw ground delta, never places or gates reach
+                diagCount = diagCount + 1
+            else
+                -- Must be wrapped in FhGroundSnap.snapZ(..., FhSnap.groundZAt(...), FhGroundSnap.SNAP_TOLERANCE)
+                local snapPos
+                local searchFrom = math.max(1, a - 200)
+                while true do
+                    local s1, s2 = src:find('FhGroundSnap%.snapZ%s*%(', searchFrom)
+                    if not s1 or s1 >= a then break end
+                    snapPos = s2
+                    searchFrom = s2 + 1
+                end
+                local snapEnd = snapPos and findMatchingParen(src, snapPos)
+                local insideSnap = snapEnd and callEnd and snapEnd > callEnd
+                local snapArgs = insideSnap and src:sub(snapPos + 1, snapEnd - 1) or ''
+                if insideSnap and snapArgs:find('FhGroundSnap%.SNAP_TOLERANCE', 1) then
+                    clampedCount = clampedCount + 1
+                else
+                    rawViolations[#rawViolations + 1] = path .. ' near: ' .. src:sub(math.max(1, a - 40), math.min(#src, (callEnd or b) + 40)):gsub('%s+', ' ')
+                end
+            end
+            pos = b + 1
+        end
+    end
+    T.eq(0, #rawViolations, 'raw groundZAt caller(s) found:\n' .. table.concat(rawViolations, '\n'))
+    assert(clampedCount >= 5, 'expected at least 5 clamped groundZAt callers, saw ' .. tostring(clampedCount))
+    T.eq(1, diagCount, 'expected exactly 1 read-only plotcheck diagnostic caller')
+end)
+
+case('mirrored server snap tolerances match fh_core config and cover SNAP_TOLERANCE + headroom', function()
+    local cfg = dofile(here .. '../server/resources/[fh]/fh_core/config.lua')
+    local containers = dofile(here .. '../server/resources/[fh]/fh_core/shared/containers.lua')
+    local cargo = dofile(here .. '../server/resources/[fh]/fh_cargo/shared/cargo_rules.lua')
+    local stations = dofile(here .. '../server/resources/[fh]/fh_homestead/shared/stations.lua')
+    local gunsmith = dofile(here .. '../server/resources/[fh]/fh_gunsmith/shared/restore_flow.lua')
+    local expected = G.SNAP_TOLERANCE + cfg.Access.InteractDistance -- 10.0 + 3.5 = 13.5 m
+    T.eq(13.5, expected)
+    T.eq(expected, cfg.Access.SnapToleranceAbove)
+    T.eq(expected, cfg.Access.SnapToleranceBelow)
+    T.eq(expected, containers.DEFAULT_SNAP_ABOVE)
+    T.eq(expected, containers.DEFAULT_SNAP_BELOW)
+    T.eq(expected, cargo.SNAP_ABOVE)
+    T.eq(expected, cargo.SNAP_BELOW)
+    T.eq(expected, stations.SNAP_ABOVE)
+    T.eq(expected, stations.SNAP_BELOW)
+    T.eq(expected, gunsmith.SNAP_ABOVE)
+    T.eq(expected, gunsmith.SNAP_BELOW)
+end)
+
 T.finish()

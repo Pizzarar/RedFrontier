@@ -170,12 +170,14 @@ describe('gunsmith restore reach via getStations', function()
         eq(false, ok); eq('no_station', why)
     end)
     it('ground-snapped workbench allows vertical snap offset within tolerance', function()
-        -- 12 m below bench hint z, 2 m horizontal -> ok
+        -- 12 m below or above bench hint z (within ±13.5 m), 2 m horizontal -> ok
         eq(true, F.stationInReach({ bench }, { x = 12.0, y = 20.0, z = -7.0 }))
+        eq(true, F.stationInReach({ bench }, { x = 12.0, y = 20.0, z = 17.0 }))
         -- 4 m horizontal -> no_station
         eq('no_station', select(2, F.stationInReach({ bench }, { x = 14.0, y = 20.0, z = -7.0 })))
-        -- >20 m below bench hint z -> no_station
-        eq('no_station', select(2, F.stationInReach({ bench }, { x = 12.0, y = 20.0, z = -15.5 })))
+        -- >13.5 m below or above bench hint z -> no_station
+        eq('no_station', select(2, F.stationInReach({ bench }, { x = 12.0, y = 20.0, z = -8.6 })))
+        eq('no_station', select(2, F.stationInReach({ bench }, { x = 12.0, y = 20.0, z = 18.6 })))
     end)
     it("other player's plot (getStations of the asker has none) / not ready ({}) / nil", function()
         eq('no_station', select(2, F.stationInReach({}, { x = 10.0, y = 20.0, z = 5.0 })))

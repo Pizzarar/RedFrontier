@@ -78,7 +78,10 @@ FH.thread(function()
             coords = c.loot, distance = 60.0, -- streaming-range point: only snap once the area is streamed
             onEnter = FH.wrap(function()
                 if stashPoints[c.id] then return end -- snap once per camp
-                local z = FhSnap.groundZAt(c.id, c.loot.x, c.loot.y, c.loot.z)
+                local cfg = FhZonesConfig.camps[c.id]
+                local z = FhGroundSnap.snapZ(c.loot.z,
+                    FhSnap.groundZAt(c.id, c.loot.x, c.loot.y, c.loot.z, FhGroundSnap.probeAboveFor(cfg)),
+                    FhGroundSnap.SNAP_TOLERANCE)
                 stashPoints[c.id] = lib.points.new({
                     coords = vector3(c.loot.x, c.loot.y, z), distance = 2.0,
                     onEnter = FH.wrap(function() lib.showTextUI('[E] Outlaw camp stash') end),

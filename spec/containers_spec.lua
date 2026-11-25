@@ -80,22 +80,39 @@ describe('fh_core shared/containers', function()
         it('ground-snapped chest checks horizontal reach + vertical snap tolerance', function()
             eq(true, Containers.isSnapped('chest'))
             local hint = { x = -496, y = 750, z = 105 }
-            -- 12 m below hint z, 2 m horizontally -> ok
+            -- 12 m below hint z, 2 m horizontally -> ok (within ±13.5 m)
             assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 93 }))
-            -- at vertical tolerance edges (±20 m) within horizontal reach -> ok
-            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 85 }))
-            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 125 }))
+            -- at vertical tolerance edges (±13.5 m) within horizontal reach -> ok
+            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 91.5 }))
+            assert(Containers.canReach('chest', hint, { x = -494, y = 750, z = 118.5 }))
             -- 4 m horizontally -> fh_out_of_reach
             local ok, reason = Containers.canReach('chest', hint, { x = -492, y = 750, z = 93 })
             eq(false, ok); eq('fh_out_of_reach', reason)
-            -- dz beyond tolerance (below and above) -> fh_out_of_reach
-            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 84.9 })
+            -- dz beyond tightened tolerance (below and above, incl. old 15/20 m band) -> fh_out_of_reach
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 91.4 })
             eq(false, ok); eq('fh_out_of_reach', reason)
-            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 125.1 })
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 118.6 })
+            eq(false, ok); eq('fh_out_of_reach', reason)
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 85.0 })
+            eq(false, ok); eq('fh_out_of_reach', reason)
+            ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 125.0 })
             eq(false, ok); eq('fh_out_of_reach', reason)
             -- explicit opts.snapped = false forces 3D even for chest
             ok, reason = Containers.canReach('chest', hint, { x = -494, y = 750, z = 93 }, { snapped = false })
             eq(false, ok); eq('fh_out_of_reach', reason)
+        end)
+        it('tightened band accepts on-foot, mounted, wagon, and downslope players at any clamped snapZ container', function()
+            local G = dofile(here .. '../server/resources/[fh]/fh_core/shared/ground_snap.lua')
+            local hint = { x = -145, y = 845, z = 117.0 }
+            -- Probe hits at edges of SNAP_TOLERANCE (±10 m), exact hint, and out-of-tolerance outliers (±25 m -> falls back to hint)
+            for _, probed in ipairs({ 117.0, 127.0, 107.0, 142.0, 92.0, 0 / 0 }) do
+                local placedZ = G.snapZ(hint.z, probed, G.SNAP_TOLERANCE)
+                -- ped torso (+1.0), mounted (+2.0), wagon (+2.5), max upward headroom (+3.5), downslope (-3.5)
+                for _, dz in ipairs({ -3.5, 0.0, 1.0, 2.0, 2.5, 3.5 }) do
+                    local ok, reason = Containers.canReach('chest', hint, { x = -143, y = 845, z = placedZ + dz })
+                    eq(true, ok, ('probed=%s placed=%s dz=%s err=%s'):format(tostring(probed), tostring(placedZ), tostring(dz), tostring(reason)))
+                end
+            end
         end)
     end)
 

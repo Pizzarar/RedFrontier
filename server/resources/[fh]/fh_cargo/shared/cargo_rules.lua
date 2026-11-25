@@ -14,8 +14,8 @@ M.ORDER = { 't1', 't2', 't3' }
 M.SPEED_LOAD_PENALTY = 0.4 -- a wagon at max weight goes at (1 - 0.4) of its cap
 M.DEFAULT_REACH = 5.0
 M.DEFAULT_OPEN_REACH = 3.5
-M.SNAP_ABOVE = 20.0 -- matches FhConfig.Access.SnapToleranceAbove / FhGroundSnap.PROBE_ABOVE
-M.SNAP_BELOW = 20.0 -- matches FhConfig.Access.SnapToleranceBelow
+M.SNAP_ABOVE = 13.5 -- matches FhConfig.Access.SnapToleranceAbove (SNAP_TOLERANCE 10.0 + 3.5 m headroom)
+M.SNAP_BELOW = 13.5 -- matches FhConfig.Access.SnapToleranceBelow (SNAP_TOLERANCE 10.0 + 3.5 m headroom)
 M.DEFAULT_FAST_TRAVEL_REACH = 30.0
 M.MAX_NEAREST_RANGE = 25.0
 

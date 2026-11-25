@@ -235,3 +235,17 @@ lib.addCommand('fh_despawn', {
     if not ok then return reply(src, 'fh_despawn: ' .. tostring(why)) end
     reply(src, ('fh_despawn: request %d despawned'):format(p.requestId))
 end)
+
+lib.addCommand('fh_where', {
+    help = 'Print your current coords and heading: fh_where',
+    restricted = 'group.admin',
+}, function(src)
+    if src == 0 then return reply(src, 'fh_where: in-game only') end
+    local ped = targetPed(src)
+    if not ped then return reply(src, 'fh_where: fh_no_player') end
+    local c = GetEntityCoords(ped)
+    local h = GetEntityHeading(ped)
+    local line = ('fh_where: vector3(%.2f, %.2f, %.2f) heading=%.1f'):format(c.x, c.y, c.z, h or 0.0)
+    print('[fh_core] ' .. line)
+    reply(src, line)
+end)

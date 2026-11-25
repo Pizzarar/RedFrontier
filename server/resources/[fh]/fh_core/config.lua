@@ -43,12 +43,13 @@ M.Saddlebag = {
 
 M.Access = {
     InteractDistance = 3.5,
-    -- Vertical reach bounds (metres) for ground-snapped containers (`snapped = true`), relative to the config z-hint:
-    -- SnapToleranceAbove matches FhGroundSnap.PROBE_ABOVE (20.0 m: probe starts 20 m above hint);
-    -- SnapToleranceBelow (20.0 m) covers FhGroundSnap.SNAP_TOLERANCE (10.0 m) + InteractDistance (3.5 m) and downward
-    -- groundZAt probes (e.g. fh_zones camp stashes) whose real ground sits >10 m below an unverified config z-hint.
-    SnapToleranceAbove = 20.0,
-    SnapToleranceBelow = 20.0,
+    -- Vertical reach bounds (metres) for ground-snapped containers (`snapped = true`), relative to the config z-hint.
+    -- Derivation: every placement/prompt caller clamps FhSnap.groundZAt through FhGroundSnap.snapZ(..., SNAP_TOLERANCE)
+    -- (±10.0 m max shift from the config z-hint). Adding 3.5 m vertical headroom (matching InteractDistance) gives ±13.5 m:
+    --   +13.5 m above hint: +10.0 m max snap + up to +3.5 m for ped torso (~1.0 m), mounted rider (~2.0 m), wagon (~2.5 m), or slope.
+    --   -13.5 m below hint: -10.0 m max snap + up to -3.5 m for a player standing downslope/below the prop within horizontal reach.
+    SnapToleranceAbove = 13.5,
+    SnapToleranceBelow = 13.5,
 }
 
 -- Items fh_core defines outright (pushed into rsg-core with SetItems at start). Shape: see shared/items.lua.

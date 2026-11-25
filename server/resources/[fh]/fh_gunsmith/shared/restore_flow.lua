@@ -17,8 +17,8 @@ function M.plan(item, partsAvailable, rules)
 end
 
 M.STATION_REACH = 3.0 -- metres, container to station (same as fh_crafting stationMaxDist)
-M.SNAP_ABOVE = 20.0   -- vertical tolerance matching FhConfig.Access.SnapToleranceAbove (workbench prop is ground-snapped)
-M.SNAP_BELOW = 20.0   -- vertical tolerance matching FhConfig.Access.SnapToleranceBelow
+M.SNAP_ABOVE = 13.5   -- vertical tolerance matching FhConfig.Access.SnapToleranceAbove (workbench prop is ground-snapped)
+M.SNAP_BELOW = 13.5   -- vertical tolerance matching FhConfig.Access.SnapToleranceBelow
 M.WORKBENCH = 'workbench' -- H3 type crafting maps 'gunsmith' to (FhCraftingConfig.stationTypeMap)
 
 ---Is any of the player's own stations a gunsmith bench within reach of `coords`? `stations` is
