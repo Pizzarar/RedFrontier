@@ -94,7 +94,6 @@ case('parseDemo', function()
     T.eq('fh_ui_demo_unknown_screen', select(2, F.parseDemo({ 'close', 'zzz' })))
 end)
 
-T.finish()
 
 case('tailor/wardrobe fixtures: lane tailor, per-screen allowlists, negatives', function()
     T.eq('tailor', R.screens.tailor); T.eq('tailor', R.screens.wardrobe)
@@ -113,3 +112,5 @@ case('tailor/wardrobe fixtures: lane tailor, per-screen allowlists, negatives', 
     T.same({ action = 'open', screen = 'wardrobe' }, F.parseDemo({ 'wardrobe' }))
     assert(F.fixtures.tailor.rows[1].owned and F.fixtures.tailor.rows[4].min_tier > F.fixtures.tailor.tier)
 end)
+
+T.finish()

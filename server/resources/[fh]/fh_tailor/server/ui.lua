@@ -9,6 +9,8 @@ local M = {}
 
 local MAX_ID, MAX_ITEMS_IN = 64, 16
 
+local function isSlot(v) return type(v) == 'number' and v == math.floor(v) end
+
 local function isId(v) return type(v) == 'string' and #v >= 1 and #v <= MAX_ID end
 
 ---@param d table { exp = { actBuy, actStock, actWardrobe, actEquip, actSave, actWear, message }, open(src, screen, data), update(src, screen, data), notify(src, text) }
@@ -106,14 +108,14 @@ function M.new(d)
     U.onSave = wardrobeAction(function(src, p)
         local items = itemList(p.item_ids)
         local label = p.label
-        if not isId(p.outfit_id) or not items or math.type(p.slot) ~= 'integer' then return nil end
+        if not isId(p.outfit_id) or not items or not isSlot(p.slot) then return nil end
         if label ~= nil and (type(label) ~= 'string' or #label > 64) then return nil end
-        return exp.actSave(src, p.slot, label, p.outfit_id, items)
+        return exp.actSave(src, math.floor(p.slot), label, p.outfit_id, items)
     end, function(p) return 'Saved to slot ' .. tostring(p.slot) .. '.' end)
 
     U.onWear = wardrobeAction(function(src, p)
-        if math.type(p.slot) ~= 'integer' then return nil end
-        return exp.actWear(src, p.slot)
+        if not isSlot(p.slot) then return nil end
+        return exp.actWear(src, math.floor(p.slot))
     end, function(p) return 'Wearing slot ' .. tostring(p.slot) .. '.' end)
 
     function U.forget(src) U.shopOf[src] = nil end
@@ -145,6 +147,7 @@ if _G.GetCurrentResourceName then
     AddEventHandler('fh:tailor:ui_equip', U.onEquip)
     AddEventHandler('fh:tailor:ui_save', U.onSave)
     AddEventHandler('fh:tailor:ui_wear', U.onWear)
+    AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) U.forget(tonumber(src)) end)
     AddEventHandler('playerDropped', function() U.forget(tonumber(source)) end)
     exports('openShop', U.openShop)
     exports('openWardrobe', U.openWardrobe)

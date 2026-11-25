@@ -26,8 +26,7 @@ FH_UI.register('tailor', {
     if (!rows.length) body.appendChild(D.h('p', 'note', 'Nothing for sale here.'));
     rows.forEach(function (r) {
       const locked = !r.owned && Number(r.min_tier) > tier;
-      const row = D.h('div', 'row card');
-      if (locked) row.style.opacity = '0.55';
+      const row = D.h('div', locked ? 'row card disabled' : 'row card');
       const info = D.h('div', 'grow');
       info.appendChild(D.h('strong', '', r.label || r.id));
       info.appendChild(D.h('div', '', (r.kind === 'outfit' ? 'Outfit' : 'Item') + ' · $' + r.price));
