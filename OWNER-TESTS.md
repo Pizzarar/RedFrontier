@@ -767,7 +767,9 @@ the core-03 fh_core exports (carried add/remove, `setItemInfo`); the tonic buff 
 has an in-game source: `lumber`, `nails`, `lead`, `casings`, `resource_gunpowder` and the `herb_*` items (ginseng,
 oregano, red sage, wild mint) are bought at trade posts (idea-716/719, on main); `gun_parts` drops from the outlaw camp
 (idea-717, on main); the four herbs can also be gathered from wild patches (the "Herb gathering" card below). Fill every
-`RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`.
+`RESULT:` with `PASS`, `FAIL <what you saw>` or `SKIP <why>`. The campfire cooking recipes (the "Cooking" card below) are the
+exception: `raw_meat` has no in-game source until the @hunting skin grant (idea-914) and `carrot`/`potato`/`corn` have none
+until the @roads supplies cards (idea-915), so use `fh_give` for those until then.
 
 1. Loot the worn rifle. Clear the T1 camp (-145, 845, 117) and press E at the camp stash.
    Expected: the stash holds a Worn Rifle with `condition` between 20 and 45 in its item info (M1 "Worn Rifle
@@ -858,6 +860,34 @@ coordinates, and adjust the config. Patches are invisible except for the prompt 
    built campfire) and run `/fh_craft tonic_vigor` (or `tonic_steady`).
    Expected: `Done: Brew Vigor Tonic.` (2 American Ginseng + 1 Wild Mint) or `Done: Brew Steady Tonic.` (2 Oregano +
    1 Red Sage), using the herbs you just gathered.
+   RESULT:
+
+### Cooking (C10, plan crafting-03)
+
+Preconditions: a campfire you can stand at: build one on your own plot (`/fh_build station_2`, needs 5 `lumber`), or
+`fh_dev 1` and the dev cook station (-289.0, 805.0, 119.0, placeholder). Cooking uses the `cook` station type, which maps
+to the homestead `campfire`. Inputs: `raw_meat` has no in-game source until @hunting lands the skinning grant (idea-914),
+and `carrot`, `potato` and `corn` have none until @roads adds them to the supplies list (idea-915). Until then give them
+with `fh_give <yourId> <item> <n>`. All output items (`cooked_meat`, `stew`, `stew_veg`) already exist in rsg-core.
+
+1. Cook meat. `fh_give <yourId> raw_meat 1`, stand at the campfire, run `/fh_craft cook_meat`.
+   Expected: chat `Done: Cook meat.`; 1 Raw Meat gone, 1 Cooked Meat in the backpack.
+   RESULT:
+2. Eat the cooked meat from the inventory.
+   Expected: the item is consumed and `Well Fed` shows in the buff HUD (a shorter buff than stew: scale 0.5).
+   RESULT:
+3. Cook stew. `fh_give <yourId> raw_meat 2`, `carrot 1`, `potato 1`, then `/fh_craft cook_stew`.
+   Expected: `Done: Cook stew.`; the 4 inputs are gone and 1 Stew is in the backpack. Eating it shows `Well Fed`
+   (full-length, scale 1.0).
+   RESULT:
+4. Cook vegetable stew. `fh_give <yourId> carrot 1`, `potato 1`, `corn 1`, then `/fh_craft cook_stew_veg`.
+   Expected: `Done: Cook vegetable stew.`; 1 Vegetable Stew in the backpack; eating it shows `Well Fed` (scale 0.85).
+   RESULT:
+5. Failure path: with no `raw_meat` run `/fh_craft cook_meat`; and away from any campfire run it with meat in the pack.
+   Expected: `Missing: 1x raw_meat (have 0)` and `You need to be at the right station.`; nothing is consumed.
+   RESULT:
+6. (Once idea-914/915 land) Replace `fh_give` with the real sources: skin an animal for raw_meat, buy the veg at a trade post.
+   Expected: the same results as steps 1-4 with no `fh_give`.
    RESULT:
 
 ## Survival (fh_survival, plan survival-01, S1-S5 combined)

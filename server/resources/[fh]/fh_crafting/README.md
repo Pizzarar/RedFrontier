@@ -44,8 +44,8 @@ Internal globals (not exports): `FhCraftStations` (`isNearStation`, alias `isNea
 |---|---|---|
 | `items` | table, item name -> definition | Registered at start (and again when `fh_core` restarts) through `exports.fh_core:registerItems`. `resource_gunpowder`, `ammo_box_revolver`, `ammo_box_rifle` and `herb_*` already exist in rsg-core and are not re-registered. |
 | `TonicDurations` | table, tonic item -> seconds | `tonic_vigor = 600`, `tonic_steady = 300`. Read by `FhCraftRules.tonicFor`. |
-| `devStations` | table, station type -> `{x, y, z}` | Dev-only fallback stations (`gunsmith` at `-280.0, 805.0, 119.0`, `reload` at `-283.0, 805.0, 119.0`, `apothecary` at `-286.0, 805.0, 119.0`), consulted only while convar `fh_dev = 1`. Placeholder coordinates: TODO verify in game. |
-| `stationTypeMap` | table, crafting type -> H3 type | `gunsmith` and `reload` -> `workbench`, `apothecary` -> `campfire`. Applied in `server/stations.lua` before every `fh_homestead` call (homestead only builds workbench/campfire/tanning_rack). |
+| `devStations` | table, station type -> `{x, y, z}` | Dev-only fallback stations (`gunsmith` at `-280.0, 805.0, 119.0`, `reload` at `-283.0, 805.0, 119.0`, `apothecary` at `-286.0, 805.0, 119.0`, `cook` at `-289.0, 805.0, 119.0`), consulted only while convar `fh_dev = 1`. Placeholder coordinates: TODO verify in game. |
+| `stationTypeMap` | table, crafting type -> H3 type | `gunsmith` and `reload` -> `workbench`, `apothecary` and `cook` -> `campfire`. Applied in `server/stations.lua` before every `fh_homestead` call (homestead only builds workbench/campfire/tanning_rack). |
 | `stationMaxDist` | number | Default reach used by `isNearStation` / `stationAt` when no `maxDist` is passed (3.0). |
 | `herbPatches` | list of `{ id, herb, coords, yield, respawnSeconds }` | 8 wild herb patches (2 per herb). Press E at a patch to pick: the server grants `yield` (1-2) of `herb` and starts a shared per-patch cooldown (`respawnSeconds`, in-memory, cleared on restart). Coordinates are `TODO-verify-in-game` placeholders. |
 
@@ -70,9 +70,15 @@ is not read here, only by `fh_gunsmith`.
 | `ammo_rifle` | `reload` | Reload rifle ammo | `resource_gunpowder` 2, `lead` 2, `casings` 2 | `ammo_box_rifle` 1 |
 | `tonic_vigor` | `apothecary` | Brew Vigor Tonic | `herb_american_ginseng` 2, `herb_wild_mint` 1 | `tonic_vigor` 1 |
 | `tonic_steady` | `apothecary` | Brew Steady Tonic | `herb_oregano` 2, `herb_red_sage` 1 | `tonic_steady` 1 |
+| `cook_meat` | `cook` | Cook meat | `raw_meat` 1 | `cooked_meat` 1 |
+| `cook_stew` | `cook` | Cook stew | `raw_meat` 2, `carrot` 1, `potato` 1 | `stew` 1 |
+| `cook_stew_veg` | `cook` | Cook vegetable stew | `carrot` 1, `potato` 1, `corn` 1 | `stew_veg` 1 |
 
+The `cook` recipes use only rsg-core items (nothing registered here); fh_survival maps the three outputs to `well_fed`.
+`raw_meat` is pending the @hunting skin grant (idea-914) and `carrot`/`potato`/`corn` the @roads supplies list (idea-915):
+`spec/crafting_sources_spec.lua` tracks both in its PENDING set.
 Recipe shape: `{ id, station_type, inputs = {{item, amount}}, outputs = {{item, amount}}, label }`, with
-`station_type` in `gunsmith | reload | apothecary` (gunsmith has no recipe; restore is `fh_gunsmith`). Invalid or
+`station_type` in `gunsmith | reload | apothecary | cook` (gunsmith has no recipe; restore is `fh_gunsmith`). Invalid or
 duplicate recipes are printed at start by `FhCraftRules.validateRecipes`.
 
 ## Restore caps (`shared/craft_rules.lua`)
