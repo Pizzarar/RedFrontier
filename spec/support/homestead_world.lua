@@ -200,7 +200,9 @@ return function(T, cfg)
             print = function(m) W.logs[#W.logs + 1] = tostring(m) end,
         }, { __index = _G })
         assert(load(MAIN_SRC, '@main.lua', 't', W.env))()
-        W.threads[1]() -- loadClaims
+        -- loadClaims; opts.deferLoad leaves it to the spec (W.load()) to observe the state before the boot load
+        W.load = function() W.threads[1]() end
+        if not opts.deferLoad then W.load() end
         W.C = W.env.FhHomesteadClaims
         W.at = function(src, plotId) W.peds[src] = cfg.plots[plotId].center end
         W.claimAt = function(src, plotId, class) W.at(src, plotId); return W.ex.claim(src, class) end

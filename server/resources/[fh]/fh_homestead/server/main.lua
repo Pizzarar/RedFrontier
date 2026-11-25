@@ -7,7 +7,7 @@ local rules = FhPlotRules
 -- byPlot[plot_id] = citizenid; byOwner[class][citizenid] = plot_id (one plot per character per class, mirrors
 -- UNIQUE(citizenid, class)); classByPlot[plot_id] = the class the row was written / loaded with.
 local claims = { byPlot = {}, byOwner = { claim = {}, town_lot = {} }, classByPlot = {} }
-local ready = false
+local ready = false -- the boot load of fh_plots finished (set at the end of loadClaims; also the claimsReady export)
 -- Per-plot in-flight lock shared by claim AND unclaim: plot_id -> true from before the first MySQL await until every
 -- exit. A second claim/unclaim of that plot meanwhile gets the retryable 'fh_claim_busy', so no two DB writes for one
 -- plot ever interleave (and a stale unclaim can never clear a newer claim's memory).
@@ -765,3 +765,6 @@ exports('claimedPlots', claimedPlots)
 exports('isInSafeZone', isInSafeZone)
 exports('plotInfo', plotInfo)
 exports('lawSafeAt', lawSafeAt)
+---claimsReady() -> boolean. True once the boot load of fh_plots has finished (0 claims included: not a count check).
+---False before it and while a resource restart reloads it. Read-only: takes no args, changes nothing.
+exports('claimsReady', function() return ready end)
