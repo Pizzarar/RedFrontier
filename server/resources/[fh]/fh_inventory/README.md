@@ -36,7 +36,8 @@ fork notes below.
   `price` / `buyPrice` are rounded to whole cents at `CreateShop` (warned); missing, non-numeric, <= 0 or over $100,000
   a unit = not for sale / not bought. Totals are worked in integer cents. The ledger region is `CreateShop`'s
   `region` (an fh_core region id) or, without one, the region of the nearest town to `coords` (`FhRegions`, loaded in
-  the manifest). A shop with no region, or a `currency` other than `cash`, refuses every trade (warned at create).
+  the manifest). A shop with no or an unknown region, or a `currency` other than `cash`, refuses every trade before
+  touching stock or items (warned at create). A malformed client amount (not a whole number) is refused.
 - **Runtime-registered items** resolve through `RSGCore.Shared.Items` (`FhItems.sharedLookup`), so an item fh_core
   pushed with its `size_class` is classed correctly here.
 

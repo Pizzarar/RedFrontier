@@ -292,8 +292,10 @@ local function claimPending(citizenid)
     local Player = onlineByCitizenid(citizenid)
     local paid, unpaid = {}, {}
     for _, row in ipairs(rows) do
-        local amount = math.tointeger(tonumber(row.amount))
-        if Player and amount and amount > 0 and addMoneyChecked(Player, amount, row.reason) then
+        -- DECIMAL(12,2) since 0019 (whole cents); the driver may hand it back as a number or a string ('1.13')
+        local raw = tonumber(row.amount)
+        local amount = logic.cents(raw) and raw > 0 and logic.toCents(raw) or nil
+        if Player and amount and addMoneyChecked(Player, amount, row.reason) then
             paid[#paid + 1] = { id = row.id, amount = amount, reason = row.reason, region_id = row.region_id }
         else
             unpaid[#unpaid + 1] = row

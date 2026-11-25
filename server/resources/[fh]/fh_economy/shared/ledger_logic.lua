@@ -102,17 +102,20 @@ function logic.validateCharge(args, ctx)
         maxReason = ctx.maxReason })
 end
 
----Credit (idea-700, offline-safe payout): a valid citizenid (logic.validCitizenid) and a positive INTEGER amount
----(5.0 is taken as 5; 5.5, numeric strings, NaN and inf are refused), then the same rules as pay / charge with its own
----cap (ctx.maxCredit).
+---Credit (idea-700, offline-safe payout): a valid citizenid (logic.validCitizenid) and a positive amount in WHOLE
+---CENTS (core M3: 5, 5.0 and 1.13 are fine; 5.555, numeric strings, NaN and inf are refused). Never rounded: a credit
+---is owed money, so a sub-cent amount is a caller bug, not something to round away. Then the same rules as pay /
+---charge with its own cap (ctx.maxCredit).
 ---@param args { citizenid:any, amount:any, reason:any, region_id:any }
 ---@param ctx { isKnownRegion:fun(id:any):boolean, maxCredit:number?, maxReason:number? }
----@return boolean ok, string? err, integer? amount  the amount as a Lua integer when ok
+---@return boolean ok, string? err, number? amount  logic.toCents form when ok (a whole amount is a Lua integer)
 function logic.validateCredit(args, ctx)
     args = args or {}
     if not logic.validCitizenid(args.citizenid) then return false, 'invalid_citizenid' end
-    local n = isFinite(args.amount) and math.tointeger(args.amount) or nil
-    if not n or n <= 0 then return false, 'invalid_amount' end
+    local c = logic.cents(args.amount)
+    -- 1e-6 of a cent absorbs float noise (1.13 * 100 = 112.99999999999999), never a real sub-cent part
+    if not c or c < 1 or math.abs(args.amount * 100 - c) > 1e-6 then return false, 'invalid_amount' end
+    local n = logic.toCents(args.amount)
     local ok, err = logic.validatePay({ amount = n, reason = args.reason, region_id = args.region_id },
         { isKnownRegion = ctx.isKnownRegion, maxPay = ctx.maxCredit, maxReason = ctx.maxReason })
     if not ok then return false, err end

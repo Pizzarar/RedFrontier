@@ -69,7 +69,8 @@ local MySQL = {
         local out = {}
         for _, r in pairs(pending) do
             if r.claimed_by == v[1] then
-                out[#out + 1] = { id = r.id, amount = r.amount, reason = r.reason, region_id = r.region_id }
+                -- fh_pending_credit.amount is decimal(12,2) since 0019: the driver may return it as a string
+                out[#out + 1] = { id = r.id, amount = ('%.2f'):format(r.amount), reason = r.reason, region_id = r.region_id }
             end
         end
         table.sort(out, function(a, b) return a.id < b.id end)
@@ -299,7 +300,7 @@ end)
 T.describe('fh_economy.credit validation', function()
     T.it('bad amount / citizenid / reason / region refused before touching anything', function()
         local nL, nP, nEv = count(ledger), count(pending), #events
-        for _, bad in ipairs({ 0, -5, 5.5, 0.5, '5', 0 / 0, math.huge, -math.huge, true }) do
+        for _, bad in ipairs({ 0, -5, 5.555, 0.004, 0.005, 1.005, '5', '1.13', 0 / 0, math.huge, -math.huge, true }) do
             T.eq('invalid_amount', select(2, credit('CIDOFF', bad, 'x', 'heartlands')), tostring(bad))
         end
         T.eq('invalid_amount', select(2, credit('CIDOFF', nil, 'x', 'heartlands')))
@@ -319,6 +320,36 @@ T.describe('fh_economy.credit validation', function()
         local r
         for _, x in pairs(pending) do if x.citizenid == 'CIDFLT' then r = x end end
         T.eq('integer', math.type(r.amount)); T.eq(5, r.amount)
+    end)
+end)
+
+T.describe('fh_economy.credit whole cents (core M3)', function()
+    local function c(x) return math.floor(x * 100 + 0.5) end
+    T.it('online: a whole-cent credit adds exactly that, ledger row and event carry it', function()
+        local P = mkPlayer(30, 'CIDCENT', 10)
+        local ok, err, mode = credit('CIDCENT', 1.13, 'shop_sell:general', 'heartlands')
+        T.eq(true, ok); T.eq(nil, err); T.eq('paid', mode)
+        T.eq(1113, c(P.PlayerData.money.cash))
+        local e = events[#events]
+        T.eq(1.13, e.payload.amount); T.eq(1.13, ledger[e.payload.ledger_id].amount)
+        T.eq(0, pendingOf('CIDCENT'))
+    end)
+    T.it('offline: queued with the exact cents, claim on load pays exactly that once', function()
+        T.eq(2, queueOffline('CIDCENTO', { 1.13, 0.5 }))
+        local amounts = {}
+        for _, r in pairs(pending) do if r.citizenid == 'CIDCENTO' then amounts[#amounts + 1] = r.amount end end
+        table.sort(amounts)
+        T.same({ 0.5, 1.13 }, amounts)
+        local P = mkPlayer(31, 'CIDCENTO', 0.14)
+        loadChar(P)
+        T.eq(177, c(P.PlayerData.money.cash))
+        T.eq(0, pendingOf('CIDCENTO')); T.eq(2, kindRows('CIDCENTO', 'credit'))
+        local paid = {}
+        for _, r in pairs(ledger) do if r.citizenid == 'CIDCENTO' and r.kind == 'credit' then paid[#paid + 1] = r.amount end end
+        table.sort(paid)
+        T.same({ 0.5, 1.13 }, paid)
+        loadChar(P)
+        T.eq(177, c(P.PlayerData.money.cash))
     end)
 end)
 

@@ -96,6 +96,15 @@ local function SetupItems(name, list, persistent)
     return items, slot - 1
 end
 
+local function KnownRegion(id)
+    local R = FhRegions
+    return type(R) == 'table' and type(R.isKnownRegion) == 'function' and R.isKnownRegion(id) == true
+end
+
+---Only a cash shop in a known fh_core region can trade: fh_economy moves cash only and refuses any other region
+---(unknown_region). Checked before any stock or inventory change, so a misconfigured shop never takes an item first.
+local function Tradeable(shop) return shop.currency == MONEY_TYPE and KnownRegion(shop.region) end
+
 local function Checked(shop)
     if shop.currency ~= MONEY_TYPE then
         print(('^3[fh_inventory:shops] shop %s: currency %s is not %s (fh_economy); it will not trade^7')
@@ -104,7 +113,16 @@ local function Checked(shop)
     if not shop.region then
         print(('^3[fh_inventory:shops] shop %s: no region (give region = <fh_core region id> or coords); it will not trade^7')
             :format(shop.name))
+    elseif not KnownRegion(shop.region) then
+        print(('^3[fh_inventory:shops] shop %s: region %s is not a known fh_core region; it will not trade^7')
+            :format(shop.name, tostring(shop.region)))
     end
+end
+
+---A client amount: nil -> default; otherwise a whole number (1, 2.0), else nil (refused). Never coerced.
+local function ParseAmount(v, default)
+    if v == nil then return default end
+    return type(v) == 'number' and math.tointeger(v) or nil
 end
 
 local function Register(name, data)
@@ -220,7 +238,7 @@ end
 
 ---Give money back to a character after its money was taken (buy: item add failed) or its item was taken (sell:
 ---pay failed and the item can't go back). pay(src) while the same character is online and loaded, else
----credit(citizenid) (offline-safe, queues; whole dollars only). Returns true once the money is back or queued.
+---credit(citizenid) (offline-safe, queues; whole cents since core M3). Returns true once the money is back or queued.
 local function Compensate(src, cid, cents, reason, region, tryPay)
     local amount = FromCents(cents)
     if tryPay and Citizenid(src) == cid then
@@ -242,13 +260,13 @@ local function Buy(src, shop, slot, amount, toSlot)
     end
 
     local it = shop.items[slot]
-    amount = math.tointeger(tonumber(amount)) or 1
-    if not it or amount < 1 or amount > 1000 then
+    amount = ParseAmount(amount, 1)
+    if not it or not amount or amount < 1 or amount > 1000 then
         return Debug(src, 'buy denied: slot %s item %s amount %s', tostring(slot), tostring(it and it.name), tostring(amount))
     end
     local unit = ToCents(it.price)
     if not unit or unit < 1 then return notify(src, 'not_for_sale') end
-    if shop.currency ~= MONEY_TYPE then return notify(src, 'not_for_sale') end -- fh_economy moves cash only
+    if not Tradeable(shop) then return notify(src, 'not_for_sale') end -- cash + known region, before any change
     if it.unique then amount = 1 end
     if it.amount and amount > it.amount then return notify(src, 'out_of_stock') end
     if not InvCore.API.CanCarry(src, it.name, amount) then return notify(src, 'too_heavy') end
@@ -294,7 +312,7 @@ local function Sell(src, shop, playerSlot, amount)
     if OnCooldown(src) or not InRange(src, shop) then return end
     local item = InvCore.API.GetItemBySlot(src, playerSlot)
     if not item then return end
-    if amount == nil then amount = item.amount else amount = math.tointeger(tonumber(amount)) end
+    amount = ParseAmount(amount, item.amount)
     if not amount or amount < 1 or amount > item.amount then return end
 
     local entry
@@ -302,7 +320,7 @@ local function Sell(src, shop, playerSlot, amount)
         if it.name == item.name and it.buyPrice then entry = it break end
     end
     if not entry then return notify(src, 'shop_wont_buy') end
-    if shop.currency ~= MONEY_TYPE then return notify(src, 'shop_wont_buy') end -- fh_economy moves cash only
+    if not Tradeable(shop) then return notify(src, 'shop_wont_buy') end -- cash + known region, before any change
     local quality = (item.info and tonumber(item.info.quality)) or 100
     if quality ~= quality then quality = 0 end
     quality = math.max(0, math.min(100, quality))

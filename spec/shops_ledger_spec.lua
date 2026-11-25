@@ -34,7 +34,10 @@ local function cents(x) return math.floor(x * 100 + 0.5) end
 local function invItems(src) return W.inv[src] end
 
 local API = {}
-function API.CanCarry(src, name, amount) return W.inv[src] ~= nil and not W.cantCarry end
+function API.CanCarry(src, name, amount)
+    if W.carryThrows then error('inventory blew up') end
+    return W.inv[src] ~= nil and not W.cantCarry
+end
 function API.GetItemBySlot(src, slot) return W.inv[src] and W.inv[src][slot] or nil end
 function API.AddItem(src, name, amount, info, slot, reason)
     W.adds[#W.adds + 1] = { src = src, name = name, amount = amount, slot = slot, reason = reason }
@@ -95,7 +98,8 @@ function Econ.pay(_, src, amount, reason, region)
 end
 function Econ.credit(_, cid, amount, reason, region)
     W.calls[#W.calls + 1] = { fn = 'credit', cid = cid, amount = amount, reason = reason, region = region }
-    if type(amount) ~= 'number' or amount % 1 ~= 0 or amount < 1 then return false, 'invalid_amount' end
+    if W.creditFail then return false, W.creditFail end
+    if not wholeCents(amount) then return false, 'invalid_amount' end -- whole cents since core M3 (was whole dollars)
     W.ledger[#W.ledger + 1] = { kind = 'credit', cid = cid, amount = amount, reason = reason, region = region }
     return true, nil, 'pending'
 end
@@ -418,6 +422,110 @@ T.describe('fh_inventory shops through the fh_economy ledger (core M3)', functio
         local s3 = Shops.CreateShop({ name = 'ghost', items = { { name = 'bread', price = 1 } } })
         T.eq(nil, s3.region)
         assert(printed[#printed]:find('no region', 1, true), printed[#printed])
+    end)
+
+    -- core M3 review fixes
+    T.it('buy add fails and the refund pay is refused: a fractional total is credited in exact cents', function()
+        fresh()
+        local cid = player(1, 10)
+        local s = shop({ { name = 'bread', price = 1.25, amount = 5 } })
+        open(1, s)
+        W.failAdd, W.payFail = true, 'addmoney_refused'
+        go(Shops.Buy, 1, s, 1, 2)
+        local cr = callsOf('credit')
+        T.eq(1, #cr)
+        T.eq(2.5, cr[1].amount)
+        T.eq('credit', W.ledger[#W.ledger].kind)
+        T.eq(cid, W.ledger[#W.ledger].cid)
+        T.eq(5, s.items[1].amount)
+        assert(not printed[#printed] or not printed[#printed]:find('ALERT', 1, true), printed[#printed])
+    end)
+
+    T.it('sell where pay says no_player: a fractional payout is credited in exact cents', function()
+        fresh()
+        local cid = player(1, 0, { [3] = { name = 'pelt', amount = 3, info = { quality = 50 }, slot = 3 } })
+        local s = shop({ { name = 'pelt', buyPrice = 0.75 } })
+        open(1, s)
+        W.payFail = 'no_player'
+        go(Shops.Sell, 1, s, 3, 3)
+        local cr = callsOf('credit')
+        T.eq(1, #cr)
+        T.eq(1.13, cr[1].amount)
+        T.eq(cid, cr[1].cid)
+        T.eq('credit', W.ledger[#W.ledger].kind)
+    end)
+
+    T.it('sell where pay is refused AND the item undo fails: payout credited instead, shop keeps the goods', function()
+        fresh()
+        local cid = player(1, 0, { [3] = { name = 'pelt', amount = 2, info = {}, slot = 3 } })
+        local s = shop({ { name = 'pelt', buyPrice = 0.75, amount = 0, maxStock = 10 } })
+        open(1, s)
+        W.payFail, W.failAdd = 'addmoney_refused', true
+        go(Shops.Sell, 1, s, 3, 2)
+        T.eq(0, count(1, 'pelt'))
+        T.eq(2, #W.adds, 'undo tried at the slot, then any slot')
+        local cr = callsOf('credit')
+        T.eq(1, #cr); T.eq(1.5, cr[1].amount); T.eq(cid, cr[1].cid)
+        T.eq(2, s.items[1].amount)
+        -- and when the credit fails too: ALERT names what is owed
+        fresh()
+        player(1, 0, { [3] = { name = 'pelt', amount = 2, info = {}, slot = 3 } })
+        s = shop({ { name = 'pelt', buyPrice = 0.75 } })
+        open(1, s)
+        W.payFail, W.failAdd, W.creditFail = 'addmoney_refused', true, 'ledger_failed'
+        go(Shops.Sell, 1, s, 3, 2)
+        assert(printed[#printed]:find('ALERT sell FAILED', 1, true) and printed[#printed]:find('owed $1.5', 1, true),
+            printed[#printed])
+    end)
+
+    T.it('an error inside a trade still releases the per-player lock', function()
+        fresh()
+        player(1, 10)
+        local s = shop({ { name = 'bread', price = 1, amount = 5 } })
+        open(1, s)
+        W.carryThrows = true
+        go(Shops.Buy, 1, s, 1, 1)
+        assert(printed[#printed]:find('ALERT shop trade error', 1, true), printed[#printed])
+        T.eq(0, #W.calls)
+        W.carryThrows = false
+        tick()
+        go(Shops.Buy, 1, s, 1, 1)
+        T.eq(1, count(1, 'bread'))
+        T.eq(1, #callsOf('charge'))
+    end)
+
+    T.it('a shop with an unknown region: warned at create, buy and sell refused before stock or inventory change', function()
+        fresh()
+        player(1, 10, { [2] = { name = 'pelt', amount = 1, info = {}, slot = 2 } })
+        local s = shop({ { name = 'bread', price = 1, amount = 5 }, { name = 'pelt', buyPrice = 1, amount = 0 } },
+            { region = 'atlantis' })
+        T.eq('atlantis', s.region)
+        assert(printed[#printed]:find('not a known fh_core region', 1, true), printed[#printed])
+        open(1, s)
+        go(Shops.Buy, 1, s, 1, 1); tick()
+        go(Shops.Sell, 1, s, 2, 1)
+        T.eq(0, #W.calls)
+        T.eq(5, s.items[1].amount); T.eq(0, s.items[2].amount)
+        T.eq(1, count(1, 'pelt')); T.eq(0, count(1, 'bread'))
+        T.eq('shop_wont_buy', W.notes[#W.notes])
+    end)
+
+    T.it('buy refuses a malformed client amount instead of coercing it to 1', function()
+        fresh()
+        player(1, 10)
+        local s = shop({ { name = 'bread', price = 1, amount = 5 } })
+        open(1, s)
+        for _, bad in ipairs({ 1.5, 'abc', '2', 0 / 0, math.huge, true, {}, 0, -1, 1001 }) do
+            tick()
+            go(Shops.Buy, 1, s, 1, bad)
+        end
+        T.eq(0, #W.calls)
+        T.eq(0, count(1, 'bread'))
+        tick()
+        go(Shops.Buy, 1, s, 1, 2.0) -- a whole float is fine
+        tick()
+        go(Shops.Buy, 1, s, 1, nil) -- no amount = 1
+        T.eq(3, count(1, 'bread'))
     end)
 end)
 

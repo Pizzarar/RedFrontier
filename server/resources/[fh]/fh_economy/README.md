@@ -27,8 +27,8 @@ Money & rep ledger (spec 4.6). All payouts and rep changes go through here; ever
   or otherwise malformed string, and any other type are refused with `no_player` instead of reading 0.
 - `exports.fh_economy:credit(citizenid, amount, reason, region_id)` -> `ok, err, mode` (core-04 E2, idea-700)
   Payout to a character by **citizenid**, online or offline, that never loses money (refunds etc.). `amount` must be a
-  positive integer (`5.0` is taken as 5; `5.5`, strings, NaN/inf refused) up to `maxCredit`; same reason / region rules
-  as `pay`. On success `err` is nil and `mode` is:
+  positive amount in **whole cents** (core M3: `5`, `5.0` (taken as 5) and `1.13` are fine; `5.555`, strings, NaN/inf
+  refused, never rounded) up to `maxCredit`; same reason / region rules as `pay`. Whole-dollar callers are unchanged. On success `err` is nil and `mode` is:
   - `'paid'`: the character is online; the `pay` path ran (ledger row `kind='credit'` first, fresh lookup after the
     insert, `AddMoney`, row voided on failure). Emits `fh:economy:credited` (`queued = false`).
   - `'pending'`: queued. One transaction inserts a `fh_pending_credit` row and a ledger row `kind='credit_pending'`
@@ -92,9 +92,11 @@ in `shared/ledger_logic.lua` (pure, tested).
 - `fh_ledger` (id, citizenid, kind pay|rep|charge, amount, reason, region_id, created_at): append-only.
   `server/migrations/0006_fh_ledger_charge.sql` widens the `kind` enum with `charge` (B7); existing rows untouched.
 - `fh_rep` (citizenid, region_id, value), PK (citizenid, region_id).
-- `fh_pending_credit` (id, citizenid, amount int unsigned, reason, region_id, claimed_by NULL|token, created_at):
+- `fh_pending_credit` (id, citizenid, amount decimal(12,2) unsigned, reason, region_id, claimed_by NULL|token, created_at):
   queued offline credits (`server/migrations/0015_fh_pending_credit.sql`, which also widens `fh_ledger.kind` with
-  `credit` and `credit_pending`). `credit_pending` = queued, no money moved; `credit` = money added.
+  `credit` and `credit_pending`). `0019_fh_pending_credit_cents.sql` (core M3) turns `amount` from int unsigned into
+  decimal(12,2) unsigned so a queued credit keeps its exact cents (existing rows convert exactly; idempotent). The claim
+  reads it as a number or a string and pays exactly those cents. `credit_pending` = queued, no money moved; `credit` = money added.
 
 Region ids: fh_economy loads `@fh_core/shared/regions.lua` itself in its manifest (`shared_scripts`), so it
 does not depend on fh_core's manifest listing it (B4a's `shared/*.lua` glob covers fh_core's own use).
