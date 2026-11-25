@@ -414,6 +414,96 @@ case('pickSteal: invariants over 2000 random chests (fraction cap, >= 1, distinc
     end
 end)
 
+case('pickSteal idea-959: same-name stacks with different info are never picked (removeItem has no slot)', function()
+    -- chest 1 holds two revolvers, serials A and B: removing "a revolver" may take either, so neither is eligible
+    local chest = {
+        [1] = { name = 'weapon_revolver', amount = 1, slot = 1, info = { serial = 'A' } },
+        [2] = { name = 'weapon_revolver', amount = 1, slot = 2, info = { serial = 'B' } },
+        [3] = { name = 'bread', amount = 4, slot = 3 },
+    }
+    -- pool = [bread(3)] only; stealStacks 2 -> picks fewer (1), two rng calls, never a revolver
+    local r, rlog = lcg(7)
+    same({ { slot = 3, name = 'bread', amount = 1, of = 4 } }, R.pickSteal(ctx, chest, seq(1, 1)))
+    eq(1, #R.pickSteal(ctx, chest, r)); eq(2, #rlog)
+    -- only conflicting stacks -> no eligible stack -> {} with no rng call
+    same({}, R.pickSteal(ctx, { chest[1], chest[2] }, noRng))
+    -- nil info vs a table, and nested differences, also conflict
+    same({}, R.pickSteal(ctx, { { name = 'r', amount = 1 }, { name = 'r', amount = 1, info = {} } }, noRng))
+    same({}, R.pickSteal(ctx, { { name = 'r', amount = 1, info = { a = { 1, 2 } } },
+        { name = 'r', amount = 1, info = { a = { 1, 3 } } } }, noRng))
+    same({}, R.pickSteal(ctx, { { name = 'r', amount = 1, info = { a = 1 } },
+        { name = 'r', amount = 1, info = { a = 1, b = 2 } } }, noRng))
+    -- a third conflicting stack after two equal ones still taints the whole name
+    same({}, R.pickSteal(ctx, { { name = 'r', amount = 1, info = { s = 'A' } },
+        { name = 'r', amount = 1, info = { s = 'A' } }, { name = 'r', amount = 1, info = { s = 'B' } } }, noRng))
+    -- junk entries (amount 0 / no name) are not stacks and do not conflict
+    same({ { slot = 1, name = 'r', amount = 1, of = 1, info = { s = 'A' } } },
+        R.pickSteal(ctx, { { name = 'r', amount = 1, info = { s = 'A' } }, { name = 'r', amount = 0, info = { s = 'B' } } },
+            seq(1, 1)))
+end)
+
+case('pickSteal idea-959: same-name stacks with deep-equal info are interchangeable and stay eligible', function()
+    local chest = {
+        [1] = { name = 'rope', amount = 2, slot = 1, info = { q = 1, tags = { 'a', 'b' }, m = { x = true } } },
+        [2] = { name = 'rope', amount = 6, slot = 2, info = { q = 1, tags = { 'a', 'b' }, m = { x = true } } },
+        [3] = { name = 'salt', amount = 3, slot = 3 },
+        [4] = { name = 'salt', amount = 5, slot = 4 },
+    }
+    -- pool = all four; pick 2 -> rope(2) take 3 (max 3); pick 2 -> salt(3) take 1; the pick carries the info
+    same({ { slot = 2, name = 'rope', amount = 3, of = 6, info = chest[2].info },
+        { slot = 3, name = 'salt', amount = 1, of = 3 } }, R.pickSteal(ctx, chest, seq(2, 3, 2, 1)))
+end)
+
+case('pickSteal idea-959: invariants over 2000 random chests with info (a picked name never has conflicting info)', function()
+    local gen = lcg(4242)
+    local infos = { function() return nil end, function() return { s = 'A' } end, function() return { s = 'B' } end,
+        function() return { s = 'A', l = { 1, 2 } } end }
+    local function eqInfo(a, b) -- independent check via a canonical string
+        local function enc(v)
+            if type(v) ~= 'table' then return tostring(v) end
+            local ks = {}
+            for k in pairs(v) do ks[#ks + 1] = k end
+            table.sort(ks, function(x, y) return tostring(x) < tostring(y) end)
+            local parts = {}
+            for _, k in ipairs(ks) do parts[#parts + 1] = tostring(k) .. '=' .. enc(v[k]) end
+            return '{' .. table.concat(parts, ',') .. '}'
+        end
+        return enc(a) == enc(b)
+    end
+    local sawFewer, sawShared = false, false
+    for trial = 1, 2000 do
+        local chest = {}
+        for s = 1, gen(0, 8) do
+            if gen(1, 4) > 1 then
+                chest[s] = { name = 'item' .. gen(1, 4), amount = gen(1, 30), slot = s, info = infos[gen(1, 4)]() }
+            end
+        end
+        local eligible = 0
+        for _, a in pairs(chest) do
+            local ok = true
+            for _, b in pairs(chest) do
+                if a.name == b.name and not eqInfo(a.info, b.info) then ok = false end
+            end
+            if ok then eligible = eligible + 1 end
+        end
+        local picks = R.pickSteal(ctx, chest, lcg(gen(1, 2147483646)))
+        eq(math.min(RC.stealStacks, eligible), #picks, 'pick count = min(stealStacks, eligible) (trial ' .. trial .. ')')
+        if eligible < math.min(RC.stealStacks, count(chest)) then sawFewer = true end
+        for _, p in ipairs(picks) do
+            local n = 0
+            for _, b in pairs(chest) do
+                if b.name == p.name then
+                    n = n + 1
+                    assert(eqInfo(p.info, b.info), 'every same-name stack shares the picked info')
+                end
+            end
+            if n > 1 then sawShared = true end
+            eq(chest[p.slot].info, p.info, 'pick carries its own stack info')
+        end
+    end
+    assert(sawFewer and sawShared, 'generator covers both cases')
+end)
+
 -- ---------------------------------------------------------------- save
 
 case('save v3 roundtrip: raid squads and cooldowns survive', function()
@@ -619,6 +709,61 @@ case('C2c ledger: deserialize trims each camp ledger to lootStacksMax, oldest dr
         { name = 'd', amount = 1 }, { name = 'e', amount = 1 },
     } } }, smallCtx)
     same({ 'c', 'd', 'e' }, names(st2.raidLoot[HEART[1]]))
+end)
+
+case('L2: deserialize reports each ledger-cap trim as a loot_dropped effect (server load logs them)', function()
+    local smallCtx = Rules.context({ claimRaids = { lootStacksMax = 2 } }, Regions, camps)
+    local st, err, eff = R.deserialize({ version = 3, raidLoot = {
+        [HEART[1]] = { { name = 'a', amount = 1 }, { name = 'b', amount = 2, info = { s = 'X' } },
+            { name = 'c', amount = 1 }, { name = 'd', amount = 1 } },
+        [HEART[2]] = { { name = 'z', amount = 1 } },
+    } }, smallCtx)
+    eq(nil, err)
+    same({ 'c', 'd' }, names(st.raidLoot[HEART[1]]))
+    same({
+        { type = 'loot_dropped', reason = 'ledger_full', camp_id = HEART[1], name = 'a', amount = 1, kept = 2 },
+        { type = 'loot_dropped', reason = 'ledger_full', camp_id = HEART[1], name = 'b', amount = 2, info = { s = 'X' },
+            kept = 2 },
+    }, eff)
+    -- under the cap: no effects
+    local _, _, eff2 = R.deserialize({ version = 3, raidLoot = { [HEART[1]] = { { name = 'a', amount = 1 } } } }, ctx)
+    same({}, eff2)
+end)
+
+case('L3: lootAdd keeps proper sequences in info as arrays; mixed/sparse junk keys still dropped', function()
+    local st = Rules.newState()
+    local cyc = { 'x' }; cyc[2] = cyc
+    local deepArr = { { { { { 'ok', { 'too deep' } } } } } } -- 'ok' at depth 6, the inner list at 7
+    local ok = R.lootAdd(ctx, st, HEART[1], { name = 'rifle', amount = 1, info = {
+        serial = 'A',
+        components = { 'scope', 'sling' },
+        nums = { 1, 2.5, 3 },
+        rows = { { a = 1 }, { b = { 'x', 'y' } } },
+        junkElems = { 'a', function() end, 0 / 0, 'b' },
+        sparse = { [1] = 'a', [3] = 'c' },
+        zero = { [0] = 'z', [1] = 'a' },
+        mixed = { 'a', 'b', k = 'v' },
+        floaty = { [1.5] = 'f' },
+        allJunk = { function() end },
+        cyc = cyc,
+        deepArr = deepArr,
+    } })
+    eq(true, ok)
+    same({
+        serial = 'A',
+        components = { 'scope', 'sling' },
+        nums = { 1, 2.5, 3 },
+        rows = { { a = 1 }, { b = { 'x', 'y' } } },
+        junkElems = { 'a', 'b' },
+        mixed = { k = 'v' },
+        cyc = { 'x' },
+        deepArr = { { { { { 'ok' } } } } },
+    }, st.raidLoot[HEART[1]][1].info)
+    -- a top-level list info is kept too, and survives the save round trip
+    R.lootAdd(ctx, st, HEART[1], { name = 'bag', amount = 1, info = { 'red', 'wool' } })
+    same({ 'red', 'wool' }, st.raidLoot[HEART[1]][2].info)
+    local st2 = R.deserialize(R.serialize(st), ctx)
+    same(st.raidLoot, st2.raidLoot)
 end)
 
 T.finish()

@@ -117,16 +117,6 @@ local function coreDropBag(coords, items, opts)
     return id, why
 end
 
----The snapshot entry of a picked slot (fh_inventory may key slots as numbers or numeric strings).
-local function slotItem(items, slot)
-    local it = items[slot] or items[tostring(slot)]
-    if type(it) == 'table' then return it end
-    for _, v in pairs(items) do
-        if type(v) == 'table' and v.slot == slot then return v end
-    end
-    return nil
-end
-
 ---Put a removed-but-unrecorded pick back (the ledger refused it): chest 1 first, else a drop bag at the claim.
 local function restorePick(chest, pick, info, e, why)
     local back, backWhy = coreAdd(chest, pick.name, pick.amount, info)
@@ -183,8 +173,9 @@ local function steal(e)
     local picks = R.pickSteal(ctx, items, rng)
     local moved = {}
     for _, pick in ipairs(picks) do
-        local it = slotItem(items, pick.slot)
-        local info = it and type(it.info) == 'table' and it.info or nil
+        -- pick.info is the picked stack's snapshot info; pickSteal only picks stacks whose same-name stacks all share
+        -- that info (idea-959: coreRemove has no slot, fh_inventory may take any stack of the name).
+        local info = type(pick.info) == 'table' and pick.info or nil
         local ok, reason = movePick(chest, pick, info, e)
         if ok then moved[#moved + 1] = { name = pick.name, amount = pick.amount }
         else log('raid %s steal: %dx %s not taken (%s)', tostring(e.squad_id), pick.amount, pick.name, tostring(reason)) end

@@ -130,26 +130,56 @@ end
 
 local MAX_INFO_DEPTH = 6
 
----JSON-safe deep copy of an item `info` table: string keys only; strings, booleans, finite numbers and nested tables
----up to MAX_INFO_DEPTH (cycles skipped). Drops functions, userdata, threads and non-finite numbers. Nil when empty.
-local function cleanJsonTable(t, depth, seen)
+---True when `t` is a proper sequence: only integer keys 1..n, no holes (n >= 1). Such a table encodes as a JSON array.
+local function isSequence(t)
+    local n = 0
+    for k in pairs(t) do
+        if math.type(k) ~= 'integer' or k < 1 then return false end
+        n = n + 1
+    end
+    if n == 0 then return false end
+    for i = 1, n do
+        if t[i] == nil then return false end
+    end
+    return true
+end
+
+local cleanJsonTable -- forward: cleanJsonValue and cleanJsonTable recurse into each other
+
+local function cleanJsonValue(v, depth, seen)
+    local vt = type(v)
+    if vt == 'string' or vt == 'boolean' then return v end
+    if vt == 'number' and finite(v) then return v end
+    if vt == 'table' then return cleanJsonTable(v, depth + 1, seen) end
+    return nil
+end
+
+---JSON-safe deep copy of an item `info` table. A proper sequence (integer keys 1..n, no holes) is kept as an array
+---(L3: list-style info such as attachment lists); elements that do not survive cleaning are dropped and the survivors
+---keep their order (re-packed 1..m, so the copy is still a sequence). Any other table keeps its string keys only, so
+---mixed (string + integer keys) and sparse/hole tables lose their non-string keys. Values: strings, booleans, finite
+---numbers and nested tables up to MAX_INFO_DEPTH (cycles skipped). Drops functions, userdata, threads and
+---non-finite numbers. Nil when empty.
+cleanJsonTable = function(t, depth, seen)
     if type(t) ~= 'table' or depth > MAX_INFO_DEPTH or seen[t] then return nil end
     seen[t] = true
     local out, any = {}, false
-    for k, v in pairs(t) do
-        if type(k) == 'string' then
-            local vt = type(v)
-            local cv
-            if vt == 'string' or vt == 'boolean' then
-                cv = v
-            elseif vt == 'number' and finite(v) then
-                cv = v
-            elseif vt == 'table' then
-                cv = cleanJsonTable(v, depth + 1, seen)
-            end
+    if isSequence(t) then
+        for i = 1, #t do
+            local cv = cleanJsonValue(t[i], depth, seen)
             if cv ~= nil then
-                out[k] = cv
+                out[#out + 1] = cv
                 any = true
+            end
+        end
+    else
+        for k, v in pairs(t) do
+            if type(k) == 'string' then
+                local cv = cleanJsonValue(v, depth, seen)
+                if cv ~= nil then
+                    out[k] = cv
+                    any = true
+                end
             end
         end
     end

@@ -22,7 +22,8 @@
 --      phase = 'warn'|'fight'|'return', mode = nil|'fight'|'steal', travel, etaTick, cancelled = reason|nil }
 --  * lifecycle: warn --(warnTicks)--> arrive: owner home -> 'fight' (fightTicks on foot at the claim, squad goal
 --    'raid', spawn owner tag OWNER_TAG) then withdraw; owner away -> steal (effect raid_steal; the server picks with
---    pickSteal, removes from chest 1 and records each confirmed removal in the camp's loot ledger, lootAdd) ->
+--    pickSteal (only stacks whose name is unique in chest 1 or whose same-name stacks share deep-equal info: fh_core
+--    removeItem has no slot, idea-959), removes from chest 1 and records each confirmed removal in the camp's loot ledger, lootAdd) ->
 --    'return' (travel ticks) -> removed (raid_returned).
 --  * loot ledger (C2c): state.raidLoot[campId] = { { name, amount, info? }, ... } oldest first, persisted with the
 --    save (not in the fh_zones stash: fh_zones wipes camp stashes on restart/boot). At most lootStacksMax entries per
@@ -331,15 +332,38 @@ function M.onSquadKill(ctx, state, squadId, n)
     return effects, nil
 end
 
----Steal pick from chest 1. `items` = fh_core snapshot slot map ({ [slot] = { name, amount, ... } }) or an array
----(entry.slot wins over the key). Valid stacks (non-empty name, amount >= 1) in slot order form the pool; up to
----stealStacks picks, each: stack = pool[rng(1, #pool)] (removed), take = rng(1, max(1, floor(amount x
----stealMaxFraction))). So at least 1 item per picked stack, never more than the fraction of a stack (a 1-item stack
----can be taken whole: the at-least-1 rule wins). Empty chest -> {} with no rng call.
----@return table picks  { { slot, name, amount, of } } in pick order (amount = taken, of = the stack's amount)
+---Deep equality of two item `info` values (nil == nil only). Conservative: NaN, cycles and anything deeper than
+---INFO_EQ_DEPTH compare unequal, so doubtful stacks are never treated as interchangeable.
+local INFO_EQ_DEPTH = 8
+local function infoEqual(a, b, depth)
+    if a == b then return true end
+    if type(a) ~= 'table' or type(b) ~= 'table' or depth > INFO_EQ_DEPTH then return false end
+    for k, v in pairs(a) do
+        if not infoEqual(v, b[k], depth + 1) then return false end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
+end
+
+---Steal pick from chest 1. `items` = fh_core snapshot slot map ({ [slot] = { name, amount, info?, ... } }) or an
+---array (entry.slot wins over the key). Valid stacks (non-empty name, amount >= 1) in slot order form the candidates.
+---Slot-exact rule (idea-959): fh_core removeItem(ref, name, amount) has no slot argument, so fh_inventory may take
+---ANY stack of that name. A stack is therefore only eligible when its name is unique among the valid stacks, or every
+---valid stack of that name has deep-equal `info` (then whichever stack is taken, the ledger's info is the taken
+---item's info). Same-name stacks with differing info (two revolvers, serials A and B) are never picked: picking A
+---could remove B, record A, and lose B. Fewer eligible stacks -> fewer picks. A slot-exact fh_core remove (removeItem
+---with a slot) would lift this limit.
+---The eligible stacks in slot order form the pool; up to stealStacks picks, each: stack = pool[rng(1, #pool)]
+---(removed), take = rng(1, max(1, floor(amount x stealMaxFraction))). So at least 1 item per picked stack, never more
+---than the fraction of a stack (a 1-item stack can be taken whole: the at-least-1 rule wins). Empty pool -> {} with no
+---rng call.
+---@return table picks  { { slot, name, amount, of, info? } } in pick order (amount = taken, of = the stack's amount,
+---info = the stack's snapshot info table, as is; lootAdd sanitises it)
 function M.pickSteal(ctx, items, rng)
     rng = rng or math.random
-    local pool, seen = {}, {}
+    local cands, seen = {}, {}
     if type(items) == 'table' then
         local keys = {}
         for k in pairs(items) do
@@ -354,9 +378,19 @@ function M.pickSteal(ctx, items, rng)
             local amount = finite(it.amount) and math.floor(it.amount) or 0
             if slot and not seen[slot] and type(it.name) == 'string' and it.name ~= '' and amount >= 1 then
                 seen[slot] = true
-                pool[#pool + 1] = { slot = slot, name = it.name, amount = amount }
+                cands[#cands + 1] = { slot = slot, name = it.name, amount = amount, info = it.info }
             end
         end
+    end
+    local firstOf, mixed = {}, {} -- per name: first candidate; true when same-name stacks differ in info
+    for _, c in ipairs(cands) do
+        local f = firstOf[c.name]
+        if not f then firstOf[c.name] = c
+        elseif not mixed[c.name] and not infoEqual(f.info, c.info, 1) then mixed[c.name] = true end
+    end
+    local pool = {}
+    for _, c in ipairs(cands) do
+        if not mixed[c.name] then pool[#pool + 1] = c end
     end
     local picks = {}
     local k = math.min(intKnob(ctx, 'stealStacks', 0), #pool)
@@ -368,7 +402,7 @@ function M.pickSteal(ctx, items, rng)
         local maxTake = math.min(st.amount, math.max(1, math.floor(st.amount * frac)))
         local take = math.floor(tonumber(rng(1, maxTake)) or 1)
         take = math.min(maxTake, math.max(1, take))
-        picks[#picks + 1] = { slot = st.slot, name = st.name, amount = take, of = st.amount }
+        picks[#picks + 1] = { slot = st.slot, name = st.name, amount = take, of = st.amount, info = st.info }
     end
     return picks
 end
@@ -473,7 +507,9 @@ function M.pruneRaids(ctx, state, plots)
     return effects
 end
 
----FhAlifeRules.deserialize (v1/v2/v3) plus pruneRaids and per-camp loot ledger cap trimming (oldest dropped).
+---FhAlifeRules.deserialize (v1/v2/v3) plus pruneRaids and per-camp loot ledger cap trimming (oldest dropped). Each
+---trimmed entry is reported (L2) so the server's load() logs it, like lootAdd's dropped list:
+---{ type = 'loot_dropped', reason = 'ledger_full', camp_id, name, amount, info?, kept = the camp's ledger size }.
 ---@return table|nil state, string|nil err, table effects
 function M.deserialize(t, ctx, plots)
     local s, err, effects = Rules.deserialize(t, ctx)
@@ -481,7 +517,11 @@ function M.deserialize(t, ctx, plots)
     effects = effects or {}
     for _, e in ipairs(M.pruneRaids(ctx, s, plots)) do effects[#effects + 1] = e end
     for _, campId in ipairs(sortedKeys(s.raidLoot)) do
-        trimLoot(ctx, s.raidLoot[campId])
+        local list = s.raidLoot[campId]
+        for _, d in ipairs(trimLoot(ctx, list)) do
+            effects[#effects + 1] = { type = 'loot_dropped', reason = 'ledger_full', camp_id = campId,
+                name = d.name, amount = d.amount, info = d.info, kept = #list }
+        end
     end
     return s, nil, effects
 end

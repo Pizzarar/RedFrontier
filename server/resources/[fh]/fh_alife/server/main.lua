@@ -50,7 +50,12 @@ local function load()
     end
     state = s
     for _, e in ipairs(dropped or {}) do
-        log('load: dropped %s %s (%s)', tostring(e.type), tostring(e.squad_id), tostring(e.reason))
+        if e.type == 'loot_dropped' then
+            log('^1load: raid loot ledger %s full (%d stacks): dropped oldest %dx %s^7', tostring(e.camp_id),
+                tonumber(e.kept) or 0, tonumber(e.amount) or 0, tostring(e.name))
+        else
+            log('load: dropped %s %s (%s)', tostring(e.type), tostring(e.squad_id), tostring(e.reason))
+        end
     end
     local nOwners, nSquads = 0, 0
     for _ in pairs(state.owners) do nOwners = nOwners + 1 end

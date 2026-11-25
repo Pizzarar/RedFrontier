@@ -671,6 +671,49 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         T.eq(nil, ledger(B2))
     end)
 
+    T.it('idea-959 steal: same-name stacks with different info are left alone; equal-info stacks are conserved',
+        function()
+        -- two revolvers (serials A and B): removeItem has no slot, so neither may be picked; bread is taken instead
+        local B = raidBoot(false)
+        B.containers[CHEST] = {
+            [1] = { name = 'weapon_revolver', amount = 1, info = { serial = 'A' } },
+            [2] = { name = 'weapon_revolver', amount = 1, info = { serial = 'B' } },
+            [3] = { name = 'bread', amount = 4 },
+        }
+        B.commands.alife(1, {}, 'alife tick 6')
+        T.same({ { 'remove', CHEST, 'bread', 1 } }, B.invLog, 'only the bread is removed (picks fewer)')
+        T.same({ serial = 'A' }, B.containers[CHEST][1].info); T.same({ serial = 'B' }, B.containers[CHEST][2].info)
+        T.same({ { name = 'bread', amount = 1 } }, ledger(B))
+        -- two ropes with the same info: interchangeable, so whichever stack removeItem takes, the ledger is right
+        local B2 = raidBoot(false)
+        B2.containers[CHEST] = {
+            [1] = { name = 'rope', amount = 1, info = { q = 1, tags = { 'tar' } } },
+            [2] = { name = 'rope', amount = 4, info = { q = 1, tags = { 'tar' } } },
+        }
+        B2.commands.alife(1, {}, 'alife tick 6')
+        T.same({ { 'remove', CHEST, 'rope', 1 }, { 'remove', CHEST, 'rope', 1 } }, B2.invLog)
+        T.eq(3, total(B2.containers[CHEST], 'rope'))
+        T.same({ { name = 'rope', amount = 1, info = { q = 1, tags = { 'tar' } } },
+            { name = 'rope', amount = 1, info = { q = 1, tags = { 'tar' } } } }, ledger(B2), 'list info kept (L3)')
+        T.same(ledger(B2), savedLedger(B2))
+    end)
+
+    T.it('L2 load: a saved camp ledger over lootStacksMax is trimmed on load and each dropped stack is logged',
+        function()
+        local big = {}
+        for i = 1, 22 do big[i] = { name = 'l' .. i, amount = i } end
+        local B = boot({ fh_alife_state = Json.encode({ version = 3, tick = 1, owners = {}, squads = {},
+            raidLoot = { [CAMP] = big } }) })
+        T.eq(20, B.raidRules.lootCount(B.server.getState(), CAMP))
+        for _, want in ipairs({ 'dropped oldest 1x l1', 'dropped oldest 2x l2' }) do
+            local hit = false
+            for _, l in ipairs(B.printed) do
+                if l:find('load: raid loot ledger ' .. CAMP .. ' full (20 stacks): ' .. want, 1, true) then hit = true end
+            end
+            assert(hit, 'logged: ' .. want)
+        end
+    end)
+
     T.it('C2c save resilience: non-JSON info sanitised before ledger; KVP save throw logs, notifies owner, never stops ticks',
         function()
         -- non-JSON info in chest item is sanitised by lootAdd so json.encode succeeds
