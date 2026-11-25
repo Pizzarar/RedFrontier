@@ -140,16 +140,13 @@ local function onUse(src, item)
     if eff then onHeal(src, live, eff) elseif clip then onClip(src, live, clip) end
 end
 
-local function names()
-    local list = {}
-    for n in pairs(C.heal) do list[#list + 1] = n end
-    for n in pairs(C.clips) do list[#list + 1] = n end
-    table.sort(list)
-    return list
-end
-
 local function register()
-    for _, name in ipairs(names()) do
+    -- two literal pairs() loops: tools/check-contracts.py resolves handler names from loops like these
+    for name in pairs(C.heal) do
+        local ok, err = pcall(function() exports['rsg-core']:CreateUseableItem(name, onUse) end)
+        if not ok then print(('[fh_core] CreateUseableItem %s failed: %s'):format(name, tostring(err))) end
+    end
+    for name in pairs(C.clips) do
         local ok, err = pcall(function() exports['rsg-core']:CreateUseableItem(name, onUse) end)
         if not ok then print(('[fh_core] CreateUseableItem %s failed: %s'):format(name, tostring(err))) end
     end

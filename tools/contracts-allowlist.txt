@@ -3,34 +3,6 @@ events|fh:cargo:offroad_hint  # TODO(R2 off-road) in fh_cargo/README.md: no veri
 events|fh:alife:camp_flipped  # published event, no consumer or README mention; fh_alife has no lane dir, reported to core lead
 
 # -- KNOWN-H2 owner: core, see audit H2: useable=true loot/starter/crafting items with no use handler --
-useable|bandage  # KNOWN-H2 owner: core, see audit H2 (also the third starter item)
-useable|bandana  # KNOWN-H2 owner: core, see audit H2
-useable|blood_money_clip  # KNOWN-H2 owner: core, see audit H2 (not in rsg-core moneyMap)
-useable|bucket  # KNOWN-H2 owner: core, see audit H2
-useable|canned_peaches  # KNOWN-H2 owner: core, see audit H2
-useable|chewingtobacco  # KNOWN-H2 owner: core, see audit H2
-useable|cigar  # KNOWN-H2 owner: core, see audit H2
-useable|cigarettes  # KNOWN-H2 owner: core, see audit H2
-useable|fieldbandage  # KNOWN-H2 owner: core, see audit H2
-useable|firstaid  # KNOWN-H2 owner: core, see audit H2
-useable|money_clip  # KNOWN-H2 owner: core, see audit H2 (not in rsg-core moneyMap)
-useable|moonshine  # KNOWN-H2 owner: core, see audit H2
-useable|mortarpestle  # KNOWN-H2 owner: core, see audit H2
-useable|oilcan  # KNOWN-H2 owner: core, see audit H2
-useable|pipe  # KNOWN-H2 owner: core, see audit H2
-useable|resource_coal  # KNOWN-H2 owner: core, see audit H2
-useable|resource_copper_bar  # KNOWN-H2 owner: core, see audit H2
-useable|resource_gold_nugget  # KNOWN-H2 owner: core, see audit H2
-useable|resource_iron_bar  # KNOWN-H2 owner: core, see audit H2
-useable|resource_silver_bar  # KNOWN-H2 owner: core, see audit H2
-useable|resource_wood  # KNOWN-H2 owner: core, see audit H2
-useable|shovel  # KNOWN-H2 owner: core, see audit H2
-useable|tonic_energy  # KNOWN-H2 owner: core, see audit H2
-useable|tonic_healing  # KNOWN-H2 owner: core, see audit H2
-useable|tonic_stamina  # KNOWN-H2 owner: core, see audit H2
-useable|tool_goldpan  # KNOWN-H2 owner: core, see audit H2
-useable|tool_lockpick  # KNOWN-H2 owner: core, see audit H2
-useable|weapon_gun_oil  # KNOWN-H2 owner: core, see audit H2
 
 # -- vendored rsg-loading ships an empty html/music/ dir, so `files { 'html/music/*' }` matches 0 files --
 manifest|rsg-loading:html/music/*  # owner: core; vendored rsg-loading (Rexshack-RedM) empty html/music/ dir; not a load break
