@@ -35,6 +35,13 @@ local function newEnv(opts)
         FhTradeConfig.freight.destinations.heartlands = { x = 0, y = 0, z = 0, radius = 40 }
         FhTradeConfig.goods.trade_salt.weight, FhTradeConfig.goods.trade_salt.stackable = 1500, true
     end
+    if opts.t3 then -- roads-03 R14: T3 contracts on a >= 800 m route (strictly > T2 400 m)
+        FhTradeConfig.freight.t3 = { enabled = true, minWagonTier = 3, minDistance = 800, deadlineBase = 1200,
+            deadlinePerMeter = 1.0, minQty = 20, maxQty = 60, qtyPerLevel = 60, maxLoad = 500000, payMultiple = 6, payCapMultiple = 7,
+            repDelta = 6, maxOffers = 2 }
+        FhTradeConfig.freight.destinations.heartlands = { x = 0, y = 0, z = 0, radius = 40 }
+        FhTradeConfig.goods.trade_salt.weight, FhTradeConfig.goods.trade_salt.stackable = 1500, true
+    end
     E.states, E.unlockCalls, E.shortages, E.tierCalls = {}, {}, {}, {}
     E.tiers = {} -- R13: region_id -> fh_progression getTier result (default 2 = T2 open everywhere)
     local registered = {}
@@ -612,6 +619,110 @@ case('R13 character swap while getTier yields -> fh_no_player; nothing added', f
     T.eq(0, #E.unlockCalls); T.eq(0, #E.addCalls)
     E.online[7], E.tierFn = 'CID1', nil
     assert(acceptWith(E, o, 't2') == true, 'accept lock released after a swap refusal')
+end)
+
+-- ---------------------------------------------------------------- T3 contracts (roads-03 R14)
+
+-- Three post regions on a line: heartlands (0) - dunes (500) - bayou_nwa (1000).
+-- T2 minDistance = 400 (all pairs); T3 minDistance = 800 (only heartlands <-> bayou_nwa = 1000 m).
+local function t3Env(opts)
+    opts = opts or {}
+    opts.t2, opts.t3 = true, true
+    local E = newEnv(opts)
+    FhTradeConfig.freight.destinations.bayou_nwa = { x = 1000, y = 0, z = 0, radius = 40 }
+    FhRegions = { regions = { heartlands = {}, dunes = {}, bayou_nwa = {} },
+        isKnownRegion = function(id) return id == 'heartlands' or id == 'dunes' or id == 'bayou_nwa' end }
+    E.shortages.dunes = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    E.shortages.bayou_nwa = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    E.shortages.heartlands = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    return E
+end
+local function t3From(E, region, to)
+    for _, o in ipairs(E.hooks.offers(region)) do if o.tier == 3 and (not to or o.to_region == to) then return o end end
+end
+
+case('R14 T3 offers: generated only for routes >= t3.minDistance; carries tier 3, locked, min_region_tier 3', function()
+    local E = t3Env()
+    T.eq(nil, t3From(E, 'heartlands', 'dunes'), '500 m < T3 minDistance 800')
+    local o = t3From(E, 'heartlands', 'bayou_nwa')
+    assert(o, '1000 m >= T3 minDistance 800')
+    T.eq(3, o.tier); T.eq(true, o.locked); T.eq(3, o.min_region_tier); T.eq(3, o.min_wagon_tier)
+    T.eq('heartlands', o.region_id); T.eq('heartlands.bayou_nwa.trade_salt.t3', o.key)
+    T.eq(0, #E.tierCalls); T.eq(0, #E.unlockCalls)
+end)
+
+case('R14 T3 regional gate: tier 3 in origin accepted (canUnlock never called); tier 2 refused fh_locked', function()
+    local E = t3Env()
+    E.tiers = { heartlands = 2, bayou_nwa = 3 }
+    local ok, err = acceptWith(E, t3From(E, 'heartlands', 'bayou_nwa'), 't3')
+    assert(ok == false and err == 'fh_locked', 'heartlands tier 2 -> ' .. tostring(err))
+    T.same({ { src = 7, region = 'heartlands' } }, E.tierCalls)
+    T.eq(0, #E.addCalls)
+
+    ok, err = acceptWith(E, t3From(E, 'bayou_nwa', 'heartlands'), 't3')
+    assert(ok == true, 'bayou tier 3 -> ' .. tostring(err))
+    T.same({ src = 7, region = 'bayou_nwa' }, E.tierCalls[2])
+    T.eq(0, #E.unlockCalls, 'no global canUnlock call for T3')
+    T.eq(1, #E.addCalls); T.eq(30, E.addCalls[1].n); T.same({ freight = 'bayou_nwa.heartlands.trade_salt.t3' }, E.addCalls[1].info)
+    T.eq(1, #E.registered.getContracts(7))
+end)
+
+case('R14 T3 fail closed: progression down / getTier throws / missing export / non-number -> fh_locked, lock released', function()
+    local setups = {
+        stopped = function(E) E.states.fh_progression = 'stopped' end,
+        throws  = function(E) E.tierFn = function() error('progression boom') end end,
+        string  = function(E) E.tierFn = function() return '3' end end,
+        ['nil'] = function(E) E.tierFn = function() return nil end end,
+    }
+    for name, setup in pairs(setups) do
+        local E = t3Env()
+        E.tiers = { heartlands = 3 }
+        local o = t3From(E, 'heartlands', 'bayou_nwa')
+        setup(E)
+        local ok, err = acceptWith(E, o, 't3')
+        assert(ok == false and err == 'fh_locked', name .. ' -> ' .. tostring(err))
+        T.eq(0, #E.addCalls); T.eq(0, #E.unlockCalls)
+        E.tierFn, E.states.fh_progression = nil, nil
+        assert(acceptWith(E, o, 't3') == true, name .. ': accept lock not released')
+    end
+    local E = t3Env({ noGetTier = true })
+    local ok, err = acceptWith(E, t3From(E, 'heartlands', 'bayou_nwa'), 't3')
+    assert(ok == false and err == 'fh_locked', 'missing getTier -> ' .. tostring(err))
+    T.eq(0, #E.unlockCalls); T.eq(0, #E.addCalls)
+end)
+
+case('R14 T3 kill switch: freight.t3.enabled false hides T3 and refuses stale T3 with fh_freight_tier_disabled; on again works', function()
+    local E = t3Env()
+    E.tiers = { heartlands = 3 }
+    local o = t3From(E, 'heartlands', 'bayou_nwa')
+    FhTradeConfig.freight.t3.enabled = false
+    T.eq(nil, t3From(E, 'heartlands', 'bayou_nwa'), 'T3 hidden while off')
+    local t2n = 0 for _, x in ipairs(E.hooks.offers('heartlands')) do if x.tier == 2 then t2n = t2n + 1 end end
+    assert(t2n > 0, 'T2 still listed while T3 is off')
+    local ok, err = acceptWith(E, o, 't3')
+    assert(ok == false and err == 'fh_freight_tier_disabled', 'off -> ' .. tostring(err))
+    T.eq(0, #E.tierCalls, 'refused before gate'); T.eq(0, #E.addCalls)
+    FhTradeConfig.freight.t3.enabled = true
+    assert(t3From(E, 'heartlands', 'bayou_nwa'), 'T3 listed again')
+    ok, err = acceptWith(E, o, 't3')
+    assert(ok == true, 'on -> ' .. tostring(err))
+    T.eq(0, #E.unlockCalls)
+end)
+
+case('R14 T3 wagon fit: t1 cart and t2 wagon refused for T3, unknown fails closed, t3 wagon accepted', function()
+    local E = t3Env()
+    E.tiers = { heartlands = 3 }
+    local o = t3From(E, 'heartlands', 'bayou_nwa')
+    local ok, err = acceptWith(E, o, 't1')
+    assert(ok == false and err == 'fh_freight_wagon_too_small', 't1 -> ' .. tostring(err))
+    ok, err = acceptWith(E, o, 't2')
+    assert(ok == false and err == 'fh_freight_wagon_too_small', 't2 -> ' .. tostring(err))
+    E.getWagonThrows = true
+    ok, err = acceptWith(E, o, 't3')
+    assert(ok == false and err == 'fh_freight_wagon_unknown', 'throws -> ' .. tostring(err))
+    E.getWagonThrows = false
+    T.eq(0, #E.addCalls, 'nothing added on refused wagon fit')
+    assert(acceptWith(E, o, 't3') == true, 't3 wagon accepted')
 end)
 
 T.finish()

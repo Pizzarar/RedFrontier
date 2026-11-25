@@ -91,6 +91,23 @@ FhTradeConfig = {
             maxOffers = 2,             -- per board, listed after the T1 offers (own cap, T1 is never crowded out)
             cooldownMin = 30,          -- raised to the deadline in minutes when that is longer
         },
+        -- T3 contracts (roads-03 R14): heavy long-haul freight, gated per player at accept by fh_progression
+        -- getTier(src, origin region) >= 3 (fail closed) and by a t3 Freight wagon. Listed on the board as `[T3]`,
+        -- `locked = true`.
+        t3 = {
+            enabled = true,            -- kill switch (roads-03 R14): false (or any non-true value) hides T3 offers, refuses T3 accepts
+            minWagonTier = 3,          -- fh_cargo TIERS[*].tier: t3 Freight (60 slots / 500 kg)
+            minDistance = 3000,        -- m between destinations (strictly > t2.minDistance 1500; e.g. heartlands <-> bayou_nwa ~3538 m, bayou_nwa <-> great_plains ~3566 m)
+            deadlineBase = 1200, deadlinePerMeter = 1.0, -- deadline_s = base + route m * perMeter (~79 min for 3566 m)
+            minQty = 20, maxQty = 60,  -- qty = clamp(ceil(level * qtyPerLevel), minQty, min(maxQty, floor(maxLoad / weight)))
+            qtyPerLevel = 60,          -- capped by the t3 wagon's SLOTS (60) and maxLoad (500 kg; whiskey caps at 33)
+            maxLoad = 500000,          -- grams: matches fh_cargo TIERS.t3.maxWeight (500 kg)
+            payMultiple = 6,           -- T3 pays 2x the matching T2 pay (~6x T1) for the same level
+            payCapMultiple = 7,        -- hard cap: T3 pay is never more than 7x the matching T1 pay
+            repDelta = 6,              -- T1 2, T2 4
+            maxOffers = 2,             -- per board, listed after T1 and T2 (own cap, never crowds out T1/T2)
+            cooldownMin = 30,          -- raised to the deadline in minutes when that is longer
+        },
         -- Freight destinations resolve from FhTradeConfig.posts (filled from FhRegions.posts at load, roads-03 R12).
         -- Only regions with >= 1 post get offers. `overrides` holds per-region { x?, y?, z?, radius?, post? } tweaks;
         -- `exclude` opts a region out of freight (either { 'region_id', ... } or { region_id = true }).

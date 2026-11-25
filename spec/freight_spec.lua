@@ -580,9 +580,10 @@ case('R12 real config: resolves destinations from FhRegions posts, >= 3 region p
     for _, r in ipairs(enabled) do byRegion[r] = P.shortages(c, state, r, now) end
 
     -- Inspect all pairs with high caps first.
-    local wide = copy(c); wide.freight = copy(c.freight); wide.freight.t2 = copy(c.freight.t2)
-    wide.freight.maxOffers, wide.freight.t2.maxOffers = 99, 99
-    local pairsSeen, t2Pairs = {}, {}
+    local wide = copy(c); wide.freight = copy(c.freight)
+    wide.freight.t2 = copy(c.freight.t2); wide.freight.t3 = copy(c.freight.t3)
+    wide.freight.maxOffers, wide.freight.t2.maxOffers, wide.freight.t3.maxOffers = 99, 99, 99
+    local pairsSeen, t2Pairs, t3Pairs = {}, {}, {}
     local hasBayou, hasPlains = false, false
     for _, from in ipairs(enabled) do
         local offers = F.generate(wide, from, byRegion, Regions)
@@ -594,6 +595,7 @@ case('R12 real config: resolves destinations from FhRegions posts, >= 3 region p
             local pair = a .. '<->' .. b
             pairsSeen[pair] = true
             if o.tier == 2 then t2Pairs[pair] = true end
+            if o.tier == 3 then t3Pairs[pair] = true end
             if o.from_region == 'bayou_nwa' or o.to_region == 'bayou_nwa' then hasBayou = true end
             if o.from_region == 'great_plains' or o.to_region == 'great_plains' then hasPlains = true end
         end
@@ -603,10 +605,14 @@ case('R12 real config: resolves destinations from FhRegions posts, >= 3 region p
     assert(nPairs >= 3, 'expected >= 3 region pairs, got ' .. nPairs)
     assert(hasBayou, 'expected offers involving bayou_nwa')
     assert(hasPlains, 'expected offers involving great_plains')
-    -- scarlett_meadows <-> bayou_nwa (~1420 m) is T1 only; bayou_nwa <-> great_plains (~3566 m) has T2.
+    -- scarlett_meadows <-> bayou_nwa (~1420 m) is T1 only; heartlands <-> scarlett_meadows (~2405 m) is T1+T2;
+    -- bayou_nwa <-> great_plains (~3566 m) and bayou_nwa <-> heartlands (~3538 m) have T1+T2+T3.
     T.eq(true, pairsSeen['bayou_nwa<->scarlett_meadows'])
     T.eq(nil, t2Pairs['bayou_nwa<->scarlett_meadows'], 'Rhodes <-> Saint Denis (~1420 m) is under T2 minDistance 1500')
     T.eq(true, t2Pairs['bayou_nwa<->great_plains'], 'Saint Denis <-> Blackwater (~3566 m) has T2')
+    T.eq(nil, t3Pairs['heartlands<->scarlett_meadows'], 'Valentine <-> Rhodes (~2405 m) is under T3 minDistance 3000')
+    T.eq(true, t3Pairs['bayou_nwa<->great_plains'], 'Saint Denis <-> Blackwater (~3566 m) has T3')
+    T.eq(true, t3Pairs['bayou_nwa<->heartlands'], 'Saint Denis <-> Valentine (~3538 m) has T3')
 
     -- Real config board caps hold even when every post region has shortages on every good.
     local allByRegion = {}
@@ -615,13 +621,14 @@ case('R12 real config: resolves destinations from FhRegions posts, >= 3 region p
         allByRegion[r] = P.shortages(c, state, r, now)
     end
     local board = F.generate(c, 'heartlands', allByRegion, Regions)
-    local n1, n2 = 0, 0
+    local n1, n2, n3 = 0, 0, 0
     for _, o in ipairs(board) do
         assert(#F.questId(o.key) <= 64, 'quest id > 64: ' .. o.key)
-        if o.tier == 1 then n1 = n1 + 1 else n2 = n2 + 1 end
+        if o.tier == 1 then n1 = n1 + 1 elseif o.tier == 2 then n2 = n2 + 1 else n3 = n3 + 1 end
     end
     T.eq(c.freight.maxOffers, n1, 'T1 board cap holds with all 15 regions')
     T.eq(c.freight.t2.maxOffers, n2, 'T2 board cap holds with all 15 regions')
+    T.eq(c.freight.t3.maxOffers, n3, 'T3 board cap holds with all 15 regions')
 end)
 
 -- ---------------------------------------------------------------- regional tier gate (roads-03 R13)
@@ -704,6 +711,164 @@ case('R13 validateOffer binds region_id to the key-bound origin (no gate dodging
     T.eq('bad_region', select(2, F.validateOffer(c, x, known)), 'forged region_id on T1')
     x = copy(o1); x.region_id = nil
     assert(F.validateOffer(c, x, known), 'T1 without region_id is still fine (never gated)')
+end)
+
+-- ---------------------------------------------------------------- T3 contracts (roads-03 R14)
+
+local T3 = { enabled = true, minWagonTier = 3, minDistance = 800, deadlineBase = 1200, deadlinePerMeter = 1.0,
+    minQty = 20, maxQty = 60, qtyPerLevel = 60, maxLoad = 500000, payMultiple = 6, payCapMultiple = 7,
+    repDelta = 6, maxOffers = 2, cooldownMin = 30 }
+local function t3With(over) local t = {} for k, v in pairs(T3) do t[k] = v end for k, v in pairs(over or {}) do t[k] = v end return t end
+local function cfgT3(over)
+    local c = cfgT2({ t3 = T3 })
+    c.freight.destinations.bayou_nwa = { x = 1000, y = 0, z = 0, radius = 40 }
+    c.goods.trade_whiskey = { base = 40, label = 'Whiskey', weight = 15000, stackable = true }
+    for k, v in pairs(over or {}) do c.freight[k] = v end
+    return c
+end
+local known3 = function(id) return id == 'heartlands' or id == 'dunes' or id == 'bayou_nwa' end
+local function byTier(offers, tier, to)
+    for _, o in ipairs(offers) do if o.tier == tier and (not to or o.to_region == to) then return o end end
+end
+
+case('R14 gateFor, tierEnabled, minWagonTier for T3', function()
+    local c = cfgT3()
+    T.same({ minRegionTier = 3 }, F.gateFor(c, 3))
+    F.gateFor(c, 3).minRegionTier = 1
+    T.eq(3, F.gateFor(c, 3).minRegionTier, 'gateFor copy protects TIER_GATES[3]')
+    T.eq(true, F.tierEnabled(c, 3))
+    T.eq(true, F.tierEnabled(cfgT3({ t3 = t3With({ enabled = nil }) }), 3), 'enabled absent = on')
+    for _, v in ipairs({ false, 'no', 'true', 0, 1 }) do
+        T.eq(false, F.tierEnabled(cfgT3({ t3 = t3With({ enabled = v }) }), 3), 'enabled = ' .. tostring(v))
+    end
+    T.eq(false, F.tierEnabled(cfgT2(), 3), 'no t3 config = off')
+    T.eq(3, F.minWagonTier(c, 3))
+end)
+
+case('R14 T3 generate: only for routes >= t3.minDistance; pay = 2x T2 (6x T1), <= 7x T1; distance-scaled deadline', function()
+    local c = cfgT3({ t2 = t2With({ maxOffers = 10 }) })
+    local sh = {
+        dunes     = { { item = 'trade_salt', level = 0.5, price = 10 } }, -- 500 m (>= T2 400, < T3 800)
+        bayou_nwa = { { item = 'trade_salt', level = 0.5, price = 10 }, { item = 'trade_whiskey', level = 0.5, price = 40 } }, -- 1000 m (>= T3 800)
+    }
+    local offers = F.generate(c, 'heartlands', sh)
+    T.eq(nil, byTier(offers, 3, 'dunes'), '500 m < T3 minDistance 800: no T3 offer')
+    assert(byTier(offers, 2, 'dunes'), '500 m still has T2')
+    local t1 = byTier(offers, 1, 'bayou_nwa')
+    local t2 = byTier(offers, 2, 'bayou_nwa')
+    local t3 = byTier(offers, 3, 'bayou_nwa')
+    assert(t1 and t2 and t3)
+    T.eq(3, t3.tier); T.eq('heartlands.bayou_nwa.trade_salt.t3', t3.key); assert(#F.questId(t3.key) <= 64)
+    T.eq(true, t3.locked); T.eq(3, t3.min_region_tier); T.eq(3, t3.min_wagon_tier); T.eq('heartlands', t3.region_id)
+    assert(t3.title:find('[T3]', 1, true), 'board title marks T3')
+    assert(t3.text:find('tier 3 in heartlands', 1, true), t3.text)
+    T.eq(30, t3.qty)           -- clamp(ceil(0.5 * 60), 20, 60)
+    T.eq(750, t3.reward)       -- floor(125 * 6) = 2 * 375 (T2)
+    T.eq(2 * t2.reward, t3.reward, 'T3 pay = 2x matching T2 pay')
+    assert(t3.reward > t2.reward and t3.reward <= 7 * t1.reward)
+    T.eq(2200, t3.deadline_s)  -- 1200 + 1000 * 1.0
+    T.eq(37, t3.cooldown_min)  -- max(30, ceil(2200 / 60))
+    T.same({ money = 750, rep = { region_id = 'bayou_nwa', delta = 6 } }, t3.rewards)
+    -- Whiskey at level 1.0 caps at floor(500000 / 15000) = 33 (maxLoad cap).
+    local wh = F.generate(c, 'heartlands', { bayou_nwa = { { item = 'trade_whiskey', level = 1.0, price = 40 } } })
+    local wh3 = byTier(wh, 3, 'bayou_nwa')
+    T.eq(33, wh3.qty, 'whiskey T3 qty capped by t3 maxLoad (500 kg / 15 kg = 33)')
+end)
+
+case('R14 T3 validateOffer + kill switch off: accepts valid, refuses tampering / short route / off switch', function()
+    local c = cfgT3()
+    local sh = { bayou_nwa = { { item = 'trade_salt', level = 0.5, price = 10 } } }
+    local offers = F.generate(c, 'heartlands', sh)
+    local o = byTier(offers, 3, 'bayou_nwa')
+    assert(F.validateOffer(c, o, known3))
+    local function bad(field, v, code, cc)
+        local x = copy(o); x[field] = v
+        local ok, err = F.validateOffer(cc or c, x, known3)
+        assert(not ok and err == code, field .. '=' .. tostring(v) .. ' -> ' .. tostring(err))
+    end
+    local noT3 = cfgT3(); noT3.freight.t3 = nil
+    bad('tier', 4, 'bad_tier'); bad('tier', 3, 'bad_tier', noT3)
+    bad('key', 'heartlands.bayou_nwa.trade_salt.t2', 'bad_key')
+    bad('qty', 29, 'bad_qty'); bad('level', 0, 'bad_level')
+    bad('reward', 0, 'bad_reward'); bad('reward', 2801, 'bad_reward') -- cap = floor(7 * 10 * 10 * 4) = 2800
+    bad('deadline_s', 1800, 'bad_deadline')
+    bad('region_id', 'bayou_nwa', 'bad_region'); bad('region_id', nil, 'bad_region')
+    local shortCfg = cfgT3({ t3 = t3With({ minDistance = 1500 }) })
+    T.eq('bad_route', select(2, F.validateOffer(shortCfg, o, known3)))
+    local off = cfgT3({ t3 = t3With({ enabled = false }) })
+    local listOff = F.generate(off, 'heartlands', sh)
+    T.eq(nil, byTier(listOff, 3), 'T3 hidden when kill switch off')
+    assert(byTier(listOff, 1) and byTier(listOff, 2), 'T1 and T2 still listed while T3 is off')
+    T.eq('tier_disabled', select(2, F.validateOffer(off, o, known3)))
+    assert(F.validateOffer(off, byTier(listOff, 2), known3), 'T2 still valid while T3 is off')
+end)
+
+case('R14 T3 wagonFits: t1 and t2 wagons refused, unreadable tier fails closed, t3 freight wagon fits', function()
+    local c = cfgT3()
+    local o = byTier(F.generate(c, 'heartlands', { bayou_nwa = { { item = 'trade_whiskey', level = 0.5, price = 40 } } }), 3) -- 30 whiskey = 450 kg
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t1)), 't1 cart refused')
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, o, CARGO.TIERS.t2)), 't2 wagon refused for T3')
+    T.eq('fh_freight_wagon_unknown', select(2, F.wagonFits(c, o, nil)), 'unreadable tier fails closed')
+    assert(F.wagonFits(c, o, CARGO.TIERS.t3), 't3 freight wagon fits 450 kg')
+    local heavy = copy(o); heavy.qty = 34 -- 510 kg > t3 500 kg
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, heavy, CARGO.TIERS.t3)), 'over t3 maxWeight')
+end)
+
+case('R14 T3 real config: t3.enabled = true, minDistance > t2, pay = 2x T2 (<= 7x T1), t2 refused & t3 fits', function()
+    local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
+    local c, Regions = loadRealTradeConfig()
+    local t2, t3 = assert(c.freight.t2, 'freight.t2 missing'), assert(c.freight.t3, 'freight.t3 missing')
+    T.eq(true, t3.enabled, 'real config ships freight.t3.enabled = true')
+    T.eq(true, F.tierEnabled(c, 3))
+    T.eq(3, t3.minWagonTier)
+    assert(t3.minDistance > t2.minDistance, 't3.minDistance must be strictly greater than t2.minDistance')
+    assert(t3.maxQty <= CARGO.TIERS.t3.slots, 't3.maxQty <= t3 wagon slots')
+    assert(t3.maxLoad <= CARGO.TIERS.t3.maxWeight, 't3.maxLoad <= t3 wagon maxWeight')
+    for item, g in pairs(c.goods) do
+        assert(math.floor(t3.maxLoad / g.weight) >= t3.minQty, item .. ': too heavy for t3.minQty')
+    end
+    local distShort = F.routeDistance(c, 'heartlands', 'scarlett_meadows', Regions)
+    local distLong  = F.routeDistance(c, 'bayou_nwa', 'great_plains', Regions)
+    assert(distShort and distShort < t3.minDistance, 'heartlands <-> scarlett_meadows should be below T3 minDistance')
+    assert(distLong and distLong >= t3.minDistance, 'bayou_nwa <-> great_plains should qualify for T3')
+
+    -- Real quotes on bayou_nwa <-> great_plains across levels and wobble phases.
+    local state, now, pair = P.newState(), 1700000000, { 'bayou_nwa', 'great_plains' }
+    c.freight.maxOffers, c.freight.t2.maxOffers, c.freight.t3.maxOffers = 99, 99, 99
+    local checked = 0
+    for _, level in ipairs({ 0.15, 0.25, 0.5, 0.75, 1.0 }) do
+        for _, wob in ipairs({ 0, 900, 1800 }) do
+            local tt = now + wob
+            for item in pairs(c.goods) do for _, r in ipairs(pair) do P.setShortage(c, state, r, item, level, tt) end end
+            local byRegion = {}
+            for _, r in ipairs(pair) do byRegion[r] = P.shortages(c, state, r, tt) end
+            for _, from in ipairs(pair) do
+                local offers = F.generate(c, from, byRegion, Regions)
+                for _, o in ipairs(offers) do
+                    if o.tier == 3 then
+                        checked = checked + 1
+                        local m1, m2
+                        for _, x in ipairs(offers) do
+                            if x.item == o.item and x.to_region == o.to_region then
+                                if x.tier == 1 then m1 = x elseif x.tier == 2 then m2 = x end
+                            end
+                        end
+                        assert(m1 and m2, o.item .. ': missing matching T1/T2 offer')
+                        T.eq(2 * m2.reward, o.reward, o.item .. ': T3 pay must be 2x matching T2 pay')
+                        assert(o.reward > m2.reward, o.item .. ': T3 pay must exceed T2')
+                        assert(o.reward <= 7 * m1.reward, ('%s lvl %s: T3 %d > 7x T1 %d'):format(o.item, level, o.reward, m1.reward))
+                    end
+                end
+            end
+        end
+    end
+    assert(checked >= 18, 'expected real T3 offers checked, got ' .. checked)
+
+    -- Real T3 offer refused on t2 wagon, accepted on t3 wagon.
+    local one = byTier(F.generate(c, 'bayou_nwa', { great_plains = P.shortages(c, state, 'great_plains', now) }, Regions), 3)
+    assert(one, 'no real T3 offer to fit-check')
+    T.eq('fh_freight_wagon_too_small', select(2, F.wagonFits(c, one, CARGO.TIERS.t2)), 't2 wagon refused for real T3')
+    assert(F.wagonFits(c, one, CARGO.TIERS.t3), 't3 wagon accepted for real T3')
 end)
 
 T.finish()

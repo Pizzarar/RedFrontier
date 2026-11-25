@@ -1,8 +1,8 @@
 -- fh_trade freight contracts (roads R4): a fh_quests job type. Thin wiring over shared/freight.lua (specced).
--- Uses fh_core §4 exports + fh_cargo exports (+ its shared TIERS, read-only) only. T2 contracts (roads-02 R9) are
--- gated at accept by fh_progression getTier in the origin region (roads-03 R13; soft dependency, fail closed), the
--- lane-local freight.t2.enabled kill switch, and the wagon's tier. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
--- and the fh_quests engine pays (engine.apply, exactly once). NOT runtime-tested (no Cfx key).
+-- Uses fh_core §4 exports + fh_cargo exports (+ its shared TIERS, read-only) only. T2/T3 contracts (roads-02 R9,
+-- roads-03 R13/R14) are gated at accept by fh_progression getTier in the origin region (soft dependency, fail closed),
+-- the lane-local freight.t<N>.enabled kill switch, and the wagon's tier. Payout is NOT done here: fh_trade emits
+-- fh:trade:contract_delivered and the fh_quests engine pays (engine.apply, exactly once). NOT runtime-tested (no Cfx key).
 -- Natives: GetCurrentResourceName, GetResourceState, GetPlayerPed, GetEntityCoords, CreateThread, Wait.
 local cfg = FhTradeConfig
 local F = FhFreight
@@ -99,7 +99,7 @@ end
 ---global canUnlock; the kill switch is lane-local (freight.t<N>.enabled, checked in validateOffer before the lock).
 ---Soft dependency, fail closed: not started / missing export / throws / non-number / too low -> 'fh_locked'.
 ---getTier may yield (rep cache load), so the character is re-checked after it: swapped -> 'fh_no_player'.
----`originRegion` must be validateOffer-checked (bound to the offer key). R14 (T3) only adds a TIER_GATES row.
+---`originRegion` must be validateOffer-checked (bound to the offer key). Covers both T2 and T3 via F.TIER_GATES.
 local function tierUnlocked(src, citizenid, tier, originRegion)
     local gate = F.gateFor(cfg, tier)
     if not gate then return true end

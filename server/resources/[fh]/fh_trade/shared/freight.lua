@@ -22,33 +22,35 @@ function M.keyOf(questId)
 end
 
 ---Stable per template: same (from, to, item, tier) = same key. fh_quests ids are <= 64 chars of [A-Za-z0-9_.:-].
----T1 keys are unchanged (`from.to.item`); T2 keys get a `.t2` suffix so both tiers can sit on one board.
+---T1 keys are unchanged (`from.to.item`); T2/T3 keys get a `.t2`/`.t3` suffix so all tiers can sit on one board.
 function M.offerKey(from, to, item, tier)
     local k = ('%s>%s>%s'):format(from, to, item):gsub('>', '.')
-    if tier == 2 then k = k .. '.t2' end
+    if tier == 2 or tier == 3 then k = k .. '.t' .. tier end
     return k
 end
 
----T2 settings (roads-02 R9) or nil when T2 freight is not configured.
-local function t2cfg(cfg)
-    local t = (cfg.freight or {}).t2
+---Contract-tier gates (roads-03 R13/R14): a tier N contract needs fh_progression getTier(src, origin_region) >=
+---minRegionTier (rep in the offer's origin region opens that region's board; no global canUnlock). The lane-local kill
+---switch is `freight.t<N>.enabled` (default true). T1 has no entry, so it is never gated and cannot be switched off.
+M.TIER_GATES = {
+    [2] = { minRegionTier = 2 },
+    [3] = { minRegionTier = 3 },
+}
+M.GATED_TIERS = { 2, 3 }
+
+---Gated tier settings (`freight.t2` / `freight.t3`) or nil when not configured.
+local function tierCfg(cfg, tier)
+    if not M.TIER_GATES[tier] then return nil end
+    local t = (cfg.freight or {})['t' .. tier]
     return type(t) == 'table' and t or nil
 end
 
----Offer tier, 1 when absent (offers generated before T2 existed). 1 and 2 are the only tiers.
+---Offer tier, 1 when absent (offers generated before T2 existed). 1, 2 and 3 are the only tiers.
 ---A present non-number tier (false, 0, '2', ...) is returned as-is so validateOffer reports bad_tier.
 function M.tierOf(offer)
     if type(offer) ~= 'table' or offer.tier == nil then return 1 end
     return offer.tier
 end
-
----Contract-tier gates (roads-03 R13): a tier N contract needs fh_progression getTier(src, origin_region) >=
----minRegionTier (rep in the offer's origin region opens that region's board; no global canUnlock). The lane-local kill
----switch is `freight.t<N>.enabled` (default true). T1 has no entry, so it is never gated and cannot be switched off.
----R14 (T3) adds `[3] = { minRegionTier = 3 }` + `freight.t3.enabled`.
-M.TIER_GATES = {
-    [2] = { minRegionTier = 2 },
-}
 
 ---Gate of a contract tier { minRegionTier }, or nil when the tier is ungated (T1). Fresh table per call.
 function M.gateFor(cfg, tier)
@@ -69,9 +71,9 @@ end
 
 ---Smallest wagon tier number (fh_cargo TIERS[*].tier) a contract tier needs. T1: 1 (any wagon).
 function M.minWagonTier(cfg, tier)
-    if tier ~= 2 then return 1 end
-    local t = t2cfg(cfg)
-    return t and t.minWagonTier or 2
+    if not M.TIER_GATES[tier] then return 1 end
+    local t = tierCfg(cfg, tier)
+    return t and t.minWagonTier or tier
 end
 
 local function excludeSet(f)
@@ -200,29 +202,36 @@ function M.routeDistance(cfg, from, to, regions)
     return dist2d(dest[from], dest[to])
 end
 
----T2 deadline (s): deadlineBase + distance * deadlinePerMeter, whole seconds, clamped to 60..86400.
-function M.t2Deadline(cfg, distance)
-    local t = t2cfg(cfg) or {}
-    local s = math.floor((t.deadlineBase or 900) + distance * (t.deadlinePerMeter or 1.0))
+---Gated-tier deadline (s): deadlineBase + distance * deadlinePerMeter, whole seconds, clamped to 60..86400.
+function M.tierDeadline(cfg, tier, distance)
+    local t = tierCfg(cfg, tier) or {}
+    local defaultBase = tier == 3 and 1200 or 900
+    local s = math.floor((t.deadlineBase or defaultBase) + distance * (t.deadlinePerMeter or 1.0))
     return clamp(s, 60, 86400)
 end
 
+---T2 deadline (s) alias.
+function M.t2Deadline(cfg, distance) return M.tierDeadline(cfg, 2, distance) end
+
+---T3 deadline (s) alias.
+function M.t3Deadline(cfg, distance) return M.tierDeadline(cfg, 3, distance) end
+
 ---Matching T1 qty for a shortage level: clamp(ceil(level * qtyPerLevel), minQty, maxQty). Shared by T1 generation and as
----the reference quantity T2 pay scales from.
+---the reference quantity T2/T3 pay scales from.
 local function t1Qty(d, level)
     return clamp(math.ceil(clamp(level, 0, 1) * d.qtyPerLevel), d.minQty, d.maxQty)
 end
 
----Matching T1 pay for a shortage level: floor(t1Qty * price * premium). T2 pays a multiple of this, so pay keeps
----following the goods' value (whiskey > cloth > salt) instead of inverting on the bigger T2 quantities.
+---Matching T1 pay for a shortage level: floor(t1Qty * price * premium). T2/T3 pay a multiple of this, so pay keeps
+---following the goods' value (whiskey > cloth > salt) instead of inverting on the bigger quantities.
 local function t1Pay(d, level, price)
     return math.floor(t1Qty(d, level) * price * d.premium)
 end
 
----T2 qty for a shortage level: clamp(ceil(level * qtyPerLevel), minQty, min(maxQty, floor(maxLoad / weight))).
----Capped by the t2 wagon's SLOTS (maxQty) and by the load in grams (maxLoad / weight), never by weight alone.
----nil when the good is missing, too heavy to even carry minQty, or the T2 qty settings are unusable.
-local function t2Qty(t, good, level)
+---Gated-tier qty for a shortage level: clamp(ceil(level * qtyPerLevel), minQty, min(maxQty, floor(maxLoad / weight))).
+---Capped by the wagon's SLOTS (maxQty) and by the load in grams (maxLoad / weight), never by weight alone.
+---nil when the good is missing, too heavy to even carry minQty, or the tier qty settings are unusable.
+local function tierQty(t, good, level)
     if type(t) ~= 'table' or not int(t.minQty) or not int(t.maxQty) or not int(t.qtyPerLevel) then return nil end
     if t.minQty < 1 or t.maxQty < t.minQty or t.qtyPerLevel < 1 then return nil end
     local cap = t.maxQty
@@ -234,29 +243,35 @@ local function t2Qty(t, good, level)
     return clamp(math.ceil(clamp(finite(level) and level or 0, 0, 1) * t.qtyPerLevel), t.minQty, cap)
 end
 
----T2 offers for one route: one per shortage with a qty template, only on routes of at least minDistance.
----None while the T2 kill switch (`freight.t2.enabled`) is off.
-local function t2Offers(cfg, d, fromRegion, to, dist, list, out)
-    local t = t2cfg(cfg)
-    if not t or not M.tierEnabled(cfg, 2) then return end
+---Gated-tier (T2/T3) offers for one route: one per shortage with a qty template, only on routes of at least minDistance.
+---None while the tier's kill switch (`freight.t<N>.enabled`) is off.
+local function tierOffers(cfg, d, tier, fromRegion, to, dist, list, out)
+    local t = tierCfg(cfg, tier)
+    if not t or not M.tierEnabled(cfg, tier) then return end
     if not dist or dist < (t.minDistance or 0) then return end
-    local deadline = M.t2Deadline(cfg, dist)
+    local deadline = M.tierDeadline(cfg, tier, dist)
     local cooldown = math.max(t.cooldownMin or d.cooldownMin, math.ceil(deadline / 60)) -- not re-takeable while one could be live
-    local payMult = math.min(t.payMultiple or 3, t.payCapMultiple or 4) -- ~3x the matching T1 pay, never more than the cap
+    local defaultMult = tier == 3 and 6 or 3
+    local defaultCap = tier == 3 and 7 or 4
+    local payMult = math.min(t.payMultiple or defaultMult, t.payCapMultiple or defaultCap)
+    local minReg = M.gateFor(cfg, tier).minRegionTier
+    local minWag = M.minWagonTier(cfg, tier)
+    local haul = tier == 3 and 'Heavy haul' or 'Bulk haul'
+    local wagonHint = tier == 3 and 'a freight wagon (t3)' or 'a wagon (t2) or bigger'
     for _, s in ipairs(list) do
         local good = cfg.goods[s.item]
         if good and finite(s.level) and finite(s.price) then
-            local qty = t2Qty(t, good, s.level)
+            local qty = tierQty(t, good, s.level)
             if qty then
                 local reward = math.floor(t1Pay(d, s.level, s.price) * payMult)
                 if reward >= 1 then
                     local label = good.label or s.item
                     out[#out + 1] = {
-                        key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true,
-                        min_region_tier = M.gateFor(cfg, 2).minRegionTier, min_wagon_tier = M.minWagonTier(cfg, 2),
-                        title = ('[T2] Freight: %dx %s to %s'):format(qty, label, to),
-                        text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier %d in %s and a wagon (t2) or bigger.')
-                            :format(qty, label, fromRegion, to, math.floor(dist), M.gateFor(cfg, 2).minRegionTier, fromRegion),
+                        key = M.offerKey(fromRegion, to, s.item, tier), tier = tier, locked = true,
+                        min_region_tier = minReg, min_wagon_tier = minWag,
+                        title = ('[T%d] Freight: %dx %s to %s'):format(tier, qty, label, to),
+                        text = ('%s: %dx %s from %s to %s (%d m). Needs rep tier %d in %s and %s.')
+                            :format(haul, qty, label, fromRegion, to, math.floor(dist), minReg, fromRegion, wagonHint),
                         region_id = fromRegion, from_region = fromRegion, to_region = to,
                         item = s.item, qty = qty, reward = reward, level = s.level, deadline_s = deadline, cooldown_min = cooldown,
                         rewards = { money = reward, rep = { region_id = to, delta = t.repDelta or d.repDelta } },
@@ -270,13 +285,14 @@ end
 ---Offers for a board at `fromRegion`, one per shortage in the OTHER post regions with valid destination coords and
 ---horizontal route distance >= that tier's minDistance.
 ---`shortagesByRegion[region] = fh_trade shortages list { item, level, multiplier, price }`. Pure; worst shortage first.
----T1 offers (tier = 1) are listed first, capped at maxOffers; then T2 offers (tier = 2, freight.t2 configured, routes of
----at least t2.minDistance), capped at t2.maxOffers. fh_quests calls offers(region_id) with no player, so a T2 offer is
----always `locked = true` (gated by the origin region's rep tier, `min_region_tier`): the board is shared and the per-player
----check happens at accept. No T2 offers while `freight.t2.enabled` is off.
+---T1 offers (tier = 1) are listed first, capped at maxOffers; then T2 (tier = 2, freight.t2) and T3 (tier = 3,
+---freight.t3), each on its own cap. fh_quests calls offers(region_id) with no player, so gated offers are always
+---`locked = true` (gated by the origin region's rep tier, `min_region_tier`): the board is shared and the per-player
+---check happens at accept. No offers for a tier while its kill switch (`freight.t<N>.enabled`) is off.
 ---@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, locked?, min_region_tier?, min_wagon_tier? }
 function M.generate(cfg, fromRegion, shortagesByRegion, regions)
-    local d, out, t2out = defaults(cfg), {}, {}
+    local d, out, gatedOut = defaults(cfg), {}, {}
+    for _, tier in ipairs(M.GATED_TIERS) do gatedOut[tier] = {} end
     if type(fromRegion) ~= 'string' or fromRegion == '' then return out end
     local dests = M.resolveDestinations(cfg, regions)
     local fromDest = dests[fromRegion]
@@ -308,15 +324,20 @@ function M.generate(cfg, fromRegion, shortagesByRegion, regions)
                     end
                 end
             end
-            t2Offers(cfg, d, fromRegion, to, dist, shortagesByRegion[to], t2out)
+            for _, tier in ipairs(M.GATED_TIERS) do
+                tierOffers(cfg, d, tier, fromRegion, to, dist, shortagesByRegion[to], gatedOut[tier])
+            end
         end
     end
     local function worstFirst(a, b) if a.level ~= b.level then return a.level > b.level end return a.key < b.key end
     table.sort(out, worstFirst)
     while #out > d.maxOffers do out[#out] = nil end
-    table.sort(t2out, worstFirst)
-    local t2max = (t2cfg(cfg) or {}).maxOffers or 2
-    for i = 1, math.min(#t2out, t2max) do out[#out + 1] = t2out[i] end
+    for _, tier in ipairs(M.GATED_TIERS) do
+        local list = gatedOut[tier]
+        table.sort(list, worstFirst)
+        local tmax = (tierCfg(cfg, tier) or {}).maxOffers or 2
+        for i = 1, math.min(#list, tmax) do out[#out + 1] = list[i] end
+    end
     return out
 end
 
@@ -337,9 +358,9 @@ function M.validateOffer(cfg, offer, isKnownRegion, regions)
     if excluded[offer.from_region] or not dests[offer.to_region] then return false, 'no_destination' end
     if type(cfg.posts) == 'table' and not dests[offer.from_region] then return false, 'no_destination' end
     local tier = M.tierOf(offer)
-    if tier ~= 1 and tier ~= 2 then return false, 'bad_tier' end
-    local t = t2cfg(cfg)
-    if tier == 2 and not t then return false, 'bad_tier' end
+    if tier ~= 1 and not M.TIER_GATES[tier] then return false, 'bad_tier' end
+    local t = tier ~= 1 and tierCfg(cfg, tier) or nil
+    if tier ~= 1 and not t then return false, 'bad_tier' end
     if not M.tierEnabled(cfg, tier) then return false, 'tier_disabled' end -- kill switch: refuse even a listed offer
     if M.gateFor(cfg, tier) and offer.region_id ~= offer.from_region then return false, 'bad_region' end
     if offer.key ~= M.offerKey(offer.from_region, offer.to_region, offer.item, tier) or #M.questId(offer.key) > 64 then return false, 'bad_key' end
@@ -351,17 +372,18 @@ function M.validateOffer(cfg, offer, isKnownRegion, regions)
         end
     else
         if not finite(offer.level) or offer.level <= 0 or offer.level > 1 then return false, 'bad_level' end
-        if not int(offer.qty) or offer.qty ~= t2Qty(t, good, offer.level) then return false, 'bad_qty' end
+        if not int(offer.qty) or offer.qty ~= tierQty(t, good, offer.level) then return false, 'bad_qty' end
         local dist = dist2d(dests[offer.from_region], dests[offer.to_region])
         if not dist or dist < (t.minDistance or 0) then return false, 'bad_route' end
-        if offer.deadline_s ~= M.t2Deadline(cfg, dist) then return false, 'bad_deadline' end
+        if offer.deadline_s ~= M.tierDeadline(cfg, tier, dist) then return false, 'bad_deadline' end
     end
     if tier == 1 then
         if not int(offer.reward) or offer.reward < 1 or offer.reward > offer.qty * good.base * d.rewardCap then return false, 'bad_reward' end
     else
-        -- T2 reward scales from the matching T1 pay: at most payCapMultiple x (T1 qty x base x rewardCap).
+        -- Gated-tier reward scales from the matching T1 pay: at most payCapMultiple x (T1 qty x base x rewardCap).
+        local defaultCap = tier == 3 and 7 or 4
         local q1 = t1Qty(d, offer.level)
-        if not int(offer.reward) or offer.reward < 1 or offer.reward > math.floor((t.payCapMultiple or 4) * q1 * good.base * d.rewardCap) then return false, 'bad_reward' end
+        if not int(offer.reward) or offer.reward < 1 or offer.reward > math.floor((t.payCapMultiple or defaultCap) * q1 * good.base * d.rewardCap) then return false, 'bad_reward' end
     end
     if not int(offer.deadline_s) or offer.deadline_s < 60 or offer.deadline_s > 86400 then return false, 'bad_deadline' end
     return true
@@ -370,7 +392,7 @@ end
 ---Can a wagon of fh_cargo tier row `tierRow` ({ tier, slots, maxWeight }, nil = unreadable) carry this contract?
 ---Checks the tier number against the contract tier's minimum, then capacity of an EMPTY wagon of that tier: slots
 ---(a stackable good takes one slot per stack) and qty * good.weight against maxWeight. fh_core canFit then checks the
----real current load. Unreadable tier: T1 passes (canFit still applies), T2 fails closed.
+---real current load. Unreadable tier: T1 passes (canFit still applies), T2/T3 fail closed.
 ---@return boolean ok, string? err 'fh_freight_wagon_unknown'|'fh_freight_wagon_too_small'
 function M.wagonFits(cfg, offer, tierRow)
     local tier = M.tierOf(offer)
