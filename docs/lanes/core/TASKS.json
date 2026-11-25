@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T03:27:05.379Z",
+  "updatedAt": "2026-11-25T03:58:34.994Z",
   "units": [
     {
       "id": "B5",
@@ -338,7 +338,7 @@
       "goal": "vendor rsg-weapons @385aa98 + rsg-ammo @02b8484 (efcd608), review rn-a4ffd957ce4a",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done"
     },
     {
       "id": "P2",
@@ -352,7 +352,7 @@
       "goal": "29 placeholder icons (d9b7746), review rn-38ddd4927784",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done"
     },
     {
       "id": "P4",
@@ -360,6 +360,13 @@
       "files": [],
       "doneCheck": "",
       "status": "done"
+    },
+    {
+      "id": "P1-wear",
+      "goal": "unify weapon wear: rsg-weapons reads/degrades/repairs info.quality (fh_inventory WeaponDefaults=100) but fh_zones loot sets info.condition 25-50 and fh_gunsmith /fh_restore uses condition; looted worn guns start at 100 quality (P1 review low, rsg-weapons/server/server.lua:25-27,74,140). Touches fh_gunsmith: coordinate with its lane",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
