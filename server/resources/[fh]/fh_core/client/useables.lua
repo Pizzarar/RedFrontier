@@ -9,6 +9,6 @@ RegisterNetEvent('fh:core:useable:restore', function(eff)
         if cur > 0 and max > 0 then SetEntityHealth(ped, math.min(max, math.floor(cur + max * math.min(hp, 1.0)))) end
     end
     if stamina > 0 then
-        Citizen.InvokeNative(0x675680D089BFA21F, PlayerId(), math.min(stamina, 1.0) * 100.0) -- RESTORE_PLAYER_STAMINA (percent)
+        Citizen.InvokeNative(0x675680D089BFA21F, ped, math.min(stamina, 1.0) * 100.0) -- RESTORE_PLAYER_STAMINA (percent)
     end
 end)

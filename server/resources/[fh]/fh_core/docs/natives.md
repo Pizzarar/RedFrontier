@@ -326,5 +326,5 @@ Also `PlayerId`, `PlayerPedId`, `GetHashKey`, `RequestClipSet`, `HasClipSetLoade
 | Native | Hash | Use | Notes |
 |---|---|---|---|
 | `GetEntityHealth` / `GetEntityMaxHealth` / `SetEntityHealth` | not looked up | client: apply a bandage/tonic heal the server already charged for; clamped to max, skipped when health <= 0 | UNVERIFIED in game |
-| `RESTORE_PLAYER_STAMINA(player, percent)` | `0x675680D089BFA21F` | client: tonic stamina | UNVERIFIED in game |
+| `RESTORE_PLAYER_STAMINA(ped, percent)` | `0x675680D089BFA21F` | client: tonic stamina | UNVERIFIED in game |
 | `GetEntityHealth` (server) | not looked up | `fh_core/server/useables.lua` refuses use by a dead ped | server |
