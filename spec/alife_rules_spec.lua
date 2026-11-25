@@ -11,7 +11,25 @@ dofile(here .. '../server/resources/[fh]/fh_zones/config.lua')
 dofile(here .. '../server/resources/[fh]/fh_alife/config.lua')
 local cfg = FhAlifeConfig
 local camps = FhZonesConfig.camps
-local ctx = R.context(cfg, Regions, camps)
+
+---Real FhRegions with per-region `ambush` lists overlaid (@world H format). isEnabled/factions/territories are the
+---real ones (via __index), so enabled gates match regions.lua.
+local function fixtureRegions(ambush)
+    local rr = {}
+    for id, r in pairs(Regions.regions) do
+        local copy = {}
+        for k, v in pairs(r) do copy[k] = v end
+        copy.ambush = ambush[id]
+        rr[id] = copy
+    end
+    return setmetatable({ regions = rr }, { __index = Regions })
+end
+
+-- The real regions.lua carries @world H ambush nodes (world-03 H). The a-life-01 cases and the B1 "no ambush" cases
+-- run on the real registry with every `ambush` list stripped, so the raid roll never fires there; the case
+-- "B1 real regions.lua ambush data" checks the unstripped registry.
+local NoAmbush = fixtureRegions({})
+local ctx = R.context(cfg, NoAmbush, camps)
 local heartlandsCamp = 'heartlands_t1_01'
 
 ---Deterministic rng: returns the next pre-set value (ignores lo/hi), like camp_rules_spec's seq.
@@ -155,7 +173,7 @@ end)
 
 case('broadcast labels: Regions.factionLabel(faction, region) used when present, falls back on error/nil', function()
     local function withLabel(fn)
-        local r = setmetatable({ factionLabel = fn }, { __index = Regions })
+        local r = setmetatable({ factionLabel = fn }, { __index = NoAmbush })
         return R.context(cfg, r, camps)
     end
     local seen = {}
@@ -249,18 +267,6 @@ end)
 local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
 local function noRng() error('rng must not be called') end
 
----Real FhRegions with per-region `ambush` lists overlaid (@world H format). isEnabled/factions/territories are the
----real ones (via __index), so enabled gates match regions.lua.
-local function fixtureRegions(ambush)
-    local rr = {}
-    for id, r in pairs(Regions.regions) do
-        local copy = {}
-        for k, v in pairs(r) do copy[k] = v end
-        copy.ambush = ambush[id]
-        rr[id] = copy
-    end
-    return setmetatable({ regions = rr }, { __index = Regions })
-end
 
 local function cfgWith(over)
     local c = {}
@@ -291,7 +297,7 @@ case('B1 no ambush data: all 15 regions, absent or empty ambush -> no nodes, no 
     eq(15, #ids, 'regions.lua has 15 regions')
     local emptyAll = {}
     for _, id in ipairs(ids) do emptyAll[id] = {} end
-    for _, regs in ipairs({ Regions, fixtureRegions({}), fixtureRegions(emptyAll) }) do
+    for _, regs in ipairs({ NoAmbush, fixtureRegions(emptyAll) }) do
         local c = R.context(cfg, regs, camps)
         same({}, c.graph.ambushByRegion)
         for _, node in pairs(c.graph.nodes) do assert(node.type ~= 'ambush', 'unexpected ambush node ' .. node.id) end
@@ -305,6 +311,25 @@ case('B1 no ambush data: all 15 regions, absent or empty ambush -> no nodes, no 
         eq(0, count(st.squads), 'no squads at all')
         same({}, st.regionPressure)
     end
+end)
+
+case('B1 real regions.lua ambush data (@world H): enabled regions get their nodes, disabled regions are skipped', function()
+    local g = R.buildGraph(cfg, Regions, camps)
+    local enabled = 0
+    for id, r in pairs(Regions.regions) do
+        if Regions.isEnabled(id) then
+            enabled = enabled + 1
+            local want = {}
+            for _, a in ipairs(r.ambush or {}) do want[#want + 1] = a.id end
+            assert(#want >= 2, id .. ' expected >=2 ambush nodes in regions.lua')
+            same(want, g.ambushByRegion[id], id .. ' ambushByRegion')
+            for _, nid in ipairs(want) do eq('ambush', g.nodes[nid] and g.nodes[nid].type, nid) end
+        else
+            eq(nil, g.ambushByRegion[id], id .. ' is disabled: no ambush nodes')
+            for _, a in ipairs(r.ambush or {}) do eq(nil, g.nodes[a.id], a.id .. ' (disabled region)') end
+        end
+    end
+    assert(enabled >= 1 and next(g.ambushByRegion) ~= nil, 'expected a non-empty ambushByRegion')
 end)
 
 case('B1 buildGraph: ambush nodes keyed by id, else <region>:ambush:<index>; x/y/z, label, verified kept', function()
