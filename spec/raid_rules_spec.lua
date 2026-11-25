@@ -658,6 +658,29 @@ case('C2c ledger: a v3 save without raidLoot (C1/C2) loads with an empty ledger;
     same({}, st3.raidLoot)
 end)
 
+case('idea-1014: deserialize reports each invalid saved ledger entry as loot_dropped reason=invalid', function()
+    local st, err, eff = R.deserialize({ version = 3, raidLoot = {
+        [HEART[1]] = { { name = 'ok', amount = 2 }, { name = 'bad', amount = -1 }, 'junk', { amount = 0 / 0 } },
+        [''] = { { name = 'empty', amount = 1 } },
+        x = 'notalist',
+    } }, ctx)
+    eq(nil, err)
+    same({ [HEART[1]] = { { name = 'ok', amount = 2 } } }, st.raidLoot)
+    same({
+        { type = 'loot_dropped', reason = 'invalid', camp_id = '', index = 1, name = 'empty', amount = 1 },
+        { type = 'loot_dropped', reason = 'invalid', camp_id = HEART[1], index = 2, name = 'bad', amount = -1 },
+        { type = 'loot_dropped', reason = 'invalid', camp_id = HEART[1], index = 3 },
+        { type = 'loot_dropped', reason = 'invalid', camp_id = HEART[1], index = 4 },
+        { type = 'loot_dropped', reason = 'invalid', camp_id = 'x' },
+    }, eff, 'one effect per dropped entry, camps in sorted order; NaN amount not copied')
+    -- the same through FhAlifeRules.deserialize without ctx (no prune): still reported
+    local _, _, eff2 = Rules.deserialize({ version = 3, raidLoot = { [HEART[1]] = { { name = 'x', amount = 0 } } } })
+    same({ { type = 'loot_dropped', reason = 'invalid', camp_id = HEART[1], index = 1, name = 'x', amount = 0 } }, eff2)
+    -- all valid: no effects
+    local _, _, eff3 = R.deserialize({ version = 3, raidLoot = { [HEART[1]] = { { name = 'ok', amount = 1 } } } }, ctx)
+    same({}, eff3)
+end)
+
 case('C2c ledger: lootAdd sanitises info (JSON-safe copy: drops fn/thread/NaN, string keys only, depth/cycle limit)', function()
     local st = Rules.newState()
     local deep = { l1 = { l2 = { l3 = { l4 = { ok6 = true, l5 = { tooDeep = 1 } } } } } }

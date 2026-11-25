@@ -243,8 +243,19 @@ function M.pruneSquads(ctx, state)
     return effects
 end
 
+---One loot_dropped effect for a saved raidLoot entry deserialize cannot keep (idea-1014). name/amount are copied
+---only when they are a string / finite number, so the server log line never formats junk.
+local function invalidLoot(campId, index, raw)
+    local r = type(raw) == 'table' and raw or {}
+    return { type = 'loot_dropped', reason = 'invalid', camp_id = tostring(campId), index = index,
+        name = type(r.name) == 'string' and r.name or nil, amount = finite(r.amount) and r.amount or nil }
+end
+
 ---Rebuild state from a saved table (v1, v2 or v3). With `ctx`, squads whose node is gone are pruned (see pruneSquads).
----@return table|nil state, string|nil err, table effects (prune effects; {} without ctx or on error)
+---Saved raidLoot entries that fail cleanLootEntry (or sit under a bad camp id / a non-list) are not kept; each is
+---reported (idea-1014, never silent) so the server's load() logs it:
+---{ type = 'loot_dropped', reason = 'invalid', camp_id, index (nil for a non-list), name?, amount? }.
+---@return table|nil state, string|nil err, table effects (invalid-loot effects, then prune effects; {} on error)
 function M.deserialize(t, ctx)
     if type(t) ~= 'table' then return nil, 'fh_alife_bad_state', {} end
     if not LOADABLE[t.version] then return nil, 'fh_alife_version', {} end
@@ -278,19 +289,30 @@ function M.deserialize(t, ctx)
             if type(plotId) == 'string' and n then s.raidCooldowns[plotId] = n end
         end
     end
+    local effects = {}
     if type(t.raidLoot) == 'table' then
-        for campId, list in pairs(t.raidLoot) do
-            if type(campId) == 'string' and campId ~= '' and type(list) == 'table' then
+        local campIds = {}
+        for campId in pairs(t.raidLoot) do campIds[#campIds + 1] = campId end
+        table.sort(campIds, function(a, b) return tostring(a) < tostring(b) end) -- deterministic log order
+        for _, campId in ipairs(campIds) do
+            local list = t.raidLoot[campId]
+            local goodCamp = type(campId) == 'string' and campId ~= ''
+            if type(list) ~= 'table' then
+                effects[#effects + 1] = invalidLoot(campId, nil, nil)
+            else
                 local out = {}
                 for i = 1, #list do
-                    local e = M.cleanLootEntry(list[i])
-                    if e then out[#out + 1] = e end
+                    local e = goodCamp and M.cleanLootEntry(list[i]) or nil
+                    if e then out[#out + 1] = e
+                    else effects[#effects + 1] = invalidLoot(campId, i, list[i]) end
                 end
-                if #out > 0 then s.raidLoot[campId] = out end
+                if goodCamp and #out > 0 then s.raidLoot[campId] = out end
             end
         end
     end
-    local effects = ctx and M.pruneSquads(ctx, s) or {}
+    if ctx then
+        for _, e in ipairs(M.pruneSquads(ctx, s)) do effects[#effects + 1] = e end
+    end
     return s, nil, effects
 end
 

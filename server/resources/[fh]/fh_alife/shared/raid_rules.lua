@@ -510,6 +510,7 @@ end
 ---FhAlifeRules.deserialize (v1/v2/v3) plus pruneRaids and per-camp loot ledger cap trimming (oldest dropped). Each
 ---trimmed entry is reported (L2) so the server's load() logs it, like lootAdd's dropped list:
 ---{ type = 'loot_dropped', reason = 'ledger_full', camp_id, name, amount, info?, kept = the camp's ledger size }.
+---FhAlifeRules.deserialize's own effects come first (idea-1014: loot_dropped reason = 'invalid', squad_returned).
 ---@return table|nil state, string|nil err, table effects
 function M.deserialize(t, ctx, plots)
     local s, err, effects = Rules.deserialize(t, ctx)

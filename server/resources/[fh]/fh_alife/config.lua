@@ -67,7 +67,7 @@ FhAlifeConfig = {
         stealStacks = 2,
         stealMaxFraction = 0.5,
         raidRadius = 60.0,      -- metres: owner "home" at arrival (server/C2 reads it). TODO-verify-in-game.
-        bootGraceTicks = 3,     -- server: raid steps skipped after start while fh_homestead shows 0 claims (cache load)
+        -- (idea-958: no boot grace knob; raid steps wait for exports.fh_homestead:claimsReady(), see server/raids.lua)
         lootStacksMax = 20,     -- stolen stacks a camp's loot ledger holds (oldest dropped first, logged)
     },
 

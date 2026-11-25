@@ -1,6 +1,6 @@
 -- fh_alife server/homestead.lua (plan a-life-03 C2): soft, read-only link to fh_homestead for claim raids. Loaded
 -- before main.lua (its boot load() reads plots). fh_homestead is NOT a manifest dependency: when it is not started
--- or an export throws, plots() returns nil and no raid can start (live raids then cancel through raid_rules.tick).
+-- or claimsReady() is not true, raid steps are skipped (no raid starts, live raids are kept, not cancelled).
 -- Plot facts come only from exports.fh_homestead:claimedPlots() + plotInfo(plotId) (C0 adds coords/region/
 -- fenceBuilt); chest 1's stash id comes from fh_homestead's own FhPlotRules.chestStashId (shared include), so
 -- fh_alife never copies homestead config or rules.
@@ -17,9 +17,21 @@ function H.plotInfo(plotId)
     return nil
 end
 
+---idea-958: fh_homestead's claimsReady() (its boot load of fh_plots finished, 0 claims included). true only when the
+---export answers exactly true; fh_homestead not started, the export missing (a pre-idea-958 fh_homestead) or
+---throwing, or any other answer -> false plus a reason. Callers treat false as "claims unknown": never act on plots().
+---@return boolean ready, string|nil why
+function H.claimsReady()
+    if not started() then return false, 'fh_homestead_not_started' end
+    local ok, r = pcall(function() return exports.fh_homestead:claimsReady() end)
+    if not ok then return false, 'claimsReady_error: ' .. tostring(r) end
+    if r ~= true then return false, 'claims_loading' end
+    return true
+end
+
 ---Every claimed plot (any class) as { [plotId] = plotInfo facts }, plus the claimedPlots() count. nil, 0 when
----fh_homestead is not started or claimedPlots throws. An empty list may also mean the claim cache has not loaded yet
----(fh_homestead has no ready export); callers treat 0 claims during their boot grace as "not loaded".
+---fh_homestead is not started or claimedPlots throws. Only meaningful once claimsReady() is true (before that an
+---empty list may just mean the claim cache has not loaded yet).
 ---@return table|nil plots, integer claims
 function H.plots()
     if not started() then return nil, 0 end

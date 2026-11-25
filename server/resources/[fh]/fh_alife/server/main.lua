@@ -40,17 +40,23 @@ local function load()
         log('bad KVP state, starting fresh: %s', tostring(t))
         return
     end
-    -- a-life-03 C2: raids are checked against the claims only once fh_homestead's claim cache has loaded (a non-empty
-    -- claimedPlots). Before that, pass nil: live raids are kept and raid_rules.tick cancels any whose plot is gone.
-    local plots, claims = FhAlifeHomestead.plots()
-    local s, err, dropped = raidRules.deserialize(t, ctx, (plots and claims > 0) and plots or nil)
+    -- a-life-03 C2 / idea-958: raids are checked against the claims only once fh_homestead says its claim load has
+    -- finished (claimsReady, 0 claims included). Before that (or homestead down / export missing or throwing), pass
+    -- nil: live raids are kept, and raids.lua skips raid steps until claimsReady, then tick cancels any whose plot is gone.
+    local plots
+    if FhAlifeHomestead.claimsReady() then plots = FhAlifeHomestead.plots() end
+    local s, err, dropped = raidRules.deserialize(t, ctx, plots)
     if not s then
         log('deserialize failed (%s), starting fresh', tostring(err))
         return
     end
     state = s
     for _, e in ipairs(dropped or {}) do
-        if e.type == 'loot_dropped' then
+        if e.type == 'loot_dropped' and e.reason == 'invalid' then
+            -- idea-1014: a saved ledger entry that fails cleanLootEntry (or a bad camp id / non-list) is not loaded
+            log('^1load: raid loot ledger %s: dropped invalid entry #%s (%s x %s)^7', tostring(e.camp_id),
+                tostring(e.index or '-'), tostring(e.name or '?'), tostring(e.amount or '?'))
+        elseif e.type == 'loot_dropped' then
             log('^1load: raid loot ledger %s full (%d stacks): dropped oldest %dx %s^7', tostring(e.camp_id),
                 tonumber(e.kept) or 0, tonumber(e.amount) or 0, tostring(e.name))
         else

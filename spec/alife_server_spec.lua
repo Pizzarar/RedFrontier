@@ -123,6 +123,8 @@ local function boot(preKvp, ambush, opts)
         -- container op log, failure knobs, raid_repelled events, resource states (default 'started').
         plots = {}, containers = {}, invLog = {}, failAdd = {}, failRemove = {}, noFit = {}, bags = {},
         repelled = {}, resState = {},
+        -- idea-958: fh_homestead claimsReady() answer (true | false | 'throw' | 'missing' = no such export)
+        claimsReady = true,
     }
     local function copy(t)
         if type(t) ~= 'table' then return t end
@@ -199,20 +201,31 @@ local function boot(preKvp, ambush, opts)
                 c[slot] = { name = name, amount = amount, info = copy(info) }
                 return true
             end,
+            -- core-10 I1 contract: id, leftovers ({} when all fit) | nil, 'fh_refused', leftovers (every stack
+            -- refused) | nil, reason. B.failBag = an outright failure reason; B.bagRefuse(stack) -> true = that stack
+            -- is a leftover; B.bagOldStyle = a pre-core-10 fh_core (id only; leftovers silently dropped).
             createDropBag = function(_, coords, items, opts)
-                if type(B.failBag) == 'function' then
-                    local why = B.failBag(items, coords, opts)
-                    if why then return nil, why end
-                elseif B.failBag then
-                    return nil, B.failBag
+                B.bagCalls = (B.bagCalls or 0) + 1
+                if B.failBag then return nil, B.failBag end
+                local fit, leftovers = {}, {}
+                for _, it in ipairs(items) do
+                    if B.bagRefuse and B.bagRefuse(it) then leftovers[#leftovers + 1] = copy(it)
+                    else fit[#fit + 1] = copy(it) end
                 end
-                B.bags[#B.bags + 1] = { coords = coords, items = copy(items), opts = opts }
-                return 'drop:' .. #B.bags
+                if #fit == 0 then return nil, 'fh_refused', leftovers end
+                B.bags[#B.bags + 1] = { coords = coords, items = fit, opts = opts }
+                if B.bagOldStyle then return 'drop:' .. #B.bags end
+                return 'drop:' .. #B.bags, B.bagLeftovers or leftovers
             end,
         },
         -- fh_homestead (soft dependency): claimedPlots + plotInfo from B.plots
         fh_homestead = {
             claimedPlots = function() return sortedPlotIds() end,
+            claimsReady = function()
+                if B.claimsReady == 'missing' then error('No such export claimsReady in resource fh_homestead') end
+                if B.claimsReady == 'throw' then error('fh_homestead claimsReady boom') end
+                return B.claimsReady
+            end,
             plotInfo = function(_, id) return copy(B.plots[id]) end,
         },
         -- rsg-core: src -> citizenid via B.cids (the lookup fh_zones also uses for camp_cleared participants).
@@ -624,51 +637,141 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         T.eq(0, total(B.containers[STASH], 'bread'), 'nothing delivered')
     end)
 
-    T.it('C2c clear: stash add refused -> one drop bag per stack at camp coords; failed bag -> kept in ledger',
-        function()
+    -- idea-1031: refused stash adds go into ONE drop bag; only fh_core's leftovers return to the ledger.
+    local BREAD = { name = 'bread', amount = 1 }
+    local ROPE = { name = 'rope', amount = 1, info = { q = 1 } }
+    local function stolenThenRefused(setup)
         local B = raidBoot(false)
         B.commands.alife(1, {}, 'alife tick 6')
         B.failAdd[STASH] = 'fh_too_heavy'
+        if setup then setup(B) end
         clearCamp(B)
-        T.eq(2, #B.bags, 'one drop bag per refused stack')
-        T.same({ { name = 'bread', amount = 1 } }, B.bags[1].items)
-        T.same({ { name = 'rope', amount = 1, info = { q = 1 } } }, B.bags[2].items)
+        return B
+    end
+    ---the next clear with a working stash: what the ledger still held arrives, nothing else
+    local function redeliver(B)
+        B.failAdd[STASH], B.failBag, B.bagRefuse, B.bagLeftovers, B.bagOldStyle = nil, nil, nil, nil, nil
+        clearCamp(B)
+        T.eq(nil, ledger(B))
+    end
+
+    T.it('idea-1031 clear: all refused stacks fit -> one drop bag at camp coords, ledger empty, no re-delivery',
+        function()
+        local B = stolenThenRefused()
+        T.eq(1, B.bagCalls, 'one bag call for all refused stacks')
+        T.eq(1, #B.bags)
+        T.same({ BREAD, ROPE }, B.bags[1].items)
         local at = B.server.ctx.camps[CAMP].loot.coords
         T.eq(at.x, B.bags[1].coords.x); T.eq(at.y, B.bags[1].coords.y)
-        T.eq(at.x, B.bags[2].coords.x); T.eq(at.y, B.bags[2].coords.y)
-        T.eq(nil, ledger(B), 'bagged entries leave the ledger')
+        T.eq(nil, ledger(B), 'bagged entries leave the ledger'); T.eq(nil, savedLedger(B))
         clearCamp(B)
-        T.eq(2, #B.bags, 'second clear: no extra bags')
-        -- partial bag failure: bread bagged, rope bag refused -> rope restored to ledger, nothing lost
-        local Bp = raidBoot(false)
-        Bp.commands.alife(1, {}, 'alife tick 6')
-        Bp.failAdd[STASH] = 'fh_too_heavy'
-        Bp.failBag = function(items)
-            if items[1] and items[1].name == 'rope' then return 'fh_bag_refused' end
-            return nil
-        end
-        clearCamp(Bp)
-        T.eq(1, #Bp.bags, 'only accepted stack bagged')
-        T.same({ { name = 'bread', amount = 1 } }, Bp.bags[1].items)
-        T.same({ { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(Bp), 'refused stack restored to ledger')
-        T.same(ledger(Bp), savedLedger(Bp))
-        Bp.failAdd[STASH], Bp.failBag = nil, nil
-        clearCamp(Bp)
-        T.eq(0, total(Bp.containers[STASH], 'bread'), 'already-bagged bread not delivered twice')
-        T.eq(1, total(Bp.containers[STASH], 'rope'), 'restored rope delivered on next clear')
-        T.eq(nil, ledger(Bp))
-        -- all bags refused: all entries stay in the ledger (never destroyed) and the next clear delivers them
+        T.eq(1, #B.bags, 'second clear: no extra bags')
+        redeliver(B)
+        T.eq(0, total(B.containers[STASH], 'bread')); T.eq(0, total(B.containers[STASH], 'rope'))
+    end)
+
+    T.it('idea-1031 clear: partial leftovers -> only the leftovers go back to the ledger (info kept), next clear delivers',
+        function()
+        local B = stolenThenRefused(function(b) b.bagRefuse = function(it) return it.name == 'rope' end end)
+        T.eq(1, B.bagCalls); T.eq(1, #B.bags)
+        T.same({ BREAD }, B.bags[1].items, 'only the accepted stack is in the bag')
+        T.same({ ROPE }, ledger(B), 'leftover restored to the ledger with its info')
+        T.same(ledger(B), savedLedger(B))
+        redeliver(B)
+        T.eq(0, total(B.containers[STASH], 'bread'), 'bagged bread not delivered twice')
+        T.eq(1, total(B.containers[STASH], 'rope'), 'restored rope delivered on the next clear')
+        -- two same-name stacks with different info: the leftover with info B restores OUR entry B, not A
         local B2 = raidBoot(false)
-        B2.commands.alife(1, {}, 'alife tick 6')
-        B2.failAdd[STASH], B2.failBag = 'fh_too_heavy', 'fh_refused'
+        B2.containers[CHEST] = {}
+        local st = B2.server.getState()
+        B2.raidRules.lootAdd(B2.server.ctx, st, CAMP, { name = 'weapon_revolver', amount = 1, info = { serial = 'A' } })
+        B2.raidRules.lootAdd(B2.server.ctx, st, CAMP, { name = 'weapon_revolver', amount = 1, info = { serial = 'B' } })
+        B2.failAdd[STASH] = 'fh_too_heavy'
+        B2.bagRefuse = function(it) return it.info and it.info.serial == 'B' end
         clearCamp(B2)
+        T.same({ { name = 'weapon_revolver', amount = 1, info = { serial = 'A' } } }, B2.bags[1].items)
+        T.same({ { name = 'weapon_revolver', amount = 1, info = { serial = 'B' } } }, ledger(B2))
+        -- a leftover that matches nothing sent is a stray: logged, never added to the ledger
+        local B3 = stolenThenRefused(function(b) b.bagLeftovers = { { name = 'gold_bar', amount = 9 } } end)
+        T.eq(nil, ledger(B3), 'stray not restored (fh_alife never adds items it did not hold)')
+        local hit = false
+        for _, l in ipairs(B3.printed) do if l:find('leftover we did not send (gold_bar x 9)', 1, true) then hit = true end end
+        assert(hit, 'stray logged')
+    end)
+
+    T.it('idea-1031 clear: total refusal or a failed bag call -> every stack stays in the ledger, nothing lost',
+        function()
+        -- every stack refused: fh_core returns nil, 'fh_refused', leftovers
+        local B = stolenThenRefused(function(b) b.bagRefuse = function() return true end end)
+        T.eq(1, B.bagCalls); T.eq(0, #B.bags)
+        T.same({ BREAD, ROPE }, ledger(B)); T.same(ledger(B), savedLedger(B))
+        redeliver(B)
+        T.eq(1, total(B.containers[STASH], 'bread')); T.eq(1, total(B.containers[STASH], 'rope'))
+        -- outright failure (no coords / fh_inventory down): nil, reason
+        local B2 = stolenThenRefused(function(b) b.failBag = 'fh_inventory_down' end)
         T.eq(0, #B2.bags)
-        T.same({ { name = 'bread', amount = 1 }, { name = 'rope', amount = 1, info = { q = 1 } } }, ledger(B2))
-        T.same(ledger(B2), savedLedger(B2))
-        B2.failAdd[STASH], B2.failBag = nil, nil
-        clearCamp(B2)
+        T.same({ BREAD, ROPE }, ledger(B2)); T.same(ledger(B2), savedLedger(B2))
+        redeliver(B2)
         T.eq(1, total(B2.containers[STASH], 'bread')); T.eq(1, total(B2.containers[STASH], 'rope'))
-        T.eq(nil, ledger(B2))
+        -- the export throws (fh_core stopped mid-call): same
+        local B3 = stolenThenRefused(function(b)
+            b.env.exports.fh_core.createDropBag = function() error('fh_core boom') end
+        end)
+        T.same({ BREAD, ROPE }, ledger(B3))
+    end)
+
+    T.it('idea-1031 clear: an old-style fh_core (id, no leftovers list) is counted as all placed, logged', function()
+        local B = stolenThenRefused(function(b) b.bagOldStyle = true end)
+        T.eq(1, #B.bags); T.same({ BREAD, ROPE }, B.bags[1].items)
+        T.eq(nil, ledger(B), 'no restore: restoring would duplicate the placed stacks')
+        local hit = false
+        for _, l in ipairs(B.printed) do if l:find('no leftovers list (fh_core predates core-10 I1)', 1, true) then hit = true end end
+        assert(hit, 'logged loudly')
+        redeliver(B)
+        T.eq(0, total(B.containers[STASH], 'bread'), 'never delivered twice')
+    end)
+
+    T.it('idea-1031 steal fallback (restorePick): chest refuses it back -> claim bag; bag leftover/refusal -> LOST, logged',
+        function()
+        local function refusedSteal(setup)
+            local B = raidBoot(false)
+            B.raidRules.lootAdd = function() return false, 'fh_alife_bad_loot', {} end -- the ledger refuses every pick
+            if setup then setup(B) end
+            B.commands.alife(1, {}, 'alife tick 6')
+            return B
+        end
+        local function printedHas(B, needle)
+            for _, l in ipairs(B.printed) do if l:find(needle, 1, true) then return true end end
+            return false
+        end
+        -- chest takes it back: nothing moved, chest whole
+        local B = refusedSteal()
+        T.eq(4, total(B.containers[CHEST], 'bread')); T.eq(2, total(B.containers[CHEST], 'rope'))
+        T.eq(0, #B.bags)
+        -- chest refuses it back: one single-stack bag at the claim per pick (owner tagged)
+        local B2 = refusedSteal(function(b)
+            b.containers[CHEST] = { [1] = { name = 'bread', amount = 4 } }
+            local add = b.env.exports.fh_core.addItem
+            b.env.exports.fh_core.addItem = function(self, ref, ...)
+                if ref.id == CHEST then return false, 'fh_full' end
+                return add(self, ref, ...)
+            end
+        end)
+        T.eq(3, total(B2.containers[CHEST], 'bread'))
+        T.eq(1, #B2.bags); T.same({ BREAD }, B2.bags[1].items); T.eq(CLAIM_AT.x, B2.bags[1].coords.x)
+        T.eq('CID1', B2.bags[1].opts.owner)
+        T.eq(false, printedHas(B2, 'LOST'))
+        -- bag returns it as a leftover (id + non-empty leftovers) or refuses it: LOST, logged with every reason
+        for _, how in ipairs({ 'leftover', 'refused' }) do
+            local B3 = refusedSteal(function(b)
+                b.containers[CHEST] = { [1] = { name = 'bread', amount = 4 } }
+                b.env.exports.fh_core.addItem = function() return false, 'fh_full' end
+                if how == 'leftover' then b.bagLeftovers = { { name = 'bread', amount = 1 } }
+                else b.bagRefuse = function() return true end end
+            end)
+            assert(printedHas(B3, 'LOST 1x bread from ' .. CHEST), how .. ': logged as lost')
+            T.eq(nil, ledger(B3))
+        end
     end)
 
     T.it('idea-959 steal: same-name stacks with different info are left alone; equal-info stacks are conserved',
@@ -878,24 +981,81 @@ T.describe('fh_alife server wiring (stubbed server)', function()
         T.eq(0, #raids(B2))
     end)
 
-    T.it('C2 boot: a live raid loaded from KVP survives while claims are not loaded yet (boot grace)', function()
+    -- idea-958: the boot gate is fh_homestead's claimsReady() (no tick-count guess).
+    local function livePlusReboot(ready, beforeLoad)
         local B0 = raidBoot(true)
         B0.commands.alife(1, {}, 'alife raid p1')
-        local saved = B0.kvp.fh_alife_state
-        -- reboot: fh_homestead started but its claim cache is still empty
-        local B = boot({ fh_alife_state = saved }, nil)
+        local B = boot({ fh_alife_state = B0.kvp.fh_alife_state }, nil, { beforeLoad = function(b)
+            b.claimsReady = ready
+            if beforeLoad then beforeLoad(b) end
+        end })
         B.server.rng = lo
-        T.eq(1, #raids(B), 'not dropped at load (plots not passed to deserialize)')
         B.players = { '1' }; B.playerPeds[1] = 101; B.cids[1] = 'CID1'
         B.pedCoords[101] = { x = CLAIM_AT.x, y = CLAIM_AT.y, z = CLAIM_AT.z }
-        B.commands.alife(1, {}, 'alife tick ' .. B.cfg.claimRaids.bootGraceTicks)
-        T.eq(nil, raids(B)[1].cancelled, 'not cancelled during the grace')
-        B.plots.p1 = claimFacts('CID1') -- claims loaded
-        B.commands.alife(1, {}, 'alife tick 1')
-        T.eq(nil, raids(B)[1].cancelled)
-        -- loaded at boot with claims ready: a raid whose plot is gone is dropped by deserialize
-        local B2 = boot({ fh_alife_state = saved }, nil, { beforeLoad = function(b) b.plots.other = claimFacts('X') end })
-        T.eq(0, #raids(B2), 'plots passed once claims are loaded: missing plot dropped')
+        B.containers[CHEST] = { [1] = { name = 'bread', amount = 4 } }
+        return B
+    end
+
+    T.it('idea-958 boot: claims not ready -> loaded raid kept (not cancelled, not advanced), no new raids', function()
+        for _, ready in ipairs({ false, 'throw', 'missing' }) do
+            -- plots ARE listed (and another claim is raidable), but claimsReady is not true: nothing may act on them
+            local B = livePlusReboot(ready, function(b) b.plots.p1 = claimFacts('CID1'); b.plots.p2 = claimFacts('CID1') end)
+            local st = B.server.getState()
+            T.eq(1, #raids(B), tostring(ready) .. ': kept at load (plots not passed to deserialize)')
+            local sq = raids(B)[1]
+            local phase, eta = sq.phase, sq.etaTick
+            B.commands.alife(1, {}, 'alife tick 20')
+            T.eq(1, #raids(B), tostring(ready) .. ': no new raid on p2')
+            T.eq(nil, sq.cancelled, tostring(ready) .. ': not cancelled')
+            T.eq(phase, sq.phase); T.eq(eta, sq.etaTick, tostring(ready) .. ': raid step skipped whole')
+            T.eq(4, total(B.containers[CHEST], 'bread'), 'nothing stolen while paused')
+            local paused = 0
+            for _, l in ipairs(B.printed) do if l:find('raid steps paused', 1, true) then paused = paused + 1 end end
+            T.eq(1, paused, tostring(ready) .. ': logged once, not per tick')
+            -- claims become ready: the raid resumes on the same step
+            B.claimsReady = true
+            B.commands.alife(1, {}, 'alife tick 1')
+            T.eq('warn', phase)
+            T.eq(nil, sq.cancelled); T.eq('fight', sq.phase, tostring(ready) .. ': resumed (arrived: owner home -> fight)')
+            T.eq('fight', sq.mode); assert(st.tick > eta)
+        end
+        -- fh_homestead stopped: also paused, raid kept
+        local B = livePlusReboot(true, function(b) b.plots.p1 = claimFacts('CID1') end)
+        T.eq(1, #raids(B))
+        B.resState.fh_homestead = 'stopped'
+        B.commands.alife(1, {}, 'alife tick 20')
+        T.eq(1, #raids(B)); T.eq(nil, raids(B)[1].cancelled)
+    end)
+
+    T.it('idea-958 boot: claims ready with 0 claims -> loaded raids on missing plots handled as before', function()
+        -- ready at load: deserialize gets the (empty) plots and drops the raid as plot_missing
+        local B = livePlusReboot(true)
+        T.eq(0, #raids(B), 'dropped at load: plot gone')
+        local hit = false
+        for _, l in ipairs(B.printed) do if l:find('plot_missing', 1, true) then hit = true end end
+        assert(hit, 'drop logged')
+        -- ready only after load: the first raid step cancels it (plot_gone), as after the old grace
+        local B2 = livePlusReboot(false)
+        T.eq(1, #raids(B2))
+        B2.claimsReady = true
+        B2.commands.alife(1, {}, 'alife tick 1')
+        T.eq('plot_gone', raids(B2)[1].cancelled)
+        -- ready with the plot present at load: kept
+        local B3 = livePlusReboot(true, function(b) b.plots.p1 = claimFacts('CID1') end)
+        T.eq(1, #raids(B3))
+    end)
+
+    T.it('idea-1014 load: invalid saved ledger entries are dropped and each one is logged', function()
+        local B = boot({ fh_alife_state = Json.encode({ version = 3, tick = 1, owners = {}, squads = {},
+            raidLoot = { [CAMP] = { { name = 'bread', amount = 2 }, { name = 'rope', amount = 0 }, { amount = 3 } } } }) })
+        T.same({ { name = 'bread', amount = 2 } }, ledger(B))
+        for _, want in ipairs({ 'dropped invalid entry #2 (rope x 0)', 'dropped invalid entry #3 (? x 3)' }) do
+            local hit = false
+            for _, l in ipairs(B.printed) do
+                if l:find('load: raid loot ledger ' .. CAMP .. ': ' .. want, 1, true) then hit = true end
+            end
+            assert(hit, 'logged: ' .. want)
+        end
     end)
 end)
 
