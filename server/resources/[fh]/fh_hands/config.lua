@@ -2,8 +2,9 @@
 FhHandsConfig = {
     regionId = 'heartlands',      -- region the wage ledger row is booked under
     unlockId = 'hire_hand',       -- fh_progression unlock required to hire (any hand)
-    -- G3: hiring while already employing N hands also needs extraHandUnlocks[N + 1] (plus unlockId). A hire past
-    -- #extraHandUnlocks + 1 hands is refused (max_hands). hire_hand_2 is added by fh_progression (heartlands t3);
+    -- G3: hiring while already employing N hands also needs extraHandUnlocks[N + 1] (plus unlockId). A hire whose
+    -- extraHandUnlocks[N + 1] slot is empty (past the last configured slot) is refused (max_hands); with only
+    -- [2] = 'hire_hand_2' set, two hands is the cap. hire_hand_2 is added by fh_progression (heartlands t3);
     -- until it exists canUnlock answers unknown_unlock and the second hire fails closed ('locked').
     extraHandUnlocks = { [2] = 'hire_hand_2' },
     tickSeconds = 600,            -- one wage tick per this many seconds

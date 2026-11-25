@@ -25,7 +25,8 @@ above it.
 - First hand: fh_progression `canUnlock(src, unlockId)` (`hire_hand`).
 - Second hand: also `canUnlock(src, extraHandUnlocks[2])` (`hire_hand_2`, heartlands t3, added by fh_progression).
   Fail closed: anything but `true` (`unknown_unlock` before the unlock exists, `tier_too_low`, a throw) is `locked`.
-- More hands than `#extraHandUnlocks + 1`: `max_hands`. The count is read under the owner's lock, so concurrent hires
+- A hire whose `extraHandUnlocks[N + 1]` slot is empty (past the last configured slot) is refused `max_hands`: with
+  only `[2] = 'hire_hand_2'` set, two hands is the cap. The count is read under the owner's lock, so concurrent hires
   cannot both pass as the first hand. Firing back to one hand means the next hire needs `hire_hand_2` again.
 
 ## Wage ticks (invariants)

@@ -13,7 +13,7 @@ local cfg = FhProgressionConfig
 case('config regions and unlock ids are known / seeded', function()
     for r in pairs(cfg.tiers) do assert(regions.isKnownRegion(r), r) end
     for _, id in ipairs({ 'contracts_t2', 'wagon_t2', 'fence_rare_stock', 'fence_treasure_leads', 'hire_hand',
-        'wagon_t3', 'contracts_t3', 'hire_hand_2' }) do
+        'wagon_t3', 'hire_hand_2' }) do
         local u = cfg.unlocks[id]
         assert(u and cfg.tiers[u.region_id], id)
     end

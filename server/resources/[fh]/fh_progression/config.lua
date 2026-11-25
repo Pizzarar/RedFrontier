@@ -9,13 +9,12 @@ FhProgressionConfig = {
     },
     -- unlock_id -> { region_id, min_tier } (min_tier is a number: 1, 2 or 3)
     unlocks = {
-        contracts_t2         = { region_id = 'heartlands', min_tier = 2 },
+        contracts_t2         = { region_id = 'heartlands', min_tier = 2 }, -- consumer: fh_trade T2 freight (roads-02 R9)
         wagon_t2             = { region_id = 'heartlands', min_tier = 2 },
         fence_rare_stock     = { region_id = 'heartlands', min_tier = 2 },
         fence_treasure_leads = { region_id = 'heartlands', min_tier = 3 },
         hire_hand            = { region_id = 'heartlands', min_tier = 2 },
         wagon_t3             = { region_id = 'heartlands', min_tier = 3 },
-        contracts_t3         = { region_id = 'heartlands', min_tier = 3 },
         hire_hand_2          = { region_id = 'heartlands', min_tier = 3 },
     },
 }

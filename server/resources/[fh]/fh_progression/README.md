@@ -35,7 +35,6 @@ Regional rep tiers and unlocks (M7). Read-only: it never writes rep; fh_economy 
 | fence_treasure_leads | heartlands | 3 |
 | hire_hand | heartlands | 2 |
 | wagon_t3 | heartlands | 3 |
-| contracts_t3 | heartlands | 3 |
 | hire_hand_2 | heartlands | 3 |
 
 ## Cache

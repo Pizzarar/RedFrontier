@@ -702,6 +702,29 @@ Needs `ensure fh_progression`, `ensure fh_fence`, `ensure fh_hands` (shipped in 
 16. Settle a stuck fence stash (`fh_fence_settle`). Set one up: stop the server, then in the DB run `INSERT INTO inventories (identifier, items) VALUES ('fh:fence:<citizenid>:roving', '[{"name":"fh_part_gunsmith","amount":2,"info":{},"slot":1}]') ON DUPLICATE KEY UPDATE items = VALUES(items);` (`<citizenid>` = your character's, from the `players` table). Start the server, join, note your cash, and try to buy 1 bread at the fence.
     Expected: `The fence is holding goods from an earlier deal. Ask an admin.` and a console line `[fh_fence] WARNING fence stash not empty, trade refused: ... items=[1:fh_part_gunsmithx2]`. Now fill your backpack until 2 gunsmith parts no longer fit and run `fh_fence_settle <id>` in the console: `fh_fence_settle: no_room`, nothing moves (backpack unchanged, the buy is still refused). Make room and run it again: `fh_fence_settle: ok (2 units to <id>)`, 2 `Gunsmith Parts` in the backpack, cash unchanged, and buying bread works again. Run it once more: `fh_fence_settle: nothing_pending`. Bad input: `fh_fence_settle abc`, `fh_fence_settle 0`, `fh_fence_settle 2.5` -> `fh_bad_target`; a disconnected id -> `no_player`. As a non-admin player `/fh_fence_settle <id>` from F8 does nothing.
     RESULT:
+17. Scarlett Meadows tier (G1). In the server console run `fh_rep_region <id> scarlett_meadows 99`, then `fh_rep_region <id> scarlett_meadows 1` (100 rep), then `fh_rep_region <id> scarlett_meadows 300` (400 rep). After each, read the tier with `print(exports.fh_progression:getTier(<id>, 'scarlett_meadows'))` in the server console.
+    Expected: `fh_rep_region: ok (scarlett_meadows +99 for <id>)` (and the two others); the tier prints `1` at 99 rep, `2` at 100 rep and `3` at 400 rep — the same 100/400 thresholds as heartlands. Drop back below with `fh_rep_region <id> scarlett_meadows -300`: the tier prints `1` again. (scarlett_meadows has no fence stop or hand of its own, so the tier is read through the export; the same climb is covered by the spec.)
+    RESULT:
+18. Woodcutter hired (G3). At 100+ rep, with a homestead plot and its chest, run `fh_hand_hire <id> woodcutter`. Put $50 in cash (`fh_pay <id> 50`), keep lumber under 40 in the plot chest (open with E), then run `fh_hand_tick <id>`.
+    Expected: console `fh_hand_tick: ticked <id>`. The woodcutter is paid $6 (`wage:woodcutter` ledger row, region heartlands) and the chest lumber went up by 5 (cap 40). Run it again: +5 more, until the chest holds 40, then the tick adds 0. (lumber is fh_homestead's build item; fh_hands only tops it up.)
+    RESULT:
+19. Woodcutter unpaid. Spend your cash to $0, then run `fh_hand_tick <id>` once.
+    Expected: `fh_hand_tick: ticked <id>`, cash stays $0 (never negative), the chest lumber does NOT rise (the hand idles), and the server console shows `[fh_hands] unpaid <citizenid>/woodcutter: fh_insufficient_funds`.
+    RESULT:
+20. Second hand gate (G3). With the woodcutter still hired (step 18), sit below heartlands tier 3 (under 400 rep; if you are at 400, drop with `fh_rep_region <id> heartlands -300`) and run `fh_hand_hire <id> ranch_hand`. Then cross to tier 3 (`fh_rep_region <id> heartlands 300`) and run the same hire again.
+    Expected: below 400 rep the second hire is refused `fh_hand_hire: locked` (a second hand needs `hire_hand_2`, heartlands tier 3); at 400 rep it answers `fh_hand_hire: ok (ranch_hand)`. A third hand (a third kind) would be `fh_hand_hire: max_hands` — with only `hire_hand_2` configured, two hands is the cap. After `fh_hand_fire <id> ranch_hand` (back to one hand), hiring it again needs `hire_hand_2` (tier 3) once more.
+    RESULT:
+21. Treasure lead dig (G2 — needs G2 merged). At 400 rep buy a treasure lead from the fence screen (step 7), then USE the lead item in your inventory.
+    Expected: a `Treasure lead` notification shows the hint, and a `Treasure lead` area blip appears (radius 60 m). The blip marks an AREA, not the spot: its centre is offset from the real target, so it never points at the dig point. The road-stop lead's hint is "Where the old rail line meets the creek." (target about -520, 910, 120); the camp-stop lead's is "Under the split oak east of the ridge." (target about -60, 760, 116).
+    a. Dig too far: inside the blip area but more than 8 m from the real target, press E at the `[E] Dig for the cache` prompt.
+       Expected: `Nothing buried here. Read the hint again.` and the lead stays in your backpack.
+    b. Dig at the spot: stand within 8 m of the real target and press E.
+       Expected: a payout notice like `You dug up $240.` or `You dug up $180 and 2 x Gunsmith Parts.` (one weighted roll: $150-300; or $100-200 + 2 Gunsmith Parts; or $100-200 + 2 Saddlery Fittings; or $400-700). Cash rises by the rolled money and/or the parts appear in your backpack. The lead is gone.
+    c. Dig again: wait past the 3 s dig cooldown, then press E at the same spot.
+       Expected: `You don't have a treasure lead.` (the lead was one-shot). If you press E inside the cooldown instead you get `Catch your breath before you dig again.`.
+    d. Full backpack: buy a second lead, use it, fill your backpack so 2 more pocket items cannot fit, then dig at the spot.
+       Expected: when the roll pays parts, `No room for what's buried here. Make space and dig again.` and the lead stays in your backpack (room is checked before the lead is taken). Money-only rolls still pay out even with a full backpack; if you roll money-only, buy another lead and retry.
+    RESULT:
 
 ## Hunting
 
