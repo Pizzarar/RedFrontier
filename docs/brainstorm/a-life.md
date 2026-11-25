@@ -35,3 +35,4 @@
 - Decision 2026-11-25: stolen claim goods go into a persisted per-camp loot ledger in fh_alife (cap 20 stacks) and are paid into the camp stash on camp_cleared. C2b (fh_zones stash-wipe change) dropped: a boot wipe would lose goods at every restart window. C2 Gemini PASS 0/0/1 (idea-961 rides along).
 - a-life-03 PASS: MERGED ff (C2 + C2c loot ledger + fixes + C3 OWNER-TESTS) on 5fca77a, 132/2428/0. Owner in-game check pending (OWNER-TESTS "A-life: claim raids"). Follow-ups idea-958/959/987/1006.
 - a-life-fx1 PASS: MERGED ff (idea-959 serial-safe raid steal picks, idea-1006 L2/L3), Gemini 0/0/0. Open: idea-958 (@homestead), 987 (@core), 1014.
+- a-life-fx2 PASS: MERGED (idea-958 claimsReady boot gate, idea-1031 one bag + leftovers, idea-1014 invalid-entry log), Gemini 0/0/2; minors idea-1055.
