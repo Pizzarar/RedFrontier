@@ -267,7 +267,7 @@ local function tierOffers(cfg, d, tier, fromRegion, to, dist, list, out)
                 if reward >= 1 then
                     local label = good.label or s.item
                     out[#out + 1] = {
-                        key = M.offerKey(fromRegion, to, s.item, tier), tier = tier, locked = true,
+                        key = M.offerKey(fromRegion, to, s.item, tier), tier = tier,
                         min_region_tier = minReg, min_wagon_tier = minWag,
                         title = ('[T%d] Freight: %dx %s to %s'):format(tier, qty, label, to),
                         text = ('%s: %dx %s from %s to %s (%d m). Needs rep tier %d in %s and %s.')
@@ -286,10 +286,10 @@ end
 ---horizontal route distance >= that tier's minDistance.
 ---`shortagesByRegion[region] = fh_trade shortages list { item, level, multiplier, price }`. Pure; worst shortage first.
 ---T1 offers (tier = 1) are listed first, capped at maxOffers; then T2 (tier = 2, freight.t2) and T3 (tier = 3,
----freight.t3), each on its own cap. fh_quests calls offers(region_id) with no player, so gated offers are always
----`locked = true` (gated by the origin region's rep tier, `min_region_tier`): the board is shared and the per-player
----check happens at accept. No offers for a tier while its kill switch (`freight.t<N>.enabled`) is off.
----@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, locked?, min_region_tier?, min_wagon_tier? }
+---freight.t3), each on its own cap. offers(region_id) is player-independent (no per-offer `locked` flag); fh_quests
+---computes per-player display locks via the `lockedFor(offer, src)` hook, and accept() stays authoritative. No offers
+---for a tier while its kill switch (`freight.t<N>.enabled`) is off.
+---@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, min_region_tier?, min_wagon_tier? }
 function M.generate(cfg, fromRegion, shortagesByRegion, regions)
     local d, out, gatedOut = defaults(cfg), {}, {}
     for _, tier in ipairs(M.GATED_TIERS) do gatedOut[tier] = {} end
@@ -496,13 +496,14 @@ function M.eventVerdict(name, payload, state)
 end
 
 ---Soft-dependency registration: only when fh_quests is started. `getState` = GetResourceState, `quests` = the
----fh_quests exports table, `hooks` = { offers, accept, onEvent, abandon }. @return boolean ok, string? err
+---fh_quests exports table, `hooks` = { offers, accept, onEvent, abandon, lockedFor? }. @return boolean ok, string? err
 function M.register(getState, quests, hooks)
     if type(getState) ~= 'function' or getState('fh_quests') ~= 'started' then return false, 'quests_not_started' end
     if type(quests) ~= 'table' then return false, 'no_exports' end
     local ok, a, b = pcall(function()
         return quests:registerJobType(M.JOB_TYPE, {
             offers = hooks.offers, accept = hooks.accept, onEvent = hooks.onEvent, abandon = hooks.abandon,
+            lockedFor = hooks.lockedFor,
             events = { M.EVENT_DELIVERED, M.EVENT_FAILED },
         })
     end)

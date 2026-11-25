@@ -136,10 +136,10 @@ local function atDest(E) E.wagons['CID1:t2'].coords = { x = 500, y = 0, z = 0 } 
 local function delivered(E) local n = 0 for _, e in ipairs(E.events) do if e.name == F.EVENT_DELIVERED then n = n + 1 end end return n end
 local function failedReasons(E) local r = {} for _, e in ipairs(E.events) do if e.name == F.EVENT_FAILED then r[#r + 1] = e.payload.reason end end return r end
 
-case('registers the freight job type (on fh_quests / self start only) with the four hooks + events', function()
+case('registers the freight job type (on fh_quests / self start only) with the five hooks + events', function()
     local E = newEnv()
     T.eq('freight', E.jobName)
-    for _, h in ipairs({ 'offers', 'accept', 'onEvent', 'abandon' }) do T.eq('function', type(E.hooks[h])) end
+    for _, h in ipairs({ 'offers', 'accept', 'onEvent', 'abandon', 'lockedFor' }) do T.eq('function', type(E.hooks[h])) end
     T.same({ 'fh:trade:contract_delivered', 'fh:trade:contract_failed' }, E.hooks.events)
     E.jobName = nil; E.onStart('fh_inventory'); T.eq(nil, E.jobName)
     E.onStart('fh_trade'); T.eq('freight', E.jobName)
@@ -342,13 +342,13 @@ local function t1Offer(E)
     for _, o in ipairs(E.hooks.offers('heartlands')) do if o.tier == 1 then return o end end
 end
 
-case('T2 offers: the board hook lists T2 with locked = true (no player is known there) next to T1', function()
+case('T2 offers: the board hook is player-independent (no hardcoded locked) and lists T2 next to T1', function()
     local E = newEnv({ t2 = true })
     E.shortages.dunes = { { item = 'trade_salt', level = 0.5, price = 10 } }
     local list = E.hooks.offers('heartlands')
     T.eq(2, #list)
     T.eq(1, list[1].tier); T.eq(nil, list[1].locked)
-    T.eq(2, list[2].tier); T.eq(true, list[2].locked); T.eq(nil, list[2].unlock); T.eq(2, list[2].min_region_tier)
+    T.eq(2, list[2].tier); T.eq(nil, list[2].locked); T.eq(nil, list[2].unlock); T.eq(2, list[2].min_region_tier)
     T.eq(0, #E.unlockCalls, 'offers must not call canUnlock'); T.eq(0, #E.tierCalls, 'offers must not call getTier')
 end)
 
@@ -641,12 +641,12 @@ local function t3From(E, region, to)
     for _, o in ipairs(E.hooks.offers(region)) do if o.tier == 3 and (not to or o.to_region == to) then return o end end
 end
 
-case('R14 T3 offers: generated only for routes >= t3.minDistance; carries tier 3, locked, min_region_tier 3', function()
+case('R14 T3 offers: generated only for routes >= t3.minDistance; carries tier 3, min_region_tier 3 (no hardcoded locked)', function()
     local E = t3Env()
     T.eq(nil, t3From(E, 'heartlands', 'dunes'), '500 m < T3 minDistance 800')
     local o = t3From(E, 'heartlands', 'bayou_nwa')
     assert(o, '1000 m >= T3 minDistance 800')
-    T.eq(3, o.tier); T.eq(true, o.locked); T.eq(3, o.min_region_tier); T.eq(3, o.min_wagon_tier)
+    T.eq(3, o.tier); T.eq(nil, o.locked); T.eq(3, o.min_region_tier); T.eq(3, o.min_wagon_tier)
     T.eq('heartlands', o.region_id); T.eq('heartlands.bayou_nwa.trade_salt.t3', o.key)
     T.eq(0, #E.tierCalls); T.eq(0, #E.unlockCalls)
 end)
@@ -723,6 +723,112 @@ case('R14 T3 wagon fit: t1 cart and t2 wagon refused for T3, unknown fails close
     E.getWagonThrows = false
     T.eq(0, #E.addCalls, 'nothing added on refused wagon fit')
     assert(acceptWith(E, o, 't3') == true, 't3 wagon accepted')
+end)
+
+-- ---------------------------------------------------------------- lockedFor per-player display lock (roads R20, idea-1039)
+
+case('R20 lockedFor: T1 always nil without calling getTier/canUnlock, even if fh_progression is stopped or throws', function()
+    for _, mode in ipairs({ 'ok', 'stopped', 'throws', 'absent' }) do
+        local E = t3Env({ noProgression = mode == 'absent' })
+        if mode == 'stopped' then E.states.fh_progression = 'stopped' end
+        if mode == 'throws' then E.tierFn = function() error('boom') end end
+        local o = t1Offer(E)
+        T.eq(nil, E.hooks.lockedFor(o, 7), mode .. ': T1 must be unlocked')
+        T.eq(0, #E.tierCalls, mode .. ': T1 must not call getTier')
+        T.eq(0, #E.unlockCalls, mode .. ': T1 must not call canUnlock')
+    end
+end)
+
+case('R20 lockedFor: T2/T3 regional tier gate: ok -> nil, low -> { min_tier, reason = freight_gate }; no wagon check', function()
+    local E = t3Env()
+    E.tiers = { heartlands = 1, bayou_nwa = 2 }
+    local hT2 = t2From(E, 'heartlands')
+    local bT2 = t2From(E, 'bayou_nwa')
+    local hT3 = t3From(E, 'heartlands', 'bayou_nwa')
+    local bT3 = t3From(E, 'bayou_nwa', 'heartlands')
+    -- No wagon spawned (E.nearest is nil): browsing must not require a wagon nearby.
+    T.same({ min_tier = 2, reason = 'freight_gate' }, E.hooks.lockedFor(hT2, 7))
+    T.eq(nil, E.hooks.lockedFor(bT2, 7), 'bayou tier 2 unlocks bayou T2 without any wagon out')
+    T.same({ min_tier = 3, reason = 'freight_gate' }, E.hooks.lockedFor(hT3, 7))
+    T.same({ min_tier = 3, reason = 'freight_gate' }, E.hooks.lockedFor(bT3, 7))
+    E.tiers.bayou_nwa = 3
+    T.eq(nil, E.hooks.lockedFor(bT3, 7), 'bayou tier 3 unlocks bayou T3 without any wagon out')
+    T.eq(0, #E.unlockCalls, 'lockedFor never calls canUnlock')
+end)
+
+case('R20 lockedFor: kill switches freight.t2.enabled / freight.t3.enabled -> freight_disabled without calling getTier', function()
+    local E = t3Env()
+    E.tiers = { heartlands = 3 }
+    local o2 = t2From(E, 'heartlands')
+    local o3 = t3From(E, 'heartlands', 'bayou_nwa')
+    FhTradeConfig.freight.t2.enabled = false
+    T.same({ min_tier = 2, reason = 'freight_disabled' }, E.hooks.lockedFor(o2, 7))
+    T.eq(0, #E.tierCalls, 'T2 disabled: no getTier call')
+    T.eq(nil, E.hooks.lockedFor(o3, 7), 'T3 unaffected while T2 is off')
+    FhTradeConfig.freight.t3.enabled = false
+    E.tierCalls = {}
+    T.same({ min_tier = 3, reason = 'freight_disabled' }, E.hooks.lockedFor(o3, 7))
+    T.eq(0, #E.tierCalls, 'T3 disabled: no getTier call')
+    FhTradeConfig.freight.t2.enabled, FhTradeConfig.freight.t3.enabled = true, true
+    T.eq(nil, E.hooks.lockedFor(o2, 7))
+    T.eq(nil, E.hooks.lockedFor(o3, 7))
+end)
+
+case('R20 lockedFor fail closed: progression stopped / throws / bad value / missing / offline / swap / bad offer -> locked', function()
+    local setups = {
+        stopped = function(E) E.states.fh_progression = 'stopped' end,
+        throws  = function(E) E.tierFn = function() error('progression boom') end end,
+        string  = function(E) E.tierFn = function() return '3' end end,
+        ['nil'] = function(E) E.tierFn = function() return nil end end,
+        nan     = function(E) E.tierFn = function() return 0 / 0 end end,
+        offline = function(E) E.online = {} end,
+        swap    = function(E) E.tierFn = function() E.online[7] = 'CID2' return 3 end end,
+    }
+    for name, setup in pairs(setups) do
+        local E = t3Env()
+        E.tiers = { heartlands = 3 }
+        local o2 = t2From(E, 'heartlands')
+        local o3 = t3From(E, 'heartlands', 'bayou_nwa')
+        setup(E)
+        T.same({ min_tier = 2, reason = 'freight_gate' }, E.hooks.lockedFor(o2, 7), 'T2 ' .. name)
+        if name == 'swap' then E.online[7] = 'CID1' end
+        T.same({ min_tier = 3, reason = 'freight_gate' }, E.hooks.lockedFor(o3, 7), 'T3 ' .. name)
+        if name == 'stopped' then T.eq(0, #E.tierCalls, 'stopped must not call getTier') end
+    end
+    local E = t3Env({ noGetTier = true })
+    T.same({ min_tier = 2, reason = 'freight_gate' }, E.hooks.lockedFor(t2From(E, 'heartlands'), 7))
+    T.same({ reason = 'freight_gate' }, E.hooks.lockedFor(nil, 7), 'non-table offer fails closed')
+    T.same({ reason = 'freight_gate' }, E.hooks.lockedFor({ tier = 4, from_region = 'heartlands' }, 7), 'unknown tier fails closed')
+end)
+
+case('R20 lockedFor parity: lockedFor(offer, src) == nil <=> accept(src, offer) passes the tier gate', function()
+    local modes = {
+        { name = 'tier1',   setup = function(E) E.tiers.heartlands = 1 end },
+        { name = 'tier2',   setup = function(E) E.tiers.heartlands = 2 end },
+        { name = 'tier3',   setup = function(E) E.tiers.heartlands = 3 end },
+        { name = 'stopped', setup = function(E) E.tiers.heartlands = 3; E.states.fh_progression = 'stopped' end },
+        { name = 'throws',  setup = function(E) E.tiers.heartlands = 3; E.tierFn = function() error('boom') end end },
+        { name = 't2_off',  setup = function(E) E.tiers.heartlands = 3; FhTradeConfig.freight.t2.enabled = false end },
+        { name = 't3_off',  setup = function(E) E.tiers.heartlands = 3; FhTradeConfig.freight.t3.enabled = false end },
+    }
+    for _, tier in ipairs({ 1, 2, 3 }) do
+        for _, m in ipairs(modes) do
+            local E = t3Env()
+            local o
+            if tier == 1 then o = t1Offer(E)
+            elseif tier == 2 then o = t2From(E, 'heartlands')
+            else o = t3From(E, 'heartlands', 'bayou_nwa') end
+            assert(o, 'missing offer for tier ' .. tier)
+            m.setup(E)
+            local lock = E.hooks.lockedFor(o, 7)
+            local ok, err = acceptWith(E, o, 't' .. tier)
+            local tag = ('T%d/%s (lock=%s, accept=%s/%s)'):format(tier, m.name, tostring(lock and lock.reason), tostring(ok), tostring(err))
+            T.eq(lock == nil, ok == true, 'parity mismatch: ' .. tag)
+            if lock then
+                assert(err == 'fh_locked' or err == 'fh_freight_tier_disabled', 'expected gate error for ' .. tag)
+            end
+        end
+    end
 end)
 
 T.finish()

@@ -146,7 +146,7 @@ local function stubQuests(ret)
     function q:registerJobType(name, hooks) self.calls[#self.calls + 1] = { name = name, hooks = hooks } return table.unpack(ret or { true }) end
     return q
 end
-local hooks = { offers = function() end, accept = function() end, onEvent = function() end, abandon = function() end, extra = 1 }
+local hooks = { offers = function() end, accept = function() end, onEvent = function() end, abandon = function() end, lockedFor = function() end, extra = 1 }
 
 case('register: skipped (no call) while fh_quests is not started', function()
     local q = stubQuests()
@@ -155,7 +155,7 @@ case('register: skipped (no call) while fh_quests is not started', function()
     ok, err = F.register(function() return 'missing' end, q, hooks); assert(not ok); T.eq(0, #q.calls)
 end)
 
-case('register: started -> registerJobType(freight, hooks + events), only the four hooks forwarded', function()
+case('register: started -> registerJobType(freight, hooks + events), only the five hooks forwarded', function()
     local q = stubQuests()
     local asked
     local ok = F.register(function(n) asked = n return 'started' end, q, hooks)
@@ -163,7 +163,8 @@ case('register: started -> registerJobType(freight, hooks + events), only the fo
     local call = q.calls[1]
     T.eq('freight', call.name)
     T.eq(hooks.offers, call.hooks.offers); T.eq(hooks.accept, call.hooks.accept)
-    T.eq(hooks.onEvent, call.hooks.onEvent); T.eq(hooks.abandon, call.hooks.abandon); T.eq(nil, call.hooks.extra)
+    T.eq(hooks.onEvent, call.hooks.onEvent); T.eq(hooks.abandon, call.hooks.abandon)
+    T.eq(hooks.lockedFor, call.hooks.lockedFor); T.eq(nil, call.hooks.extra)
     T.same({ 'fh:trade:contract_delivered', 'fh:trade:contract_failed' }, call.hooks.events)
 end)
 
@@ -254,7 +255,7 @@ case('T2 generate: T1 offers first (tier 1, unchanged keys), then T2 locked offe
     T.eq(1, offers[2].tier); T.eq('heartlands.dunes.trade_cloth', offers[2].key)
     local o = offers[3]
     T.eq(2, o.tier); T.eq('heartlands.dunes.trade_salt.t2', o.key); assert(#F.questId(o.key) <= 64)
-    T.eq(true, o.locked, 'T2 is always listed locked (board is shared; gate is per player at accept)')
+    T.eq(nil, o.locked, 'no hardcoded locked flag on generated offers (lockedFor hook computes per-player lock)')
     T.eq(nil, o.unlock, 'no global unlock id (R13)'); T.eq(2, o.min_region_tier); T.eq(2, o.min_wagon_tier)
     T.eq(15, o.qty)             -- clamp(ceil(0.5 * 30), 10, 30)
     T.eq(375, o.reward)         -- floor(floor(10 * 10 * 1.25) * 3) = floor(125 * 3)
@@ -759,7 +760,7 @@ case('R14 T3 generate: only for routes >= t3.minDistance; pay = 2x T2 (6x T1), <
     local t3 = byTier(offers, 3, 'bayou_nwa')
     assert(t1 and t2 and t3)
     T.eq(3, t3.tier); T.eq('heartlands.bayou_nwa.trade_salt.t3', t3.key); assert(#F.questId(t3.key) <= 64)
-    T.eq(true, t3.locked); T.eq(3, t3.min_region_tier); T.eq(3, t3.min_wagon_tier); T.eq('heartlands', t3.region_id)
+    T.eq(nil, t3.locked); T.eq(3, t3.min_region_tier); T.eq(3, t3.min_wagon_tier); T.eq('heartlands', t3.region_id)
     assert(t3.title:find('[T3]', 1, true), 'board title marks T3')
     assert(t3.text:find('tier 3 in heartlands', 1, true), t3.text)
     T.eq(30, t3.qty)           -- clamp(ceil(0.5 * 60), 20, 60)

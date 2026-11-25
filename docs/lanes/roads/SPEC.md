@@ -39,11 +39,13 @@ New migrations take main max+1 at merge time (renumber on rebase, as b06fc58 / 9
   `fh:cargo:fasttravel_blocked` `{ src, citizenid, reason, wagon }`. No fast-travel system exists: whoever adds one
   calls this.
 - Freight job type: `exports.fh_quests:registerJobType('freight', { offers(region_id), accept(src, offer),
-  onEvent(name, payload, state), abandon(src, state), events = { 'fh:trade:contract_delivered',
+  onEvent(name, payload, state), abandon(src, state), lockedFor(offer, src), events = { 'fh:trade:contract_delivered',
   'fh:trade:contract_failed' } })`. Soft dep (no `dependencies` entry; registers on onResourceStart of fh_quests or
   self). Quest id `job:freight:<key>`; key from `state.progress.job.key`. Payout only via the fh_quests engine
   (exactly once); fh_trade never pays freight. Hooks never call fh_quests start/abandon/acceptOffer/talk; abandon
-  also undoes a failed accept (cargo out via fh_core removeItem, contract row dropped). Events (one table):
+  also undoes a failed accept (cargo out via fh_core removeItem, contract row dropped). `lockedFor(offer, src)` is
+  display-only (T1 -> nil; gated T2/T3 reuse `tierUnlocked` + kill switches -> nil or `{ min_tier, reason }`, fail
+  closed, no wagon check; `accept` stays authoritative). Events (one table):
   `{ src?, citizenid, key, quest_id, from_region, to_region, item, qty, reward, reason? }`.
 - `exports.fh_cargo:buyWagon(src, tier, region_id) -> ok, err[, detail]`: buys a wagon tier, charged once at the post's
   region; t2/t3 gated by `canUnlock`; `fh_already_owned` refunds. `exports.fh_trade:nearestPost(src) -> post|nil`:

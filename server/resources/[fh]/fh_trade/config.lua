@@ -75,9 +75,9 @@ FhTradeConfig = {
         acceptReach = 8.0,             -- m: your wagon must be this close to you to take a contract
         minDistance = 0,               -- m: minimum horizontal distance between origin and destination for T1 offers
         destinationRadius = 40.0,      -- m: default delivery radius around each region's resolved trade post
-        -- T2 contracts (roads-02 R9): bulk loads on long routes, gated per player at accept by fh_progression
-        -- getTier(src, origin region) >= 2 (roads-03 R13, fail closed) and by the wagon's fh_cargo tier. Listed on the
-        -- board as `[T2]`, `locked = true`.
+        -- T2 contracts (roads-02 R9): bulk loads on long routes, gated per player by fh_progression
+        -- getTier(src, origin region) >= 2 (roads-03 R13, fail closed; board display via lockedFor, accept authoritative)
+        -- and at accept by the wagon's fh_cargo tier. Listed on the board as `[T2]`.
         t2 = {
             enabled = true,            -- kill switch (roads-03 R13): false (or any non-true value) hides T2 offers, refuses T2 accepts
             minWagonTier = 2,          -- fh_cargo TIERS[*].tier: t2 Wagon (30 slots / 300 kg) or t3 Freight
@@ -92,9 +92,9 @@ FhTradeConfig = {
             maxOffers = 2,             -- per board, listed after the T1 offers (own cap, T1 is never crowded out)
             cooldownMin = 30,          -- raised to the deadline in minutes when that is longer
         },
-        -- T3 contracts (roads-03 R14): heavy long-haul freight, gated per player at accept by fh_progression
-        -- getTier(src, origin region) >= 3 (fail closed) and by a t3 Freight wagon. Listed on the board as `[T3]`,
-        -- `locked = true`.
+        -- T3 contracts (roads-03 R14): heavy long-haul freight, gated per player by fh_progression
+        -- getTier(src, origin region) >= 3 (fail closed; board display via lockedFor, accept authoritative) and at accept
+        -- by a t3 Freight wagon. Listed on the board as `[T3]`.
         t3 = {
             enabled = true,            -- kill switch (roads-03 R14): false (or any non-true value) hides T3 offers, refuses T3 accepts
             minWagonTier = 3,          -- fh_cargo TIERS[*].tier: t3 Freight (60 slots / 500 kg)

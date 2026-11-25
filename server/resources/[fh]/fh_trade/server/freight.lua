@@ -188,6 +188,33 @@ end
 
 local function onEvent(name, payload, state) return F.eventVerdict(name, payload, state) end
 
+---Per-player display lock for fh_quests (roads R20, idea-1039). Uses the same tier kill switch (F.tierEnabled) and
+---regional tier gate as accept (tierUnlocked) so board display and accept can never disagree. Display only: accept()
+---stays authoritative. Intentionally does NOT check wagon tier here: the player's wagon need not be out while browsing
+---the board; accept() keeps the wagon-fits-qty check.
+local function lockedFor(offer, src)
+    if type(offer) ~= 'table' then return { reason = 'freight_gate' } end
+    local tier = F.tierOf(offer)
+    if tier == 1 then return nil end
+    local gate = F.gateFor(cfg, tier)
+    if not gate then return { reason = 'freight_gate' } end
+    if not F.tierEnabled(cfg, tier) then
+        return { min_tier = gate.minRegionTier, reason = 'freight_disabled' }
+    end
+    if type(offer.from_region) ~= 'string' or offer.from_region == '' then
+        return { min_tier = gate.minRegionTier, reason = 'freight_gate' }
+    end
+    local citizenid = citizenidOf(src)
+    if not citizenid then
+        return { min_tier = gate.minRegionTier, reason = 'freight_gate' }
+    end
+    local unlocked = tierUnlocked(src, citizenid, tier, offer.from_region)
+    if not unlocked then
+        return { min_tier = gate.minRegionTier, reason = 'freight_gate' }
+    end
+    return nil
+end
+
 -- ---------------------------------------------------------------- emit + check loop
 
 local function payloadOf(c, src, reason)
@@ -248,7 +275,7 @@ end)
 -- ---------------------------------------------------------------- registration (soft dependency on fh_quests)
 
 local function registerFreight()
-    local ok, err = F.register(GetResourceState, exports.fh_quests, { offers = offers, accept = accept, onEvent = onEvent, abandon = abandon })
+    local ok, err = F.register(GetResourceState, exports.fh_quests, { offers = offers, accept = accept, onEvent = onEvent, abandon = abandon, lockedFor = lockedFor })
     if ok then log('registered job type freight with fh_quests') elseif err ~= 'quests_not_started' then log('registerJobType failed: %s', tostring(err)) end
 end
 
