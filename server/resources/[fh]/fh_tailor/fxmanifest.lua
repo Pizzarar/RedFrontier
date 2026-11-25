@@ -27,4 +27,7 @@ client_scripts {
 
 dependencies { 'fh_core', 'fh_economy', 'fh_progression', 'ox_lib', 'oxmysql', 'rsg-core' }
 
-server_exports { 'buy', 'grant', 'equip', 'saveOutfit', 'wearSaved', 'getStock', 'getWardrobe', 'message' }
+server_exports { 'buy', 'grant', 'equip', 'saveOutfit', 'wearSaved', 'getStock', 'getWardrobe', 'message',
+    'actBuy', 'actStock', 'actWardrobe', 'actEquip', 'actSave', 'actWear' }
+
+client_exports { 'previewLook', 'revertLook' }

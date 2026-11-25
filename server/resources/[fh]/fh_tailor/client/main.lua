@@ -16,6 +16,7 @@ local points = {}
 local shownText = nil
 local applySeq = 0
 local lastLook = nil
+local pendingWardrobeRefresh = false -- an equip / save / wear fired from a wardrobe menu awaits its result
 local previewing = false -- a previewLook is on the ped (cleared by revertLook)
 
 -- ---------------------------------------------------------------- UI helpers
@@ -145,6 +146,7 @@ end)
 -- ---------------------------------------------------------------- stopgap ox_lib menus
 
 local function openShopMenu(shopId)
+    pendingWardrobeRefresh = false
     local ok, res = lib.callback.await('fh:tailor:stock', false, shopId)
     if not ok then
         return notify(logic.message(res), 'error')
@@ -179,6 +181,7 @@ local function promptSaveSlot(slot, currentLabel, worn)
         { type = 'input', label = 'Outfit Name (optional)', default = currentLabel or '', max = logic.MAX_LABEL },
     })
     if not input then return end
+    pendingWardrobeRefresh = true
     TriggerServerEvent('fh:tailor:save_outfit', {
         slot = slot,
         label = input[1] or '',
@@ -199,6 +202,7 @@ local function openOutfitsMenu(data)
                 description = wearing and 'Currently worn' or 'Equip this outfit',
                 disabled = wearing,
                 onSelect = function()
+                    pendingWardrobeRefresh = true
                     TriggerServerEvent('fh:tailor:equip', { outfit_id = item.id, items = wornItems })
                 end,
             }
@@ -234,6 +238,7 @@ local function openItemsMenu(data)
                     if action == 'full' then
                         return notify(logic.message('too_many_items'), 'error')
                     end
+                    pendingWardrobeRefresh = true
                     TriggerServerEvent('fh:tailor:equip', { outfit_id = wornOutfit, items = nextItems })
                 end,
             }
@@ -259,6 +264,7 @@ local function openSlotMenu(slot, savedEntry, worn)
             description = savedEntry.valid and formatLookSummary(savedEntry) or 'Unavailable (missing piece)',
             disabled = not savedEntry.valid,
             onSelect = function()
+                pendingWardrobeRefresh = true
                 TriggerServerEvent('fh:tailor:wear_saved', { slot = slot })
             end,
         },
@@ -354,17 +360,18 @@ local function openWardrobeMenu(returnShopId)
     lib.showContext('fh_tailor_wardrobe')
 end
 
--- After a successful equip / save / wear the open fh_tailor menu holds stale (Worn) labels: reopen the wardrobe with
--- fresh data. Only when one of our menus is the one on screen.
+-- ox_lib clears the open context menu BEFORE onSelect runs, so we cannot ask "is our menu open". Instead the wardrobe
+-- sub-menus set pendingWardrobeRefresh when they fire equip / save / wear; the result reopens the wardrobe with fresh
+-- (Worn) labels unless another menu has been opened meanwhile.
 refreshWardrobeMenu = function()
-    local open = lib.getOpenContextMenu and lib.getOpenContextMenu() or nil
-    if type(open) ~= 'string' or not open:find('^fh_tailor_') or open == 'fh_tailor_shop' or open == 'fh_tailor_stop' then
-        return
-    end
+    if not pendingWardrobeRefresh then return end
+    pendingWardrobeRefresh = false
+    if lib.getOpenContextMenu and lib.getOpenContextMenu() then return end
     FH.thread(function() openWardrobeMenu(wardrobeReturnShop) end)
 end
 
 local function openTailorMenu(shopId)
+    pendingWardrobeRefresh = false
     local shop = cfg.shops[shopId]
     if not shop then return end
     lib.registerContext({
@@ -391,6 +398,7 @@ end
 FH.onNet('fh:tailor:result', function(res)
     if type(res) ~= 'table' then return end
     if not res.ok then
+        pendingWardrobeRefresh = false
         return notify(logic.message(res.code), 'error')
     end
     if res.action == 'buy' then

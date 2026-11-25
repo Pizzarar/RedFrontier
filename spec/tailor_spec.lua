@@ -779,4 +779,31 @@ case('actions: equip / save / wear share one per-src debounce; range refusal doe
     eq(0, #bcalls)
 end)
 
+case('actions: src normalized with tonumber; non-number refused (bad_src); forget clears the same key', function()
+    local t = 0
+    local d = logic.newDebounce(750, function() return t end)
+    eq(true, d.allow('7')); eq(false, d.allow(7), 'string and number share one key')
+    d.forget(7); eq(true, d.allow('7'), 'forget(number) clears the key allowed as a string')
+    eq(false, d.allow('abc')); eq(false, d.allow(nil))
+    local A, calls = actionsFixture()
+    local ok, code = A.actEquip('x', 'o', {}); eq(false, ok); eq('bad_src', code)
+    ok, code = A.actSave(nil, 1, '', 'o', {}); eq('bad_src', code)
+    ok, code = A.actWear({}, 1); eq('bad_src', code)
+    eq(0, #calls)
+    eq(true, (A.actEquip('5', 'o', {})))
+    ok, code = A.actEquip(5, 'o', {}); eq('too_fast', code)
+    eq(5, calls[1] and 5, 'core reached once')
+end)
+
+case('resolveApply force: unknown or wrong-kind item refuses the look; normal path skips it', function()
+    local c = fixture()
+    eq(nil, logic.resolveApply(c, { outfit = 'ranch_m', items = { 'hat', 'nope' } }, true))
+    eq(nil, logic.resolveApply(c, { outfit = 'ranch_m', items = { 'ranch_m' } }, true), 'outfit id as item')
+    same({ outfit = 'ranch_m', preset = 3, components = { 1234 } },
+        logic.resolveApply(c, { outfit = 'ranch_m', items = { 'hat' } }, true))
+    c.FittedOutfits = true
+    same({ outfit = 'ranch_m', preset = 3, components = { 1234 } },
+        logic.resolveApply(c, { outfit = 'ranch_m', items = { 'hat', 'nope' } }), 'normal path unchanged')
+end)
+
 T.finish()

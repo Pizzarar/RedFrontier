@@ -286,6 +286,7 @@ M.messages = {
     empty_slot = 'That wardrobe slot is empty.',
     bad_label = 'That name is not allowed.',
     too_fast = 'Slow down a moment.',
+    bad_src = 'Unknown player.',
     not_at_wardrobe = 'You need to be at a tailor or your homestead wardrobe.',
     -- grant (other resources)
     invalid_citizenid = 'Invalid character id.',
@@ -306,6 +307,8 @@ function M.newDebounce(ms, clock)
     local last = {}
     return {
         allow = function(key)
+            key = tonumber(key)
+            if not key then return false end
             if not (isInt(ms) and ms > 0) then return true end
             local now = clock()
             local prev = last[key]
@@ -313,7 +316,7 @@ function M.newDebounce(ms, clock)
             last[key] = now
             return true
         end,
-        forget = function(key) last[key] = nil end,
+        forget = function(key) key = tonumber(key); if key then last[key] = nil end end,
     }
 end
 
@@ -322,10 +325,13 @@ end
 ---inWardrobeRange(src), debounce }. Every function returns the core's `ok, res|code`.
 function M.makeActions(deps)
     local core = deps.core
+    ---@return string|nil code, number|nil src (normalized with tonumber so debounce keys match forget())
     local function wardrobeGate(src)
-        if not deps.inWardrobeRange(src) then return 'not_at_wardrobe' end
-        if not deps.debounce.allow(src) then return 'too_fast' end
-        return nil
+        src = tonumber(src)
+        if not src then return 'bad_src' end
+        if not deps.inWardrobeRange(src) then return 'not_at_wardrobe', src end
+        if not deps.debounce.allow(src) then return 'too_fast', src end
+        return nil, src
     end
     local A = {}
     -- buy range + the per-character lock live in the core; no debounce (a refused buy takes nothing).
@@ -341,19 +347,19 @@ function M.makeActions(deps)
         return core.getWardrobe(src)
     end
     function A.actEquip(src, outfitId, items)
-        local code = wardrobeGate(src)
+        local code, nsrc = wardrobeGate(src)
         if code then return false, code end
-        return core.equip(src, outfitId, items)
+        return core.equip(nsrc, outfitId, items)
     end
     function A.actSave(src, slot, label, outfitId, items)
-        local code = wardrobeGate(src)
+        local code, nsrc = wardrobeGate(src)
         if code then return false, code end
-        return core.saveOutfit(src, slot, label, outfitId, items)
+        return core.saveOutfit(nsrc, slot, label, outfitId, items)
     end
     function A.actWear(src, slot)
-        local code = wardrobeGate(src)
+        local code, nsrc = wardrobeGate(src)
         if code then return false, code end
-        return core.wearSaved(src, slot)
+        return core.wearSaved(nsrc, slot)
     end
     return A
 end
@@ -362,7 +368,8 @@ end
 
 ---Resolve a worn look into the ped apply plan ({ outfit, preset, components }) when cfg.FittedOutfits is on.
 ---When FittedOutfits is off (or the look is missing/invalid), returns nil so the client applies nothing.
----`force = true` (UI preview only, never persisted) resolves the look even with the flag off.
+---`force = true` (UI preview only, never persisted) resolves the look even with the flag off, and is strict: any
+---unknown / wrong-kind item id refuses the look (nil). The normal path skips such items.
 ---@return table|nil plan { outfit = id, preset = int, components = { hash|name, ... } }
 function M.resolveApply(cfg, look, force)
     if type(cfg) ~= 'table' or (cfg.FittedOutfits ~= true and force ~= true) then return nil end
@@ -377,6 +384,8 @@ function M.resolveApply(cfg, look, force)
             local e = type(id) == 'string' and catalog[id] or nil
             if type(e) == 'table' and e.kind == 'item' and (isInt(e.component) or isStr(e.component)) then
                 components[#components + 1] = e.component
+            elseif force == true then
+                return nil -- preview is strict: an unknown or wrong-kind item refuses the whole look
             end
         end
     end

@@ -132,7 +132,7 @@ For @ui's mirror screen. Local and cosmetic: nothing is saved or sent to the ser
 - Shop: `not_ready`, `tailor_busy`, `tailor_error`, `db_failed`, `unknown_shop`, `unknown_entry`, `out_of_range`,
   `earned_only`, `not_stocked`, `wrong_sex`, `tier_too_low`, `tier_unavailable`, `already_owned`.
 - Wardrobe: `not_owned`, `not_outfit`, `not_item`, `too_many_items`, `duplicate_item`, `bad_slot`, `empty_slot`,
-  `bad_label`, `not_at_wardrobe`, `too_fast`.
+  `bad_label`, `not_at_wardrobe`, `too_fast`, `bad_src` (act* given a non-numeric src).
 - Grant: `invalid_citizenid`, `unknown_citizenid`, `invalid_source`.
 
 ## Money rules (Tier A)
