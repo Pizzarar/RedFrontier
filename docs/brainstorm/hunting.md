@@ -25,6 +25,7 @@
 - S4 spk_pelt GO → consider PeltQualitySource='native'.
 
 ## In flight
+- 2026-11-25 Hun2: idea-1050 chainState export (quests-04 L0) PASS 0/0/0 8bd0743 (rn-0dcd2288e19b, Review-Gemini) after FAIL 1/0/1 38bba7f (readState off the FXServer path, fixed).
 - 2026-11-25 Hun2: idea-1040 trapper spec (heartlands nil case) PASS 0/0/1 04bf5f7 (rn-18ae4ac3774e). Hunting build queue empty; @ui I2 trapper export OK-ed.
 - 2026-11-25 Hun2: hunting-lows (idea-1025 trapper loader warn/error, idea-1027 backfill DB-error log) PASS 0/0/1 1494cc2 (rn-2026511db6eb, Review-Gemini). Low queued idea-1040.
 - 2026-11-25 Hun2: hunting-03 COMPLETE. C3 docs PASS 0/0/0 e2c9b0b (rn-40c2867f9aed, Review-Gemini). C1 db3e791, C2 c9f7829. Lows idea-1025/1027 in review on hunting-lows.
