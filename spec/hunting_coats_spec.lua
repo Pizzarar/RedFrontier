@@ -88,6 +88,17 @@ describe('refusals are logged once per (id, code)', function()
     end)
 end)
 
+describe('server/main.lua wiring guard', function()
+    it('has one PlayerLoaded handler, one coats setup and one of each top-level setup (no duplicated block)', function()
+        local f = assert(io.open(base .. 'server/main.lua', 'rb')); local src = f:read('a'); f:close()
+        local function count(pat) local n = 0; for _ in src:gmatch(pat) do n = n + 1 end return n end
+        eq(count("RSGCore:Server:PlayerLoaded"), 1)
+        eq(count("FhHuntingCoats%.new"), 1)
+        eq(count("\nchain = FhHuntingChain%.new"), 1)
+        eq(count("fh:hunting:pelt_skinned"), 1)
+    end)
+end)
+
 describe('backfill', function()
     it('grants for the given completed ids only', function()
         local W = world()
