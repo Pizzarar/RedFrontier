@@ -32,4 +32,4 @@
 - PASS merged d19a22e: T3 heat HUD live (837390b) + idea-854 survival HUD (881aaaa). T1 held: contracts lint 2 findings (fh:trade:sell/buy handlers lost their sender) -> fix. T2+T4 wait on hunting-l1.
 - PASS merged 8ca4067: T1 tradepost (c51335e + contracts fix 59eb13f) + idea-849 fieldguide (5c7c850, 0c1028d). Guide lead + Roa3 pinged. Left: T2 trapper + T4 card after hunting-l1.
 - PASS merged d8f2103: T2 trapper re-port on hunting-02 (99b2057) + T4 owner card steps 25-29. Plan 4 ui-live-trade-heat COMPLETE.
-- Plan 5 ui-tailor-catalog (idea-1003, progression-03 T4): T4a PASS 0/0/1, merged f16213f (tailor + wardrobe screens on T2b act* exports). T4b PASS, merged a22db9f (mirror preview + tailor stops open fh_ui screens, ox_lib menus removed). Next T4c.
+- Plan 5 ui-tailor-catalog (idea-1003, progression-03 T4): T4a PASS 0/0/1, merged f16213f (tailor + wardrobe screens on T2b act* exports). T4b PASS, merged a22db9f (mirror preview + tailor stops open fh_ui screens, ox_lib menus removed). T4c+T4d merged 56e66b7 (owner steps UI 30-36, saddlebag Wardrobe button). Plan 5 ui-tailor-catalog COMPLETE.

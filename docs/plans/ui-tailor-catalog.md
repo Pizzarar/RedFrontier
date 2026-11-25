@@ -33,3 +33,4 @@ Order (Pro2-agreed merge order): T2b → T4a → T4b → T4c.
 ## In flight
 - T4a MERGED f16213f (20de27d+f16213f; review PASS 0/0/1 rn-2131f8ce03a2). Gates: 137/2546/0, G5 0 unknown, contracts 0, syntax 268/0. Next: T4b on main.
 - T4b MERGED a22db9f (e5e6be6+a22db9f; review FAIL 0/1/1 fixed, PASS 0/0/0 rn-2334560ccd4a; Pro2 OK). Gates 143/2650/0, G5 0 unknown, contracts 0, syntax 271/0. Saddlebag pane -> TASKS ui-saddlebag-pane + core idea-1024. Next: T4c (screens-only steps, cross-ref Pro2 T6).
+- T4c + T4d MERGED 56e66b7 (ec631cb owner steps 30-35, PASS rn-afd0d38333cf; 56e66b7 saddlebag Wardrobe pane button on core hook ef66ad7, no range exemption, PASS rn-158825803861, Pro2 OK). Gates 148/2750/0, G5 0 unknown, contracts 0, syntax 276/0. PLAN COMPLETE (in-game test pending: OWNER-TESTS UI 30-36).
