@@ -320,3 +320,11 @@ fh_survival sluggish effect (`fh_survival/client/effects.lua`, S5), only when `F
 | `SET_PED_MOVEMENT_CLIPSET(ped, clipSetHash, transitionSpeed)` | `0x923583741DC87BCE` | Level-3 movement clipset; only when `SluggishClipset` is set |
 | `RESET_PED_MOVEMENT_CLIPSET(ped, transitionSpeed)` | `0x58F7DB5BD8FA2288` | Clear the clipset when level drops |
 Also `PlayerId`, `PlayerPedId`, `GetHashKey`, `RequestClipSet`, `HasClipSetLoaded`, `GetGameTimer`. No health native is used anywhere (never lethal). The notify mode uses no game natives (chat event only).
+
+## core-08 P2 useables (`fh_core/client/useables.lua`)
+
+| Native | Hash | Use | Notes |
+|---|---|---|---|
+| `GetEntityHealth` / `GetEntityMaxHealth` / `SetEntityHealth` | not looked up | client: apply a bandage/tonic heal the server already charged for; clamped to max, skipped when health <= 0 | UNVERIFIED in game |
+| `RESTORE_PLAYER_STAMINA(player, percent)` | `0x675680D089BFA21F` | client: tonic stamina | UNVERIFIED in game |
+| `GetEntityHealth` (server) | not looked up | `fh_core/server/useables.lua` refuses use by a dead ped | server |

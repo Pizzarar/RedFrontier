@@ -22,7 +22,7 @@ local ALLOW = {
     'AddRelationshipGroup', 'ClearPedTasks', 'CreateObject', 'CreatePed', 'CreateVehicle', 'DeleteEntity', 'DeleteObject',
     'DisableAllControlActions', 'DisableControlAction', 'DoesAnimDictExist', 'DoesEntityExist',
     'EnableControlAction', 'FreezeEntityPosition', 'GetCloudTimeAsInt', 'GetCurrentPedWeapon',
-    'GetEntityBoneIndexByName', 'GetEntityCoords', 'GetEntityHealth', 'GetEntityModel', 'GetGameTimer',
+    'GetEntityBoneIndexByName', 'GetEntityCoords', 'GetEntityHealth', 'GetEntityMaxHealth', 'SetEntityHealth', 'GetEntityModel', 'GetGameTimer',
     'GetGroundZFor_3dCoord', 'GetHashKey', 'GetMount', 'GetPedBoneIndex', 'HasAnimDictLoaded', 'HasClipSetLoaded',
     'HasEntityBeenDamagedByWeapon', 'HasModelLoaded', 'IsControlJustReleased', 'IsDisabledControlJustReleased',
     'IsEntityDead', 'IsEntityInWater', 'IsModelInCdimage', 'IsModelValid', 'IsPauseMenuActive', 'IsPedAPlayer',

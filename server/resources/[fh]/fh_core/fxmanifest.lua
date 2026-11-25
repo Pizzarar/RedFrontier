@@ -25,4 +25,5 @@ client_scripts {
     'client/ground_snap.lua',
     'client/spawn.lua',
     'client/saddlebag.lua',
+    'client/useables.lua',
 }

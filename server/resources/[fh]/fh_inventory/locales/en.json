@@ -106,6 +106,7 @@
     "fh_refused": "That can't go there",
     "ui_saddlebag": "Saddlebag",
     "ui_backpack": "Backpack",
+    "fh_cant_use": "You can't use that.",
     "fh_pane_use": "Move it to your satchel to use it",
     "fh_pane_shop": "Switch back to your satchel to trade",
     "fh_pane_changed": "Back to your satchel",

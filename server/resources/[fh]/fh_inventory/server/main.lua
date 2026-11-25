@@ -1555,7 +1555,10 @@ RegisterNetEvent('rsg-inventory:server:useItem', function(slot)
         end
         TriggerClientEvent(weaponEvents[item.type], src, item)
     else
-        if not RSGCore.Functions.CanUseItem(item.name) then return end -- not a usable item: no 'used' box
+        if not RSGCore.Functions.CanUseItem(item.name) then -- no use handler (FH core-08 P2): say so, no 'used' box
+            Notify(src, 'fh_cant_use', 'inform')
+            return
+        end
         API.UseItem(item.name, src, item)
     end
     TriggerClientEvent('rsg-inventory:client:ItemBox', src, s, 'use', 1)

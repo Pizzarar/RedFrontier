@@ -22,7 +22,7 @@ local Core = { Shared = { Items = shared }, Functions = stub(), Commands = stub(
 Core.Functions.GetPlayer = function(src) return players[src] end
 Core.Functions.GetRSGPlayers = function() return {} end
 Core.Functions.AddPlayerMethod = function() end
-Core.Functions.CanUseItem = function(name) return function(src, item) used[#used + 1] = { src = src, name = item.name } end end
+Core.Functions.CanUseItem = function(name) if name == 'cigar' then return nil end return function(src, item) used[#used + 1] = { src = src, name = item.name } end end
 local EXPORTED = {}
 local fhCore = { saddlebagPane = function(_, src, netId)
   gateCalls = gateCalls + 1
@@ -146,6 +146,13 @@ T.describe('flag off (default): byte-for-byte the backpack pane', function()
   case('use works from the player slot (no gate call)', function()
     local g0 = gateCalls; fire('rsg-inventory:server:useItem', 1, 6)
     return #used == 1 and used[1].name == 'bread' and gateCalls == g0 end)
+  case("no use handler (core-08 P2): notifies fh_cant_use, uses nothing, no 'used' box", function()
+    P1.PlayerData.items[11] = { name = 'cigar', amount = 1, slot = 11, type = 'item', info = {} }
+    shared.cigar = shared.cigar or { name = 'cigar', label = 'Cigar', weight = 10, unique = false, type = 'item', useable = false }
+    local n0 = #used; fire('rsg-inventory:server:useItem', 1, 11)
+    local ok = #used == n0 and notified(1, 'fh_cant_use')
+    P1.PlayerData.items[11] = nil
+    return ok end)
   case('the saddlebag id is not reachable by naming it', function()
     local before = snap(bag.items); move(BAG, 'player', 1, 9)
     return snap(bag.items) == before and P1.PlayerData.items[9] == nil end)

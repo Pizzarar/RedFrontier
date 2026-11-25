@@ -1647,4 +1647,12 @@ warning). Town lots are never raided. Console lines start with `[fh_alife]`. Adm
 5. Stand at or target a town lot (e.g. `heartlands_lot_01`) and run `/alife raid <lotId>`.
    Expected: town lots are law-safe and not raidable (`raidable = false`, `class = 'town_lot'`). The command is refused
    with: `Raid on <lotId> refused: fh_alife_not_raidable`. A town lot is never raided.
+## core-08 P2 · first-play items (TODO-verify)
+1. Starter bandage: take some damage, open the inventory, use the `bandage`. Expected: health goes up about 15%, one bandage is gone, no error. TODO-verify
+   RESULT:
+2. `/giveitem` yourself `firstaid`, `tonic_healing`, `tonic_stamina`, `tonic_energy` and use each. Expected: first aid / healing tonic heal, stamina tonic refills stamina, energy tonic does a bit of both; each use takes one item. TODO-verify (stamina native 0x675680D089BFA21F unverified in game)
+   RESULT:
+3. Use a `money_clip` and a `blood_money_clip`. Expected: a few dollars arrive (notify "You find $x in the clip."), the clip is gone, and the amount shows in `fh_ledger`. TODO-verify
+   RESULT:
+4. Use a `cigar` (or any item from the VENDORED.md list). Expected: notify "You can't use that." and nothing is consumed. TODO-verify
    RESULT:
