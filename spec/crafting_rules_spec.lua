@@ -85,7 +85,7 @@ describe('crafting: validateRecipe(s)', function()
     local function good() return { id = 'g', station_type = 'gunsmith', inputs = { { item = 'a', amount = 1 } },
         outputs = { { item = 'b', amount = 1 } } } end
     it('accepts a good recipe for every station type', function()
-        for _, st in ipairs({ 'gunsmith', 'reload', 'apothecary' }) do
+        for _, st in ipairs({ 'gunsmith', 'reload', 'apothecary', 'cook' }) do
             local r = good(); r.station_type = st
             eq(true, (R.validateRecipe(r)))
         end

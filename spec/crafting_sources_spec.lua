@@ -13,8 +13,11 @@ dofile(fh .. 'fh_crafting/config.lua')  -- herbPatches (idea-720 herb gathering,
 
 -- PENDING: input item -> owning card that will add its source. TARGET: PENDING = {} (shrink it as cards land).
 -- idea-716/719 landed: lumber, nails, lead, casings, resource_gunpowder and the 4 herbs are FhTradeConfig.supplies;
--- gun_parts (idea-717) is zone loot (core-05 K1). Every input is sourced: keep it empty.
-local PENDING = {}
+-- gun_parts (idea-717) is zone loot (core-05 K1). Cooking inputs (crafting-03 C10a) wait on idea-914/915.
+local PENDING = {
+    raw_meat = 'idea-914', -- @hunting skin grant (plan crafting-03)
+    carrot = 'idea-915', potato = 'idea-915', corn = 'idea-915', -- @roads supplies (plan crafting-03)
+}
 
 -- External sources (outside [fh]). An entry needs a CONFIRMED in-game way to obtain the item (a gatherer, shop or
 -- drop you can point at); an item definition alone is not a source. Empty today.

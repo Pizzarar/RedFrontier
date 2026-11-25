@@ -27,7 +27,7 @@ M.ALIASES = {
     giver = 'giver', givers = 'giver', quest = 'giver', quests = 'giver',
     fence = 'fence',
     lot = 'lot', lots = 'lot', townlot = 'lot', town_lot = 'lot', -- pseudo-kind: plot places with class 'town_lot'
-    station = 'station', stations = 'station', crafting = 'station', gunsmith = 'station', reload = 'station', apothecary = 'station',
+    station = 'station', stations = 'station', crafting = 'station', gunsmith = 'station', reload = 'station', apothecary = 'station', cook = 'station',
 }
 
 local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
@@ -138,7 +138,7 @@ function M.gather(sources, opts)
     -- per-plot on the homestead, so they have no fixed coordinate to blip.
     local cr = sources.crafting
     if type(cr) == 'table' and type(cr.devStations) == 'table' then
-        local names = { gunsmith = 'Gunsmith', reload = 'Reload bench', apothecary = 'Apothecary' }
+        local names = { gunsmith = 'Gunsmith', reload = 'Reload bench', apothecary = 'Apothecary', cook = 'Campfire' }
         for id, c in pairs(cr.devStations) do
             local x, y, z = M.coords(c)
             if x then push(places, id, 'station', names[id] or 'Crafting station', x, y, z) end

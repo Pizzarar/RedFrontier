@@ -24,6 +24,7 @@ FhCraftingConfig = {
         gunsmith   = { x = -280.0, y = 805.0, z = 119.0 },
         reload     = { x = -283.0, y = 805.0, z = 119.0 },
         apothecary = { x = -286.0, y = 805.0, z = 119.0 },
+        cook       = { x = -289.0, y = 805.0, z = 119.0 },
     },
     stationMaxDist = 3.0,
 
@@ -33,6 +34,7 @@ FhCraftingConfig = {
         gunsmith   = 'workbench',
         reload     = 'workbench',
         apothecary = 'campfire',
+        cook       = 'campfire',
     },
 
     -- Wild herb patches (plan crafting-02 C9a): walk up, press E, a short progress bar, and the server grants 1-2 of

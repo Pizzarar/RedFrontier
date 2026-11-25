@@ -79,14 +79,14 @@ describe('station adapter', function()
         local b = mk({ state = 'missing' })
         eq(0, #b.getStations('cid')); eq(nil, b.stationAt(atDev, 3.0))
         local c = mk({ state = 'missing', dev = true })
-        eq(3, #c.getStations('cid')); eq(true, c.stationAt(atDev, 3.0).dev)
+        eq(4, #c.getStations('cid')); eq(true, c.stationAt(atDev, 3.0).dev)
         eq(nil, mk({ throws = true }).stationAt(atDev, 3.0))
     end)
 end)
 
 describe('station type map + ready gate', function()
     it('maps crafting types to homestead types before the H3 call', function()
-        for t, h3 in pairs({ gunsmith = 'workbench', reload = 'workbench', apothecary = 'campfire' }) do
+        for t, h3 in pairs({ gunsmith = 'workbench', reload = 'workbench', apothecary = 'campfire', cook = 'campfire' }) do
             eq(h3, cfg.stationTypeMap[t])
             local a, calls = mk({ near = true })
             eq(true, a.isNearStation(1, t))

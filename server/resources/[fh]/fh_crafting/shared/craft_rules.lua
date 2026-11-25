@@ -2,7 +2,7 @@
 -- '@fh_crafting/shared/craft_rules.lua' (global FhCraftRules).
 local M = {}
 
-M.STATION_TYPES = { gunsmith = true, reload = true, apothecary = true }
+M.STATION_TYPES = { gunsmith = true, reload = true, apothecary = true, cook = true }
 M.PART_VALUE = 20                       -- condition restored per gun_parts
 M.STAR_CAPS = { [1] = 60, [2] = 80, [3] = 100 }
 

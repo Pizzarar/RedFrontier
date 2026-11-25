@@ -11,6 +11,7 @@ local Recipes = dofile(base .. 'shared/recipes.lua')
 local EXISTING = {
     resource_gunpowder = true, ammo_box_revolver = true, ammo_box_rifle = true,
     herb_american_ginseng = true, herb_wild_mint = true, herb_oregano = true, herb_red_sage = true,
+    raw_meat = true, cooked_meat = true, carrot = true, potato = true, corn = true, stew = true, stew_veg = true,
 }
 
 describe('crafting recipes', function()
@@ -23,6 +24,26 @@ describe('crafting recipes', function()
         eq('reload', Recipes.get('ammo_rifle').station_type)
         eq('apothecary', Recipes.get('tonic_vigor').station_type)
         eq('apothecary', Recipes.get('tonic_steady').station_type)
+    end)
+    it('ships the cook recipes (C10a)', function()
+        for id, ins, out in (function()
+            local t = { { 'cook_meat', { raw_meat = 1 }, 'cooked_meat' }, { 'cook_stew', { raw_meat = 2, carrot = 1, potato = 1 }, 'stew' },
+                { 'cook_stew_veg', { carrot = 1, potato = 1, corn = 1 }, 'stew_veg' } }
+            local i = 0
+            return function() i = i + 1; if t[i] then return t[i][1], t[i][2], t[i][3] end end
+        end)() do
+            local r = Recipes.get(id)
+            eq('cook', r.station_type, id)
+            eq(1, #r.outputs, id); eq(out, r.outputs[1].item, id); eq(1, r.outputs[1].amount, id)
+            local have = {}
+            for _, e in ipairs(r.inputs) do have[e.item] = e.amount end
+            for item, n in pairs(ins) do eq(n, have[item], id .. ' ' .. item) end
+            eq(true, (R.canCraft(ins, r)), id .. ' craftable with exact inputs')
+            eq(false, (R.canCraft({}, r)), id .. ' not craftable empty')
+        end
+    end)
+    it('cook resolves to the campfire station', function()
+        eq('campfire', cfg.stationTypeMap.cook)
     end)
     it('every input/output item is registered by fh_crafting or a known existing item', function()
         for _, r in ipairs(Recipes.list) do
