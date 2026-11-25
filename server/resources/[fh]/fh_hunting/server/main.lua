@@ -138,6 +138,15 @@ RegisterNetEvent('fh:hunting:skin', function(payload)
                 msg = msg .. ' The trophy could not be stowed.'
             end
         end
+        if res.meat then
+            if res.meat.container then
+                local mw = res.meat.container == 'backpack' and 'your backpack'
+                    or (res.meat.container == 'wagon' and 'your wagon' or 'your saddlebag')
+                msg = msg .. (' %dx raw meat stowed in %s.'):format(res.meat.amount, mw)
+            else
+                msg = msg .. ' Raw meat could not be stowed (no room).'
+            end
+        end
         notify(src, 'success', msg)
     else
         notify(src, 'error', FhHuntingSkin.message(res, cfg))

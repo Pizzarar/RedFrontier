@@ -17,9 +17,10 @@ the trophy comfort lookup. Pure logic lives in `shared/` and is specced with `py
 Both feed the same `FhHuntingQuality.resolve()`. Other config: `QualityMult` (1 star 0.4, 2 stars 1.0, 3 stars 1.8),
 `LegendaryMult` 4, `SkinRange` 5 m, `WagonRange` 8 m, `Zones`, `BoneZones`, `MultiHitMin`.
 
-H2 keys:
+H2 / H8 keys:
 
-- `GrantOrder`: where a pelt goes, tried in order and filtered by the fh_core size-class rules. Default `bulky = { 'saddlebag', 'wagon' }`, `cargo = { 'wagon' }`.
+- `GrantOrder`: where skinned items go, tried in order and filtered by the fh_core size-class rules. Default `pocket = { 'backpack', 'saddlebag', 'wagon' }`, `bulky = { 'saddlebag', 'wagon' }`, `cargo = { 'wagon' }`.
+- `MeatItem` (`'raw_meat'`), `MeatSizeClass` (`'pocket'`), `MeatPerSize` (`{ pocket = 1, bulky = 2, cargo = 3 }`): H8 raw meat grant alongside every skinned pelt, keyed by the animal's `size_class` (rsg-core item `raw_meat`, `rsg-core/shared/items.lua:151`).
 - `SkinDurationMs` (4000): client progress bar before the request is sent.
 - `SkinCooldownMs` (1000): server, one skin request per player per this many ms; extra ones are ignored.
 - `SkinPromptDistance` (2.5): rsg-target reach; the server re-checks `SkinRange`.
@@ -148,7 +149,7 @@ skinning. Evidence (from the H2 research):
 Risk: players can still use the built-in skin action. It yields no `fh_hunting` pelt (and may delete the carcass).
 
 Flow: the client sends one request after the progress bar; the server re-reads the carcass, claims it (test-and-set),
-grants the pelt, then marks it skinned (`fhSkinned` state bag) and deletes it. A refusal or failure releases the claim so
+grants the pelt, then grants `raw_meat` (H8: amount from `MeatPerSize[animal.size_class]`, pocket `GrantOrder` backpack -> saddlebag -> wagon; best-effort so if no container has room the pelt grant still stands and the notification notes that raw meat could not be stowed), then marks it skinned (`fhSkinned` state bag) and deletes it. A refusal or failure on the pelt releases the claim so
 the carcass stays skinnable.
 
 ## Events
@@ -169,7 +170,7 @@ Consumed (engine): `onResourceStart` (own resource and `fh_core`, to register th
 
 Emitted (server-only, for @quests and @guide; never sent to clients):
 
-- `fh:hunting:pelt_skinned` `{ src, citizenid, item_id, animal, quality, size_class }`: now, after a grant only.
+- `fh:hunting:pelt_skinned` `{ src, citizenid, item_id, animal, quality, size_class, meat }`: now, after a grant only (`meat` is the count of `raw_meat` stowed, `0` if skipped for no room).
   Never fired on a refusal.
 - `fh:hunting:pelt_sold` `{ citizenid, item_id, animal, size_class, quality, price, region_id }`: H3, after a payout succeeded only. `price` is what `fh_economy:pay` was given.
 - `fh:hunting:clue_found` `{ citizenid, chain_id, region_id, legendary, step = 1|2|3 }`: H4, each clue of a legendary

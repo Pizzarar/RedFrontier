@@ -114,7 +114,7 @@ end
 
 -- ---------------------------------------------------------------- destinations
 
----Container types a pelt of `sizeClass` may go to, in order: cfg.GrantOrder[sizeClass] filtered by the fh_core
+---Container types an item of `sizeClass` may go to, in order: cfg.GrantOrder[sizeClass] filtered by the fh_core
 ---size-class rules (accepts(type, sizeClass) -> boolean). A backpack listed for a bulky pelt is dropped here (§4.1).
 function M.targetsFor(sizeClass, cfg, accepts)
     local out = {}
@@ -122,6 +122,14 @@ function M.targetsFor(sizeClass, cfg, accepts)
         if accepts(t, sizeClass) then out[#out + 1] = t end
     end
     return out
+end
+
+---H8: raw_meat count for an animal from cfg.MeatPerSize (keyed by animal.size_class). Returns 0 if unconfigured.
+function M.meatAmount(animal, cfg)
+    local tbl = cfg and cfg.MeatPerSize
+    local n = tbl and animal and tbl[animal.size_class]
+    if type(n) == 'number' and n > 0 and n % 1 == 0 then return math.tointeger(n) end
+    return 0
 end
 
 -- ---------------------------------------------------------------- player messages
@@ -197,17 +205,18 @@ function M.new(opts)
         return ok, s, detail
     end
 
-    -- Grant one item into the player's containers for `sizeClass` (the same targetsFor path for every pelt).
-    -- Returns ok, { item, container }|reason, granted. `not any` distinguishes "no such container" (fh_no_wagon /
-    -- fh_no_container) from "every container refused" (lastErr).
-    local function grantItem(src, sizeClass, itemName, info, pc)
+    -- Grant an item into the player's containers for `sizeClass` (the same targetsFor path for every skinned item).
+    -- Returns ok, { item, amount, container }|reason, granted. `not any` distinguishes "no such container" (fh_no_wagon
+    -- / fh_no_container) from "every container refused" (lastErr).
+    local function grantItem(src, sizeClass, itemName, info, pc, amount)
+        amount = amount or 1
         local lastErr, any = nil, false
         for _, t in ipairs(M.targetsFor(sizeClass, cfg, deps.accepts)) do
             local ref = refOf(t, src, pc)
             if ref then
                 any = true
-                local added, err = deps.addItem(ref, itemName, 1, info)
-                if added == true then return true, { item = itemName, container = t }, true end
+                local added, err = deps.addItem(ref, itemName, amount, info)
+                if added == true then return true, { item = itemName, amount = amount, container = t }, true end
                 lastErr = err or 'fh_refused'
             end
         end
@@ -219,20 +228,35 @@ function M.new(opts)
     local function grant(src, req, animal, pc)
         local ok, s, detail = stars(req, animal)
         if not ok then return false, s, false end
-        local pok, pres = grantItem(src, animal.size_class, animal.pelt, { stars = s }, pc)
+        local pok, pres = grantItem(src, animal.size_class, animal.pelt, { stars = s }, pc, 1)
         if not pok then return false, pres, false end
         local res = { item = pres.item, stars = s, container = pres.container, zone = detail and detail.zone }
         -- H4: a legendary skin also yields the trophy (bulky, saddlebag then wagon). It is best-effort: the pelt is
         -- the primary grant and the skin never fails (or double-pays) because of a full saddlebag. A throw here must
         -- not abort the grant after the pelt was added, so the trophy path is pcalled.
         if animal.trophy then
-            local tok, tgrant, tres = pcall(grantItem, src, 'bulky', animal.trophy, {}, pc)
+            local tok, tgrant, tres = pcall(grantItem, src, 'bulky', animal.trophy, {}, pc, 1)
             if tok and tgrant then
                 res.trophy = { item = tres.item, container = tres.container }
             elseif tok then
                 res.trophy = { item = animal.trophy, container = nil, reason = tres }
             else
                 res.trophy = { item = animal.trophy, container = nil, reason = 'fh_skin_error' }
+            end
+        end
+        -- H8: skinning also yields rsg-core raw_meat (pocket size_class, amount by animal size_class). Best-effort
+        -- after the pelt succeeds: if no container has room (or addItem throws), the pelt grant still stands.
+        local meatCount = M.meatAmount(animal, cfg)
+        if meatCount > 0 then
+            local meatItem = cfg.MeatItem or 'raw_meat'
+            local meatSize = cfg.MeatSizeClass or 'pocket'
+            local mok, mgrant, mres = pcall(grantItem, src, meatSize, meatItem, {}, pc, meatCount)
+            if mok and mgrant then
+                res.meat = { item = mres.item, amount = meatCount, container = mres.container }
+            elseif mok then
+                res.meat = { item = meatItem, amount = 0, wanted = meatCount, container = nil, reason = mres }
+            else
+                res.meat = { item = meatItem, amount = 0, wanted = meatCount, container = nil, reason = 'fh_skin_error' }
             end
         end
         return true, res, true
@@ -285,7 +309,7 @@ function M.new(opts)
         if type(res) ~= 'table' then return true, { item = animal.pelt } end
         pcall(deps.emit, M.EVENT_SKINNED, {
             src = src, citizenid = cid, item_id = animal.pelt, animal = animal.key, quality = res.stars,
-            size_class = animal.size_class,
+            size_class = animal.size_class, meat = (res.meat and res.meat.amount) or 0,
         })
         return true, res
     end

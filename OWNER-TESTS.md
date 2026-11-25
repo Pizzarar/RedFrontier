@@ -843,6 +843,13 @@ All unverified in-game. Table of legendaries: `fh_hunting/README.md`, section Le
 
    RESULT:
 
+### H8 raw_meat grant on skin (fh_hunting)
+
+1. Skin a medium/bulky animal (e.g. deer): expected `pelt_deer` in saddlebag AND `2x raw_meat` in backpack (falls back to saddlebag/wagon if backpack is full). Skin a big/cargo animal (e.g. bear with a wagon within 8 m): expected `pelt_bear` in wagon AND `3x raw_meat` in backpack.
+2. Fill backpack, saddlebag (leaving room for a bulky pelt, or skin a bear with a full backpack/saddlebag/wagon for meat) so `raw_meat` has no room, then skin: expected the pelt grant STILL succeeds and the notification reports that raw meat could not be stowed.
+
+   RESULT:
+
 ## Crafting (fh_crafting, fh_gunsmith)
 
 Preconditions: stations come from @homestead H3 (on main): crafting uses a built `workbench` (gunsmith, reload) or

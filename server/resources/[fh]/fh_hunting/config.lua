@@ -14,11 +14,22 @@ FhHuntingConfig = {
     WagonRange = 8.0,  -- metres, cargo pelts go straight into a wagon this close
 
     -- H2 skin flow.
-    -- Where a pelt goes, tried in order; each entry is also filtered by the fh_core size-class rules (FhContainers):
-    -- the backpack takes pocket items only (spec 4.1), so it is never a bulky or cargo destination.
+    -- Where skinned items go, tried in order; each entry is also filtered by the fh_core size-class rules
+    -- (FhContainers): the backpack takes pocket items only (spec 4.1), so it is never a bulky or cargo destination.
     GrantOrder = {
-        bulky = { 'saddlebag', 'wagon' },
-        cargo = { 'wagon' },
+        pocket = { 'backpack', 'saddlebag', 'wagon' },
+        bulky  = { 'saddlebag', 'wagon' },
+        cargo  = { 'wagon' },
+    },
+
+    -- H8: raw_meat (rsg-core item, pocket size_class) granted alongside a skinned pelt.
+    -- Keyed by animal size_class (pocket = small, bulky = medium, cargo = big/legendary).
+    MeatItem = 'raw_meat',
+    MeatSizeClass = 'pocket',
+    MeatPerSize = {
+        pocket = 1,
+        bulky  = 2,
+        cargo  = 3,
     },
     SkinDurationMs = 4000,    -- client progress bar before the request is sent
     SkinCooldownMs = 1000,    -- server: one skin request per player per this many ms (extra ones are ignored)
