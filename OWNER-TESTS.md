@@ -1600,3 +1600,51 @@ Start: `fh_tour scarlett_meadows` (origin town `rhodes`)
    RESULT:
 
 <!-- END world-walk-sheet -->
+
+## A-life: claim raids (fh_alife, fh_homestead)
+
+Wilderness claim raids (plan a-life-03): an outlaw-held camp can send a raid squad against an eligible claimed
+wilderness plot while its owner is online. Pacing and knobs come from `FhAlifeConfig.claimRaids` in `fh_alife/config.lua`:
+warning time `warnTicks` = 5 (~5 min at 60 s/tick), arrival radius `raidRadius` = 60.0 m (owner home vs away), theft
+`stealStacks` = 2 and `stealMaxFraction` = 0.5 from chest 1 only, and per-claim `cooldownTicks` = 180 (~3 h from the
+warning). Town lots are never raided. Console lines start with `[fh_alife]`. Admin: `/alife`, `/alife raid <plotId>`
+(`group.admin`).
+
+1. Claim a wilderness plot in a region where outlaws hold a camp (e.g. `heartlands_01` near Valentine while Heartlands
+   camps are held by outlaws; verify with `/alife` that the camp owner is not `(law)`). Put a few stacks of items in
+   chest 1 (e.g. 10x bread, 10x wood).
+   Expected: plot is claimed with `raidable = true`; chest 1 contains your items.
+   RESULT:
+2. Run `/alife raid <plotId>` while standing at your claim. Stay home (within 60 m of the claim center).
+   Expected: the command replies `Raid started: sq<id> raid <plotId> by <faction> x<n> from <camp> warn (eta tick <t>)`;
+   chat receives `Riders from <camp> are heading for your claim (~5 min).` and console logs `[fh_alife] raid notice -> <cid>: Riders from <camp> are heading for your claim (~5 min).`.
+   Running `/alife` lists the raid squad: `sq<id> raid <plotId> by <faction> x<n> from <camp> warn (eta tick <t>)`.
+   When the squad arrives (`warnTicks` 5, or advance with `/alife tick 5`): chat receives
+   `The raiders are at your claim! Drive them off.`, console logs `[fh_alife] raid <id> fight at <plotId> (x<n>)` and
+   `[fh_alife] squad <id> (raid) materialised at <plotId> (<n> peds)`. A gang of 3-5 outlaws attacks on foot (check in game:
+   raiders may spawn inside the house at the claim centre).
+   Kill all raiders in the squad: chat receives `You drove the raiders off your claim.`, console logs
+   `[fh_alife] squad <id> despawned (wiped)` and `[fh_alife] raid <id> repelled at <plotId>`, emitting `fh:alife:raid_repelled`.
+   `/alife` no longer lists the raid, and the claim enters cooldown (180 ticks / ~3 h).
+   RESULT:
+3. Put several stacks back into chest 1 (at least 2 stacks with counts > 1). Run `/alife raid <plotId>`, then ride away so
+   you are more than 60 m (`claimRaids.raidRadius`) from the claim center when the raiders arrive.
+   Expected: upon arrival, the raiders steal from chest 1 instead of fighting. Chat receives an itemised notice:
+   `Riders from <camp> raided your claim while you were away and took from your chest: <items>. Clear their camp to get it back.`
+   and console logs `[fh_alife] raid <id> stole from <chest> -> loot ledger <campId>: <items>`. At most 2 stacks
+   (`stealStacks`) are taken from chest 1, and at most 50% (`stealMaxFraction` 0.5) of each stack is taken (never a whole
+   stack if the fraction cap applies). The notice lists exactly what left chest 1. `/alife` shows
+   `raid loot: <campId>=<stacks>`.
+   Then clear that camp: the stolen items appear in the camp stash (`fh:camp:<campId>`) with the loot, even after a
+   server restart between the theft and the clear (console: `[fh_alife] raid loot <campId> delivered to fh:camp:<campId>: <items>`).
+   Clearing the same camp again later does not hand them out a second time, and `/alife` shows `raid loot: none`.
+   RESULT:
+4. Put items in chest 1, run `/alife raid <plotId>`, and log off mid-raid (during the warning or fight phase).
+   Expected: the raid is cancelled and nothing is taken. The squad despawns (`[fh_alife] squad <id> despawned (raid_over)`);
+   console logs `[fh_alife] raid notice -> <cid>: The riders heading for your claim turned back (you left).` and the squad
+   switches to returning phase (`cancelled = 'owner_offline'`). Nothing is missing from chest 1.
+   RESULT:
+5. Stand at or target a town lot (e.g. `heartlands_lot_01`) and run `/alife raid <lotId>`.
+   Expected: town lots are law-safe and not raidable (`raidable = false`, `class = 'town_lot'`). The command is refused
+   with: `Raid on <lotId> refused: fh_alife_not_raidable`. A town lot is never raided.
+   RESULT:
