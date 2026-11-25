@@ -110,11 +110,13 @@ local function skin(entity)
     end
     local netId = NetworkGetNetworkIdFromEntity(entity)
     busy = true
+    pcall(function() exports.fh_anim:start('skin') end)
     -- pcall: if the progress bar throws, `busy` must still reset or the Skin option stays locked forever.
     local ok, done = pcall(lib.progressBar, {
         duration = cfg.SkinDurationMs, label = 'Skinning...', canCancel = true,
         disable = { move = true, car = true, combat = true },
     })
+    pcall(function() exports.fh_anim:stop('skin') end)
     busy = false
     if not ok or not done then return end
     local d = dead[netId] or {}
