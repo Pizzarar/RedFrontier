@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T01:31:37.651Z",
+  "updatedAt": "2026-11-25T03:27:05.379Z",
   "units": [
     {
       "id": "B5",
@@ -288,10 +288,10 @@
     },
     {
       "id": "M3",
-      "goal": "fh_inventory/server/shops.lua:136-170 bypasses fh_economy ledger, fractional prices, unchecked sell AddMoney (A1 med)",
+      "goal": "shops via fh_economy ledger; fix dca9adf (credit whole cents, mig 0019) in delta review rn-8c44be211d1c",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-m3"
     },
     {
@@ -332,6 +332,34 @@
       "files": [],
       "doneCheck": "",
       "status": "todo"
+    },
+    {
+      "id": "P1",
+      "goal": "vendor rsg-weapons @385aa98 + rsg-ammo @02b8484 (efcd608), review rn-a4ffd957ce4a",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "P2",
+      "goal": "fh_core useables + useable=false + can't-use notify (d0dcccf), review rn-6323e4e5288e",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "P3",
+      "goal": "29 placeholder icons (d9b7746), review rn-38ddd4927784",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "P4",
+      "goal": "dropped: hub rf-gate-lint (rn-8b07778f27e6) owns check-contracts useables/images/squad_wiped rules",
+      "files": [],
+      "doneCheck": "",
+      "status": "done"
     }
   ]
 }

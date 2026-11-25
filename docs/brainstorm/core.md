@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor3
-- Workers: 0
+- Workers: 3
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -67,3 +67,4 @@
 - 11-24 core-07 B6f PASS: saddlebag player pane toggle DARK behind fh_saddlebag_pane=false (c895347+e2474f7+c7d4c9c), Gemini tierA PASS 0/0/4 then delta PASS 0/0/2 e4e00ab; venv 98/1808/0. Lows + /saddlebag in|out removal -> B6f-cleanup (after owner RESULT + flip).
 - 11-25 core-07 N1 PASS: X1-nit case-insensitive admin/allow keywords fail closed + L1-nit stale hands allowlist dropped (998dd55), Gemini tierA-security PASS 0/0/0.
 - 11-25 core-07 M2 PASS: rsg-core AddMoney/RemoveMoney/SetMoney return false and restore balance when cash items cannot fit (d062662), Gemini tierA PASS 0/0/2 6895248; lows -> M2-nit. venv 99/1826/0.
+- 11-25 core-07 M3 PASS: shop buy/sell via fh_economy charge/pay/credit in whole cents, per-player trade lock, region/price/amount guards; fh_economy credit takes whole cents (mig 0019 pending amount decimal(12,2)). 3d6ce1f+671a8ca, Gemini tierA FAIL 1/1/2 then PASS 0/0/0 dca9adf; venv 116/2135/0. core-07 complete.
