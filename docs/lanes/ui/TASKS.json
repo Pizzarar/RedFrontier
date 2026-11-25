@@ -1,6 +1,6 @@
 {
   "laneId": "ui",
-  "updatedAt": "2026-11-25T20:05:51.624Z",
+  "updatedAt": "2026-11-25T20:49:42.232Z",
   "units": [
     {
       "id": "ui-saddlebag-pane",
@@ -14,6 +14,13 @@
     {
       "id": "ui-i2-lows",
       "goal": "I2 lows: spec getTrappers export + fh:ui:trappers callback; clear stale trapper blips when fh_hunting stops; dedupe fetchTrappers helper",
+      "files": [],
+      "doneCheck": "",
+      "status": "done"
+    },
+    {
+      "id": "ui-trappers-start-retry",
+      "goal": "Low (rn-9a6e31db4284): fh_ui client/trappers.lua start handler does not retry when fh:ui:trappers fails right at fh_hunting start; blips stay on cfg fallback until next refresh",
       "files": [],
       "doneCheck": "",
       "status": "todo"
