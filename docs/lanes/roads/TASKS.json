@@ -1,6 +1,6 @@
 {
   "laneId": "roads",
-  "updatedAt": "2026-11-24T21:06:26.327Z",
+  "updatedAt": "2026-11-25T03:42:28.171Z",
   "units": [
     {
       "id": "R0",
@@ -101,7 +101,8 @@
         "server/resources/[fh]/fh_progression/config.lua"
       ],
       "doneCheck": "git grep -n wagon_t3 -- \"server/resources/[fh]/fh_progression/config.lua\"",
-      "status": "blocked"
+      "status": "done",
+      "sha": "ae3f6a2"
     },
     {
       "id": "R8",
@@ -111,8 +112,9 @@
         "spec"
       ],
       "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
-      "status": "todo",
-      "branch": "roads-r8"
+      "status": "done",
+      "branch": "roads-r8",
+      "sha": "21b2d7e"
     },
     {
       "id": "R9",
@@ -122,8 +124,9 @@
         "spec"
       ],
       "doneCheck": "~/.venvs/rf/bin/python tools/run-specs.py",
-      "status": "todo",
-      "branch": "roads-r9"
+      "status": "done",
+      "branch": "roads-r9",
+      "sha": "c0299e4"
     },
     {
       "id": "R10",
@@ -133,8 +136,9 @@
         "docs/lanes/roads/TASKS.json"
       ],
       "doneCheck": "",
-      "status": "running",
-      "branch": "roads-r10"
+      "status": "done",
+      "branch": "roads-r10",
+      "sha": "6356a56"
     },
     {
       "id": "R11",
@@ -143,7 +147,8 @@
         "OWNER-TESTS.md"
       ],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done",
+      "sha": "c2f20d2"
     }
   ]
 }
