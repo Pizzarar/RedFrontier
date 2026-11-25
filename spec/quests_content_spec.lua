@@ -10,6 +10,7 @@ local fh = here .. '../server/resources/[fh]/'
 local shared = fh .. 'fh_quests/shared/'
 package.path = shared .. '?.lua;' .. package.path
 local JT = dofile(shared .. 'jobtypes.lua')
+local WR = require('watch_rules')
 local Board = require('board')
 local BS = dofile(shared .. 'board_spots.lua')
 local regions = require('regions')
@@ -104,6 +105,32 @@ describe('quests content: keys and coverage', function()
             end
         end
         assert(n > 0, 'no survey/escort points checked')
+    end)
+    it('survey point pairs are more than 2x the effective watch radius apart', function()
+        local pairs_checked = 0
+        local bad = {}
+        for id, d in pairs(JT.DATA) do
+            for _, sv in ipairs(d.surveys or {}) do
+                local pts = sv.points or {}
+                for i = 1, #pts - 1 do
+                    for j = i + 1, #pts do
+                        local a, b = pts[i], pts[j]
+                        local ra = a.radius or sv.radius or WR.DEFAULT_RADIUS
+                        local rb = b.radius or sv.radius or WR.DEFAULT_RADIUS
+                        local need = ra + rb
+                        local dx, dy = a.x - b.x, a.y - b.y
+                        local dist = math.sqrt(dx * dx + dy * dy)
+                        if not (dist > need) then
+                            bad[#bad + 1] = ('%s survey %s points %d & %d are %.1f m apart, need > %.1f'):format(
+                                id, sv.key, i, j, dist, need)
+                        end
+                        pairs_checked = pairs_checked + 1
+                    end
+                end
+            end
+        end
+        assert(pairs_checked > 0, 'no survey point pairs checked')
+        assert(#bad == 0, table.concat(bad, '\n'))
     end)
     it('every enabled region offers at least one of each type it has data for', function()
         for id, d in pairs(JT.DATA) do

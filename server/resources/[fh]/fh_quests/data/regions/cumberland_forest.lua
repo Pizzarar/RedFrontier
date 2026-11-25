@@ -19,7 +19,7 @@ JT.registerRegion('cumberland_forest', {
         { key = 'forest_cornerstones', name = 'Forest cornerstones', money = 24, rep = 2, ordered = true, points = {
             { x = -815.0, y = 1340.0, z = 130.0 }, -- TODO-verify-in-game
             { x = -870.0, y = 1230.0, z = 120.0 }, -- TODO-verify-in-game
-            { x = -885.0, y = 1210.0, z = 110.0 }, -- TODO-verify-in-game
+            { x = -970.0, y = 1230.0, z = 110.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game

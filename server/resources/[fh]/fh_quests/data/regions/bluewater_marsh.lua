@@ -19,7 +19,7 @@ JT.registerRegion('bluewater_marsh', {
         { key = 'marsh_line', name = 'Marsh line', money = 24, rep = 2, ordered = true, points = {
             { x = 2300.0, y = -600.0, z = 20.0 }, -- TODO-verify-in-game
             { x = 2350.0, y = -500.0, z = 22.0 }, -- TODO-verify-in-game
-            { x = 2355.0, y = -490.0, z = 25.0 }, -- TODO-verify-in-game
+            { x = 2450.0, y = -500.0, z = 25.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game

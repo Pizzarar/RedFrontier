@@ -19,7 +19,7 @@ JT.registerRegion('rio_bravo', {
         { key = 'bravo_overlooks', name = 'Bravo overlooks', money = 24, rep = 2, ordered = true, points = {
             { x = -2005.0, y = -3005.0, z = 55.0 }, -- TODO-verify-in-game
             { x = -1900.0, y = -3100.0, z = 55.0 }, -- TODO-verify-in-game
-            { x = -1870.0, y = -3130.0, z = 55.0 }, -- TODO-verify-in-game
+            { x = -1800.0, y = -3080.0, z = 55.0 }, -- TODO-verify-in-game
         } },
     },
     escorts = { -- escortee spawns at start, follows the holder to destination. Coords/model TODO-verify-in-game
