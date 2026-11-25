@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: Core
-- Lead: ★ Cor3
-- Workers: 3
+- Lead: ★ Cor4
+- Workers: 2
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -70,3 +70,4 @@
 - 11-25 core-07 M3 PASS: shop buy/sell via fh_economy charge/pay/credit in whole cents, per-player trade lock, region/price/amount guards; fh_economy credit takes whole cents (mig 0019 pending amount decimal(12,2)). 3d6ce1f+671a8ca, Gemini tierA FAIL 1/1/2 then PASS 0/0/0 dca9adf; venv 116/2135/0. core-07 complete.
 - 11-25 core-08 P1 PASS: vendored rsg-weapons @385aa98 + rsg-ammo @02b8484 (byte-identical to upstream, reviewer-diffed), ensured after fh_inventory; weapons draw, ammo boxes load (unverified in game). Gemini PASS 0/0/1 efcd608; low -> P1-wear.
 - 11-25 core-08 P3 PASS: 29 placeholder icons copied from existing pngs (d9b7746), Gemini PASS 0/0/0. venv 122/2224/0. P2 use handlers in fix (FAIL 3/0/3).
+- 11-25 core-08 P5 PASS: fh_log provides rsg-log (console + server/logs/audit.log, sanitized, server-only event) + rsg-weapons WeaponComponents=false; 2561926, Sonnet PASS 0/0/2 (lows -> P5-nit). venv 130/2322/0.

@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T03:58:34.994Z",
+  "updatedAt": "2026-11-25T13:37:11.410Z",
   "units": [
     {
       "id": "B5",
@@ -342,7 +342,7 @@
     },
     {
       "id": "P2",
-      "goal": "fh_core useables + useable=false + can't-use notify (d0dcccf), review rn-6323e4e5288e",
+      "goal": "use handlers; FAIL 1/0/2 fixed 43fb820 -> tierA re-review Gemini rn-a0e563850200",
       "files": [],
       "doneCheck": "",
       "status": "running"
@@ -364,6 +364,28 @@
     {
       "id": "P1-wear",
       "goal": "unify weapon wear: rsg-weapons reads/degrades/repairs info.quality (fh_inventory WeaponDefaults=100) but fh_zones loot sets info.condition 25-50 and fh_gunsmith /fh_restore uses condition; looted worn guns start at 100 quality (P1 review low, rsg-weapons/server/server.lua:25-27,74,140). Touches fh_gunsmith: coordinate with its lane",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
+    },
+    {
+      "id": "P5",
+      "goal": "fh_log rsg-log shim + WeaponComponents=false; 80fe3d6. NEXT: Review - Sonnet (Gemini-built)",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "commit": "2561926"
+    },
+    {
+      "id": "CHEST-REACH",
+      "goal": "canReach vertical 20->10m ff567ae (+cargo/homestead/gunsmith mirrors) -> Review Gemini rn-f1f8f3b1ead4",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "P5-nit",
+      "goal": "fh_log audit.log: size cap/rotation + buffered timer flush instead of sync io per event (P5 review lows, fh_log/server/main.lua:34-48)",
       "files": [],
       "doneCheck": "",
       "status": "todo"
