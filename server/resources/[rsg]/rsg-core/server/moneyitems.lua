@@ -55,16 +55,18 @@ local function refreshInventory(src)
     end
 end
 
--- FH (core M2): re-reads the stacks before every removal (each RemoveItem commits, and a commit can merge cents into
--- dollars, so a list read once can name slots that changed); stops when nothing is left or a removal is refused.
+-- FH (core M2-nit): one RemoveItem for the whole amount, no slot. fh_inventory's RemoveFrom counts every stack first
+-- and takes the amount across stacks in one commit, so ConvertCoins (which runs on commit) cannot merge cents into a
+-- dollar between two removals. Per-slot removals could: >=100 cents split over 2+ stacks (DB load / SetInventory)
+-- converted after the first removal, the next found too few cents, and the first slot's cents were already gone.
+-- -> true when exactly the amount went (math.huge: every stack), false with nothing removed otherwise.
 local function removeItems(player, itemName, amountToRemove, reason)
-    while amountToRemove > 0 do
-        local item = (player.Functions.GetItemsByName(itemName) or {})[1]
-        if not item then break end
-        local removeAmount = math.min(item.amount, amountToRemove)
-        if not player.Functions.RemoveItem(item.name, removeAmount, item.slot, reason) then break end
-        amountToRemove = amountToRemove - removeAmount
-    end
+    local held = 0
+    for _, item in pairs(player.Functions.GetItemsByName(itemName) or {}) do held = held + (item.amount or 0) end
+    if amountToRemove == math.huge then amountToRemove = held end
+    if amountToRemove <= 0 then return true end
+    if held < amountToRemove then return false end
+    return player.Functions.RemoveItem(itemName, amountToRemove, nil, reason) == true
 end
 
 -- work in whole cents to avoid float errors (e.g. 0.29 * 100 = 28.999... which lost a cent)
@@ -97,22 +99,30 @@ end
 -- The items ARE the balance (SynchronizeMoneyItems re-reads it from them), so a handler that could not place its
 -- items used to leave the balance short while AddMoney / RemoveMoney / SetMoney still returned true.
 -- Shape: every add first, then every remove. An add can fail (no slot, over weight); a remove of items counted a
--- moment earlier with no yield in between cannot, so a failed add is undone by removing the adds already done, never
--- by adding anything back (which could fail again).
+-- moment earlier with no yield in between should not, so a failed add is undone by removing the adds already done.
+-- Only a refused remove (core M2-nit) has to give items back, which could itself fail (logged by ApplyMoneyItems).
 
 local function applyMoves(player, adds, removes)
-    local done = {}
+    local added, removed = {}, {}
+    -- FH (core M2-nit): any refused step undoes every step already done: the adds are taken back (they are still
+    -- there), then the removed items are given back (ConvertCoins may merge returned cents; same value). Whatever
+    -- cannot be restored shows up in ApplyMoneyItems' before/after check.
+    local function undo()
+        for i = #added, 1, -1 do removeItems(player, added[i][1], added[i][2], 'money-item-rollback') end
+        for i = #removed, 1, -1 do giveMoneyItem(player, removed[i][1], removed[i][2]) end
+        return false
+    end
     for _, a in ipairs(adds) do
         if a[2] > 0 then
-            if not giveMoneyItem(player, a[1], a[2]) then
-                for i = #done, 1, -1 do removeItems(player, done[i][1], done[i][2], 'money-item-rollback') end
-                return false
-            end
-            done[#done + 1] = a
+            if not giveMoneyItem(player, a[1], a[2]) then return undo() end
+            added[#added + 1] = a
         end
     end
     for _, r in ipairs(removes) do
-        if r[2] > 0 then removeItems(player, r[1], r[2]) end
+        if r[2] > 0 then
+            if not removeItems(player, r[1], r[2]) then return undo() end
+            removed[#removed + 1] = r
+        end
     end
     return true
 end
@@ -189,6 +199,12 @@ local moneyHandlers = {
     set = handleSetMoney,
 }
 
+-- FH (core M2-nit): citizenids with an ApplyMoneyItems in progress. Each item step commits and runs the money-item
+-- sync, which used to re-read the half-moved items as the balance and send the HUD a change per step (and a +/- pair
+-- for a rolled-back add). While set, SynchronizeMoneyItems leaves the balance alone; player.lua's moveMoney syncs
+-- once afterwards and sends the one change event for the whole operation.
+local applying = {}
+
 ---FH (core M2): called by player.lua AddMoney / RemoveMoney / SetMoney (no longer an RSGCore:Server:OnMoneyChange
 ---listener, whose result nobody could read). -> true when the items now hold the change, false when nothing moved.
 ---The item value is checked before and after: only an exact move counts. A partial move (an inventory that changed
@@ -199,7 +215,12 @@ function ApplyMoneyItems(player, moneytype, amount, operation)
     local before = itemValue(player, moneytype)
     local want = toUnits(moneytype, amount)
     if operation == 'remove' then want = before - want elseif operation == 'add' then want = before + want end
-    local done = handler(player, moneytype, amount) == true
+    local cid = player.PlayerData.citizenid
+    applying[cid] = true
+    local ran, result = pcall(handler, player, moneytype, amount)
+    applying[cid] = nil
+    if not ran then print(('^1[rsg-core] money items %s %s %s failed: %s^7'):format(operation, amount, moneytype, tostring(result))) end
+    local done = ran and result == true
     local after = itemValue(player, moneytype)
     refreshInventory(player.PlayerData.source)
     if done and after == want then return true end
@@ -283,8 +304,15 @@ end
 
 if RSGCore.Config.Money.EnableMoneyItems or RSGCore.Config.Gold.EnableGoldItems then
 
+    -- FH (core M2-nit): the balance still snaps to the items, but float residue (4.90 - 2.95 = 1.9500000000000002 vs
+    -- the items' 1.95) is not a HUD change; only a move of at least a cent is shown
+    local function hudChange(src, moneytype, new, old)
+        local diff = math.abs(math.floor(new * 100 + 0.5) - math.floor(old * 100 + 0.5))
+        if diff > 0 then TriggerClientEvent('hud:client:OnMoneyChange', src, moneytype, diff / 100, new < old) end
+    end
+
     function SynchronizeMoneyItems(playerData)
-        if not initialized[playerData.citizenid] then return playerData end
+        if not initialized[playerData.citizenid] or applying[playerData.citizenid] then return playerData end
 
         local money = getInventoryMoney(playerData)
 
@@ -295,13 +323,13 @@ if RSGCore.Config.Money.EnableMoneyItems or RSGCore.Config.Gold.EnableGoldItems 
             if cash ~= playerData.money.cash then
                 local old = playerData.money.cash or 0
                 playerData.money.cash = cash
-                TriggerClientEvent('hud:client:OnMoneyChange', playerData.source, 'cash', math.abs(cash - old), cash < old)
+                hudChange(playerData.source, 'cash', cash, old)
             end
 
             if bloodmoney ~= playerData.money.bloodmoney then
                 local old = playerData.money.bloodmoney or 0
                 playerData.money.bloodmoney = bloodmoney
-                TriggerClientEvent('hud:client:OnMoneyChange', playerData.source, 'bloodmoney', math.abs(bloodmoney - old), bloodmoney < old)
+                hudChange(playerData.source, 'bloodmoney', bloodmoney, old)
             end
         end
 

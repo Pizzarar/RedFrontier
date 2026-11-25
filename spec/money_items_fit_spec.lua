@@ -18,7 +18,8 @@ function TriggerEvent(name, ...)
     serverEvents[#serverEvents + 1] = { name = name, args = { ... } }
     for _, fn in ipairs(handlers[name] or {}) do fn(...) end
 end
-function TriggerClientEvent() end
+local clientEvents = {}
+function TriggerClientEvent(name, ...) clientEvents[#clientEvents + 1] = { name = name, args = { ... } } end
 function GetCurrentResourceName() return 'rsg-core' end
 function GetPlayerName(src) return 'P' .. tostring(src) end
 function Player() return { state = {} } end
@@ -137,6 +138,7 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(P) -- compat.lua Registe
         return true
     end)
     P.Functions.AddMethod('RemoveItem', function(name, amount, slot)
+        if refuseRemove == name then refuseRemove = nil; return false end -- one-shot refusal (spec hook)
         local c = container(src)
         if not removeFrom(c, name, amount, slot) then return false end
         commit(c)
@@ -198,6 +200,15 @@ local function moneyChanges()
     local n = 0
     for _, e in ipairs(serverEvents) do if e.name == 'RSGCore:Server:OnMoneyChange' then n = n + 1 end end
     return n
+end
+-- hud:client:OnMoneyChange events sent to the player since index `from`
+local function hudEvents(P, from)
+    local out = {}
+    for i = from + 1, #clientEvents do
+        local e = clientEvents[i]
+        if e.name == 'hud:client:OnMoneyChange' and e.args[1] == P.PlayerData.source then out[#out + 1] = e.args end
+    end
+    return out
 end
 -- the next sync: any later inventory commit re-reads cash from the items
 local function sync(P) P.Functions.UpdatePlayerData() end
@@ -365,6 +376,76 @@ T.describe('money items: reconcile and odd layouts', function()
         sync(P)
         T.eq(100, cents(P.PlayerData.money.cash))
         T.eq(100, itemCents(P))
+    end)
+end)
+
+T.describe('money items: atomic cent removal (core M2-nit)', function()
+    T.it('>=100 cents split over 3 stacks: ConvertCoins cannot fire between removals, exact amount taken', function()
+        -- per-slot removals: 80 taken, the 160 left converted to 1 dollar + 60 cents, then only 60 of the 120 more
+        -- were there: false, and the balance put back to 2.40 was then synced down to the 1.00 the items held
+        local P = newPlayer({ slots = 6, items = { { 'cent', 80, 1 }, { 'cent', 80, 2 }, { 'cent', 80, 3 } } })
+        T.eq(true, P.Functions.RemoveMoney('cash', 2.00, 'spec'))
+        sync(P)
+        T.eq(40, cents(P.PlayerData.money.cash))
+        T.eq(40, itemCents(P))
+    end)
+
+    T.it('a refused removal after cents were taken: false, the cents go back, nothing lost', function()
+        -- 120 unconverted cents in 2 stacks; 2.50 = 50 cents + 2 dollars (70 change kept). The dollar removal is
+        -- refused after the 50 cents went: they are restored (ConvertCoins may merge them, same value)
+        local P = newPlayer({ slots = 6, items = { { 'dollar', 5, 1 }, { 'cent', 60, 2 }, { 'cent', 60, 3 } } })
+        refuseRemove = 'dollar'
+        T.eq(false, P.Functions.RemoveMoney('cash', 2.50, 'spec'))
+        refuseRemove = nil
+        T.eq(620, itemCents(P), 'items still hold 6.20')
+        T.eq(620, cents(P.PlayerData.money.cash), 'balance put back')
+        sync(P)
+        T.eq(620, cents(P.PlayerData.money.cash), 'balance after the next sync')
+    end)
+
+    T.it('a refused removal after change was added: false, the change is taken back', function()
+        local P = newPlayer({ slots = 6, items = { { 'dollar', 5, 1 } } })
+        local L = layout(P)
+        refuseRemove = 'dollar'
+        T.eq(false, P.Functions.RemoveMoney('cash', 0.25, 'spec'))
+        refuseRemove = nil
+        same(P, L, 500, 'refused dollar removal')
+    end)
+end)
+
+T.describe('money items: one HUD money change per operation (core M2-nit)', function()
+    T.it('AddMoney of dollars + cents (two item steps): one hud event, the full amount', function()
+        local P = newPlayer({ slots = 6, items = { { 'dollar', 2, 1 } } })
+        local from = #clientEvents
+        T.eq(true, checkedAdd(P, 1.50))
+        local ev = hudEvents(P, from)
+        T.eq(1, #ev, 'one hud:client:OnMoneyChange')
+        T.same({ P.PlayerData.source, 'cash', 1.50, false }, ev[1])
+    end)
+
+    T.it('RemoveMoney with change (add cents, remove cents and dollars): one hud event', function()
+        local P = newPlayer({ slots = 6, items = { { 'dollar', 4, 1 }, { 'cent', 90, 2 } } })
+        local from = #clientEvents
+        T.eq(true, P.Functions.RemoveMoney('cash', 2.95, 'spec'))
+        local ev = hudEvents(P, from)
+        T.eq(1, #ev, 'one hud:client:OnMoneyChange')
+        T.same({ P.PlayerData.source, 'cash', 2.95, true }, ev[1])
+    end)
+
+    T.it('a failed all-or-nothing add (dollars placed, then taken back): no hud event', function()
+        local P = newPlayer({ slots = 4, fill = true, items = { { 'dollar', 3, 2 } } })
+        local from = #clientEvents
+        T.eq(false, checkedAdd(P, 1.50))
+        T.eq(0, #hudEvents(P, from), 'no hud:client:OnMoneyChange')
+    end)
+
+    T.it('a player-driven item move still reaches the HUD through the sync', function()
+        local P = newPlayer({ slots = 6, items = { { 'dollar', 3, 1 } } })
+        local from = #clientEvents
+        P.Functions.RemoveItem('dollar', 1, 1)
+        local ev = hudEvents(P, from)
+        T.eq(1, #ev)
+        T.same({ P.PlayerData.source, 'cash', 1, true }, ev[1])
     end)
 end)
 
