@@ -37,12 +37,16 @@
 
 - idea-847 spk_herb: plan docs/brainstorm/plans/spikes-02-herb.md. Client-local plant props + blip probe (S6). Not gated on fh_spike_gated (that is S1/S2 ownership); crafting wires the cue only after GO. crafting-herb-spike branch empty (verified). Handed to Spikes Lead rn-3095b3717f66 (2026-11-24).
 
+- S7 spk_outfit for Progression idea-891: plan spikes-03-outfit.md, client-only, re-apply on rsg ApplySkin; named S7 (their 'S1'). Handed to lead rn-3095b3717f66 2026-11-25.
+
 ## Open
+- S6 RESULT from Aub (herb model index + blip sprite).
 - Does Aub have a 2nd RedM account? (adds true 2-client S1 check)
 
 ## In flight
-- PASS spk_herb K1-K3 (plan spikes-02-herb complete): merged to main ff 1680b5b (rebased 659d31b, content identical, lupa OK), Gemini PASS 0/0/0. Next: S6 card to Aub; on GO inbox @crafting to wire the cue.
-- spk_herb K1 PASS a7a1ea2 on spikes-herb (4 files, all [spikes]/, Buddy verified); K2 Gemini FAIL (clearProps/clearBlip used before local decl = nil crash; blip loop re-entry; model release), fixed 659d31b (Buddy verified); K2 Gemini re-review PASS 0/0/0; K3 merge slot requested (Red4) -> K3 merge slot (lead rn-3095b3717f66). On GO: inbox @crafting to wire cue.
+- PASS spk_outfit S7 O1-O3 (plan spikes-03-outfit complete): merged main ff 23e32fe, fresh-Gemini PASS 0/0/1, G5 0 unknown, contracts 0 findings. Next: S7 card to Aub; RESULT -> Progression Buddy rn-515b14f1fb08 + Pro2, natives -> Core.
+- S7 O1 PASS 9a93a05 on spikes-outfit (Gemini build, 4 files [spikes]/); O2 Gemini review PASS 0/0/1 (L1 nit skipped); rebased 23e32fe on main 95177a0, slot requested Red4 -> O3 merge (lead rn-3095b3717f66). RESULT goes to Progression rn-515b14f1fb08 + Pro2.
+- spk_herb MERGED main 1680b5b (+brief d492bfe), Gemini PASS 0/0/0. S6 card relayed to Aub 2026-11-25. On GO: inbox @crafting (model+sprite), natives to Core.
 - PARKED forge freeze 2026-11-23: no unit running; spikes in main (4d11954), cards held for keyed boot; worktree spikes-probes clean. Resume = relay TEST-CARDS.md to Aub after Cor2 boot ping.
 - PASS S1-S5 build+review: spikes/probes 4d11954 (on core/b1-boot ee8eef5), Gemini PASS-WITH-NITS, 3 fixed, 2 nits skipped; Core lead merges to main; in-game RESULTs pending Aub.
 - Next: Gemini review of all 5 (after machine restart) → test cards to Aub once Core server boots.
