@@ -19,7 +19,7 @@ Regional trade prices, shortages, trade-post selling and supplies buying (spec L
 
 ## Events
 - Emits (server): `fh:trade:sold` `{ src, region, post, item, amount, total }` after a paid sale; `fh:trade:bought` (same shape) after a paid and granted buy. Emits (to the client): `fh:trade:menu` (now also `supplies = { { item, label, price } }`, `maxBuy`), `fh:trade:sold`, `fh:trade:bought`.
-- Consumes (from clients, server re-validates everything): `fh:trade:menu`, `fh:trade:sell(item, amount)`, `fh:trade:buy(item, amount)`.
+- Consumes (from clients, server re-validates everything): `fh:trade:menu`; the fh_ui `tradepost` screen actions relayed as `fh:trade:ui_sell` / `fh:trade:ui_buy` (payload `{item, amount}`; src comes from the relay, not the payload).
 
 ## Selling
 Server checks the player stands within a post's `radius`, validates item/amount, `fh_core.removeItem({type='backpack', id=src}, item, amount)` (all-or-nothing), commits the sale to the price state, then `fh_economy:pay(src, total, 'trade_sell:<item>', region)`. Money only comes from `pay`.

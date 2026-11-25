@@ -272,18 +272,6 @@ RegisterNetEvent('fh:trade:menu', function()
     TriggerClientEvent('fh:trade:menu', src, data) -- fh_tutorial step 5 still keys on this signal (the ox_lib menu is gone)
 end)
 
-RegisterNetEvent('fh:trade:sell', function(item, amount)
-    local src = source
-    if type(item) ~= 'string' or #item > 64 then return end
-    doSell(src, item, amount)
-end)
-
-RegisterNetEvent('fh:trade:buy', function(item, amount)
-    local src = source
-    if type(item) ~= 'string' or #item > 64 then return end
-    doBuy(src, item, amount)
-end)
-
 -- fh_ui `tradepost` screen (T1). The relay re-emits fh:trade:ui_sell / fh:trade:ui_buy as ONE table
 -- { src, screen, action, payload } (src from the net source, never the payload). The same doSell/doBuy that the
 -- chat fallback uses runs (throttle, proximity, item/qty validation), then the fresh screen data is re-sent with an

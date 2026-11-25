@@ -23,7 +23,7 @@ function M.screenData(cfg, post, quote, labelOf, now)
         max_sell = cfg.maxSellPerTx, max_buy = cfg.maxBuyPerTx or 100 }
 end
 
----Buy-refusal text, shared with the chat fallback (fh:trade:buy -> doBuy). reason(code) -> string is injected.
+---Buy-refusal text, shared with the chat fallback (/tradebuy -> doBuy). reason(code) -> string is injected.
 function M.buyMessage(cfg, res, extra, reason)
     if res == 'invalid_amount' then return ('Amount must be a whole number from 1 to %d.'):format(cfg.maxBuyPerTx or 100) end
     if res == 'unknown_item' then return 'The post does not sell that.' end
