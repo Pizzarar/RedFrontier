@@ -3,6 +3,8 @@
 // maxItems single items (client-side cap; the server decides), then Wear it or Save it to a slot. Saved slots 1..maxSaved
 // show their look; Wear applies a saved slot. `saved` may arrive as an array or as an object keyed by slot (sparse Lua table).
 // Actions: equip { outfit_id, item_ids }, save { slot, label?, outfit_id, item_ids }, wear { slot }, close {}.
+// Mirror preview (client-local, never sent to the server): Preview tries the selected look on you; Stop preview / Close / Esc
+// put your own look back (fh_tailor reverts on every close path).
 // A notice-only update keeps the lists. No autofocus, Enter does nothing.
 FH_UI.register('wardrobe', {
   last: null, outfit: null, items: [], label: '',
@@ -85,6 +87,11 @@ FH_UI.register('wardrobe', {
     });
     if (!this.outfit) wear.disabled = true;
     picked.appendChild(wear);
+    const pv = D.btn('Preview', function () {
+      FH_UI.preview('wardrobe', { outfit: String(self.outfit), items: self.items.slice() });
+    });
+    if (!this.outfit) pv.disabled = true;
+    picked.appendChild(pv);
     body.appendChild(picked);
 
     body.appendChild(D.h('h2', 'sub', 'Saved outfits'));
@@ -117,6 +124,7 @@ FH_UI.register('wardrobe', {
       body.appendChild(row);
     }
     p.appendChild(body);
+    p.appendChild(D.btn('Stop preview', function () { FH_UI.previewEnd('wardrobe'); }));
     p.appendChild(D.btn('Close', function () { FH_UI.close('wardrobe'); }));
     el.appendChild(p);
   },

@@ -182,13 +182,26 @@ Header shows the shop label and the player's tier. Rows show label, kind, price;
 rows with `min_tier > tier` are greyed with "Needs tier N". A notice-only update keeps the rows. Actions: `buy` `{ entry_id }`
 (`fh:tailor:ui_buy`), `close` `{}`; any other action is rejected by the relay allowlist. The server re-derives price, tier,
 owned and the shop (from `openShop` state), never from the client.
+Mirror preview (client-local): each row has Preview (outfit rows try the outfit; item rows layer over the last previewed
+outfit, disabled until one is previewed) plus Stop preview; see "Mirror preview" below.
 
 ### wardrobe (owner `tailor`)
 `open/update` data = fh_tailor `getWardrobe`: `{ owned = { { id, label, kind, source } }, worn?, saved = { [slot] = { label, outfit, items, valid } }, fitted, maxItems, maxSaved, notice?, notice_kind? }`.
 Pick one owned outfit and up to `maxItems` items (client cap; the server decides), then Wear, or Save to a slot 1..`maxSaved`
 (optional name); a saved slot shows its look with Wear. `saved` may arrive as an array or a slot-keyed object. Actions:
 `equip` `{ outfit_id, item_ids }`, `save` `{ slot, label?, outfit_id, item_ids }`, `wear` `{ slot }`, `close` `{}`.
-fh_tailor opens both via `openShop` / `openWardrobe` and answers with `fh:ui:update` + `notice`.
+fh_tailor opens both via `openShop` / `openWardrobe` and answers with `fh:ui:update` + `notice`. Preview shows the selected
+look on the ped (Stop preview puts yours back).
+
+### Mirror preview (tailor, wardrobe)
+Local and cosmetic; no server round trip and no relay action (so it is not in `M.actions`). The page calls
+`FH_UI.preview(screen, { outfit, items })` / `FH_UI.previewEnd(screen)`, which post the NUI callbacks `preview` / `preview_end`.
+fh_ui shape-checks the look (`FhUiRelay.checkPreview`: only `FhUiRelay.previewable` screens, outfit id string <= 64, items
+array <= 16 ids) and only for an open screen, then raises the LOCAL client events `fh:ui:preview` `{ screen, look }` /
+`fh:ui:preview_end` `{ screen }` for fh_tailor (`previewLook`). `fh:ui:closed` `{ screen }` fires on EVERY close path
+(server close, Esc, close button, character unload, a previewable screen replacing another, the NUI page reloading:
+`app.js` posts `ready` on load and Lua then closes whatever it thought was open). Client export `isOpen(screen)` lets
+fh_tailor's watchdog detect a vanished screen. fh_tailor reverts the preview on all of those (its README, "Mirror preview").
 
 ### Dev demo (fixtures)
 `/fh_ui_demo <heat|insurance|jobs|journal|dialogue|station|fence|tradepost|fieldguide|trapper|tailor|wardrobe>` opens that screen with `shared/fixtures.lua` data for the caller;

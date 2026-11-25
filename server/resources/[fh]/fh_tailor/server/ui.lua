@@ -16,7 +16,7 @@ local function isId(v) return type(v) == 'string' and #v >= 1 and #v <= MAX_ID e
 ---@param d table { exp = { actBuy, actStock, actWardrobe, actEquip, actSave, actWear, message }, open(src, screen, data), update(src, screen, data), notify(src, text) }
 function M.new(d)
     local exp = d.exp
-    local U = { shopOf = {} } -- src -> last shop opened by the server (never from the client)
+    local U = { shopOf = {}, openAt = {} } -- src -> last shop opened by the server (never from the client)
 
     local function stockData(src, shopId)
         local ok, res = exp.actStock(src, shopId)
@@ -111,14 +111,23 @@ function M.new(d)
         if not isId(p.outfit_id) or not items or not isSlot(p.slot) then return nil end
         if label ~= nil and (type(label) ~= 'string' or #label > 64) then return nil end
         return exp.actSave(src, math.floor(p.slot), label, p.outfit_id, items)
-    end, function(p) return 'Saved to slot ' .. tostring(p.slot) .. '.' end)
+    end, function(p) return ('Saved to slot %d.'):format(math.floor(p.slot)) end)
 
     U.onWear = wardrobeAction(function(src, p)
         if not isSlot(p.slot) then return nil end
         return exp.actWear(src, math.floor(p.slot))
-    end, function(p) return 'Wearing slot ' .. tostring(p.slot) .. '.' end)
+    end, function(p) return ('Wearing slot %d.'):format(math.floor(p.slot)) end)
 
-    function U.forget(src) U.shopOf[src] = nil end
+    -- Open-request throttle (ms clock injected). A refused request is dropped silently.
+    function U.allowOpen(src, nowMs)
+        if type(src) ~= 'number' or type(nowMs) ~= 'number' then return false end
+        local last = U.openAt[src]
+        if last and nowMs - last < 1000 then return false end
+        U.openAt[src] = nowMs
+        return true
+    end
+
+    function U.forget(src) U.shopOf[src] = nil; U.openAt[src] = nil end
 
     return U
 end
@@ -147,6 +156,16 @@ if _G.GetCurrentResourceName then
     AddEventHandler('fh:tailor:ui_equip', U.onEquip)
     AddEventHandler('fh:tailor:ui_save', U.onSave)
     AddEventHandler('fh:tailor:ui_wear', U.onWear)
+    -- Client [E] / [G] prompts only ask to open; range guard + data come from actStock / actWardrobe inside openShop /
+    -- openWardrobe. One open per second per player (U.allowOpen), the shop id is the only client value.
+    RegisterNetEvent('fh:tailor:open_shop', function(shopId)
+        local src = source
+        if U.allowOpen(src, GetGameTimer()) then U.openShop(src, shopId) end
+    end)
+    RegisterNetEvent('fh:tailor:open_wardrobe', function()
+        local src = source
+        if U.allowOpen(src, GetGameTimer()) then U.openWardrobe(src) end
+    end)
     AddEventHandler('RSGCore:Server:OnPlayerUnload', function(src) U.forget(tonumber(src)) end)
     AddEventHandler('playerDropped', function() U.forget(tonumber(source)) end)
     exports('openShop', U.openShop)

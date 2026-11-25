@@ -36,6 +36,9 @@
     // Server validates: action ^[a-z_]{1,32}$, payload table <= 2 KB, depth <= 4, rate limited.
     action: function (screen, action, payload) { return post('action', { screen: screen, action: action, payload: payload || {} }); },
     close: function (screen) { return post('close', { screen: screen }); },
+    // Client-local mirror preview (never reaches the server): look = { outfit, items }. Lua shape-checks it.
+    preview: function (screen, look) { return post('preview', { screen: screen, look: look }); },
+    previewEnd: function (screen) { return post('preview_end', { screen: screen }); },
   };
 
   window.addEventListener('message', function (ev) {
@@ -50,6 +53,9 @@
       if (e) e.hidden = true;
     }
   });
+
+  // Tell Lua this page just (re)loaded so it drops screens the page no longer shows (and reverts any preview).
+  post('ready', {});
 
   // Esc: ask the client to close interactive screens (it releases NUI focus).
   document.addEventListener('keydown', function (ev) {

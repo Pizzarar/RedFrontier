@@ -100,4 +100,28 @@ case('relay: invalid is dropped with a reason; rate limit counts bad traffic', f
     T.eq('rate_limited', select(2, R.relay(lim, 1, msg('heat', 'a', {}), 0)))
 end)
 
+case('checkPreview: only previewable screens, strict look shape, clean copy returned', function()
+    local ok, screen, look = R.checkPreview({ screen = 'tailor', look = { outfit = 'o1', items = { 'a', 'b' }, junk = 1 } })
+    assert(ok and screen == 'tailor' and look.outfit == 'o1' and #look.items == 2 and look.junk == nil)
+    ok, screen, look = R.checkPreview({ screen = 'wardrobe', look = { outfit = 'o1' } })
+    assert(ok and #look.items == 0)
+    T.eq('unknown_screen', select(2, R.checkPreview({ screen = 'fence', look = { outfit = 'o1' } })))
+    T.eq('unknown_screen', select(2, R.checkPreview({ screen = 'nope', look = { outfit = 'o1' } })))
+    T.eq('bad_message', select(2, R.checkPreview('x')))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor' })))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = 5 } })))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = '' } })))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = string.rep('x', 65) } })))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = 'o', items = 'a' } })))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = 'o', items = { 1 } } })))
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = 'o', items = { a = 'x' } } })))
+    local many = {}
+    for i = 1, 17 do many[i] = 'i' .. i end
+    T.eq('bad_look', select(2, R.checkPreview({ screen = 'tailor', look = { outfit = 'o', items = many } })))
+end)
+case('preview is not a relayed action: tailor/wardrobe allowlists reject it', function()
+    T.eq('bad_action', why(R.validate(msg('tailor', 'preview', {}))))
+    T.eq('bad_action', why(R.validate(msg('wardrobe', 'preview', {}))))
+end)
+
 T.finish()

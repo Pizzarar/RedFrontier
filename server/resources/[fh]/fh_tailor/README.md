@@ -10,8 +10,8 @@ tailors and catalogs) by Rockstar Games (design idea only; no assets or text cop
 ## Status
 
 - T1: pure logic + server. Catalog, per-shop stock, ownership, buy, grant, starter set, equip, saved outfits.
-- T2 (this): client apply behind `Config.FittedOutfits`, tailor stops per town, and stopgap `ox_lib` shop + wardrobe
-  menus (replaced by the @ui catalog screen in T4).
+- T2: client apply behind `Config.FittedOutfits` and tailor stops per town. T4b: the stops open the fh_ui catalog and
+  wardrobe screens (the T2 stopgap `ox_lib` menus and their net events are gone), with a mirror preview.
 - `Config.FittedOutfits = false` until the @spikes S1 probe passes. Off: everything above works and persists; the
   client applies nothing to the ped, so `rsg-character` stays unchanged.
 - Config ships tailor stops per town and one placeholder starter outfit per sex. Real catalog content is T3.
@@ -80,8 +80,7 @@ calls: no range check, no debounce** (rewards, admin tools, tests). A resource r
 
 `too_fast`: equip / save / wear share one cooldown per player (`Config.actionDebounceMs`, default 750 ms, 0 = off). A
 refused call does not extend the window; a call refused for range does not start it. The net events
-(`fh:tailor:buy` / `equip` / `save_outfit` / `wear_saved`) and the `fh:tailor:stock` / `fh:tailor:wardrobe` callbacks
-go through the same functions.
+relayed from the fh_ui screens (`fh:tailor:ui_*`, see "fh_ui screens") go through the same functions.
 
 ## Client exports (preview)
 
@@ -96,7 +95,7 @@ For @ui's mirror screen. Local and cosmetic: nothing is saved or sent to the ser
   previewed, restores the ped by reloading the character's saved skin through `exports['rsg-character']:ApplySkin()`
   (brief model swap); if nothing was previewed it does nothing and returns `false`.
 
-## Client apply and stopgap menus (T2)
+## Client apply, prompts and preview (T2, T4b)
 
 - **Client apply (`client/main.lua`)**: listens to `rsg-character:client:ApplySkin`, `RSGCore:Client:OnPlayerLoaded`,
   `playerSpawned` and `fh:tailor:apply`. When `Config.FittedOutfits = true`, re-applies the character's saved outfit
@@ -105,18 +104,28 @@ For @ui's mirror screen. Local and cosmetic: nothing is saved or sent to the ser
   is `false`, the client applies nothing.
 - **Tailor stops (`config.lua`)**: per-town stops (`valentine_general`, `emerald_ranch_general`, `rhodes_general`,
   `lagras_general`, `saint_denis_tailor`, `blackwater_tailor`, plus disabled-region towns). Client prompts are gated on
-  `FhRegions.isEnabled(shop.region_id)`. Press `[E]` at a tailor stop to open the stopgap `ox_lib` menu (Browse Catalog
-  / Open Wardrobe).
+  `FhRegions.isEnabled(shop.region_id)`. At a stop `[E]` opens the fh_ui catalog (`tailor` screen) and `[G]` the fh_ui
+  `wardrobe` screen. There are no `ox_lib` menus any more.
 - **Homestead wardrobe**: references `fh_homestead` read-only (`fh:homestead:plots` callback on the client,
   `getPlot` + `plotInfo` exports on the server; `fh_homestead` is never edited). Press `[G]` near a homestead chest to
-  open the Wardrobe menu, shown only at a chest of one of your own plots (`fh:tailor:own_plots` callback; the plots fetch retries until `fh_homestead` is up; uses `[G]` so `fh_homestead`'s `[E]` chest prompt is untouched).
-- **Client-server contract** (server validates everything; client sends only ids):
-  - Callbacks: `fh:tailor:worn` (player's worn look when `FittedOutfits` is on), `fh:tailor:stock` (`shopId`, range
-    checked), `fh:tailor:wardrobe` (tailor or own homestead range checked).
-  - Net events (client -> server): `fh:tailor:buy` `{ shop_id, entry_id }`, `fh:tailor:equip` `{ outfit_id, items }`,
-    `fh:tailor:save_outfit` `{ slot, label, outfit_id, items }`, `fh:tailor:wear_saved` `{ slot }`.
-  - Net events (server -> client): `fh:tailor:result` `{ action, ok, code?, ... }` (client shows `message(code)` on
-    errors), `fh:tailor:apply` `{ outfit, items }`.
+  open the wardrobe screen, shown only at a chest of one of your own plots (`fh:tailor:own_plots` callback; the plots fetch retries until `fh_homestead` is up; uses `[G]` so `fh_homestead`'s `[E]` chest prompt is untouched).
+- **Open path** (the client sends no data except a shop id; the server validates everything):
+  - Net events (client -> server): `fh:tailor:open_shop` `shopId` (`[E]`), `fh:tailor:open_wardrobe` (`[G]`). `server/ui.lua`
+    allows one open per second per player, then calls `openShop` / `openWardrobe`, which fetch through the guarded
+    `actStock` / `actWardrobe` (range guard: `out_of_range` / `not_at_wardrobe`; a refusal shows `message(code)` in chat and opens nothing).
+  - Callbacks: `fh:tailor:worn` (player's worn look when `FittedOutfits` is on), `fh:tailor:own_plots`.
+  - Net events (server -> client): `fh:tailor:apply` `{ outfit, items }`.
+- **Mirror preview (`client/preview.lua` guard)**: the fh_ui `tailor` / `wardrobe` Preview buttons reach fh_tailor as the
+  LOCAL client event `fh:ui:preview` `{ screen, look }` (fh_ui shape-checks the look; the server is never involved), then
+  `previewLook`. A preview is always reverted (`revertLook`) when:
+  - fh_ui closes the screen, whatever the cause (close button, Esc, server close, character unload, another previewable
+    screen replacing it, the NUI page reloading): event `fh:ui:closed` `{ screen }`;
+  - the screen's Stop preview button is pressed: `fh:ui:preview_end`;
+  - `RSGCore:Client:OnPlayerUnload`;
+  - the watchdog (500 ms while previewing) finds fh_ui stopped or crashed (`exports.fh_ui:isOpen` errors), the screen no
+    longer open, or the player dead (the screen is closed first so NUI focus is released);
+  - `fh_tailor` or `fh_ui` stops (`onResourceStop`; synchronous, flag-on uses the last pushed look instead of asking the server).
+  A preview the client cannot show (unknown or wrong-kind id) comes back as a notice on the screen.
 
 ## Bus events (server, `TriggerEvent`)
 

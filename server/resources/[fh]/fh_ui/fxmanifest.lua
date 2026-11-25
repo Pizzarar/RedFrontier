@@ -50,4 +50,6 @@ client_scripts {
     'client/where.lua',
 }
 
+client_exports { 'isOpen' }
+
 dependencies { 'fh_core', 'ox_lib' }

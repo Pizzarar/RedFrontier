@@ -36,6 +36,34 @@ M.actions = {
     wardrobe   = { equip = true, save = true, wear = true, close = true },
 }
 
+-- Screens that may ask for a client-local mirror preview (fh_tailor owns the apply). No server round trip, no authority.
+M.previewable = { tailor = true, wardrobe = true }
+
+local MAX_LOOK_ID, MAX_LOOK_ITEMS = 64, 16
+
+local function lookId(v) return type(v) == 'string' and #v >= 1 and #v <= MAX_LOOK_ID end
+
+-- Pure shape check of a NUI preview request { screen, look = { outfit = id, items = { id, ... } } }.
+-- Returns true, screen, look(clean copy) | false, reason. The catalog check (unknown / wrong kind) is fh_tailor's.
+function M.checkPreview(msg)
+    if type(msg) ~= 'table' then return false, 'bad_message' end
+    if type(msg.screen) ~= 'string' or not M.previewable[msg.screen] then return false, 'unknown_screen' end
+    local look = msg.look
+    if type(look) ~= 'table' or not lookId(look.outfit) then return false, 'bad_look' end
+    local items = {}
+    if look.items ~= nil then
+        if type(look.items) ~= 'table' or #look.items > MAX_LOOK_ITEMS then return false, 'bad_look' end
+        for k in pairs(look.items) do
+            if type(k) ~= 'number' or k < 1 or k > #look.items then return false, 'bad_look' end
+        end
+        for i = 1, #look.items do
+            if not lookId(look.items[i]) then return false, 'bad_look' end
+            items[i] = look.items[i]
+        end
+    end
+    return true, msg.screen, { outfit = look.outfit, items = items }
+end
+
 M.limits = {
     actionPattern = '^[a-z_]+$', -- Lua has no {n,m}; length 1..maxAction is checked separately
     maxAction = 32,

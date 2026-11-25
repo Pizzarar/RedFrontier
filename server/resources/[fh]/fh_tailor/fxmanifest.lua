@@ -23,6 +23,7 @@ server_scripts {
 
 client_scripts {
     '@fh_core/client/safe.lua',
+    'client/preview.lua', -- mirror-preview revert guard (T4b)
     'client/main.lua',
 }
 

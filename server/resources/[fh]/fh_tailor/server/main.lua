@@ -246,7 +246,8 @@ CreateThread(function()
     end
 end)
 
--- ---------------------------------------------------------------- client callbacks + net events (T2 stopgap menus)
+-- ---------------------------------------------------------------- client callbacks
+-- (shop / wardrobe actions go through the fh_ui screens: server/ui.lua)
 -- Server validates everything (shop, range, wardrobe location, ownership, sex, tier, slot, label): client sends ids only.
 
 lib.callback.register('fh:tailor:worn', function(src)
@@ -255,8 +256,6 @@ lib.callback.register('fh:tailor:worn', function(src)
     if not ok or type(view) ~= 'table' then return nil end
     return view.worn
 end)
-
-lib.callback.register('fh:tailor:stock', function(src, shopId) return act.actStock(src, shopId) end)
 
 -- Plot ids of the caller's own claimed plots (claim / town lot): the client shows the [G] prompt only at those chests.
 lib.callback.register('fh:tailor:own_plots', function(src)
@@ -269,53 +268,6 @@ lib.callback.register('fh:tailor:own_plots', function(src)
         end
     end
     return out
-end)
-
-lib.callback.register('fh:tailor:wardrobe', function(src) return act.actWardrobe(src) end)
-
-RegisterNetEvent('fh:tailor:buy', function(payload)
-    local src = source
-    local shopId = type(payload) == 'table' and payload.shop_id or nil
-    local entryId = type(payload) == 'table' and payload.entry_id or nil
-    local ok, res = act.actBuy(src, shopId, entryId)
-    TriggerClientEvent('fh:tailor:result', src, {
-        action = 'buy', ok = ok, code = (not ok) and res or nil,
-        shop_id = shopId, entry_id = entryId,
-        price = ok and res.price or nil, unverified = ok and res.unverified or nil,
-    })
-end)
-
-RegisterNetEvent('fh:tailor:equip', function(payload)
-    local src = source
-    local outfitId = type(payload) == 'table' and payload.outfit_id or nil
-    local itemIds = type(payload) == 'table' and payload.items or nil
-    local ok, res = act.actEquip(src, outfitId, itemIds)
-    TriggerClientEvent('fh:tailor:result', src, {
-        action = 'equip', ok = ok, code = (not ok) and res or nil,
-        outfit_id = ok and res.outfit or nil,
-    })
-end)
-
-RegisterNetEvent('fh:tailor:save_outfit', function(payload)
-    local src = source
-    local slot = type(payload) == 'table' and payload.slot or nil
-    local label = type(payload) == 'table' and payload.label or nil
-    local outfitId = type(payload) == 'table' and payload.outfit_id or nil
-    local itemIds = type(payload) == 'table' and payload.items or nil
-    local ok, err = act.actSave(src, slot, label, outfitId, itemIds)
-    TriggerClientEvent('fh:tailor:result', src, {
-        action = 'save_outfit', ok = ok, code = (not ok) and err or nil, slot = slot,
-    })
-end)
-
-RegisterNetEvent('fh:tailor:wear_saved', function(payload)
-    local src = source
-    local slot = type(payload) == 'table' and payload.slot or nil
-    local ok, res = act.actWear(src, slot)
-    TriggerClientEvent('fh:tailor:result', src, {
-        action = 'wear_saved', ok = ok, code = (not ok) and res or nil,
-        slot = slot, outfit_id = ok and res.outfit or nil,
-    })
 end)
 
 -- ---------------------------------------------------------------- exports (contract: README.md)
