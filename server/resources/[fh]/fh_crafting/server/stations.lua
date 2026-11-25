@@ -36,7 +36,7 @@ local function build(env)
     end
 
     ---@param src number
-    ---@param stationType string 'gunsmith'|'reload'|'apothecary'
+    ---@param stationType string 'gunsmith'|'reload'|'apothecary'|'cook'
     ---@param maxDist number|nil default FhCraftingConfig.stationMaxDist, passed to H3
     ---@return boolean ok
     ---@return string|nil reason 'bad_type' | 'no_station' | 'no_homestead' | 'homestead_error'
