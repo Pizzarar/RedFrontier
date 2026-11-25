@@ -40,4 +40,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'oxmysql', 'rsg-core', 'ox_lib', 'fh_economy' }
 
-server_exports { 'claim', 'unclaim', 'buyLot', 'getPlot', 'claimedPlots', 'isInSafeZone', 'plotInfo', 'lawSafeAt', 'getStations', 'stationAt', 'isNearStation', 'getComfort', 'placeTrophy', 'unplaceTrophy', 'addTrophy', 'removeTrophy', 'getTrough' }
+server_exports { 'claim', 'unclaim', 'buyLot', 'getPlot', 'claimedPlots', 'isInSafeZone', 'plotInfo', 'lawSafeAt', 'getStations', 'stationAt', 'isNearStation', 'getComfort', 'placeTrophy', 'unplaceTrophy', 'addTrophy', 'removeTrophy', 'getTrough', 'feedTrough' }

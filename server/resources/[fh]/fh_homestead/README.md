@@ -316,9 +316,14 @@ slot, so no chest prompt) and its only writer is the load below.
   `fh:homestead:trough_refilled`, and the client sets the horse health and stamina cores to full (`GetMount`,
   `SetAttributeCoreValue`: unverified natives, TODO-verify). No fh_buffs buff. Migration `0099_homestead_trough.sql`
   (placeholder number, renumbered at merge).
-- **Export** `exports.fh_homestead:getTrough(citizenid)` -> `{ type = 'chest', id = 'fh:trough:<plot>' }` of the character's
-  claim trough, or `nil` (no claim, trough not built, slots not loaded). For @progression's fh_hands top-up (fh_hands is
-  not edited here). The ref is registered with fh_core, so `addItem` / `snapshot` work on it.
+- **Cap**: `trough.capacity` (default **10** = `maxWeight` 20000 g / feedbag 2000 g). The use handler and `feedTrough` both stop there (`fh_trough_full`).
+- **Exports** (all writes stay inside fh_homestead; no container ref is ever handed out):
+  `exports.fh_homestead:getTrough(citizenid)` -> `{ plotId, count, capacity }` (read-only), or `nil, why` (`fh_no_trough`,
+  `fh_not_ready`, `fh_trough_check_failed`).
+  `exports.fh_homestead:feedTrough(citizenid, n)` -> `added` | `nil, why`: adds `n` FEEDBAGS (the item is implicit) to the
+  character's own claim trough, clamped to the room left, same lock as the use handler. Reasons: `fh_bad_amount`
+  (n not a positive integer), `fh_no_trough`, `fh_trough_full`, `fh_trough_busy`, `fh_not_ready`, `fh_trough_check_failed`.
+  Where the feedbags come from is the caller's job (fh_hands pays for them); we only add. fh_hands is not edited here.
 - **Unclaim** is refused `fh_trough_not_empty` while the trough holds any item (a failed read: `fh_trough_check_failed`,
   also for admins). Admin `force` logs every item (`stash=fh:trough:<plot>`) and empties it with the chests; the
   `fh_plot_trough` row goes with the plot.

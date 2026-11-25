@@ -110,8 +110,9 @@ FhHomesteadConfig = {
     },
     -- H20: trough slot. Container fh:trough:<plot> accepts `item` only; one refill consumes 1 feedbag, then cooldownSeconds
     -- must pass. `troughRefill` gates the client refill (native cores) and the server consume: false until verified in game.
+    -- capacity = most feedbags the trough holds (maxWeight 20000 g / feedbag 2000 g = 10); the use handler and feedTrough both stop there.
     -- reach = metres from the trough prop within which using a feedbag loads it (owner only).
-    trough = { item = 'feedbag', cooldownSeconds = 1800, slots = 4, maxWeight = 20000, reach = 5.0, troughRefill = false },
+    trough = { item = 'feedbag', cooldownSeconds = 1800, slots = 4, maxWeight = 20000, capacity = 10, reach = 5.0, troughRefill = false },
     -- H2: build materials, registered with exports.fh_core:registerItems from fh_homestead ONLY (full §4.1 defs).
     -- Materials are taken from the plot's main chest (fh:chest:<plot>:1) when a slot is built. Weights in grams.
     buildItems = {

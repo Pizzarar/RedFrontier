@@ -53,6 +53,12 @@ local function reach()
     return (r and r > 0 and r < math.huge) and r or 5.0
 end
 
+---Most feedbags the trough holds (trough.capacity, default 10 = maxWeight 20000 g / feedbag 2000 g).
+local function capacity()
+    local c = math.tointeger(tonumber(tcfg().capacity))
+    return (c and c > 0) and c or 10
+end
+
 local function stillOwns(cid, plotId, g)
     local c = claims()
     return genOf(plotId) == g and c ~= nil and c.ownerOf(plotId) == cid and c.plotOf(cid, CLAIM) == plotId
@@ -134,9 +140,7 @@ local function troughOf(src)
     return cid, plotId
 end
 
-local function locked(src, fn, onError, extra)
-    local cid, plotId = troughOf(src)
-    if not cid then return false, plotId end
+local function runLocked(src, cid, plotId, fn, onError, extra)
     if busyPlot[plotId] or busyCid[cid] then return false, 'fh_trough_busy' end
     local held, hwhy = claims().beginChestWrite(plotId)
     if not held then return false, hwhy end
@@ -159,6 +163,12 @@ local function locked(src, fn, onError, extra)
     return table.unpack(out, 1, out.n)
 end
 
+local function locked(src, fn, onError, extra)
+    local cid, plotId = troughOf(src)
+    if not cid then return false, plotId end
+    return runLocked(src, cid, plotId, fn, onError, extra)
+end
+
 -- ---------------------------------------------------------------- load (use a feedbag at the trough)
 
 local function loadLocked(st)
@@ -170,6 +180,12 @@ local function loadLocked(st)
     if at.plot_id ~= st.plotId or claims().ownerOf(st.plotId) ~= st.cid then return false, 'fh_not_owner' end
     if not stillOwns(st.cid, st.plotId, st.g) then return false, 'fh_no_plot' end
     local ref = troughRef(st.plotId)
+    local have, hwhy = T.feedbags(st.plotId)
+    if not have then
+        log('warn', ('trough read for %s failed: %s'):format(st.plotId, tostring(hwhy)))
+        return false, 'fh_trough_check_failed'
+    end
+    if have >= capacity() then return false, 'fh_trough_full' end
     if citizenidOf(st.src) ~= st.cid then return false, 'player_changed' end
     local ok, res, rwhy = pcall(function() return exports.fh_core:removeItem(bagRef(st.src), st.item, 1) end)
     if not ok then return false, 'fh_removeitem_unavailable' end
@@ -275,16 +291,63 @@ end)
 
 -- ---------------------------------------------------------------- export + unclaim support
 
----getTrough(citizenid) -> { type = 'chest', id = 'fh:trough:<plot>' } of the character's claim trough, or nil (no claim,
----trough not built, slots not loaded). The ref is registered with fh_core; for @progression's fh_hands feed top-up.
+---getTrough(citizenid) -> { plotId, count, capacity } of the character's claim trough (READ-ONLY: no container ref, so
+---no caller can write into it; use feedTrough), or nil, why (fh_no_trough, fh_not_ready, fh_trough_check_failed).
 local function getTrough(citizenid)
     local S, C = slots(), claims()
-    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
-    if not (S and S.isReady() and C and C.isReady()) then return nil end
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'fh_no_trough' end
+    if not (S and S.isReady() and C and C.isReady()) then return nil, 'fh_not_ready' end
     local plotId = C.plotOf(citizenid, CLAIM)
-    if not plotId or (S.getTiers(plotId).trough or 0) < 1 then return nil end
-    return troughRef(plotId)
+    if not plotId or (S.getTiers(plotId).trough or 0) < 1 then return nil, 'fh_no_trough' end
+    local count = T.feedbags(plotId)
+    if not count then return nil, 'fh_trough_check_failed' end
+    return { plotId = plotId, count = count, capacity = capacity() }
 end
+
+local function feedLocked(st)
+    if not stillOwns(st.cid, st.plotId, st.g) then return false, 'fh_no_plot' end
+    local item = tcfg().item
+    if not rules.accepts(item) then return false, 'fh_trough_wrong_item' end
+    local have, hwhy = T.feedbags(st.plotId)
+    if not have then
+        log('warn', ('trough read for %s failed: %s'):format(st.plotId, tostring(hwhy)))
+        return false, 'fh_trough_check_failed'
+    end
+    local room = capacity() - have
+    if room < 1 then return false, 'fh_trough_full' end
+    local add = math.min(st.n, room)
+    local ref = troughRef(st.plotId)
+    local ok, res, why = pcall(function() return exports.fh_core:addItem(ref, item, add) end)
+    if ok and res ~= true and why == 'fh_unknown_container' and T.register(st.plotId) then
+        ok, res, why = pcall(function() return exports.fh_core:addItem(ref, item, add) end)
+    end
+    if not ok then return false, 'fh_trough_failed' end
+    if res ~= true then
+        if why == 'fh_inventory_full' then return false, 'fh_trough_full' end
+        return false, type(why) == 'string' and why or 'fh_trough_failed'
+    end
+    return true, add
+end
+
+---feedTrough(citizenid, n) -> added | nil, why. The ONLY way another resource puts anything into a trough: n FEEDBAGS
+---(the item is implicit) into the character's own claim trough, clamped to the room left under trough.capacity.
+---Where the feedbags come from is the caller's job (we only add). Same lock as the use handler.
+---Reasons: fh_bad_amount, fh_no_trough, fh_trough_full (no room), fh_trough_busy, fh_trough_check_failed, fh_not_ready.
+local function feedTrough(citizenid, n)
+    if type(n) ~= 'number' or n ~= n or n < 1 or math.tointeger(n) == nil then return nil, 'fh_bad_amount' end
+    n = math.tointeger(n)
+    local S, C = slots(), claims()
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'fh_no_trough' end
+    if not (S and S.isReady() and C and C.isReady()) then return nil, 'fh_not_ready' end
+    local plotId = C.plotOf(citizenid, CLAIM)
+    if not plotId or (S.getTiers(plotId).trough or 0) < 1 then return nil, 'fh_no_trough' end
+    local ok, a, b = runLocked(nil, citizenid, plotId, feedLocked, function() return false, 'fh_trough_failed' end,
+        { op = 'feed', n = n })
+    if ok then return a end
+    return nil, a
+end
+exports('feedTrough', feedTrough)
+T.feedTrough = feedTrough
 exports('getTrough', getTrough)
 T.getTrough = getTrough
 
