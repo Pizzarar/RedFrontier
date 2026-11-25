@@ -1,7 +1,7 @@
 -- fh_trade freight contracts (roads R4): a fh_quests job type. Thin wiring over shared/freight.lua (specced).
 -- Uses fh_core §4 exports + fh_cargo exports (+ its shared TIERS, read-only) only. T2 contracts (roads-02 R9) are
--- gated at accept by fh_progression getTier in the origin region + canUnlock (roads-03 R13; soft dependency, fail
--- closed) and by the wagon's tier. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
+-- gated at accept by fh_progression getTier in the origin region (roads-03 R13; soft dependency, fail closed), the
+-- lane-local freight.t2.enabled kill switch, and the wagon's tier. Payout is NOT done here: fh_trade emits fh:trade:contract_delivered
 -- and the fh_quests engine pays (engine.apply, exactly once). NOT runtime-tested (no Cfx key).
 -- Natives: GetCurrentResourceName, GetResourceState, GetPlayerPed, GetEntityCoords, CreateThread, Wait.
 local cfg = FhTradeConfig
@@ -94,11 +94,11 @@ end
 
 -- ---------------------------------------------------------------- tier gates (roads-02 R9, roads-03 R13)
 
----Per-player contract-tier gate. T1 always passes. A gated tier (F.gateFor) needs BOTH, in this order:
----  1. regional: fh_progression getTier(src, origin_region) >= gate.minRegionTier (rep in the offer's origin region);
----  2. global kill switch: fh_progression canUnlock(src, gate.unlock) == true.
----Soft dependency, fail closed: not started / missing export / throws / non-number / anything but true -> 'fh_locked'.
----Both exports may yield (rep reads), so the character is re-checked after each: swapped -> 'fh_no_player'.
+---Per-player contract-tier gate (roads-03 R13). T1 always passes. A gated tier (F.gateFor) needs fh_progression
+---getTier(src, origin_region) >= gate.minRegionTier: rep in the offer's origin region opens that region's board. No
+---global canUnlock; the kill switch is lane-local (freight.t<N>.enabled, checked in validateOffer before the lock).
+---Soft dependency, fail closed: not started / missing export / throws / non-number / too low -> 'fh_locked'.
+---getTier may yield (rep cache load), so the character is re-checked after it: swapped -> 'fh_no_player'.
 ---`originRegion` must be validateOffer-checked (bound to the offer key). R14 (T3) only adds a TIER_GATES row.
 local function tierUnlocked(src, citizenid, tier, originRegion)
     local gate = F.gateFor(cfg, tier)
@@ -110,9 +110,6 @@ local function tierUnlocked(src, citizenid, tier, originRegion)
         log('T%s contract refused for src %s: needs tier %s in %s (%s)', tostring(tier), tostring(src), tostring(gate.minRegionTier), tostring(originRegion), tostring(why))
         return false, 'fh_locked'
     end
-    ok, why = F.checkUnlock(GetResourceState, function() return exports.fh_progression:canUnlock(src, gate.unlock) end)
-    if citizenidOf(src) ~= citizenid then return false, 'fh_no_player' end
-    if not ok then log('T%s contract refused for src %s: %s (%s)', tostring(tier), tostring(src), gate.unlock, tostring(why)) return false, 'fh_locked' end
     return true
 end
 

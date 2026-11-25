@@ -75,9 +75,10 @@ FhTradeConfig = {
         minDistance = 0,               -- m: minimum horizontal distance between origin and destination for T1 offers
         destinationRadius = 40.0,      -- m: default delivery radius around each region's resolved trade post
         -- T2 contracts (roads-02 R9): bulk loads on long routes, gated per player at accept by fh_progression
-        -- canUnlock(unlock) (fail closed) and by the wagon's fh_cargo tier. Listed on the board as `[T2]`, `locked = true`.
+        -- getTier(src, origin region) >= 2 (roads-03 R13, fail closed) and by the wagon's fh_cargo tier. Listed on the
+        -- board as `[T2]`, `locked = true`.
         t2 = {
-            unlock = 'contracts_t2',
+            enabled = true,            -- kill switch (roads-03 R13): false (or any non-true value) hides T2 offers, refuses T2 accepts
             minWagonTier = 2,          -- fh_cargo TIERS[*].tier: t2 Wagon (30 slots / 300 kg) or t3 Freight
             minDistance = 1500,        -- m between the two regions' destinations (heartlands <-> scarlett_meadows ~2405 m)
             deadlineBase = 900, deadlinePerMeter = 1.0, -- deadline_s = base + route m * perMeter (~55 min for 2405 m)

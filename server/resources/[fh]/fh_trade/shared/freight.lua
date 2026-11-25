@@ -29,8 +29,6 @@ function M.offerKey(from, to, item, tier)
     return k
 end
 
-M.T2_UNLOCK = 'contracts_t2'
-
 ---T2 settings (roads-02 R9) or nil when T2 freight is not configured.
 local function t2cfg(cfg)
     local t = (cfg.freight or {}).t2
@@ -44,28 +42,29 @@ function M.tierOf(offer)
     return offer.tier
 end
 
----Contract-tier gates (roads-03 R13): a tier N contract needs fh_progression getTier(src, origin_region) >= minRegionTier
----(regional rep opens that region's board) AND the global canUnlock(src, unlock) kill switch. Both must pass. T1 has
----no entry, so it is never gated. A tier's `freight.t<N>.unlock` overrides its default unlock id. R14 (T3) adds
----`[3] = { unlock = 'contracts_t3', minRegionTier = 3 }`.
+---Contract-tier gates (roads-03 R13): a tier N contract needs fh_progression getTier(src, origin_region) >=
+---minRegionTier (rep in the offer's origin region opens that region's board; no global canUnlock). The lane-local kill
+---switch is `freight.t<N>.enabled` (default true). T1 has no entry, so it is never gated and cannot be switched off.
+---R14 (T3) adds `[3] = { minRegionTier = 3 }` + `freight.t3.enabled`.
 M.TIER_GATES = {
-    [2] = { unlock = M.T2_UNLOCK, minRegionTier = 2 },
+    [2] = { minRegionTier = 2 },
 }
 
----Gate of a contract tier { unlock, minRegionTier }, or nil when the tier is ungated (T1). Fresh table per call.
+---Gate of a contract tier { minRegionTier }, or nil when the tier is ungated (T1). Fresh table per call.
 function M.gateFor(cfg, tier)
     local g = M.TIER_GATES[tier]
     if not g then return nil end
-    local f = type(cfg) == 'table' and type(cfg.freight) == 'table' and cfg.freight or {}
-    local t = type(tier) == 'number' and f['t' .. tier] or nil
-    local unlock = type(t) == 'table' and type(t.unlock) == 'string' and t.unlock ~= '' and t.unlock or g.unlock
-    return { unlock = unlock, minRegionTier = g.minRegionTier }
+    return { minRegionTier = g.minRegionTier }
 end
 
----fh_progression unlock id gating a tier, or nil (T1 is never gated).
-function M.unlockFor(cfg, tier)
-    local g = M.gateFor(cfg, tier)
-    return g and g.unlock or nil
+---Kill switch: is contract tier `tier` switched on? T1 always. A gated tier needs its `freight.t<N>` table and
+---`enabled` absent (default on) or exactly true; any other value (false, 'no', 0, ...) is off (fail closed).
+function M.tierEnabled(cfg, tier)
+    if not M.gateFor(cfg, tier) then return tier == 1 end
+    local f = type(cfg) == 'table' and type(cfg.freight) == 'table' and cfg.freight or {}
+    local t = f['t' .. tier]
+    if type(t) ~= 'table' then return false end
+    return t.enabled == nil or t.enabled == true
 end
 
 ---Smallest wagon tier number (fh_cargo TIERS[*].tier) a contract tier needs. T1: 1 (any wagon).
@@ -236,9 +235,10 @@ local function t2Qty(t, good, level)
 end
 
 ---T2 offers for one route: one per shortage with a qty template, only on routes of at least minDistance.
+---None while the T2 kill switch (`freight.t2.enabled`) is off.
 local function t2Offers(cfg, d, fromRegion, to, dist, list, out)
     local t = t2cfg(cfg)
-    if not t then return end
+    if not t or not M.tierEnabled(cfg, 2) then return end
     if not dist or dist < (t.minDistance or 0) then return end
     local deadline = M.t2Deadline(cfg, dist)
     local cooldown = math.max(t.cooldownMin or d.cooldownMin, math.ceil(deadline / 60)) -- not re-takeable while one could be live
@@ -252,7 +252,7 @@ local function t2Offers(cfg, d, fromRegion, to, dist, list, out)
                 if reward >= 1 then
                     local label = good.label or s.item
                     out[#out + 1] = {
-                        key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true, unlock = M.unlockFor(cfg, 2),
+                        key = M.offerKey(fromRegion, to, s.item, 2), tier = 2, locked = true,
                         min_region_tier = M.gateFor(cfg, 2).minRegionTier, min_wagon_tier = M.minWagonTier(cfg, 2),
                         title = ('[T2] Freight: %dx %s to %s'):format(qty, label, to),
                         text = ('Bulk haul: %dx %s from %s to %s (%d m). Needs rep tier %d in %s and a wagon (t2) or bigger.')
@@ -272,8 +272,9 @@ end
 ---`shortagesByRegion[region] = fh_trade shortages list { item, level, multiplier, price }`. Pure; worst shortage first.
 ---T1 offers (tier = 1) are listed first, capped at maxOffers; then T2 offers (tier = 2, freight.t2 configured, routes of
 ---at least t2.minDistance), capped at t2.maxOffers. fh_quests calls offers(region_id) with no player, so a T2 offer is
----always `locked = true` (gated by `unlock`): the board is shared and the per-player check happens at accept.
----@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, locked?, unlock?, min_wagon_tier? }
+---always `locked = true` (gated by the origin region's rep tier, `min_region_tier`): the board is shared and the per-player
+---check happens at accept. No T2 offers while `freight.t2.enabled` is off.
+---@return table[] offers { key, tier, title, text, from_region, to_region, item, qty, reward, rewards, deadline_s, level, region_id, locked?, min_region_tier?, min_wagon_tier? }
 function M.generate(cfg, fromRegion, shortagesByRegion, regions)
     local d, out, t2out = defaults(cfg), {}, {}
     if type(fromRegion) ~= 'string' or fromRegion == '' then return out end
@@ -339,6 +340,7 @@ function M.validateOffer(cfg, offer, isKnownRegion, regions)
     if tier ~= 1 and tier ~= 2 then return false, 'bad_tier' end
     local t = t2cfg(cfg)
     if tier == 2 and not t then return false, 'bad_tier' end
+    if not M.tierEnabled(cfg, tier) then return false, 'tier_disabled' end -- kill switch: refuse even a listed offer
     if M.gateFor(cfg, tier) and offer.region_id ~= offer.from_region then return false, 'bad_region' end
     if offer.key ~= M.offerKey(offer.from_region, offer.to_region, offer.item, tier) or #M.questId(offer.key) > 64 then return false, 'bad_key' end
     if tier == 1 then
@@ -383,18 +385,6 @@ function M.wagonFits(cfg, offer, tierRow)
     if finite(tierRow.maxWeight) and finite(good.weight) and offer.qty * good.weight > tierRow.maxWeight then
         return false, 'fh_freight_wagon_too_small'
     end
-    return true
-end
-
----Fail-closed unlock gate (soft dep on fh_progression, fh_fence/fh_hands pcall pattern). `getState` =
----GetResourceState, `canUnlock` = function() returning exports.fh_progression:canUnlock(src, id).
----@return boolean ok, string? why  why = 'not_started'|'threw'|<canUnlock reason>|'denied' (callers refuse 'fh_locked')
-function M.checkUnlock(getState, canUnlock)
-    local okS, st = pcall(getState, 'fh_progression')
-    if not okS or st ~= 'started' then return false, 'not_started' end
-    local ok, res, why = pcall(canUnlock)
-    if not ok then return false, 'threw' end
-    if res ~= true then return false, type(why) == 'string' and why or 'denied' end
     return true
 end
 

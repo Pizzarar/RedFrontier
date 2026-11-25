@@ -29,7 +29,7 @@ local function newEnv(opts)
     FhRegions = { regions = { heartlands = {}, dunes = {} }, isKnownRegion = function(id) return id == 'heartlands' or id == 'dunes' end }
     FhCargoRules = CARGO
     if opts.t2 then -- roads-02 R9: T2 contracts on a 500 m route; salt gets a weight so wagon fit is real
-        FhTradeConfig.freight.t2 = { unlock = 'contracts_t2', minWagonTier = 2, minDistance = 400, deadlineBase = 900,
+        FhTradeConfig.freight.t2 = { minWagonTier = 2, minDistance = 400, deadlineBase = 900,
             deadlinePerMeter = 1.0, minQty = 10, maxQty = 30, qtyPerLevel = 30, maxLoad = 300000, payMultiple = 3, payCapMultiple = 4,
             repDelta = 4, maxOffers = 2 }
         FhTradeConfig.freight.destinations.heartlands = { x = 0, y = 0, z = 0, radius = 40 }
@@ -45,6 +45,7 @@ local function newEnv(opts)
     } } end }
     exp.fh_trade = { getShortages = function(_, id) return E.shortages[id] or {} end }
     if not opts.noProgression then
+        -- canUnlock stays stubbed only so specs can prove freight never calls it (R13: regional getTier alone)
         exp.fh_progression = { canUnlock = function(_, src, id)
             E.unlockCalls[#E.unlockCalls + 1] = { src = src, id = id }
             if E.unlockFn then return E.unlockFn(src, id) end
@@ -340,26 +341,26 @@ case('T2 offers: the board hook lists T2 with locked = true (no player is known 
     local list = E.hooks.offers('heartlands')
     T.eq(2, #list)
     T.eq(1, list[1].tier); T.eq(nil, list[1].locked)
-    T.eq(2, list[2].tier); T.eq(true, list[2].locked); T.eq('contracts_t2', list[2].unlock)
-    T.eq(0, #E.unlockCalls, 'offers must not call canUnlock')
+    T.eq(2, list[2].tier); T.eq(true, list[2].locked); T.eq(nil, list[2].unlock); T.eq(2, list[2].min_region_tier)
+    T.eq(0, #E.unlockCalls, 'offers must not call canUnlock'); T.eq(0, #E.tierCalls, 'offers must not call getTier')
 end)
 
-case('T2 accept allowed: canUnlock(src, contracts_t2) true + t2 wagon -> cargo added, contract listed', function()
+case('T2 accept allowed: getTier(src, heartlands) 2 + t2 wagon -> cargo added, contract listed; canUnlock never called', function()
     local E = newEnv({ t2 = true })
     local o = t2Offer(E)
     local ok, err = acceptWith(E, o, 't2')
     assert(ok == true, tostring(err))
-    T.same({ { src = 7, id = 'contracts_t2' } }, E.unlockCalls)
+    T.same({ { src = 7, region = 'heartlands' } }, E.tierCalls); T.eq(0, #E.unlockCalls)
     T.eq(1, #E.addCalls); T.eq(15, E.addCalls[1].n); T.same({ freight = 'heartlands.dunes.trade_salt.t2' }, E.addCalls[1].info)
     T.eq(1, #E.registered.getContracts(7))
 end)
 
-case('T2 accept refused fh_locked: tier_too_low / not started / throws / export missing / non-true; nothing added, lock released', function()
+case('T2 accept refused fh_locked: tier 1 / not started / getTier throws / export missing / non-number; nothing added, lock released', function()
     local setups = {
-        tier_too_low = function(E) E.unlockFn = function() return false, 'tier_too_low' end end,
+        tier_too_low = function(E) E.tiers.heartlands = 1 end,
         not_started = function(E) E.states.fh_progression = 'stopped' end,
-        throws = function(E) E.unlockFn = function() error('progression cache boom') end end,
-        truthy = function(E) E.unlockFn = function() return 1 end end,
+        throws = function(E) E.tierFn = function() error('progression cache boom') end end,
+        string = function(E) E.tierFn = function() return '2' end end,
     }
     for name, setup in pairs(setups) do
         local E = newEnv({ t2 = true })
@@ -368,8 +369,8 @@ case('T2 accept refused fh_locked: tier_too_low / not started / throws / export 
         local ok, err = acceptWith(E, o, 't2')
         assert(ok == false and err == 'fh_locked', name .. ' -> ' .. tostring(err))
         T.eq(0, #E.addCalls, name .. ': cargo added'); T.eq(0, #E.registered.getContracts(7), name .. ': contract kept')
-        if name == 'not_started' then T.eq(0, #E.unlockCalls, 'canUnlock called while fh_progression is stopped') end
-        E.unlockFn, E.states.fh_progression = nil, nil -- gate opens: the accept lock must have been released
+        if name == 'not_started' then T.eq(0, #E.tierCalls, 'getTier called while fh_progression is stopped') end
+        E.tierFn, E.states.fh_progression, E.tiers.heartlands = nil, nil, nil -- gate opens: the accept lock must have been released
         assert(acceptWith(E, o, 't2') == true, name .. ': accept lock not released')
     end
     local E = newEnv({ t2 = true, noProgression = true }) -- fh_progression exports absent entirely
@@ -377,14 +378,14 @@ case('T2 accept refused fh_locked: tier_too_low / not started / throws / export 
     assert(ok == false and err == 'fh_locked', 'missing export -> ' .. tostring(err))
 end)
 
-case('T1 is never gated: accepted with fh_progression stopped / throwing / absent, canUnlock not called', function()
+case('T1 is never gated: accepted with fh_progression stopped / throwing / absent, no progression export called', function()
     for _, mode in ipairs({ 'stopped', 'throws', 'absent' }) do
         local E = newEnv({ t2 = true, noProgression = mode == 'absent' })
         if mode == 'stopped' then E.states.fh_progression = 'stopped' end
-        if mode == 'throws' then E.unlockFn = function() error('x') end end
+        if mode == 'throws' then E.tierFn = function() error('x') end E.unlockFn = E.tierFn end
         local ok, err = acceptWith(E, t1Offer(E), 't1')
         assert(ok == true, mode .. ' -> ' .. tostring(err))
-        T.eq(0, #E.unlockCalls, mode .. ': canUnlock called for T1')
+        T.eq(0, #E.unlockCalls, mode .. ': canUnlock called for T1'); T.eq(0, #E.tierCalls, mode .. ': getTier called for T1')
     end
 end)
 
@@ -405,10 +406,10 @@ case('T2 wagon fit: t1 cart too small, unknown tier fails closed, t3 fits; refus
     assert(acceptWith(E, o, 't3') == true, 't3 freight wagon fits')
 end)
 
-case('T2 accept: the character changed while canUnlock ran -> fh_no_player, nothing added', function()
+case('T2 accept: the character changed while getTier ran -> fh_no_player, nothing added', function()
     local E = newEnv({ t2 = true })
     local o = t2Offer(E)
-    E.unlockFn = function() E.online[7] = 'CID2' return true end -- canUnlock yields in game (rep read)
+    E.tierFn = function() E.online[7] = 'CID2' return 3 end -- getTier yields in game (rep cache load)
     local ok, err = acceptWith(E, o, 't2')
     assert(ok == false and err == 'fh_no_player', tostring(err))
     T.eq(0, #E.addCalls)
@@ -472,7 +473,7 @@ case('R12: accept rejects disabled origin or destination (before unlock/addItem,
     T.eq(false, ok); T.eq('fh_freight_region_disabled', err)
     ok, err = acceptWith(E, staleFrom, 't2')
     T.eq(false, ok); T.eq('fh_freight_region_disabled', err)
-    T.eq(0, #E.unlockCalls, 'rejected before progression unlock gate')
+    T.eq(0, #E.tierCalls, 'rejected before the progression tier gate'); T.eq(0, #E.unlockCalls)
     T.eq(0, #E.addCalls, 'rejected before adding cargo')
 
     -- Accept lock was never stuck: a valid enabled-region offer still accepts, and completes even if its destination is disabled mid-run.
@@ -513,11 +514,11 @@ case('R13 regional: bayou_nwa tier 2 opens bayou-origin T2 while heartlands tier
     local ok, err = acceptWith(E, t2From(E, 'heartlands'), 't2')
     assert(ok == false and err == 'fh_locked', 'heartlands tier 1 -> ' .. tostring(err))
     T.same({ { src = 7, region = 'heartlands' } }, E.tierCalls)
-    T.eq(0, #E.unlockCalls, 'regional refusal stops before the global canUnlock'); T.eq(0, #E.addCalls)
+    T.eq(0, #E.addCalls)
     ok, err = acceptWith(E, t2From(E, 'bayou_nwa'), 't2')
     assert(ok == true, 'bayou tier 2 -> ' .. tostring(err))
     T.same({ src = 7, region = 'bayou_nwa' }, E.tierCalls[2], 'gate reads the ORIGIN region, not the destination')
-    T.same({ { src = 7, id = 'contracts_t2' } }, E.unlockCalls, 'global kill switch still consulted')
+    T.eq(0, #E.unlockCalls, 'no global canUnlock: regional rep alone opens the board')
     T.eq(1, #E.addCalls); T.eq(1, #E.registered.getContracts(7))
 end)
 
@@ -535,18 +536,25 @@ case('R13 regional tier 1 / 2 / 3 per region: T2 needs >= 2; T1 accepted at tier
     T.eq(0, #E.tierCalls, 'T1 never reads getTier'); T.eq(0, #E.unlockCalls)
 end)
 
-case('R13 global kill switch: canUnlock(contracts_t2) false refuses even at region tier 2/3; lock released', function()
-    for _, t in ipairs({ 2, 3 }) do
-        local E = regionalEnv()
-        E.tiers = { bayou_nwa = t }
-        E.unlockFn = function() return false, 'tier_too_low' end
-        local o = t2From(E, 'bayou_nwa')
-        local ok, err = acceptWith(E, o, 't2')
-        assert(ok == false and err == 'fh_locked', 'tier ' .. t .. ' -> ' .. tostring(err))
-        T.eq(0, #E.addCalls); T.eq(1, #E.tierCalls)
-        E.unlockFn = nil
-        assert(acceptWith(E, o, 't2') == true, 'accept lock not released after kill-switch refusal')
-    end
+case('R13 kill switch: freight.t2.enabled false hides T2 and refuses a listed T2 at any region tier (lock free, no gate call); on again works', function()
+    local E = regionalEnv()
+    E.tiers = { bayou_nwa = 3 }
+    local o = t2From(E, 'bayou_nwa') -- listed while on
+    FhTradeConfig.freight.t2.enabled = false
+    T.eq(nil, t2From(E, 'bayou_nwa'), 'T2 hidden while off')
+    local t1n = 0 for _, x in ipairs(E.hooks.offers('bayou_nwa')) do if x.tier == 1 then t1n = t1n + 1 end end
+    assert(t1n > 0, 'T1 still listed while T2 is off')
+    local ok, err = acceptWith(E, o, 't2')
+    assert(ok == false and err == 'fh_freight_tier_disabled', 'off -> ' .. tostring(err))
+    T.eq(0, #E.tierCalls); T.eq(0, #E.addCalls)
+    FhTradeConfig.freight.t2.enabled = 'yes' -- non-true is off (fail closed)
+    ok, err = acceptWith(E, o, 't2')
+    assert(ok == false and err == 'fh_freight_tier_disabled', 'non-true -> ' .. tostring(err))
+    FhTradeConfig.freight.t2.enabled = true
+    assert(t2From(E, 'bayou_nwa'), 'T2 listed again')
+    ok, err = acceptWith(E, o, 't2')
+    assert(ok == true, 'on -> ' .. tostring(err))
+    T.eq(0, #E.unlockCalls)
 end)
 
 case('R13 fail closed: progression down / getTier throws / non-number / getTier export missing -> fh_locked, lock released', function()
@@ -565,13 +573,13 @@ case('R13 fail closed: progression down / getTier throws / non-number / getTier 
         setup(E)
         local ok, err = acceptWith(E, o, 't2')
         assert(ok == false and err == 'fh_locked', name .. ' -> ' .. tostring(err))
-        T.eq(0, #E.addCalls, name .. ': cargo added'); T.eq(0, #E.unlockCalls, name .. ': canUnlock reached')
+        T.eq(0, #E.addCalls, name .. ': cargo added'); T.eq(0, #E.unlockCalls, name .. ': canUnlock called')
         T.eq(0, #E.registered.getContracts(7), name .. ': contract kept')
         if name == 'stopped' or name == 'starting' then T.eq(0, #E.tierCalls, name .. ': getTier called while not started') end
         E.tierFn, E.states.fh_progression = nil, nil
         assert(acceptWith(E, o, 't2') == true, name .. ': accept lock not released')
     end
-    local E = regionalEnv({ t2 = true, noGetTier = true }) -- canUnlock exported, getTier missing
+    local E = regionalEnv({ t2 = true, noGetTier = true }) -- only canUnlock exported, getTier missing
     local ok, err = acceptWith(E, t2From(E, 'bayou_nwa'), 't2')
     assert(ok == false and err == 'fh_locked', 'missing getTier -> ' .. tostring(err))
     T.eq(0, #E.unlockCalls); T.eq(0, #E.addCalls)
@@ -595,7 +603,7 @@ case('R13 forged region_id: claiming another origin is rejected before any gate 
     assert(acceptWith(E, t2From(E, 'heartlands'), 't2') == false, 'genuine heartlands offer still refused at tier 1')
 end)
 
-case('R13 character swap while getTier yields -> fh_no_player; canUnlock not reached; nothing added', function()
+case('R13 character swap while getTier yields -> fh_no_player; nothing added', function()
     local E = regionalEnv()
     local o = t2From(E, 'bayou_nwa')
     E.tierFn = function() E.online[7] = 'CID2' return 3 end -- getTier yields in game (rep cache load)

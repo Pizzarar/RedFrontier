@@ -232,7 +232,7 @@ end)
 -- ---------------------------------------------------------------- T2 contracts (roads-02 R9)
 
 local CARGO = dofile(here .. '../server/resources/[fh]/fh_cargo/shared/cargo_rules.lua')
-local T2 = { unlock = 'contracts_t2', minWagonTier = 2, minDistance = 400, deadlineBase = 900, deadlinePerMeter = 1.0,
+local T2 = { minWagonTier = 2, minDistance = 400, deadlineBase = 900, deadlinePerMeter = 1.0,
     minQty = 10, maxQty = 30, qtyPerLevel = 30, maxLoad = 300000, payMultiple = 3, payCapMultiple = 4,
     repDelta = 4, maxOffers = 2, cooldownMin = 30 }
 local function t2With(over) local t = {} for k, v in pairs(T2) do t[k] = v end for k, v in pairs(over or {}) do t[k] = v end return t end
@@ -255,7 +255,7 @@ case('T2 generate: T1 offers first (tier 1, unchanged keys), then T2 locked offe
     local o = offers[3]
     T.eq(2, o.tier); T.eq('heartlands.dunes.trade_salt.t2', o.key); assert(#F.questId(o.key) <= 64)
     T.eq(true, o.locked, 'T2 is always listed locked (board is shared; gate is per player at accept)')
-    T.eq('contracts_t2', o.unlock); T.eq(2, o.min_wagon_tier)
+    T.eq(nil, o.unlock, 'no global unlock id (R13)'); T.eq(2, o.min_region_tier); T.eq(2, o.min_wagon_tier)
     T.eq(15, o.qty)             -- clamp(ceil(0.5 * 30), 10, 30)
     T.eq(375, o.reward)         -- floor(floor(10 * 10 * 1.25) * 3) = floor(125 * 3)
     T.eq(1400, o.deadline_s)    -- 900 + 500 m * 1.0
@@ -343,19 +343,8 @@ case('T2 wagonFits: fh_cargo tier rows; t1 cart too small (tier), t2/t3 fit, wei
     assert(F.wagonFits(c, t1, CARGO.TIERS.t1), 'T1 on a cart')
 end)
 
-case('T2 checkUnlock: allowed / tier_too_low / not started / getState throws / canUnlock throws / truthy non-true', function()
-    local started = function() return 'started' end
-    assert(F.checkUnlock(started, function() return true end))
-    T.eq('tier_too_low', select(2, F.checkUnlock(started, function() return false, 'tier_too_low' end)))
-    local called = false
-    T.eq('not_started', select(2, F.checkUnlock(function() return 'stopped' end, function() called = true return true end)))
-    T.eq(false, called, 'canUnlock must not be called while fh_progression is not started')
-    T.eq('not_started', select(2, F.checkUnlock(function() error('native gone') end, function() return true end)))
-    T.eq('not_started', select(2, F.checkUnlock(nil, function() return true end)))
-    T.eq('threw', select(2, F.checkUnlock(started, function() error('No such export canUnlock') end)))
-    T.eq('denied', select(2, F.checkUnlock(started, function() return 'yes' end)), 'only true unlocks')
-    T.eq('denied', select(2, F.checkUnlock(started, function() return nil end)))
-    T.eq('contracts_t2', F.unlockFor(cfgT2(), 2)); T.eq(nil, F.unlockFor(cfgT2(), 1)); T.eq(1, F.minWagonTier(cfgT2(), 1))
+case('T2 wagon tiers: T1 needs any wagon, T2 the configured minWagonTier', function()
+    T.eq(1, F.minWagonTier(cfgT2(), 1)); T.eq(2, F.minWagonTier(cfgT2(), 2))
 end)
 
 local function loadRealTradeConfig()
@@ -371,7 +360,7 @@ case('T2 real config: every T2 pay <= 4x matching T1 (about 3x at half); qty fit
     local P = dofile(here .. '../server/resources/[fh]/fh_trade/shared/trade_prices.lua')
     local c = loadRealTradeConfig()
     local t = assert(c.freight.t2, 'freight.t2 missing')
-    T.eq('contracts_t2', t.unlock); T.eq(2, t.minWagonTier)
+    T.eq(true, t.enabled); T.eq(2, t.minWagonTier)
     T.eq(true, t.maxQty <= CARGO.TIERS.t2.slots, 't2.maxQty must not exceed the t2 wagon slots')
     T.eq(true, t.maxLoad <= CARGO.TIERS.t2.maxWeight, 't2.maxLoad must not exceed the t2 wagon max weight')
     for item, g in pairs(c.goods) do
@@ -637,14 +626,41 @@ end)
 
 -- ---------------------------------------------------------------- regional tier gate (roads-03 R13)
 
-case('R13 gateFor: T1 ungated; T2 = contracts_t2 + region tier 2; t2.unlock override; unknown tiers ungated-by-table', function()
+case('R13 gateFor: T1 ungated; T2 = region tier 2 only (no global unlock id); copies', function()
     T.eq(nil, F.gateFor(cfgT2(), 1))
-    T.same({ unlock = 'contracts_t2', minRegionTier = 2 }, F.gateFor(cfgT2(), 2))
-    T.same({ unlock = 'contracts_t2', minRegionTier = 2 }, F.gateFor(cfgNew(), 2), 'default unlock without t2 config')
-    T.eq('my_switch', F.gateFor(cfgT2({ t2 = t2With({ unlock = 'my_switch' }) }), 2).unlock)
-    T.eq('contracts_t2', F.gateFor(cfgT2({ t2 = t2With({ unlock = '' }) }), 2).unlock, 'empty override ignored')
+    T.same({ minRegionTier = 2 }, F.gateFor(cfgT2(), 2))
+    T.same({ minRegionTier = 2 }, F.gateFor(cfgNew(), 2))
+    T.eq(nil, F.unlockFor, 'unlockFor removed'); T.eq(nil, F.checkUnlock, 'checkUnlock removed')
     F.gateFor(cfgT2(), 2).minRegionTier = 1
     T.eq(2, F.gateFor(cfgT2(), 2).minRegionTier, 'gateFor hands out a copy; TIER_GATES cannot be mutated through it')
+end)
+
+case('R13 kill switch tierEnabled: default on; false / non-true off (fail closed); T1 always on; no t2 table = off', function()
+    T.eq(true, F.tierEnabled(cfgT2(), 2), 'enabled absent = on')
+    T.eq(true, F.tierEnabled(cfgT2({ t2 = t2With({ enabled = true }) }), 2))
+    for _, v in ipairs({ false, 'no', 'true', 0, 1 }) do
+        T.eq(false, F.tierEnabled(cfgT2({ t2 = t2With({ enabled = v }) }), 2), 'enabled = ' .. tostring(v))
+    end
+    T.eq(false, F.tierEnabled(cfgNew(), 2), 'no t2 config')
+    T.eq(true, F.tierEnabled(cfgNew(), 1)); T.eq(true, F.tierEnabled(cfgT2({ t2 = t2With({ enabled = false }) }), 1), 'T1 cannot be switched off')
+    T.eq(false, F.tierEnabled(cfgT2(), 4), 'unknown tier is never on')
+end)
+
+case('R13 kill switch off: no T2 offers listed (T1 untouched) and validateOffer refuses a listed T2 offer', function()
+    local on = cfgT2()
+    local o = t2of(F.generate(on, 'heartlands', SH))
+    assert(o and F.validateOffer(on, o, known))
+    local off = cfgT2({ t2 = t2With({ enabled = false }) })
+    local list = F.generate(off, 'heartlands', SH)
+    T.eq(nil, t2of(list), 'T2 hidden'); T.eq(2, #list, 'T1 offers still listed'); T.eq(1, list[1].tier)
+    T.eq('tier_disabled', select(2, F.validateOffer(off, o, known)))
+    assert(F.validateOffer(off, list[1], known), 'T1 still valid with T2 off')
+end)
+
+case('R13 real config: freight.t2.enabled ships true, no unlock id', function()
+    local c = loadRealTradeConfig()
+    T.eq(true, c.freight.t2.enabled); T.eq(nil, c.freight.t2.unlock)
+    T.eq(true, F.tierEnabled(c, 2))
 end)
 
 case('R13 checkRegionTier: tier 1/2/3 vs need 2; not started; getState throws; getTier throws; non-number', function()
