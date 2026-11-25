@@ -38,7 +38,7 @@ local SPRITES = {
 
 local props = {}       -- spawned object handles (local, non-networked)
 local blip = nil       -- the cycle blip handle
-local blipActive = false
+local blipGen = 0      -- generation counter: clearBlip bumps it, which stops any running cycle thread
 
 local function say(msg)
     print('[spk_herb] ' .. msg)
@@ -54,8 +54,26 @@ local function loadModel(name)
     RequestModel(hash, false)
     local t = GetGameTimer() + 5000
     while not HasModelLoaded(hash) and GetGameTimer() < t do Wait(50) end
-    if not HasModelLoaded(hash) then return nil, 'load timed out' end
+    if not HasModelLoaded(hash) then
+        SetModelAsNoLongerNeeded(hash)
+        return nil, 'load timed out'
+    end
     return hash
+end
+
+local function clearProps()
+    for _, o in ipairs(props) do
+        if DoesEntityExist(o) then DeleteEntity(o) end
+    end
+    props = {}
+end
+
+local function clearBlip()
+    blipGen = blipGen + 1 -- invalidate any running cycle thread before touching the handle
+    if blip and blip ~= 0 then
+        RemoveBlip(blip) -- 0xF2C3C9DA47AAA54A
+        blip = nil
+    end
 end
 
 -- /spk_herb props
@@ -91,17 +109,17 @@ end
 -- /spk_herb blip
 local function spawnBlip()
     clearBlip()
+    local gen = blipGen -- this thread's generation; a later clearBlip() bumps blipGen and stops us
     local ped = PlayerPedId()
     local c = GetEntityCoords(ped, true, true)
     blip = Citizen.InvokeNative(N_BLIP_ADD_FOR_COORDS, BLIP_STYLE, c.x, c.y, c.z)
     if not blip or blip == 0 then return say('BLIP_ADD_FOR_COORDS returned no blip') end
     SetBlipScale(blip, 0.8)
     Citizen.InvokeNative(N_SET_BLIP_NAME, blip, 'herb patch cue')
-    blipActive = true
     say('blip created at the player; cycling ' .. #SPRITES .. ' candidate sprites every 3s')
     CreateThread(function()
         local i = 0
-        while blipActive and blip and blip ~= 0 do
+        while blipGen == gen and blip and blip ~= 0 do
             local s = SPRITES[(i % #SPRITES) + 1]
             SetBlipSprite(blip, s.hash, 1) -- 0x74F74D3207ED525C, p2=1
             say(('showing sprite %d/%d: %s joaat=%s (%s)'):format(
@@ -110,21 +128,6 @@ local function spawnBlip()
             Wait(3000)
         end
     end)
-end
-
-local function clearProps()
-    for _, o in ipairs(props) do
-        if DoesEntityExist(o) then DeleteEntity(o) end
-    end
-    props = {}
-end
-
-local function clearBlip()
-    blipActive = false
-    if blip and blip ~= 0 then
-        RemoveBlip(blip) -- 0xF2C3C9DA47AAA54A
-        blip = nil
-    end
 end
 
 -- /spk_herb clear
