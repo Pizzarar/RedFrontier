@@ -38,13 +38,13 @@ case('food/drink map: rows are valid or skipped by registry existence', function
     }
     for name in pairs(names) do assert(I.isForeign(name), name .. ' should be foreign') end
     assert(I.isForeign('fh_jerky') == false and I.isForeign('fh_canteen') == false, 'fh items are ours')
-    -- all 10 foreign items exist -> nothing skipped; 4 fh + 10 foreign = 14 rows register
+    -- all 11 foreign items exist -> nothing skipped; 4 fh + 11 foreign = 15 rows register
     local register, skipped = I.usableRows(function(n) return names[n] == true end)
     assert(#skipped == 0, 'known rsg items must not be skipped')
-    assert(#register == 14, '#register = ' .. #register)
+    assert(#register == 15, '#register = ' .. #register)
     -- a future @crafting/@hunting item that does not exist yet is skipped; our fh items still register
     local r2, s2 = I.usableRows(function() return false end)
-    assert(#r2 == 4 and #s2 == 10, 'foreign rows skipped, fh rows kept: ' .. #r2 .. '/' .. #s2)
+    assert(#r2 == 4 and #s2 == 11, 'foreign rows skipped, fh rows kept: ' .. #r2 .. '/' .. #s2)
 end)
 
 case('food/drink fractions match the jerky/biscuit/stew scale', function()
