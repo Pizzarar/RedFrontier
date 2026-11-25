@@ -732,6 +732,40 @@ Reward scaling by offer min_tier (1.0x at tier 1, 1.5x at tier 2, 2.25x at tier 
     In all cases, payment occurs exactly once via `fh_economy`, scaled by 1.5x. Even if the player's rep subsequently drops or increases while the job is active, the payout remains 1.5x because scaled rewards are frozen in `progress.job` at accept.
     RESULT:
 
+Legacy hunt keys (idea-902). Before idea-902 a hunt job was saved as `job:hunt_request:<animal>_<N>star`; the new build
+keys it `job:hunt_request:hunt_<region>_<animal>_<N>star` and re-keys an old row when the character's quests load
+(`server/main.lua:110`, `:135-162`; rules in `shared/jobs.lua` `migrateLegacy`). Rows are read fresh on every character
+load (`server/main.lua:338`), so a relog is enough (a server restart also works). On a server already on the new build,
+plant an old row by hand with the SQL below (DevPC DB is MariaDB 11.4, `tools/setup-server.ps1:8`; columns from
+`server/migrations/0007_quest_state.sql`). `<cid>` = your citizenid (`players` table). Use the "Pelt wanted: 2-star wolf"
+offer: heartlands, $16 and +1 rep, tier 1, so no scaling (`data/regions/heartlands.lua:6`, `shared/jobtypes/hunt_request.lua:31,36`).
+If it is not on the board this hour, wait for the next rotation (step 19).
+
+Plant SQL (disconnect first; it turns your new-format wolf job back into the pre-idea-902 form, id and snapshot key):
+`UPDATE fh_quest_state SET quest_id = 'job:hunt_request:wolf_2star', progress = JSON_SET(progress, '$.job.key', 'wolf_2star') WHERE citizenid = '<cid>' AND quest_id = 'job:hunt_request:hunt_heartlands_wolf_2star';` -> 1 row.
+Check SQL (run after the plant, and again after you rejoin):
+`SELECT quest_id, status, cooldown_until, JSON_VALUE(progress, '$.job.key') AS job_key, JSON_VALUE(progress, '$.job.legacy_key') AS legacy_key FROM fh_quest_state WHERE citizenid = '<cid>' AND quest_id LIKE 'job:hunt_request:%';`
+
+21. Legacy active job. Accept "Pelt wanted: 2-star wolf" and disconnect. Run the plant SQL; the check SQL shows
+    `job:hunt_request:wolf_2star`, `active`, `job_key` = `wolf_2star`, `legacy_key` = NULL. Rejoin.
+    Expected: one console line `[fh_quests] legacy row <cid>/job:hunt_request:wolf_2star re-keyed to job:hunt_request:hunt_heartlands_wolf_2star`
+    (`server/main.lua:159`) and no `legacy re-key ... failed` or `legacy row ... kept` line (`:140`, `:144`, `:154`). The check SQL now
+    shows only `job:hunt_request:hunt_heartlands_wolf_2star`, `active`, `job_key` = `hunt_heartlands_wolf_2star`, `legacy_key` = `wolf_2star`
+    (the old row is gone: one transaction writes the new row and deletes the old, `server/main.lua:149-152`). `/journal` still lists
+    "Pelt wanted: 2-star wolf", and if the offer is on `/jobs` its row shows `Accepted` (`server/main.lua:286`). Sell a wolf pelt of 2+
+    stars at the trapper.
+    Expected: the job completes and pays $16 and +1 rep once. The newest `fh_ledger` rows for you are `pay` 16 and `rep` 1, both with
+    the OLD reason `quest:job:hunt_request:wolf_2star` (a re-keyed job keeps its old ledger reason until it is accepted again:
+    `shared/jobs.lua:115`, `:196`). Sell a second matching pelt: no second payment, no second `quest:` row.
+    RESULT:
+22. Legacy job on cooldown. Within 60 minutes of step 21's completion (job cooldown, `shared/jobs.lua:16`), disconnect and run the plant
+    SQL again (it now moves the `done` row; the check SQL shows `done` and a `cooldown_until` in the future). Rejoin.
+    Expected: the same `re-keyed to` console line as step 21; the check SQL shows the new id, `done`, the same `cooldown_until`.
+    With the wolf 2-star offer on `/jobs`, click Accept: refused with `You took that job recently. Try another.`
+    (`fh_quest_cooldown`, `shared/engine.lua:252`, `server/ui_text.lua:14`). After `cooldown_until` has passed, Accept works and the
+    next completion pays under the new reason `quest:job:hunt_request:hunt_heartlands_wolf_2star` (the check SQL shows `legacy_key` = NULL).
+    RESULT:
+
 Known limits (not failures):
 - Item rewards stay owed: fh_core refuses `backpack`/`equipped` item adds (idea-643), so a quest with `items` keeps
   `reward_pending`, pays money/rep once, retries on each load, and a repeatable with items cannot be taken again
