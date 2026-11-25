@@ -57,10 +57,17 @@ local function newWorld(db, refillOn)
             if W.fail.refillRead then error('db down') end
             local v = W.db.refill[p[1]]
             return v and { { last_refill_at = v } } or {}
+        elseif sql:find('^SELECT t%.last_refill_at FROM fh_plot_trough t JOIN fh_plots p') then
+            if W.fail.refillRead then error('db down') end
+            local v = W.db.refill[p[1]]
+            if v == nil or W.db.plots[p[1]] ~= p[2] then return {} end
+            return { { last_refill_at = v } }
         elseif sql:find('^INSERT INTO fh_plot_trough') then
             if W.fail.refillWrite then error('db down') end
             if W.db.plots[p[3]] ~= p[4] then return 0 end
             W.db.refill[p[1]] = p[2]
+            if W.fail.rollover then W.now = W.now + 1 end -- the clock ticks over during the await
+            if W.fail.stolen then W.db.plots[p[1]] = 'B' end -- plot changes hands right after the write
             if W.fail.refillUnchanged then return 0 end -- MySQL: 0 affected when the value is unchanged
             return 1
         elseif sql:find('^DELETE FROM fh_plot_trough') then
@@ -249,6 +256,18 @@ T.describe('refill on mount', function()
         T.eq(2, W.trough().feedbag); T.eq(T0, W.db.refill[P1])
         T.eq('fh:homestead:trough_refilled', W.client[#W.client].name)
         T.eq(add0, W.calls.addItem)
+    end)
+    case('affected=0 and the clock rolls over between the write and the re-read: still a success (one ts)', function()
+        local W = world(true); W.trough().feedbag = 3; W.peds[1] = at(p1)
+        W.fail.refillUnchanged = true; W.fail.rollover = true
+        local add0 = W.calls.addItem; assert(W.refill(1))
+        T.eq(2, W.trough().feedbag); T.eq(T0, W.db.refill[P1]); T.eq(add0, W.calls.addItem)
+    end)
+    case('affected=0 and the re-read row belongs to someone else: refund, no refill', function()
+        local W = world(true); W.trough().feedbag = 3; W.peds[1] = at(p1)
+        W.fail.refillUnchanged = true; W.fail.stolen = true
+        T.same({ false, 'fh_trough_save_failed', n = 2 }, r(W.TR.refill(1)))
+        T.eq(3, W.trough().feedbag)
     end)
     case('empty trough = no refill (and no cooldown recorded)', function()
         local W = world(true); W.peds[1] = at(p1)

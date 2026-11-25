@@ -245,17 +245,20 @@ local function refillLocked(st)
     if not okr then return false, 'fh_removeitem_unavailable' end
     if res ~= true then return false, rwhy == 'fh_not_enough' and 'fh_trough_empty' or (rwhy or 'fh_removeitem_failed') end
     st.taken = true
+    local ts = now() -- one clock read: the write and the re-read compare must agree across the awaits
     local okw, affected = pcall(MySQL.update.await,
         'INSERT INTO fh_plot_trough (plot_id, last_refill_at) SELECT ?, ? FROM fh_plots WHERE plot_id = ? AND citizenid = ?'
         .. ' ON DUPLICATE KEY UPDATE last_refill_at = VALUES(last_refill_at)',
-        { st.plotId, now(), st.plotId, st.cid })
+        { st.plotId, ts, st.plotId, st.cid })
     local saved = okw and (tonumber(affected) or 0) >= 1
     if okw and not saved then
         -- 0 affected rows is ambiguous: ON DUPLICATE KEY UPDATE reports 0 when the value is unchanged (same second,
         -- cooldownSeconds 0, clock step back), but the ownership-guarded SELECT also inserts 0 rows for a lost plot.
         -- Re-read the row: it exists with this timestamp only if the write really took.
-        local okq, rows = pcall(MySQL.query.await, 'SELECT last_refill_at FROM fh_plot_trough WHERE plot_id = ?', { st.plotId })
-        saved = okq and type(rows) == 'table' and rows[1] ~= nil and tonumber(rows[1].last_refill_at) == now()
+        local okq, rows = pcall(MySQL.query.await,
+            'SELECT t.last_refill_at FROM fh_plot_trough t JOIN fh_plots p ON p.plot_id = t.plot_id'
+            .. ' WHERE t.plot_id = ? AND p.citizenid = ?', { st.plotId, st.cid })
+        saved = okq and type(rows) == 'table' and rows[1] ~= nil and tonumber(rows[1].last_refill_at) == ts
     end
     if not saved then
         log('warn', ('trough refill %s: could not record the refill (%s); putting the feedbag back')
