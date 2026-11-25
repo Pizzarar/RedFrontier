@@ -22,6 +22,7 @@
 - Native default flip (WaterCheck/SluggishEffect) after the owner's F3 spike PASS.
 
 ## In flight
+- PASS/MERGED 2026-11-25: idea-857 /rest e8ba6f1 (Gemini PASS 0/0/1); G1 any-owner campfire heat via stationAt (idea-893) + restBed cooldown (idea-948) 8d0b4f1 (Sonnet PASS 0/0/2). New gates clean for survival on 8d0b4f1: 128/2303/0/0, load-manifests 0 unknown, contracts 0 findings. Owner steps 29-31 added. MERGED idea-1008 carrot well_fed 0.25 (0f4d2e9 2af9721 + H18 allowlist stopgap dropped 67059af; Gemini PASS 0/0/0). Owner steps 29-32. Lane queue empty: next plan via Buddy.
 - survival-02 handed to Sur2 rn-9bba3824750e (2026-11-24). survival-01 fully merged (caebf25).
 - PASS/MERGED survival-02 complete: F1 c6e26bd + F2 029a49f (Gemini PASS 0/0/1, 0/0/3), F3 card dc424a1 (PASS 0/0/0). venv 105/1947/0/0. Lows queued: task F-lows, @homestead idea-893. Next: owner runs ## Survival steps 21-28; native default flip only after spike PASS.
 - MERGED S1 on main @ 9730266 (range-diff '=' vs 1d21178, venv specs 36/697/0).

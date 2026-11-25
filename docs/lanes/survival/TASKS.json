@@ -1,6 +1,6 @@
 {
   "laneId": "survival",
-  "updatedAt": "2026-11-25T01:51:21.825Z",
+  "updatedAt": "2026-11-25T17:01:11.611Z",
   "units": [
     {
       "id": "S3-low",
@@ -93,7 +93,36 @@
       "goal": "survival-02 review lows: drink refuse/refund msg says 'eat' (F1 actions.lua:65-70); H.reconcile gate on not wanted[id] (F2 shared/homestead_heat.lua:48-55); offline-owner fires: use homestead all-stations accessor when it lands",
       "files": [],
       "doneCheck": "",
-      "status": "todo"
+      "status": "done",
+      "branch": "survival-flows",
+      "commit": "9253835"
+    },
+    {
+      "id": "idea-857",
+      "goal": "client /rest sender for fh:survival:restBed (homestead bed rest unreachable)",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "survival-rest",
+      "commit": "e8ba6f1"
+    },
+    {
+      "id": "idea-948",
+      "goal": "",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "survival-g1",
+      "commit": "8d0b4f1"
+    },
+    {
+      "id": "idea-1008",
+      "goal": "carrot in fh_survival food map; drop H18 allowlist stopgap",
+      "files": [],
+      "doneCheck": "",
+      "status": "done",
+      "branch": "survival-carrot",
+      "commit": "67059af"
     }
   ]
 }
