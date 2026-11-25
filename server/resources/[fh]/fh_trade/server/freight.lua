@@ -130,6 +130,9 @@ local function accept(src, offer)
     if not citizenid then return false, 'fh_no_player' end
     local ok, err = F.validateOffer(cfg, offer, FhRegions.isKnownRegion, FhRegions)
     if not ok then return false, 'fh_freight_' .. err end
+    if FhRegions.isEnabled and not (FhRegions.isEnabled(offer.from_region) and FhRegions.isEnabled(offer.to_region)) then
+        return false, 'fh_freight_region_disabled'
+    end
     if accepting[citizenid] then return false, 'fh_busy' end
     accepting[citizenid] = true -- held across the yielding exports below, so two accepts cannot both pass the cap
     local rok, res, extra = pcall(function()

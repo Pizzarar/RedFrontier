@@ -434,4 +434,45 @@ case('R12: post-derived destinations deliver at resolved post coords and skip di
     T.eq(1, delivered(E), 'delivered using post-derived destination')
 end)
 
+case('R12: accept rejects disabled origin or destination (before unlock/addItem, lock free); in-flight contract still delivers if region is later disabled', function()
+    local E = newEnv({ t2 = true })
+    FhTradeConfig.freight.destinations = nil
+    FhTradeConfig.posts = {
+        { id = 'val_post', radius = 6 },
+        { id = 'dunes_post', radius = 6 },
+        { id = 'off_post', radius = 6 },
+    }
+    local disabled = { offworld = true }
+    FhRegions = {
+        regions = { heartlands = {}, dunes = {}, offworld = {} },
+        posts = {
+            val_post   = { id = 'val_post',   region = 'heartlands', x = 0,    y = 0, z = 0 },
+            dunes_post = { id = 'dunes_post', region = 'dunes',      x = 500,  y = 0, z = 0 },
+            off_post   = { id = 'off_post',   region = 'offworld',   x = 2000, y = 0, z = 0 },
+        },
+        isKnownRegion = function(id) return id == 'heartlands' or id == 'dunes' or id == 'offworld' end,
+        isEnabled = function(id) return not disabled[id] end,
+    }
+    -- Build stale/hand-crafted T2 offers with disabled origin or destination.
+    local staleTo = F.generate(FhTradeConfig, 'heartlands', { offworld = { { item = 'trade_salt', level = 0.5, price = 10 } } }, FhRegions)[2]
+    local staleFrom = F.generate(FhTradeConfig, 'offworld', { heartlands = { { item = 'trade_salt', level = 0.5, price = 10 } } }, FhRegions)[2]
+    assert(staleTo and staleTo.tier == 2 and staleFrom and staleFrom.tier == 2)
+
+    local ok, err = acceptWith(E, staleTo, 't2')
+    T.eq(false, ok); T.eq('fh_freight_region_disabled', err)
+    ok, err = acceptWith(E, staleFrom, 't2')
+    T.eq(false, ok); T.eq('fh_freight_region_disabled', err)
+    T.eq(0, #E.unlockCalls, 'rejected before progression unlock gate')
+    T.eq(0, #E.addCalls, 'rejected before adding cargo')
+
+    -- Accept lock was never stuck: a valid enabled-region offer still accepts, and completes even if its destination is disabled mid-run.
+    E.shortages.dunes = { { item = 'trade_salt', level = 0.5, price = 10 } }
+    local validOffer = E.hooks.offers('heartlands')[1]
+    assert(acceptWith(E, validOffer, 't1') == true)
+    disabled.dunes = true
+    E.wagons['CID1:t1'].coords = { x = 500, y = 0, z = 0 }
+    E.tick()
+    T.eq(1, delivered(E), 'already-accepted contract still delivers when destination is later disabled')
+end)
+
 T.finish()
