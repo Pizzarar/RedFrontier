@@ -416,6 +416,25 @@ actions relay to lanes that may not exist yet; "unhandled" is expected.
     Expected: at 30 a `Heat` widget appears (opened by fh_heat via `fh:ui:open`) with the `Mountain Gang` row (tier and 30, plus a bar); the mouse is not captured and you can keep moving. At 0 the widget hides. On switching character (unload) the widget clears. Then run `grep -rn "lib.registerContext\|lib.showContext\|lib.inputDialog" server/resources/[fh]/fh_trade server/resources/[fh]/fh_hunting`: no matches.
     RESULT:
 
+30. Tailor catalog (ui-tailor-catalog T4b). Walk to a tailor stop (e.g. `valentine_general`) and look for the prompt `[E] <shop label>   [G] Wardrobe`. Press E. Economy and persistence of tailor purchases: see ## Progression tailor steps (progression-03 T6).
+    Expected: the fh_ui `tailor` screen opens (title = the shop label, `Your standing here: tier N`), no ox_lib menu. Each row shows the label, `Outfit` or `Item`, `· $price`; rows you already own say `Owned` and their button reads `Owned` (disabled); rows above your tier are greyed with `Needs tier N` and cannot be bought. Each row has Preview and Buy; the footer has `Stop preview` and `Close`.
+    RESULT:
+31. In the catalog, click Buy on an unowned unlocked row you can afford. Then click Buy on a row you cannot afford (or stand just out of range and click Buy).
+    Expected: the first buy shows an `ok` notice and the row refreshes to `Owned`. A refused buy shows an error notice on the screen with the server's reason and the rows stay (nothing is taken).
+    RESULT:
+32. Preview. Click Preview on an item row first, then click Preview on an outfit row, then Preview on an item row again.
+    Expected: before any outfit preview the item Preview buttons are disabled (tooltip `Preview an outfit first`). The outfit Preview shows the outfit on your character and unlocks the item Preview buttons; an item Preview layers that item on top of the previewed outfit. A look that cannot be shown comes back as a notice on the screen.
+    RESULT:
+33. Preview always reverts. Preview an outfit, then end it each of these ways (repeat the preview before each): click `Stop preview`; click `Close`; press Esc; walk away from the stop (or have an admin kill you) while the screen is open.
+    Expected: every way restores your saved look at once (no previewed outfit sticks; with the screen closed by death or distance, NUI focus is released). Then preview an outfit, `relog`: you spawn in your saved outfit, not the previewed one.
+    RESULT:
+34. Wardrobe at a stop. At the tailor stop press G, and also stand at the chest of your own homestead plot and press G (not at a chest of someone else's plot).
+    Expected: the fh_ui `Wardrobe` screen opens with `Outfits` (Select/Selected), single items (Add/Remove), a `Wear` button, a `Preview` button and `Saved outfits` slots. At another player's chest or far from any chest/stop nothing opens (a chat refusal at most).
+    RESULT:
+35. Wardrobe actions. Select an owned outfit, Add an owned item, click `Wear`. Then click `Save here` on `Slot 1`, change the look, and click `Wear` on `Slot 1`.
+    Expected: Wear equips the selection (applies to the ped when `Config.FittedOutfits` is on). Slot 1 now shows its label and pieces (no `Empty`); `Wear` on the slot restores that saved look. Slot numbers show as integers (`Slot 1`, never `Slot 1.0`). Wardrobe Preview and `Stop preview` revert like step 33.
+    RESULT:
+
 ## Homestead (H1-H4 + H2): slots, build, stations, comfort
 
 Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hunting's `getTrophyComfort` (today step 6 shows the refusal). `<id>` is your server id (as in the fh_economy tests). Start from a character with no plot and an empty plot chest. Materials are taken from your backpack first, the rest from the plot chest (H14b); until step 3h keep them in the chest, so the backpack has none. If a `/giveitem` is refused as too heavy, give 20 at a time and move each batch into the chest.
