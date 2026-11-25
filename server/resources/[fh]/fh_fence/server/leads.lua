@@ -6,7 +6,10 @@
 --  1. One dig per citizenid at a time (lock taken before the first yield, released on every path; a second dig gets
 --     'dig_busy'). A lock whose dig never resumes is reclaimed after cfg.leads.lockStaleSeconds.
 --  2. The client sends nothing but the request: position = server-side ped coords, lead = the player's own carried
---     inventory (equipped, then backpack), target = the lead's item info written by the fence at purchase.
+--     inventory (equipped, then backpack), target = the spot the lead's item info names. Item info holds only an
+--     opaque spot id ({ lead = '<id>' }, written by the fence at purchase); the id is resolved here against the
+--     server-only spot table (FhFenceLeadSpots, server/config_leads.lua). A pre-G2b lead whose info still carries a
+--     server-written { target, hint } is accepted as that target (read server-side only), so it digs exactly once.
 --  3. Order: pick lead (distance) -> region + loot roll -> canFit the loot -> removeItem(lead, 1) -> pay out. Every
 --     refusal before removeItem leaves the lead and pays nothing. removeItem is fh_core's all-or-nothing count check,
 --     so N leads can be spent at most N times: one payout per removed lead, even if a stale lock were reclaimed.
@@ -16,7 +19,8 @@
 --     side effect (removeItem, pay, addItem) and right after removeItem. A switch before removal refuses the dig
 --     ('player_changed', nothing taken); a switch after it pays nothing more to anyone and logs a WARNING with both
 --     citizenids, the target and what is owed.
---  6. The client never gets an exact target: lead views carry the grid-rounded offset area, keyed by that area.
+--  6. The client never gets an exact target: lead views carry the grid-rounded offset area, keyed by that area. No
+--     client-visible data (shared config, item info, menu stock) holds a spot's coords or hint.
 local M = {}
 
 local CARRIED = { 'equipped', 'backpack' } -- lead search order
@@ -25,7 +29,8 @@ local CARRIED = { 'equipped', 'backpack' } -- lead search order
 ---canFit(ref, item, qty), removeItem(ref, item, qty) (all-or-nothing), addItem(ref, item, qty, info),
 ---pay(src, amount, reason, region_id), knownRegion(id) -> bool, rng(m, n), now() -> seconds, log(msg),
 ---label(item) -> string|nil. Failures are returned (false/nil, reason), not thrown; a throw is still caught.
-function M.new(cfg, logic, deps)
+---spots: the server-only spot table, id -> { coords = {x,y,z}, hint } (FhFenceLeadSpots).
+function M.new(cfg, logic, deps, spots)
     local L = cfg.leads
     local function log(fmt, ...) deps.log(fmt:format(...)) end
     local held, last = {}, {} -- citizenid -> lock token; citizenid -> last attempt time
@@ -44,7 +49,8 @@ function M.new(cfg, logic, deps)
     local function release(tok) if held[tok.cid] == tok then held[tok.cid] = nil end end
     function D.busy(cid) return held[cid] ~= nil end
 
-    local function where(t) return ('%.1f,%.1f,%.1f'):format(t.x, t.y, t.z) end
+    ---Server log only: exact target + spot id ('legacy' = a pre-G2b lead whose target matches no spot).
+    local function where(t, id) return ('%.1f,%.1f,%.1f lead=%s'):format(t.x, t.y, t.z, tostring(id or 'legacy')) end
 
     local function carried(src)
         local sections = {}
@@ -70,12 +76,12 @@ function M.new(cfg, logic, deps)
         if not pos then return false, 'no_player' end
         local sections, serr = carried(src)
         if not sections then return false, serr end
-        local pick, why = logic.pick(sections, pos, L.digRadius, L.item)
+        local pick, why = logic.pick(sections, pos, L.digRadius, L.item, spots)
         if not pick then return false, why end
 
-        local region = logic.regionFor(cfg, pick.target)
+        local region = logic.regionFor(cfg, pick.id)
         if not (region and deps.knownRegion(region)) then
-            log('ERROR lead dig: no known pay region for target %s (%s): nothing taken', where(pick.target),
+            log('ERROR lead dig: no known pay region for target %s (%s): nothing taken', where(pick.target, pick.id),
                 tostring(region))
             return false, 'lead_bad_config'
         end
@@ -100,12 +106,12 @@ function M.new(cfg, logic, deps)
         if not ok then
             if not CLEAN[err] then
                 log('WARNING lead dig: removeItem failed (%s): citizenid=%s src=%s target=%s section=%s; lead state '
-                    .. 'unknown, nothing paid', tostring(err), tostring(cid), tostring(src), where(pick.target),
+                    .. 'unknown, nothing paid', tostring(err), tostring(cid), tostring(src), where(pick.target, pick.id),
                     pick.ref.type)
             end
             return false, err == 'fh_not_enough' and 'no_lead' or (err or 'fh_refused')
         end
-        state.removed = { target = pick.target, region = region, loot = loot }
+        state.removed = { target = pick.target, id = pick.id, region = region, loot = loot }
 
         local res, owed = { money = 0, qty = 0 }, nil
         ---Character switched after the lead was taken: nothing more is handed to anyone on this src.
@@ -116,7 +122,7 @@ function M.new(cfg, logic, deps)
             log('WARNING lead dig: character switched %s, pay by hand: citizenid=%s (dig owner) now=%s src=%s '
                 .. 'target=%s section=%s region=%s roll=%d paid_money=%d owed_money=%d owed_item=%s x%d; the lead '
                 .. 'came from whichever character held src during removeItem', step, tostring(cid),
-                tostring(deps.citizenOf(src)), tostring(src), where(pick.target), pick.ref.type, region, loot.index,
+                tostring(deps.citizenOf(src)), tostring(src), where(pick.target, pick.id), pick.ref.type, region, loot.index,
                 res.money, owed.money or 0, owed.item or '-', owed.qty or 0)
             return false, 'dig_player_changed'
         end
@@ -142,10 +148,10 @@ function M.new(cfg, logic, deps)
             res.owed = owed
             log('WARNING lead dig: lead taken but payout incomplete, pay by hand: citizenid=%s src=%s target=%s '
                 .. 'region=%s owed_money=%d (%s) owed_item=%s x%d (%s)', tostring(cid), tostring(src),
-                where(pick.target), region, owed.money or 0, owed.payErr or '-', owed.item or '-', owed.qty or 0,
+                where(pick.target, pick.id), region, owed.money or 0, owed.payErr or '-', owed.item or '-', owed.qty or 0,
                 owed.addErr or '-')
         end
-        log('lead dug: citizenid=%s target=%s roll=%d money=%d item=%s x%d', tostring(cid), where(pick.target),
+        log('lead dug: citizenid=%s target=%s roll=%d money=%d item=%s x%d', tostring(cid), where(pick.target, pick.id),
             loot.index, res.money, tostring(res.item or '-'), res.qty)
         return true, res
     end
@@ -164,7 +170,7 @@ function M.new(cfg, logic, deps)
         local s = state.removed
         if s then
             log('WARNING lead dig: error after the lead was taken, pay by hand: citizenid=%s src=%s target=%s '
-                .. 'region=%s roll=%d money=%d item=%s x%d: %s', tostring(cid), tostring(src), where(s.target),
+                .. 'region=%s roll=%d money=%d item=%s x%d: %s', tostring(cid), tostring(src), where(s.target, s.id),
                 s.region, s.loot.index, s.loot.money, tostring(s.loot.item or '-'), s.loot.qty, tostring(r[2]))
             return false, 'dig_error_taken'
         end
@@ -173,12 +179,13 @@ function M.new(cfg, logic, deps)
     end
 
     ---Client view of one lead's item info: { key, area, radius, hint } or nil. No exact target anywhere: area is the
-    ---grid-rounded offset circle and key is derived from that area only.
+    ---grid-rounded offset circle and key is derived from that area only. The target (and the hint) are resolved from
+    ---the spot id server-side; the spot id itself is not sent either.
     function D.leadView(info)
-        local t = logic.targetOf(info)
+        local t, id = logic.targetOf(info, spots)
         if not t then return nil end
         local a = logic.area(t, L.areaRadius)
-        return { key = ('%d:%d'):format(a.x, a.y), area = a, radius = L.areaRadius, hint = tostring(info.hint or '') }
+        return { key = ('%d:%d'):format(a.x, a.y), area = a, radius = L.areaRadius, hint = logic.hintOf(info, spots, id) }
     end
 
     ---Map areas + hints for the leads the player carries (one per area).
@@ -224,6 +231,11 @@ if _G.GetCurrentResourceName and _G.lib then
 
     local ok, why = logic.validLoot(cfg.leads.loot)
     if not ok then log('ERROR leads loot table invalid (' .. tostring(why) .. '): every dig is refused') end
+    local spots = FhFenceLeadSpots -- server/config_leads.lua (server only)
+    local missing = logic.missingSpots(cfg, spots)
+    if #missing > 0 then
+        log('ERROR lead spot ids missing from server/config_leads.lua (not sold): ' .. table.concat(missing, ', '))
+    end
 
     local function citizenOf(src)
         local okp, P = pcall(function() return exports['rsg-core']:GetPlayer(src) end)
@@ -248,7 +260,7 @@ if _G.GetCurrentResourceName and _G.lib then
         now = os.time,
         log = log,
         label = function(item) return cfg.items[item] and cfg.items[item].label or nil end,
-    })
+    }, spots)
 
     lib.callback.register('fh:fence:dig', function(src) return digger.dig(src) end)
     lib.callback.register('fh:fence:leads', function(src) return digger.leadsFor(src) end)

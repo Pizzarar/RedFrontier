@@ -12,11 +12,23 @@ local leads = require('leads')
 
 assert(loadfile(fence .. 'config.lua'))()
 local cfg = FhFenceConfig
+assert(loadfile(fence .. 'server/config_leads.lua'))() -- server-only spot table
+local SPOTS = FhFenceLeadSpots
 local LEAD = cfg.leads.item
-local ROAD = cfg.stock.heartlands_road.leads[1].lead          -- heartlands_road lead (coords + hint)
-local CAMP = cfg.stock.heartlands_camp.leads[1].lead
+---A stock lead: { id, coords, hint } (id from the shared stock, coords + hint from the server-only spots).
+local function stockLead(stopId)
+    local id = cfg.stock[stopId].leads[1].lead
+    local s = assert(SPOTS[id], 'spot ' .. tostring(id))
+    return { id = id, coords = s.coords, hint = s.hint }
+end
+local ROAD = stockLead('heartlands_road')
+local CAMP = stockLead('heartlands_camp')
 local SPOT = { x = ROAD.coords.x, y = ROAD.coords.y, z = ROAD.coords.z }
-local function info(l) return { target = { x = l.coords.x, y = l.coords.y, z = l.coords.z }, hint = l.hint } end
+local function target(l) return { x = l.coords.x, y = l.coords.y, z = l.coords.z } end
+---Item info of a lead bought now (FhFenceLogic.leadInfo): the opaque spot id only.
+local function info(l) return { lead = l.id } end
+---Item info of a lead bought before G2b: the server wrote the exact target + hint.
+local function legacy(l) return { target = target(l), hint = l.hint } end
 
 -- Seeded LCG with math.random's (m, n) contract: same seed = same sequence.
 local function lcg(seed)
@@ -88,7 +100,7 @@ end)
 
 case('area: the spot is inside the circle, never its centre, and the centre is stable', function()
     for _, l in ipairs({ ROAD, CAMP }) do
-        local t = info(l).target
+        local t = target(l)
         local a = logic.area(t, cfg.leads.areaRadius)
         local d = math.sqrt((a.x - t.x) ^ 2 + (a.y - t.y) ^ 2)
         local slack = math.sqrt(2) * logic.AREA_GRID / 2 -- grid rounding moves the centre at most this far
@@ -99,9 +111,41 @@ case('area: the spot is inside the circle, never its centre, and the centre is s
     end
 end)
 
-case('regionFor: stop region for a stock lead, config fallback otherwise', function()
-    T.eq('heartlands', logic.regionFor(cfg, SPOT))
-    T.eq(cfg.leads.regionId, logic.regionFor(cfg, { x = 1, y = 2, z = 3 }))
+case('regionFor: stop region for a stock lead id, config fallback otherwise', function()
+    T.eq('heartlands', logic.regionFor(cfg, ROAD.id))
+    T.eq('heartlands', logic.regionFor(cfg, CAMP.id))
+    T.eq(cfg.leads.regionId, logic.regionFor(cfg, 'lead_nowhere'))
+    T.eq(cfg.leads.regionId, logic.regionFor(cfg, nil)) -- a pre-G2b lead whose target matches no spot
+end)
+
+case('targetOf: id resolves server-side; unknown id is nil; a pre-G2b target still resolves', function()
+    T.same({ target(ROAD), ROAD.id, n = 2 }, table.pack(logic.targetOf(info(ROAD), SPOTS)))
+    T.same({ target(CAMP), CAMP.id, n = 2 }, table.pack(logic.targetOf(info(CAMP), SPOTS)))
+    T.eq(nil, (logic.targetOf({ lead = 'lead_nowhere' }, SPOTS)))
+    T.eq(nil, (logic.targetOf(info(ROAD), nil)))        -- no spot table (e.g. on a client) = nothing to resolve
+    T.eq(nil, (logic.targetOf({ lead = 7 }, SPOTS)))
+    -- an id never falls back to a target field next to it
+    T.eq(nil, (logic.targetOf({ lead = 'lead_nowhere', target = target(ROAD) }, SPOTS)))
+    -- legacy: the stored target, mapped back to its spot id when the coords match exactly
+    T.same({ target(ROAD), ROAD.id, n = 2 }, table.pack(logic.targetOf(legacy(ROAD), SPOTS)))
+    T.same({ { x = 1, y = 2, z = 3 }, nil, n = 2 }, table.pack(logic.targetOf({ target = { x = 1, y = 2, z = 3 } }, SPOTS)))
+    T.eq(nil, (logic.targetOf({ target = { x = 1, y = 0 / 0, z = 3 } }, SPOTS)))
+    T.eq(nil, (logic.targetOf({ hint = 'x' }, SPOTS)))
+    -- hint: the spot's (server-only), else what a pre-G2b lead carries
+    T.eq(ROAD.hint, logic.hintOf(info(ROAD), SPOTS, ROAD.id))
+    T.eq('old', logic.hintOf({ target = { x = 1, y = 2, z = 3 }, hint = 'old' }, SPOTS, nil))
+    T.eq('', logic.hintOf({ lead = 'lead_nowhere' }, SPOTS, nil))
+end)
+
+case('config: every stock lead id resolves to a spot; ids do not carry coords', function()
+    T.same({}, logic.missingSpots(cfg, SPOTS))
+    T.same({ 'heartlands_camp#1=' .. CAMP.id, 'heartlands_road#1=' .. ROAD.id }, logic.missingSpots(cfg, {}))
+    for _, s in pairs(cfg.stock) do
+        for _, e in ipairs(s.leads or {}) do
+            T.eq('string', type(e.lead), 'a stock lead names its spot by id only')
+            assert(not e.lead:find('%d%d%d'), 'id looks like coords: ' .. e.lead)
+        end
+    end
 end)
 
 -- ---------------------------------------------------------------- fake world
@@ -192,7 +236,7 @@ local function world(o)
         log = function(m) W.logs[#W.logs + 1] = m end,
         label = function(item) return cfg.items[item] and cfg.items[item].label end,
     }
-    W.D = leads.new(cfg, logic, W.deps)
+    W.D = leads.new(cfg, logic, W.deps, SPOTS)
     W.C1 = W.players.C1
     W.leads = function() return count(W.C1.equipped, LEAD) + count(W.C1.backpack, LEAD) end
     return W
@@ -428,7 +472,7 @@ local function leaves(v, out)
 end
 
 local function assertNoExact(payload, l)
-    local t = info(l).target
+    local t = target(l)
     for _, v in ipairs(leaves(payload)) do
         if type(v) == 'number' then
             for _, c in ipairs({ t.x, t.y, t.z }) do
@@ -527,12 +571,207 @@ case('switch between pay and addItem: money stays with C1, the part is not given
     W.rngq = copy(GUN_ROLL)
     local realPay = W.deps.pay
     W.deps.pay = function(...) local r = table.pack(realPay(...)); W.srcs[1] = 'C2'; return table.unpack(r, 1, r.n) end
-    W.D = leads.new(cfg, logic, W.deps)
+    W.D = leads.new(cfg, logic, W.deps, SPOTS)
     T.same({ false, 'dig_player_changed', n = 2 }, table.pack(W.D.dig(1)))
     T.same({ { amount = 100, reason = 'fence_lead_dig', region = 'heartlands', cid = 'C1' } }, W.paid)
     T.eq(nil, W.calls.addItem); T.eq(0, count(W.C2.backpack, 'fh_part_gunsmith'))
     local line = assert(logged(W, 'WARNING lead dig: character switched before addItem'))
     assert(line:find('paid_money=100', 1, true) and line:find('owed_money=0', 1, true), line)
+end)
+
+-- ---------------------------------------------------------------- G2b: spot ids, pre-G2b leads, client-visible data
+
+local function at(l) return { pos = target(l) } end
+
+case('dig: resolves the lead by its spot id (item info = { lead = id } only); log names the id', function()
+    for _, l in ipairs({ ROAD, CAMP }) do
+        local W = world(withLead('backpack', l, at(l)))
+        T.same({ lead = l.id }, W.C1.backpack[5].info)
+        local ok = W.D.dig(1)
+        T.eq(true, ok)
+        T.eq(0, W.leads()); T.eq(1, #W.paid); T.eq('heartlands', W.paid[1].region)
+        assert(logged(W, ('lead dug: citizenid=C1 target=%.1f,%.1f,%.1f lead=%s'):format(l.coords.x, l.coords.y,
+            l.coords.z, l.id)), 'audit line names the spot id')
+        W.clock = W.clock + 60
+        T.same({ false, 'no_lead', n = 2 }, table.pack(W.D.dig(1)))
+        T.eq(1, #W.paid)
+    end
+end)
+
+case('dig: a lead whose spot id is unknown (spot removed) is never dug or spent', function()
+    local W = world({ backpack = { [5] = { name = LEAD, amount = 1, info = { lead = 'lead_nowhere' } } } })
+    T.same({ false, 'lead_too_far', n = 2 }, table.pack(W.D.dig(1)))
+    T.eq(1, W.leads()); T.eq(nil, W.calls.removeItem); T.eq(0, #W.paid)
+    T.same({}, W.D.leadsFor(1))
+    -- and without the server-only spot table nothing resolves at all
+    local W2 = world(withLead('backpack', ROAD))
+    W2.D = leads.new(cfg, logic, W2.deps, nil)
+    T.same({ false, 'lead_too_far', n = 2 }, table.pack(W2.D.dig(1)))
+    T.eq(1, W2.leads())
+end)
+
+case('legacy: a pre-G2b lead with target info still digs exactly once', function()
+    local W = world(withLead('backpack', ROAD, nil))
+    W.C1.backpack[5].info = legacy(ROAD)
+    W.rngq = copy(GUN_ROLL)
+    local r = interleave({ function() return W.D.dig(1) end, function() return W.D.dig(2) end })
+    T.eq(true, r[1][1]); T.same({ false, 'dig_busy', n = 2 }, r[2])
+    T.same({ { amount = 100, reason = 'fence_lead_dig', region = 'heartlands', cid = 'C1' } }, W.paid)
+    T.same({ { name = 'fh_part_gunsmith', qty = 2 } }, W.added)
+    T.eq(0, W.leads())
+    assert(logged(W, 'lead=' .. ROAD.id), 'a legacy target that matches a spot is logged with its id')
+    W.clock = W.clock + 60
+    T.same({ false, 'no_lead', n = 2 }, table.pack(W.D.dig(1)))
+    T.eq(1, #W.paid); T.eq(1, #W.added)
+end)
+
+case('legacy: a stored target that matches no spot digs at that target once, fallback region, logged as legacy', function()
+    local old = { x = 100.0, y = 200.0, z = 50.0 }
+    local W = world({ pos = copy(old), backpack = { [5] = { name = LEAD, amount = 1, info = { target = old, hint = 'h' } } } })
+    T.eq(true, (W.D.dig(1)))
+    T.eq(1, #W.paid); T.eq(cfg.leads.regionId, W.paid[1].region); T.eq(0, W.leads())
+    assert(logged(W, 'target=100.0,200.0,50.0 lead=legacy'))
+    W.clock = W.clock + 60
+    T.same({ false, 'no_lead', n = 2 }, table.pack(W.D.dig(1)))
+    T.eq(1, #W.paid)
+end)
+
+case('legacy + id lead for the same spot in one section: each dig spends one, two leads pay twice at most', function()
+    local W = world({ backpack = { [1] = { name = LEAD, amount = 1, info = legacy(ROAD) },
+                                   [2] = { name = LEAD, amount = 1, info = info(ROAD) } } })
+    T.eq(true, (W.D.dig(1))); T.eq(1, W.leads())
+    W.clock = W.clock + 60
+    T.eq(true, (W.D.dig(1))); T.eq(0, W.leads())
+    W.clock = W.clock + 60
+    T.same({ false, 'no_lead', n = 2 }, table.pack(W.D.dig(1)))
+    T.eq(2, #W.paid)
+end)
+
+case('legacy view: same area and key as the id lead, hint shown, no exact target in the payload', function()
+    local W = world()
+    local new, old = W.D.leadView(info(ROAD)), W.D.leadView(legacy(ROAD))
+    T.same(new, old)
+    T.eq(ROAD.hint, new.hint)
+    assertNoExact(new, ROAD)
+    T.eq(nil, new.lead); T.eq(nil, new.id) -- the spot id is not sent either
+end)
+
+-- Client-visible data: what fxmanifest ships to clients (shared_scripts, client_scripts, files). The shared scripts
+-- are loaded the way a client runs them (one env, GetCurrentResourceName present) and every value they leave in it
+-- is scanned; every client-visible file's text is scanned too.
+local manifestText = assert(io.open(fence .. 'fxmanifest.lua')):read('a')
+local function manifestList(key)
+    local body = manifestText:match(key .. '%s*(%b{})')
+    local out = {}
+    for e in (body or ''):gmatch("'([^']+)'") do out[#out + 1] = e end
+    return out
+end
+
+local function spotLeaks()
+    local spots = {}
+    for id, sp in pairs(SPOTS) do spots[#spots + 1] = { id = id, c = sp.coords, hint = sp.hint } end
+    return spots
+end
+
+---Every leak of a spot in a value tree: a {x,y,z} within digRadius of a spot, an x/y coord number, a hint string.
+local function scanValue(root, path0)
+    local found, seen = {}, {}
+    local function walk(v, path)
+        if type(v) == 'table' then
+            if seen[v] then return end
+            seen[v] = true
+            if type(v.x) == 'number' and type(v.y) == 'number' and type(v.z) == 'number' then
+                for _, sp in ipairs(spotLeaks()) do
+                    if logic.within(v, sp.c, cfg.leads.digRadius) then found[#found + 1] = path .. ' ~ ' .. sp.id end
+                end
+            end
+            for k, x in pairs(v) do walk(x, path .. '.' .. tostring(k)) end
+        elseif type(v) == 'number' then
+            for _, sp in ipairs(spotLeaks()) do
+                if v == sp.c.x or v == sp.c.y then found[#found + 1] = path .. '=' .. v .. ' ~ ' .. sp.id end
+            end
+        elseif type(v) == 'string' then
+            for _, sp in ipairs(spotLeaks()) do
+                if v:find(sp.hint, 1, true) then found[#found + 1] = path .. ' has hint of ' .. sp.id end
+            end
+        end
+    end
+    walk(root, path0)
+    return found
+end
+
+---Every leak of a spot in a file's text: the hint, or an x / y coord written as in config ('-520.0', '-520').
+local function scanText(txt, name)
+    local found = {}
+    for _, sp in ipairs(spotLeaks()) do
+        if txt:find(sp.hint, 1, true) then found[#found + 1] = name .. ' has hint of ' .. sp.id end
+        for _, c in ipairs({ sp.c.x, sp.c.y }) do
+            for _, f in ipairs({ ('%.1f'):format(c), ('%d'):format(math.floor(c)) }) do
+                if txt:find('%f[%w%.%-]' .. f:gsub('[%-%.]', '%%%0') .. '%f[^%w%.]') then
+                    found[#found + 1] = name .. ' has coord ' .. f .. ' of ' .. sp.id
+                end
+            end
+        end
+    end
+    return found
+end
+
+case('scanners catch the pre-G2b leak shapes (negative control)', function()
+    assert(#scanValue({ stock = { { lead = { coords = target(ROAD), hint = ROAD.hint } } } }, 'old') >= 2)
+    assert(#scanValue({ info = legacy(CAMP) }, 'old') >= 2)
+    assert(#scanText(("lead = { coords = { x = %.1f, y = %.1f } }"):format(ROAD.coords.x, ROAD.coords.y), 'old') >= 2)
+    T.same({}, scanValue({ lead = ROAD.id, area = logic.area(target(ROAD), cfg.leads.areaRadius) }, 'ok'))
+end)
+
+case('client-visible: the spot config is server-only and no shared/client file or value holds a spot', function()
+    local server = manifestList('server_scripts')
+    local visible = {}
+    for _, key in ipairs({ 'shared_scripts', 'client_scripts', 'files', 'shared_script', 'client_script', 'file' }) do
+        for _, e in ipairs(manifestList(key)) do visible[#visible + 1] = e end
+    end
+    assert(#manifestList('shared_scripts') > 0 and #manifestList('client_scripts') > 0, 'manifest parsed')
+    local isServer = false
+    for _, e in ipairs(server) do if e == 'server/config_leads.lua' then isServer = true end end
+    assert(isServer, 'server/config_leads.lua is a server_script')
+    for _, e in ipairs(visible) do
+        assert(not e:find('server/', 1, true) and not e:find('*', 1, true), 'client-visible entry ' .. e)
+    end
+
+    -- load the shared scripts in one env, as a client does (ox_lib is external: skipped)
+    local env = setmetatable({}, { __index = _G })
+    env._G = env
+    env.GetCurrentResourceName = function() return 'fh_fence' end
+    local loaded = 0
+    for _, e in ipairs(manifestList('shared_scripts')) do
+        local path = e:sub(1, 1) == '@' and (fence .. '../' .. e:sub(2)) or (fence .. e)
+        local f = io.open(path)
+        if f then
+            f:close()
+            assert(loadfile(path, 't', env))()
+            loaded = loaded + 1
+        else
+            assert(e == '@ox_lib/init.lua', 'missing shared script ' .. e)
+        end
+    end
+    T.eq(#manifestList('shared_scripts') - 1, loaded)
+    assert(rawget(env, 'FhFenceConfig') and rawget(env, 'FhFenceLeadsLogic'), 'shared globals loaded')
+    T.eq(nil, rawget(env, 'FhFenceLeadSpots'))
+    local g = {}
+    for k, v in next, env do if k ~= '_G' then g[k] = v end end
+    T.same({}, scanValue(g, 'client'))
+
+    -- text of every client-visible local file
+    for _, e in ipairs(visible) do
+        if e:sub(1, 1) ~= '@' then
+            local f = assert(io.open(fence .. e), 'client-visible file ' .. e)
+            T.same({}, scanText(f:read('a'), e))
+            f:close()
+        end
+    end
+    -- and the server-only file really is where the spots are (the scanner is not blind)
+    local f = assert(io.open(fence .. 'server/config_leads.lua'))
+    assert(#scanText(f:read('a'), 'config_leads') >= #spotLeaks())
+    f:close()
 end)
 
 T.finish()

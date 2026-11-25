@@ -862,4 +862,59 @@ case('reclaim: unpinned SELL resumes after B flagged its own leftovers for sweep
     end
 end)
 
+-- ---------------------------------------------------------------- G2b: lead item info holds no coords
+
+---Every number anywhere in a value (keys included).
+local function numbers(v, out)
+    out = out or {}
+    if type(v) == 'table' then for k, x in pairs(v) do numbers(k, out); numbers(x, out) end
+    elseif type(v) == 'number' then out[#out + 1] = v end
+    return out
+end
+
+case('lead buy: the item info written at purchase is { lead = <spot id> } only: no coords, no hint', function()
+    assert(loadfile(fence .. 'server/config_leads.lua'))()
+    local spots = FhFenceLeadSpots
+    local id = cfg.stock.heartlands_road.leads[1].lead
+    local W = world()
+    local infos = {}
+    local realAdd = W.deps.addItem
+    W.deps.addItem = function(ref, name, qty, info)
+        if name == 'fh_treasure_lead' then infos[#infos + 1] = copy(info) end
+        return realAdd(ref, name, qty, info)
+    end
+    W.T = trade.new(cfg, logic, W.deps)
+    T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(1, 'fh_treasure_lead', 1)))
+    T.same({ { lead = id } }, infos) -- what trade.lua staged (logic.leadInfo)
+    local held
+    for _, it in pairs(W.C1.bag) do if it.name == 'fh_treasure_lead' then held = it end end
+    T.same({ lead = id }, assert(held, 'lead delivered').info)
+    T.same({}, numbers(held.info))
+    T.eq(nil, held.info.target); T.eq(nil, held.info.hint)
+    assert(spots[id] and spots[id].coords, 'the id resolves only in the server-only spot table')
+    T.eq(1000 - 250, W.C1.money); T.eq(0, size(W.stash()))
+end)
+
+case('menu stock: a lead row carries only its spot id; an id missing from the spot table is not listed', function()
+    assert(loadfile(fence .. 'server/config_leads.lua'))()
+    local spots = FhFenceLeadSpots
+    local leadsLogic = dofile(fence .. 'shared/leads_logic.lua')
+    local function leadOk(e) return leadsLogic.spotOf(spots, e.lead) ~= nil end -- server/main.lua visibleStock
+    local rows = logic.filterStock(cfg.stock.heartlands_road, true, true, leadOk)
+    local leadRows = 0
+    for _, r in ipairs(rows) do
+        if r.category == 'leads' then
+            leadRows = leadRows + 1
+            T.eq('string', type(r.lead))
+            T.same({ item = 'fh_treasure_lead', price = 250, category = 'leads', lead = r.lead }, r) -- nothing else
+            T.eq(1, logic.screenData({ stock = { r } }).stock[1].qty) -- still a fixed-qty lead row
+        end
+    end
+    T.eq(1, leadRows)
+    local broken = { common = {}, leads = { { item = 'fh_treasure_lead', price = 1, lead = 'lead_nowhere' } } }
+    T.same({}, logic.filterStock(broken, true, true, leadOk))
+    T.eq(1, #logic.filterStock(broken, true, true)) -- no predicate (specs / old callers): listed as before
+    T.eq(nil, logic.leadInfo({ lead = { coords = { x = 1, y = 2, z = 3 } } })) -- an old-shape entry writes nothing
+end)
+
 T.finish()

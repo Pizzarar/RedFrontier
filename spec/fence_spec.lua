@@ -83,12 +83,11 @@ case('quoteSell: only bought items and qty (payout cap is fh_economy pay\'s amou
     _, why = logic.quoteSell(cfg, 5, 1); T.eq('bad_item', why)
 end)
 
-case('leadInfo carries target coords and hint', function()
+case('leadInfo carries only the opaque spot id (G2b: no coords, no hint)', function()
     local e = cfg.stock.heartlands_road.leads[1]
-    local info = logic.leadInfo(e)
-    T.same(e.lead.coords, info.target)
-    T.eq(e.lead.hint, info.hint)
-    assert(logic.leadInfo({}) == nil and logic.leadInfo({ lead = { coords = { x = 1 } } }) == nil)
+    T.same({ lead = e.lead }, logic.leadInfo(e))
+    assert(logic.leadInfo({}) == nil and logic.leadInfo({ lead = '' }) == nil)
+    assert(logic.leadInfo({ lead = { coords = { x = 1, y = 2, z = 3 }, hint = 'h' } }) == nil)
 end)
 
 case('inRange and parseFlag', function()

@@ -671,7 +671,7 @@ Needs `ensure fh_progression`, `ensure fh_fence`, `ensure fh_hands` (shipped in 
    Expected: `Bought.`, backpack holds 2 `Gunsmith Parts`, cash down by 2 x the price. The refreshed lists show the same price (stock is not limited).
    RESULT:
 7. Buy a treasure lead at 400+ rep.
-   Expected: `Bought.`, backpack holds 1 `Treasure Lead` ($250 or $300 less cash). The item info carries the target hint text (inspect the item if your UI shows it; otherwise check the `fh_dump backpack <id>` console output).
+   Expected: `Bought.`, backpack holds 1 `Treasure Lead` ($250 or $300 less cash). The item info holds only `lead = lead_hl_01` (road) or `lead_hl_02` (camp): no coords, no hint (check the `fh_dump backpack <id>` console output). The hint shows as a notify instead.
    RESULT:
 8. Sell: with parts in your backpack, under Your goods sell `Gunsmith Parts` ($30 each) or `Saddlery Fittings` ($35 each). Also type a qty higher than `you hold N` and click Sell (or sell until 0 held).
    Expected: `Sold N for $X.` with your cash up by exactly X and the parts gone (the fence stash is emptied with fh_core `removeItem`: no `[fh_fence] WARNING sell: removing` line in the console). Typing above `you hold N` clamps to `N` (selling at most what you hold); once held reaches 0, the row's qty box and Sell button are disabled (`You don't have that to sell.` only fires if the stack drops server-side after the screen was fetched). The screen works again straight away.

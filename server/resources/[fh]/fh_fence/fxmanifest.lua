@@ -15,6 +15,7 @@ shared_scripts {
 }
 
 server_scripts {
+    'server/config_leads.lua', -- SERVER ONLY: exact treasure lead spots (FhFenceLeadSpots); never make this shared
     'server/charge.lua',
     'server/trade.lua',
     'server/main.lua',

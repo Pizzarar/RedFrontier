@@ -38,12 +38,16 @@ function M.secondsToNext(cfg, now)
 end
 
 ---Stock entries visible to a player: common always, rare / leads only when unlocked. Each result has category set.
-function M.filterStock(stopStock, canRare, canLeads)
+---leadOk(entry) -> bool (optional, server): a `leads` entry is listed only when it is true (its spot id resolves in
+---the server-only spot config), so a lead whose spot is missing is never sold. `lead` is the opaque spot id only.
+function M.filterStock(stopStock, canRare, canLeads, leadOk)
     local out = {}
     if type(stopStock) ~= 'table' then return out end
     local function add(cat, list)
         for _, e in ipairs(list or {}) do
-            out[#out + 1] = { item = e.item, price = e.price, category = cat, lead = e.lead }
+            if cat ~= 'leads' or not leadOk or leadOk(e) then
+                out[#out + 1] = { item = e.item, price = e.price, category = cat, lead = e.lead }
+            end
         end
     end
     add('common', stopStock.common)
@@ -114,13 +118,12 @@ function M.quoteSell(cfg, item, qty)
     return price * qty
 end
 
----Lead item info: target coords + hint text. entry.lead = { coords = {x,y,z}, hint }.
+---Lead item info written at purchase: ONLY the opaque spot id, { lead = '<id>' }. Item info reaches the client, so it
+---never carries coords or the hint: the server resolves the id (server/config_leads.lua) when the lead is dug or shown.
 function M.leadInfo(entry)
-    local l = entry and entry.lead
-    if type(l) ~= 'table' or type(l.coords) ~= 'table' then return nil end
-    local c = l.coords
-    if type(c.x) ~= 'number' or type(c.y) ~= 'number' or type(c.z) ~= 'number' then return nil end
-    return { target = { x = c.x, y = c.y, z = c.z }, hint = tostring(l.hint or '') }
+    local id = entry and entry.lead
+    if type(id) ~= 'string' or id == '' then return nil end
+    return { lead = id }
 end
 
 ---Distance check against a stop. Accepts {x,y,z} tables.

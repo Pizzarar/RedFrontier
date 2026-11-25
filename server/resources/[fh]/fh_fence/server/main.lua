@@ -100,8 +100,12 @@ local function unlocked(src, id)
     return ok and res == true
 end
 
+---A lead row is listed only when its spot id resolves in the server-only spot table (server/config_leads.lua).
+local function leadOk(e) return FhFenceLeadsLogic.spotOf(FhFenceLeadSpots, e.lead) ~= nil end
+
 local function visibleStock(src, stopId)
-    return logic.filterStock(cfg.stock[stopId], unlocked(src, 'fence_rare_stock'), unlocked(src, 'fence_treasure_leads'))
+    return logic.filterStock(cfg.stock[stopId], unlocked(src, 'fence_rare_stock'), unlocked(src, 'fence_treasure_leads'),
+        leadOk)
 end
 
 ---Current stop if the player is in range. @return table|nil stop, string stopIdOrReason
