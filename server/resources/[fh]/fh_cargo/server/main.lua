@@ -96,7 +96,10 @@ local function spawnWagon(src, tierKey, coords)
             register(w, c)
             TriggerEvent('fh:cargo:wagon_spawned', { src = src, citizenid = citizenid, wagon = id, tier = tierKey, netId = netId })
         end,
-        onFailed = function(reason) reply(src, 'fh_wagon: spawn failed: ' .. tostring(reason)) end,
+        onFailed = function(reason)
+            if wagons[id] == w then wagons[id] = nil end -- a failed request must not count as a live wagon
+            reply(src, 'fh_wagon: spawn failed: ' .. tostring(reason))
+        end,
     })
     if not reqId then return nil, err end -- the old wagon (if any) is untouched
     local old = wagons[id]
@@ -352,6 +355,102 @@ local function ownedTiers(who)
     if not set then return nil, 'fh_db_error' end
     return rules.ownedList(set)
 end
+
+-- ---------------------------------------------------------------- R17: call / stow / menu at a trade post (roads-04)
+-- Pure flow in server/wagon_post.lua (spec/cargo_post_spec.lua). The post comes from exports.fh_trade:nearestPost (same
+-- server-side radius as selling); fh_trade is a soft dependency (it depends on fh_cargo), absent = fh_not_at_post.
+local postLocks, lastPostReq = {}, {}
+
+local function postThrottled(src)
+    local t = GetGameTimer()
+    local gap = tonumber(cfg.PostThrottleMs) or 750
+    if lastPostReq[src] and t - lastPostReq[src] < gap then return true end
+    lastPostReq[src] = t
+    return false
+end
+
+---The player's live wagon (any tier), or nil. A spawn still in flight counts (coords = nil). An entry whose entity is
+---gone is dropped here so it cannot block a new call (the container is untouched).
+local function liveWagon(citizenid)
+    for id, w in pairs(wagons) do
+        if w.owner == citizenid then
+            local c = w.netId and wagonCoords(w) or nil
+            if w.netId and not c then
+                if w.requestId then pcall(function() exports.fh_core:despawn(w.requestId) end) end
+                wagons[id] = nil
+            else
+                return { id = w.id, tier = w.tier, coords = c, w = w }
+            end
+        end
+    end
+    return nil
+end
+
+local postDeps = {
+    citizenid = citizenidOf,
+    nearestPost = function(src)
+        if GetResourceState('fh_trade') ~= 'started' then return nil end
+        local ok, p = pcall(function() return exports.fh_trade:nearestPost(src) end)
+        return ok and p or nil
+    end,
+    owned = dbOwned,
+    ownedSet = dbOwnedSet,
+    live = liveWagon,
+    spawnPoint = function(src)
+        local ped = GetPlayerPed(src)
+        if ped == 0 then return nil end
+        local c, h = GetEntityCoords(ped), GetEntityHeading(ped)
+        local rad, d = math.rad(h), cfg.SpawnAheadMetres
+        return vector4(c.x - math.sin(rad) * d, c.y + math.cos(rad) * d, c.z, h)
+    end,
+    spawn = spawnWagon,
+    stow = function(live)
+        local w = live.w
+        if wagons[w.id] ~= w then return false, 'fh_no_wagon' end
+        -- Entity only: the fh_core container (cargo) is deliberately left registered and untouched.
+        if w.requestId then
+            local ok = pcall(function() exports.fh_core:despawn(w.requestId) end)
+            if not ok then return false, 'fh_stow_failed' end
+        end
+        wagons[w.id] = nil
+        return true
+    end,
+    buy = function(src, tierKey, region) return buyWagon(src, tierKey, region) end,
+    canUnlock = buyDeps.canUnlock,
+    log = function(msg) print('^1[fh_cargo] ' .. msg .. '^7') end,
+}
+
+local function postMenu(src)
+    local data, err = FhCargoPost.menu(cfg, rules, postDeps, src)
+    if not data then return nil, err end
+    return data
+end
+
+RegisterNetEvent('fh:cargo:menu_open', function()
+    local src = source
+    if postThrottled(src) then return end
+    local data, err = postMenu(src)
+    if not data then return TriggerClientEvent('fh:cargo:menu_result', src, { ok = false, err = err }) end
+    TriggerClientEvent('fh:cargo:menu', src, data)
+end)
+
+-- payload = { action = 'buy'|'call'|'stow', tier = 't1'..'t3' }. Validated here and again in FhCargoPost; the post and
+-- region are server-derived, nothing positional is read from the client.
+RegisterNetEvent('fh:cargo:menu_action', function(payload)
+    local src = source
+    if type(payload) ~= 'table' or postThrottled(src) then return end
+    local action, tier = payload.action, payload.tier
+    if action ~= 'buy' and action ~= 'call' and action ~= 'stow' then return end
+    if action ~= 'stow' and (type(tier) ~= 'string' or #tier > 16) then return end
+    local ok, res, detail
+    if action == 'buy' then ok, res, detail = FhCargoPost.buy(cfg, rules, postDeps, postLocks, src, tier)
+    elseif action == 'call' then ok, res, detail = FhCargoPost.call(cfg, rules, postDeps, postLocks, src, tier)
+    else ok, res, detail = FhCargoPost.stow(cfg, rules, postDeps, postLocks, src) end
+    TriggerClientEvent('fh:cargo:menu_result', src, { ok = ok, action = action, err = (not ok) and res or nil,
+        detail = (not ok) and detail or nil, tier = type(res) == 'table' and res.tier or nil })
+end)
+
+AddEventHandler('playerDropped', function() lastPostReq[source] = nil end)
 
 exports('buyWagon', buyWagon)
 exports('ownsWagon', ownsWagon)

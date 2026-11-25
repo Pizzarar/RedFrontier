@@ -31,4 +31,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'fh_cargo', 'fh_economy', 'oxmysql', 'rsg-core', 'ox_lib' }
 
-server_exports { 'quote', 'getShortages', 'setShortage', 'listGoods', 'previewSell', 'getContracts' }
+server_exports { 'quote', 'getShortages', 'setShortage', 'listGoods', 'previewSell', 'getContracts', 'nearestPost' }

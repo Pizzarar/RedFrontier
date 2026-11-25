@@ -125,6 +125,26 @@ Errors: `fh_no_player`, `fh_bad_tier`, `fh_no_price`, `fh_unknown_region`, `fh_n
 `removemoney_refused`, `ledger_failed`, ...), `fh_economy_unavailable`, `charge_refused`, `fh_charge_error`, `fh_buy_refunded`,
 `fh_refund_failed`, `fh_buy_error`.
 
+## Wagon post: buy / call / stow (roads-04 R17)
+
+`/wagonpost` (client) opens an ox_lib stopgap menu at a trade post (the @ui screen comes later): **Buy a wagon** (tiers
+with price, owned / locked state), **Call <tier>** (owned tiers only) and **Stow my wagon**. Client -> server events
+`fh:cargo:menu_open` and `fh:cargo:menu_action { action = 'buy'|'call'|'stow', tier }`; the server answers with
+`fh:cargo:menu` (rows) and `fh:cargo:menu_result { ok, action, err, detail }`. Pure flow: `server/wagon_post.lua`.
+
+- **Proximity is server-side**: the post comes from `exports.fh_trade:nearestPost(src)` (same radius + region gate as
+  selling, from the ped coords the server reads). fh_trade is a soft dependency (it depends on fh_cargo): not started =
+  `fh_not_at_post`. Nothing positional or regional is read from the client; **buy charges the post's region**.
+- **Call** (`fh_not_owned` unless the tier is in `fh_wagons`): spawns via `spawnWagon` ahead of the player, so the
+  `wagon_t2` / `wagon_t3` rep gate still applies and the deterministic wagon id keeps the cargo.
+- **One live wagon per player**: calling while one is live (or its spawn is still in flight) is refused with
+  `fh_wagon_live` (detail = its tier). Refusing never loses cargo; stow is the explicit way to put a wagon away. A failed
+  spawn request or a vanished entity does not count as live.
+- **Stow**: player at a post AND wagon within `post.radius + Config.StowMargin` (10 m) of that post, else
+  `fh_wagon_far`; `fh_wagon_not_ready` while still spawning. It only despawns the entity; the container is never cleared.
+- Busy lock per player and `PostThrottleMs` (750 ms) per request; unknown actions / bad tiers are ignored.
+- `/fh_wagon <tier>` stays the admin-only dev bypass (no post, no ownership).
+
 **Cargo persists per wagon:** the stash id is `fh:wagon:<citizenid>:<tier>` (`rules.wagonId` / `stashId`), the same on
 every spawn. fh_core `registerContainer` -> fh_inventory `RegisterStash` loads the items from the `inventories` row with
 that identifier when it is not in memory and `SaveStash` writes them back by the same identifier. Replacing or

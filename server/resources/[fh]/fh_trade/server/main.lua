@@ -260,6 +260,13 @@ exports('getShortages', getShortages)
 exports('setShortage', setShortage)
 exports('listGoods', listGoods)
 exports('previewSell', previewSell)
+-- roads-04 R17: the trade post `src` stands in (same server-side radius + region gate as selling), for fh_cargo's wagon
+-- call/stow/buy menu. Returns a copy { id, label, region, x, y, z, radius } or nil. Never throws.
+exports('nearestPost', function(src)
+    local ok, p = pcall(function() return tonumber(src) and nearestPost(tonumber(src)) or nil end)
+    if not ok or type(p) ~= 'table' then return nil end
+    return { id = p.id, label = p.label, region = p.region, x = p.x, y = p.y, z = p.z, radius = p.radius }
+end)
 
 -- ---------------------------------------------------------------- client menu + chat fallback
 

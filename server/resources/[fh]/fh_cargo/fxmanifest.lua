@@ -15,6 +15,7 @@ shared_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/wagon_buy.lua',
+    'server/wagon_post.lua',
     'server/main.lua',
 }
 

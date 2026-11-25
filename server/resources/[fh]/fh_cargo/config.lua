@@ -15,4 +15,8 @@ FhCargoConfig = {
     -- times (after BuyRetryMs) before refusing.
     BuyChargeRetries = 1,
     BuyRetryMs = 250,
+    -- R17: a wagon can be stowed while within (post radius + StowMargin) m of the trade post the player stands in.
+    StowMargin = 10.0,
+    -- Min ms between wagon-post menu requests/actions per player.
+    PostThrottleMs = 750,
 }

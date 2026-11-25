@@ -93,3 +93,7 @@ fh_quests is a **soft dependency**: not in `dependencies`; `registerJobType('fre
 - [ ] Abandon from the journal: cargo removed from the wagon, no failed event, no payout; abandoning again changes nothing.
 - [ ] T2: `fh_trade_shortage scarlett_meadows trade_salt 0.5`; the heartlands board also lists `[T2] Freight: 15x Salt Sack to scarlett_meadows`. Heartlands rep tier 1: accept -> `fh_locked` (R13: the gate reads rep in the offer's origin region, heartlands here). `freight.t2.enabled = false` + restart: no `[T2]` offers; back to `true`: listed again. Rep tier 2 (rep >= 100), `/fh_wagon t1` beside you: `fh_freight_wagon_too_small`; `/fh_wagon t2`: accepted, 15 salt in the wagon. `stop fh_progression`: T2 accept -> `fh_locked`, T1 still accepted.
 - [ ] T3: `fh_trade_shortage bayou_nwa trade_salt 0.5`; the heartlands board lists `[T3] Freight: 30x Salt Sack to bayou_nwa` (~3538 m >= 3000 m; scarlett_meadows ~2405 m has no T3). Heartlands rep tier 2: accept -> `fh_locked`; rep tier 3 + `/fh_wagon t2`: `fh_freight_wagon_too_small`; rep tier 3 + `/fh_wagon t3`: accepted, 30 salt in the wagon. `freight.t3.enabled = false` + restart: no `[T3]` offers and stale T3 accept -> `fh_freight_tier_disabled`.
+
+## nearestPost(src) (roads-04 R17)
+
+`exports.fh_trade:nearestPost(src) -> { id, label, region, x, y, z, radius } | nil`: the trade post the player's ped is inside (same radius and disabled-region gate as selling). Used by fh_cargo's wagon post menu. Never throws.
