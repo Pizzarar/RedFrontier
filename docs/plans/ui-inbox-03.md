@@ -29,3 +29,4 @@ All three run in parallel (the only shared file, fixtures.lua, is an append-only
 - I1 fix a007399 -> re-review Gemini rn-1d8c63c67e1a. I3 rebased 24ae103 + fold 386e04c -> delta review Sonnet rn-111e62251d86. I2 Hun2 OK, rebased 05fac44 (=), gates 148/2778/0, slot asked; lows -> TASKS ui-i2-lows.
 - I1 PASS 0/0/0 a007399 (rn-1d8c63c67e1a), rebased 9ad8433. I3 delta PASS 0/0/0 386e04c (rn-111e62251d86), rebased 4fcb5d6. Both slot-asked behind I2; Roa4 sent diff+review line; Que4 FYI.
 - I2 MERGED (a0e2c54 + docs; PASS 0/0/3 rn-9eb0005f28f3, Hun2 OK). Gates 148/2791/0, G5 0 unknown, contracts 0, syntax 277/0. Lows -> TASKS ui-i2-lows.
+- I1 MERGED (5444f92+74387ce+1d9c043 + docs; PASS 0/0/0 a007399 rn-1d8c63c67e1a, range-diff =). Gates 148/2794/0, G5 0 unknown, contracts 0, syntax 277/0. showLockedOffers=true live.
