@@ -13,6 +13,8 @@ shared_scripts {
 }
 
 server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    'server/wagon_buy.lua',
     'server/main.lua',
 }
 
@@ -20,6 +22,9 @@ client_scripts {
     'client/main.lua',
 }
 
-dependencies { 'fh_core', 'rsg-core', 'ox_lib' }
+dependencies { 'fh_core', 'rsg-core', 'ox_lib', 'oxmysql' }
 
-server_exports { 'canFastTravel', 'getWagon', 'spawnWagon', 'nearestWagon', 'isWheelBroken', 'getSpeedLimit' }
+server_exports {
+    'canFastTravel', 'getWagon', 'spawnWagon', 'nearestWagon', 'isWheelBroken', 'getSpeedLimit',
+    'buyWagon', 'ownsWagon', 'ownedTiers',
+}

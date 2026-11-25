@@ -282,6 +282,43 @@ function M.wagonTierGate(tierKey, callOk, ok, reason)
     return false, 'fh_locked'
 end
 
+-- ---------------------------------------------------------------- R16: owned wagons (roads-04)
+-- A character owns a tier once bought (fh_wagons row, one per tier). The buy flow lives in server/wagon_buy.lua; these
+-- are the pure pieces it (and the specs) use. Gate order there: unknown tier -> already owned -> canUnlock -> charge.
+M.BUY_REASON = 'wagon_buy'
+M.REFUND_REASON = 'wagon_buy_refund'
+
+---Buy price (whole dollars, > 0) of a tier from the config price table, or nil (unknown tier / missing or bad price).
+function M.wagonPrice(prices, tierKey)
+    if not M.TIERS[tierKey] or type(prices) ~= 'table' then return nil end
+    local p = prices[tierKey]
+    if type(p) ~= 'number' or p ~= p or p <= 0 or p == math.huge or p ~= math.floor(p) then return nil end
+    return math.floor(p)
+end
+
+---fh_wagons rows ({ tier = 't1' }, ...) -> set { t1 = true, ... }. Rows with an unknown tier are ignored.
+function M.ownedSet(rows)
+    local set = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local t = type(r) == 'table' and r.tier or nil
+        if type(t) == 'string' and M.TIERS[t] then set[t] = true end
+    end
+    return set
+end
+
+---Owned set -> tier keys in tier order ({ 't1', 't3' }).
+function M.ownedList(set)
+    local out = {}
+    for _, k in ipairs(M.ORDER) do if type(set) == 'table' and set[k] then out[#out + 1] = k end end
+    return out
+end
+
+---Same shape fh_economy accepts for a citizenid string (1-50 letters, digits, _ or -; not all digits).
+function M.validCitizenid(cid)
+    return type(cid) == 'string' and #cid >= 1 and #cid <= 50 and cid:match('^[%w_%-]+$') ~= nil
+        and cid:match('^%d+$') == nil
+end
+
 -- ---------------------------------------------------------------- R2: wheel break + repair (spec L6)
 -- The break roll runs on the server each tick from server-known state. A client hint is only ever a bool (off-road),
 -- and any reported speed goes through sanitizeSpeed first.

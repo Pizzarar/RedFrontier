@@ -83,9 +83,8 @@ local function spawnWagon(src, tierKey, coords)
     if not allowed then return nil, why end
     local id = rules.wagonId(citizenid, tierKey)
     local w = { id = id, owner = citizenid, tier = tierKey }
-    -- TODO(R0 @core idea-602): fh_core requestSpawn has no kind 'wagon' yet (spawn_rules.KINDS = ped/object/horse), so
-    -- this returns nil, 'fh_spawn_kind_unsupported'/'fh_spawn_bad_kind' until R0 merges. Written against the intended
-    -- contract: same spec/opts as ped/horse, onReady(netId) adopts the wagon entity.
+    -- fh_core requestSpawn kind 'wagon' (B7): onReady(netId) adopts the wagon entity. The stash id is deterministic per
+    -- owner + tier (rules.wagonId/stashId), so a respawn re-registers the same fh_inventory stash and keeps its cargo.
     local reqId, err = exports.fh_core:requestSpawn({
         kind = 'wagon', model = cfg.Models[tierKey], coords = coords,
         owner = { kind = 'wagon', id = id }, tag = 'wagon:' .. id,
@@ -246,6 +245,117 @@ local function nearestWagon(src, coords, range)
     return nil
 end
 
+-- ---------------------------------------------------------------- R16: owned wagons + buy (roads-04)
+-- fh_wagons (server/migrations/0021_fh_wagons.sql): one row per owned tier, PK (citizenid, tier). The buy flow is the
+-- pure FhCargoBuy.buy (server/wagon_buy.lua, specced in spec/cargo_buy_spec.lua); this only supplies its deps.
+-- Natives used: none beyond citizenidOf (rsg-core). DB: oxmysql MySQL.query.await / MySQL.update.await.
+local buyLocks = {}
+
+CreateThread(function()
+    -- Idempotent, same DDL as server/migrations/0021_fh_wagons.sql (belt and braces for a DB that skipped the migration;
+    -- until the table exists every buy fails closed at the ownership read, fh_db_error, before any charge).
+    local ok, err = pcall(MySQL.query.await, [[CREATE TABLE IF NOT EXISTS `fh_wagons` (
+      `citizenid` varchar(50) NOT NULL,
+      `tier` varchar(8) NOT NULL,
+      `bought_at` timestamp NOT NULL DEFAULT current_timestamp(),
+      PRIMARY KEY (`citizenid`, `tier`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci]])
+    if not ok then print('^1[fh_cargo] fh_wagons DDL failed: ' .. tostring(err) .. '^7') end
+end)
+
+---true / false, or nil when the DB read failed (callers fail closed).
+local function dbOwned(citizenid, tierKey)
+    local ok, rows = pcall(MySQL.query.await, 'SELECT 1 FROM fh_wagons WHERE citizenid = ? AND tier = ? LIMIT 1',
+        { citizenid, tierKey })
+    if not ok or type(rows) ~= 'table' then return nil end
+    return rows[1] ~= nil
+end
+
+---{ t1 = true, .. } or nil when the DB read failed.
+local function dbOwnedSet(citizenid)
+    local ok, rows = pcall(MySQL.query.await, 'SELECT tier FROM fh_wagons WHERE citizenid = ?', { citizenid })
+    if not ok or type(rows) ~= 'table' then return nil end
+    return rules.ownedSet(rows)
+end
+
+---1 = new row, 0 = already owned (PK), nil = DB failure.
+local function dbInsert(citizenid, tierKey)
+    local ok, n = pcall(MySQL.update.await, 'INSERT IGNORE INTO fh_wagons (citizenid, tier) VALUES (?, ?)',
+        { citizenid, tierKey })
+    n = ok and tonumber(n) or nil
+    if n == 1 or n == 0 then return n end
+    return nil
+end
+
+local buyDeps = {
+    citizenid = citizenidOf,
+    owned = dbOwned,
+    -- fh_progression README: canUnlock(src, unlock_id) -> ok, reason. Throws when not started (fail closed upstream).
+    canUnlock = function(src, unlockId) return exports.fh_progression:canUnlock(src, unlockId) end,
+    -- fh_economy README: charge(src, amount, reason, region_id) -> ok, err, ledgerId (B7). Not started = refused, nothing
+    -- taken; a throw while started is an unknown outcome (FhCargoBuy keeps the wagon, logs an ALERT).
+    charge = function(src, amount, why, region)
+        if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
+        return exports.fh_economy:charge(src, amount, why, region)
+    end,
+    insert = dbInsert,
+    -- fh_economy README: credit(citizenid, amount, reason, region_id) -> ok, err, mode; online or queued, never lost.
+    refund = function(citizenid, amount, why, region)
+        if GetResourceState('fh_economy') ~= 'started' then return false, 'fh_economy_unavailable' end
+        return exports.fh_economy:credit(citizenid, amount, why, region)
+    end,
+    wait = function(ms) Wait(ms) end,
+    log = function(msg) print('^1[fh_cargo] ' .. msg .. '^7') end,
+    emit = function(name, payload) TriggerEvent(name, payload) end,
+}
+
+---Buy a wagon tier for `src`'s character, charged at `region_id` (the trade post's region). See server/wagon_buy.lua.
+---@return boolean ok, string|nil err, string|nil detail ('refunded' with fh_already_owned after a charge)
+local function buyWagon(src, tierKey, region_id)
+    local called, ok, res, detail = pcall(FhCargoBuy.buy, cfg, rules, buyDeps, buyLocks, tonumber(src), tierKey, region_id)
+    if not called then -- only reachable before the lock / any money (the flow itself is protected)
+        print('^1[fh_cargo] ERROR buyWagon: ' .. tostring(ok) .. '^7')
+        return false, 'fh_buy_error'
+    end
+    if ok then return true, nil end
+    return false, res, detail
+end
+
+---`who` = server id (number, character loaded) or citizenid string -> citizenid, or nil, err.
+local function resolveWho(who)
+    if type(who) == 'number' then
+        local cid = citizenidOf(who)
+        if not cid then return nil, 'fh_no_character' end
+        return cid
+    end
+    if rules.validCitizenid(who) then return who end
+    return nil, 'fh_bad_citizenid'
+end
+
+---Does `who` own wagon `tier`? -> true | false, or nil, err (fh_bad_tier, fh_no_character, fh_bad_citizenid,
+---fh_db_error). Reads fh_wagons (yields).
+local function ownsWagon(who, tierKey)
+    local tier = rules.parseTier(tierKey)
+    if not tier then return nil, 'fh_bad_tier' end
+    local cid, err = resolveWho(who)
+    if not cid then return nil, err end
+    local owned = dbOwned(cid, tier.key)
+    if owned == nil then return nil, 'fh_db_error' end
+    return owned
+end
+
+---Owned tier keys of `who`, in tier order ({ 't1', 't2' }), or nil, err. Reads fh_wagons (yields).
+local function ownedTiers(who)
+    local cid, err = resolveWho(who)
+    if not cid then return nil, err end
+    local set = dbOwnedSet(cid)
+    if not set then return nil, 'fh_db_error' end
+    return rules.ownedList(set)
+end
+
+exports('buyWagon', buyWagon)
+exports('ownsWagon', ownsWagon)
+exports('ownedTiers', ownedTiers)
 exports('canFastTravel', canFastTravel)
 exports('nearestWagon', nearestWagon)
 exports('spawnWagon', spawnWagon)
