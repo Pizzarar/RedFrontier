@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_moose_01', -- same model as the plain moose; identified as legendary by the chain's spawn
     outfit = 0,                     -- TODO-verify-in-game
     scale = 1.15,                   -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_coalhorn_moose', label = 'Legendary Coalhorn Moose Pelt', value = 62, weight = 30000,
+    pelt = { item = 'pelt_legendary_coalhorn_moose', label = 'Legendary Coalhorn Moose Pelt', value = 67, weight = 30000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_coalhorn_moose', label = 'Legendary Coalhorn Moose Trophy', comfort = 25 },
     rumour = {

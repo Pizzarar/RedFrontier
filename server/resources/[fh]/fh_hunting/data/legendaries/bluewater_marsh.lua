@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_boar_01', -- same model as the plain boar; identified as legendary by the chain's spawn
     outfit = 0,                    -- TODO-verify-in-game
     scale = 1.1,                   -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_brackhide_boar', label = 'Legendary Brackhide Boar Pelt', value = 52, weight = 4000,
+    pelt = { item = 'pelt_legendary_brackhide_boar', label = 'Legendary Brackhide Boar Pelt', value = 16, weight = 4000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_brackhide_boar', label = 'Legendary Brackhide Boar Trophy', comfort = 25 },
     rumour = {

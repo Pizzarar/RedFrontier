@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_alligator_01', -- same model as the plain alligator; identified as legendary by the chain's spawn
     outfit = 0,                         -- TODO-verify-in-game
     scale = 1.15,                       -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_mossback_gator', label = 'Legendary Mossback Gator Pelt', value = 65, weight = 25000,
+    pelt = { item = 'pelt_legendary_mossback_gator', label = 'Legendary Mossback Gator Pelt', value = 73, weight = 25000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_mossback_gator', label = 'Legendary Mossback Gator Trophy', comfort = 25 },
     rumour = {

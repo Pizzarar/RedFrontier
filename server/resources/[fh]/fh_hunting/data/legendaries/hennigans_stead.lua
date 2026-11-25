@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_deer_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                    -- TODO-verify-in-game
     scale = 1.25,                  -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_saltbrush_buck', label = 'Saltbrush Buck Pelt', value = 30, weight = 6000,
+    pelt = { item = 'pelt_legendary_saltbrush_buck', label = 'Saltbrush Buck Pelt', value = 19, weight = 6000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_saltbrush_buck', label = 'Saltbrush Buck Trophy', comfort = 25 },
     rumour = {

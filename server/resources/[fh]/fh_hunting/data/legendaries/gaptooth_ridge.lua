@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_fox_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                   -- TODO-verify-in-game
     scale = 1.3,                  -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_sandveil_fox', label = 'Sandveil Fox Pelt', value = 20, weight = 3500,
+    pelt = { item = 'pelt_legendary_sandveil_fox', label = 'Sandveil Fox Pelt', value = 11, weight = 3500,
         image = 'resource_pelt_fox.png' },
     trophy = { item = 'trophy_legendary_sandveil_fox', label = 'Sandveil Fox Trophy', comfort = 25 },
     rumour = {

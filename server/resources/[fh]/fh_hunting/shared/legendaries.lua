@@ -18,6 +18,7 @@
 --   outfit         integer >= 0, optional (default 0)   outfit preset. Not applied yet (no fh_core spawn field).
 --   scale          number  > 0, optional (default 1.0)  ped scale.   Not applied yet (no fh_core spawn field).
 --   pelt   { item = 'pelt_<id>', label, value (> 0, 2-star base before multipliers), weight (> 0), image }
+--                          pelt.value rule: round(plain species value * 4/3), the bear's 45 -> 60 ratio (owner tunes after playtest).
 --   trophy { item = 'trophy_<id>', label, comfort (>= 0), image?, weight?, description? }
 --   rumour { coords {x,y,z}, price (>= 0), label (the "[E] ..." prompt text), range? (m), text? (paid notice) }
 --   markers { [2] = { id?, label, coords, radius? }, [3] = { ... } }  clue 2 (track) and clue 3 (carcass)

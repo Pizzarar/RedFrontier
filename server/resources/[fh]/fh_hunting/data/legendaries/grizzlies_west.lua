@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_elk_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                   -- TODO-verify-in-game
     scale = 1.25,                 -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_palehorn_elk', label = 'Palehorn Elk Pelt', value = 55, weight = 24000,
+    pelt = { item = 'pelt_legendary_palehorn_elk', label = 'Palehorn Elk Pelt', value = 51, weight = 24000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_palehorn_elk', label = 'Palehorn Elk Trophy', comfort = 25 },
     rumour = {

@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_wolf', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                 -- TODO-verify-in-game
     scale = 1.2,                -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_greyhowl_wolf', label = 'Greyhowl Wolf Pelt', value = 35, weight = 8000,
+    pelt = { item = 'pelt_legendary_greyhowl_wolf', label = 'Greyhowl Wolf Pelt', value = 27, weight = 8000,
         image = 'resource_pelt_wolf.png' },
     trophy = { item = 'trophy_legendary_greyhowl_wolf', label = 'Greyhowl Wolf Trophy', comfort = 25 },
     rumour = {

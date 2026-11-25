@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_moose_01', -- plain row in shared/animals.lua; identified as legendary by the chain's spawn
     outfit = 0,                     -- TODO-verify-in-game
     scale = 1.3,                    -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_frostmane_moose', label = 'Frostmane Moose Pelt', value = 70, weight = 32000,
+    pelt = { item = 'pelt_legendary_frostmane_moose', label = 'Frostmane Moose Pelt', value = 67, weight = 32000,
         image = 'perfect_pelt.png' },
     trophy = { item = 'trophy_legendary_frostmane_moose', label = 'Frostmane Moose Trophy', comfort = 25 },
     rumour = {

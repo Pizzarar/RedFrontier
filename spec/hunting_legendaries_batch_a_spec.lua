@@ -12,11 +12,11 @@ local Items = dofile(here .. '../server/resources/[fh]/fh_core/shared/items.lua'
 local regions = require('regions')
 
 local BATCH = {
-    { region = 'scarlett_meadows', id = 'legendary_redclay_stag',   species = 'a_c_deer_01',      value = 55 },
-    { region = 'bayou_nwa',        id = 'legendary_mossback_gator', species = 'a_c_alligator_01', value = 65 },
-    { region = 'great_plains',     id = 'legendary_dusthorn_bison', species = 'a_c_buffalo_01',   value = 60 },
-    { region = 'bluewater_marsh',  id = 'legendary_brackhide_boar', species = 'a_c_boar_01',      value = 52 },
-    { region = 'roanoke_ridge',    id = 'legendary_coalhorn_moose', species = 'a_c_moose_01',     value = 62 },
+    { region = 'scarlett_meadows', id = 'legendary_redclay_stag',   species = 'a_c_deer_01',      value = 19 },
+    { region = 'bayou_nwa',        id = 'legendary_mossback_gator', species = 'a_c_alligator_01', value = 73 },
+    { region = 'great_plains',     id = 'legendary_dusthorn_bison', species = 'a_c_buffalo_01',   value = 53 },
+    { region = 'bluewater_marsh',  id = 'legendary_brackhide_boar', species = 'a_c_boar_01',      value = 16 },
+    { region = 'roanoke_ridge',    id = 'legendary_coalhorn_moose', species = 'a_c_moose_01',     value = 67 },
 }
 
 local function entry(b) return L.byRegion[b.region] end

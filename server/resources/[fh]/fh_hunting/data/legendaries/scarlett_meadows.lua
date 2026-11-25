@@ -8,7 +8,7 @@ return {
     species_model = 'a_c_deer_01', -- same model as the plain deer; identified as legendary by the chain's spawn
     outfit = 0,                    -- TODO-verify-in-game
     scale = 1.1,                   -- TODO-verify-in-game
-    pelt = { item = 'pelt_legendary_redclay_stag', label = 'Legendary Red Clay Stag Pelt', value = 55, weight = 4000,
+    pelt = { item = 'pelt_legendary_redclay_stag', label = 'Legendary Red Clay Stag Pelt', value = 19, weight = 4000,
         image = 'good_pelt.png' },
     trophy = { item = 'trophy_legendary_redclay_stag', label = 'Legendary Red Clay Stag Trophy', comfort = 25 },
     rumour = {
