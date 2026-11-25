@@ -27,6 +27,7 @@ server_scripts {
     'server/build.lua',
     'server/plotcheck.lua', -- H16 /fh_plotcheck (admin)
     'server/garden.lua', -- H19 /fh_plant, /fh_harvest, /fh_garden (FhHomesteadGarden; after build.lua: reads its BAG_ADD_UNCHANGED)
+    'server/trough.lua', -- H20 trough: feedbag use handler, refill, getTrough (FhHomesteadTrough; after slots.lua)
 }
 
 client_scripts {
@@ -34,8 +35,9 @@ client_scripts {
     '@fh_core/shared/ground_snap.lua',
     '@fh_core/client/ground_snap.lua',
     'client/main.lua',
+    'client/trough.lua', -- H20 refill on mount (flagged: troughRefill)
 }
 
 dependencies { 'fh_core', 'oxmysql', 'rsg-core', 'ox_lib', 'fh_economy' }
 
-server_exports { 'claim', 'unclaim', 'buyLot', 'getPlot', 'claimedPlots', 'isInSafeZone', 'plotInfo', 'lawSafeAt', 'getStations', 'stationAt', 'isNearStation', 'getComfort', 'placeTrophy', 'unplaceTrophy', 'addTrophy', 'removeTrophy' }
+server_exports { 'claim', 'unclaim', 'buyLot', 'getPlot', 'claimedPlots', 'isInSafeZone', 'plotInfo', 'lawSafeAt', 'getStations', 'stationAt', 'isNearStation', 'getComfort', 'placeTrophy', 'unplaceTrophy', 'addTrophy', 'removeTrophy', 'getTrough' }

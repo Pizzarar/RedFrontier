@@ -296,6 +296,34 @@ Rules (tier A: no free crop, no lost seed, no double harvest):
   else plot chest 1 (same rule as above). When neither takes it and nothing landed, the bed row is put back as it was and
   the reply is `fh_no_room`; any other failure is logged `ITEM LOST` and the reply is `fh_harvest_lost`.
 
+## Trough (H20b, `server/trough.lua`, `client/trough.lua`, `shared/trough.lua`)
+
+Build `/fh_build trough` on your claim (a `trough` station slot, prop at plot center + (8, -8), placeholder `p_chest01x`,
+TODO-verify; claims only, town lots have none). It owns the fh_core container `fh:trough:<plot>` (type `chest`, registered
+at the prop, `trough.slots` / `trough.maxWeight`) which holds the **feedbag only** (`FhTrough.accepts`). fh_core has no
+per-item filter, so this is kept by construction: no player UI ever opens the container (the trough is not a `chest_<n>`
+slot, so no chest prompt) and its only writer is the load below.
+
+- **Load**: *use* a feedbag (`CreateUseableItem('feedbag')`, the item's consumer) within `trough.reach` of your own trough:
+  1 feedbag moves from the backpack into the container (`fh_no_trough`, `fh_not_near_trough`, `fh_not_owner`,
+  `fh_no_feedbag`, `fh_trough_full`, `fh_trough_wrong_item`). If the container refuses the add, the bag goes back to the
+  backpack, else `ITEM LOST` is logged (never rerouted). `FhHomesteadTrough.load(src, item)` is the server-local call.
+- **Refill** (flag `trough.troughRefill`, default **false**: with it off the client calls no native and the server
+  consumes nothing): the client asks (`fh:homestead:trough_refill`) when its owner mounts a horse; the server re-checks
+  with `FhTrough.canRefill` (owner, the SERVER ped inside the plot radius, at least 1 feedbag in the container, `fh_plot_trough.last_refill_at`
+  + `trough.cooldownSeconds` (1800) passed), takes exactly 1 feedbag from the container, records `last_refill_at`
+  (conditional on the plot still being the owner's; if that write fails the feedbag goes back), then sends
+  `fh:homestead:trough_refilled`, and the client sets the horse health and stamina cores to full (`GetMount`,
+  `SetAttributeCoreValue`: unverified natives, TODO-verify). No fh_buffs buff. Migration `0099_homestead_trough.sql`
+  (placeholder number, renumbered at merge).
+- **Export** `exports.fh_homestead:getTrough(citizenid)` -> `{ type = 'chest', id = 'fh:trough:<plot>' }` of the character's
+  claim trough, or `nil` (no claim, trough not built, slots not loaded). For @progression's fh_hands top-up (fh_hands is
+  not edited here). The ref is registered with fh_core, so `addItem` / `snapshot` work on it.
+- **Unclaim** is refused `fh_trough_not_empty` while the trough holds any item (a failed read: `fh_trough_check_failed`,
+  also for admins). Admin `force` logs every item (`stash=fh:trough:<plot>`) and empties it with the chests; the
+  `fh_plot_trough` row goes with the plot.
+- Lock: same as the garden (one trough flow per plot and per character plus `beginChestWrite`).
+
 ## Open
 
 - Nothing enforces "safe" beyond fh_heat's own-lot skip: `isInSafeZone` / `plotInfo` are queries only (law AI and raids:

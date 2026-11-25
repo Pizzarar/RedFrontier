@@ -23,6 +23,7 @@ One in-game session, in this order (it groups sections so state carries over: ge
 | 11 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); get `lumber`/`nails` first: buy at the Valentine trade post or give via OWNER-STEPS section 7 |
 | 12 | [Homestead > Town lots (H8-H10): buy, build, abandon, law-safe](#town-lots-h8-h10-buy-build-abandon-law-safe) | 15 | right after Homestead; needs $500 cash and lumber; step 5 needs a second character with under $300 and step 7 (law-safe) a second character too; find a lot with `/where lot` |
 | 13 | [Homestead > Garden (H19): plant, grow offline, harvest, unclaim guard](#garden-h19-plant-grow-offline-harvest-unclaim-guard) | 15 | right after Town lots; solo; set `garden.growthSeconds = 120` first (step 5 restarts the server); needs 10 lumber, $50 and `/giveitem` seeds |
+| 13b | [Homestead > Trough (H20b): load with a feedbag, horse refill on mount, unclaim guard](#trough-h20b-load-with-a-feedbag-horse-refill-on-mount-unclaim-guard) | 15 | right after Garden; solo; set `trough.troughRefill = true` first (step 5 needs it and a horse; a restart); needs 8 lumber, $40 and `/giveitem` feedbags |
 | 14 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
 | 15 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
 | 16 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
@@ -427,7 +428,7 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
    RESULT:
 3. Build. Prepare: `/giveitem <id> lumber 65` (or buy 65 lumber at any trade post, $3 each, then give yourself that money back), move all 65 lumber into the plot chest, then `/givemoney <id> cash 500`. Note your cash (call it C).
    a. `/fh_build`
-      Expected: `fh_build: plot heartlands_01: cabin 0/2 next: $150, 20 lumber; chest_2 0/1 next: $40, 8 lumber; chest_3 0/1 next: $60, 10 lumber; fence 0/1 next: $100, 15 lumber; garden 0/1 next: $50, 10 lumber; station_1 0/1 next: $60, 10 lumber; station_2 0/1 next: $25, 5 lumber; station_3 0/1 next: $80, 12 lumber; trophy_wall 0/1 next: $120, 10 lumber`
+      Expected: `fh_build: plot heartlands_01: cabin 0/2 next: $150, 20 lumber; chest_2 0/1 next: $40, 8 lumber; chest_3 0/1 next: $60, 10 lumber; fence 0/1 next: $100, 15 lumber; garden 0/1 next: $50, 10 lumber; station_1 0/1 next: $60, 10 lumber; station_2 0/1 next: $25, 5 lumber; station_3 0/1 next: $80, 12 lumber; trophy_wall 0/1 next: $120, 10 lumber; trough 0/1 next: $40, 8 lumber`
    b. `/fh_build chest_2` (needs the cabin first).
       Expected: `fh_build: fh_prereq_missing`. Chest still 65 lumber, cash still C.
    c. Run these in order. After each one, check the reply and the lumber left in the plot chest:
@@ -568,6 +569,34 @@ Resource: `fh_homestead`. Claims only. Prepare: in `fh_homestead/config.lua` set
    Admin force: on the server console run `fh_unclaim heartlands_01 force`.
    Expected: a yellow `force unclaim: plot=heartlands_01 owner=<cid> bed=1 crop=seedcarrot planted_at=<n> cleared` line, then `[fh_homestead] fh_unclaim: released plot heartlands_01`. No red lines. DB: `SELECT * FROM fh_plot_beds WHERE plot_id = 'heartlands_01';` -> 0 rows. Claim again with `/fh_claim`: `/fh_garden` -> `fh_garden: fh_no_garden (build it first: /fh_build garden)`.
    The whole card: the console shows no `ITEM LOST` line and no red errors. Set `garden.growthSeconds` back to `7200`.
+   RESULT:
+
+### Trough (H20b): load with a feedbag, horse refill on mount, unclaim guard
+
+Resource: `fh_homestead`. Claims only. Prepare: apply the trough migration (`server/migrations/*_homestead_trough.sql`, the server also creates `fh_plot_trough` itself at boot). For step 5 set `trough.troughRefill = true` in `fh_homestead/config.lua` and restart; it ships `false` and every native is untested in game. Own `heartlands_01` (center (-500, 750, 105)); the trough prop will stand at about (-492, 742), 8 m east and 8 m south of the center. Have $40+ cash and 8 lumber. `/giveitem <id> feedbag 3`, `/giveitem <id> carrot 1`. Own a horse. Plot chests empty.
+
+1. Not built yet. Stand at about (-492, 742) and use a feedbag from the backpack.
+   Expected: chat `Could not load the trough: fh_no_trough`. You still have 3 feedbag.
+   RESULT:
+2. Build. `/fh_build trough`.
+   Expected: `fh_build: built trough tier 1 ($40, 8 lumber)`. A placeholder `p_chest01x` prop stands at about (-492, 742). `/fh_comfort` is 2 higher.
+   RESULT:
+3. Load. At the prop use a feedbag. Then walk to the plot center (-500, 750) and use another.
+   Expected: first `The feed trough is loaded.` (backpack feedbag 3 -> 2). At the center: `Could not load the trough: fh_not_near_trough`, still 2. Use the carrot: nothing happens to the trough (it is not a feedbag; the trough never takes anything else).
+   RESULT:
+4. Flag off. With `troughRefill = false` (default), mount your horse inside the plot.
+   Expected: nothing happens, the trough keeps its feedbag, no console error.
+   RESULT:
+5. Refill (needs `troughRefill = true`). Hurt or tire the horse, leave the plot, ride back in and mount.
+   Expected: within a second or two the horse health and stamina cores fill; the trough lost exactly 1 feedbag (DB: `SELECT * FROM fh_plot_trough;` -> one row `heartlands_01`, `last_refill_at` = unix seconds). Dismount and mount again at once: nothing happens (30 minute cooldown), no feedbag lost. If the cores do not change, mark `FAIL` with the console text: `SetAttributeCoreValue` / `GetMount` are unverified natives.
+   RESULT:
+6. Empty and out of range. Use the last feedbag, mount (cooldown still running: nothing). Set `trough.cooldownSeconds = 5`, restart, mount with the trough empty.
+   Expected: nothing, no refill. Ride 200 m outside the plot with a loaded trough and mount: nothing, the feedbag stays.
+   RESULT:
+7. Unclaim guard. With 1 feedbag in the trough run `/fh_unclaim`.
+   Expected: `fh_unclaim: fh_trough_not_empty`. Nothing changes. Admin force: console `fh_unclaim heartlands_01 force`.
+   Expected: a yellow `force unclaim: plot=heartlands_01 owner=<cid> stash=fh:trough:heartlands_01 slot=1 item=feedbag count=1 cleared` line, then `fh_unclaim: released plot heartlands_01`. No red lines; `SELECT * FROM fh_plot_trough;` -> 0 rows.
+   Put `troughRefill` back to `false` and `cooldownSeconds` to `1800`.
    RESULT:
 
 ## Q5: quests (fh_quests)

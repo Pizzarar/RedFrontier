@@ -121,9 +121,11 @@ case('H9 town_lot template: chest_2 + station_1 workbench only, no cabin/fence/t
 end)
 case('H9 claim template unchanged: every claim plot carries exactly slotTemplates.claim()', function()
     local claimT = cfg.slotTemplates.claim()
-    T.same({ 'cabin', 'chest_2', 'chest_3', 'fence', 'garden', 'station_1', 'station_2', 'station_3', 'trophy_wall' }, keys(claimT))
+    T.same({ 'cabin', 'chest_2', 'chest_3', 'fence', 'garden', 'station_1', 'station_2', 'station_3', 'trophy_wall', 'trough' }, keys(claimT))
     T.eq('garden', claimT.garden.stationType) -- H19: claims only (the town lot template has no garden)
     T.eq(nil, cfg.slotTemplates.town_lot().garden)
+    T.eq('trough', claimT.trough.stationType) -- H20: claims only too
+    T.eq(nil, cfg.slotTemplates.town_lot().trough)
     T.same({ cabin = 1 }, claimT.chest_2.requires)
     for id, p in pairs(cfg.plots) do
         if (p.class or 'claim') == 'claim' then T.same(claimT, p.slots, id) end

@@ -383,6 +383,27 @@ local function readStashes(plotId)
             return nil, 'fh_chest_check_failed'
         end
     end
+    -- H20: the trough slot's container fh:trough:<plot> (feedbag only), read like a chest but flagged so the unclaim
+    -- refusal names it ('fh_trough_not_empty'). Built = registered this boot; unknown = register again and re-read.
+    local tid = plot and plot.slots and plot.slots.trough and FhTrough and FhTrough.containerId(plotId)
+    if tid then
+        local S = FhHomesteadSlots
+        if not (S and S.isReady and S.isReady()) then return nil, 'fh_not_ready' end
+        if ((S.getTiers(plotId) or {}).trough or 0) >= 1 then
+            local ref = { type = 'chest', id = tid }
+            local items, why = snapshotOf(ref)
+            if not items and why == 'fh_unknown_container' then
+                local TR = FhHomesteadTrough
+                if TR and TR.register then pcall(TR.register, plotId) end
+                items, why = snapshotOf(ref)
+            end
+            if not items then
+                print(('^1[fh_homestead] cannot read trough %s of %s (%s)^7'):format(tid, plotId, tostring(why)))
+                return nil, 'fh_trough_check_failed'
+            end
+            out[#out + 1] = { id = tid, ref = ref, items = stashLines(items), trough = true }
+        end
+    end
     return out
 end
 
@@ -477,6 +498,8 @@ end
 ---is taken (no new chest open, build or trophy change can start) and before the rep-back and the DELETE; a final sweep
 ---after the DELETE catches anything a pane opened before the lock (or fh_hands) slipped in, so the next owner always
 ---opens empty chests.
+---H20 trough: refused 'fh_trough_not_empty' while the trough container holds an item (a failed read refuses
+---'fh_trough_check_failed'); `force` logs and empties it with the chests.
 ---H19 garden: refused 'fh_garden_not_empty' while any garden bed of the plot is planted (read from the DB under the
 ---lock, before the stash check; a failed read refuses 'fh_garden_check_failed'). `force` instead logs every bed and
 ---deletes the rows after the fh_plots DELETE (the FK cascade normally already removed them).
@@ -529,6 +552,15 @@ local function unclaim(src, plotId, force)
         return false, read and swhy or 'fh_chest_check_failed'
     end
     local full = hasItems(stashes)
+    -- H20: items in the trough block a release like full chests (own reason); force empties + logs it with the chests
+    if not force then
+        for _, st in ipairs(stashes) do
+            if st.trough and #st.items > 0 then
+                busy[plotId] = nil
+                return false, 'fh_trough_not_empty'
+            end
+        end
+    end
     if full and not force then
         busy[plotId] = nil
         return false, 'fh_chests_not_empty'

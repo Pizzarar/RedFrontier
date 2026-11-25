@@ -65,6 +65,13 @@ function slotTemplates.claim()
             tiers = { [1] = { cost = { money = 50, items = { lumber = 10 } }, comfort = 3, unlocks = { stationType = 'garden' } } },
             prop = { model = 'p_chest01x', offset = { x = 0.0, y = -10.0, z = 0.0 } }, -- TODO-verify: real garden bed prop
         },
+        -- H20 trough (claims only, like garden). A station of type 'trough': owner loads it by using a feedbag within
+        -- trough.reach of the prop; the owner mounting their horse inside the plot then refills it (troughRefill flag).
+        trough = {
+            kind = 'station', stationType = 'trough', maxTier = 1,
+            tiers = { [1] = { cost = { money = 40, items = { lumber = 8 } }, comfort = 2, unlocks = { stationType = 'trough' } } },
+            prop = { model = 'p_chest01x', offset = { x = 8.0, y = -8.0, z = 0.0 } }, -- TODO-verify: real feed trough prop
+        },
     }
 end
 -- Town lot (owner Q3 default): one extra chest and a workbench only. No cabin, so chest_2 has no cabin prerequisite.
@@ -103,7 +110,8 @@ FhHomesteadConfig = {
     },
     -- H20: trough slot. Container fh:trough:<plot> accepts `item` only; one refill consumes 1 feedbag, then cooldownSeconds
     -- must pass. `troughRefill` gates the client refill (native cores) and the server consume: false until verified in game.
-    trough = { item = 'feedbag', cooldownSeconds = 1800, slots = 4, maxWeight = 20000, troughRefill = false },
+    -- reach = metres from the trough prop within which using a feedbag loads it (owner only).
+    trough = { item = 'feedbag', cooldownSeconds = 1800, slots = 4, maxWeight = 20000, reach = 5.0, troughRefill = false },
     -- H2: build materials, registered with exports.fh_core:registerItems from fh_homestead ONLY (full §4.1 defs).
     -- Materials are taken from the plot's main chest (fh:chest:<plot>:1) when a slot is built. Weights in grams.
     buildItems = {
