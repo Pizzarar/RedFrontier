@@ -62,6 +62,7 @@ case('fieldguide fixture has 3 entries and only relays close to tutorial', funct
     T.eq('tutorial', R.screens.fieldguide)
     assert(not R.passive.fieldguide)
     assert(R.validate({ screen = 'fieldguide', action = 'close', payload = {} }))
+    assert(not R.validate({ screen = 'fieldguide', action = 'abandon', payload = {} }), 'fieldguide must not relay non-close actions')
     T.eq('fh:tutorial:ui_close', R.eventName('tutorial', 'close'))
     T.same({ action = 'open', screen = 'fieldguide' }, F.parseDemo({ 'fieldguide' }))
 end)

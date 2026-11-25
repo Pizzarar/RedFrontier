@@ -23,6 +23,13 @@ M.screens = {
 -- Passive HUD widgets never take NUI focus. Everything else is interactive.
 M.passive = { buffs = true, heat = true, bags = true, survival = true }
 
+-- Optional per-screen action allowlist. A screen listed here may only send the actions named in its set
+-- (fieldguide is read-only and only ever closes). Screens not listed here stay unguarded: the owning lane
+-- revalidates ev.screen itself. Keep this small; add an entry only when a screen must not send other actions.
+M.actions = {
+    fieldguide = { close = true },
+}
+
 M.limits = {
     actionPattern = '^[a-z_]+$', -- Lua has no {n,m}; length 1..maxAction is checked separately
     maxAction = 32,
@@ -95,6 +102,8 @@ function M.validate(msg)
     local lane = M.screens[screen]
     if not lane then return false, 'unknown_screen' end
     if type(action) ~= 'string' or not action:match(M.limits.actionPattern) or #action > M.limits.maxAction then return false, 'bad_action' end
+    local allowed = M.actions[screen]
+    if allowed and not allowed[action] then return false, 'bad_action' end
     if payload == nil then payload = {} end
     if type(payload) ~= 'table' then return false, 'bad_payload' end
     local size, why = M.measure(payload)

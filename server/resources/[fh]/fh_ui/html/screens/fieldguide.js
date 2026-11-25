@@ -5,7 +5,7 @@
 FH_UI.register('fieldguide', {
   last: null,
   selected: null, // id of the entry currently shown in the right pane
-  open: function (el, data) { this.last = data || {}; this.selected = null; this.render(el); },
+  open: function (el, data) { this.last = data || {}; this.selected = this.pick(this.last, null); this.render(el); },
   update: function (el, data) {
     data = data || {};
     if (data.entries === undefined) data = Object.assign({}, this.last, data); // selected-only update keeps entries
