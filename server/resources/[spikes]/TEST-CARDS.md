@@ -1,4 +1,4 @@
-# Spike test cards (S1 → S7), owner: Aub
+# Spike test cards (S1 → S8), owner: Aub
 
 Checkout: `<repo-root>` (the same one you start the server from with `tools/start-server.ps1`). The spikes live in `server/resources/[spikes]/`. They are **not** in server.cfg, so you start each one by hand.
 How: in the **server console window** type `ensure spk_<name>`. In game, press T and type the `/spk_...` command. Console output shows in the server window, and client output shows in F8.
@@ -45,3 +45,9 @@ Each card takes 5 minutes or less. When you're done, open `server/resources/[spi
 - Test: on each character, apply 5+ presets (`/spk_outfit 0`, `/spk_outfit next` / `prev`) and compare face/hair/body against `/spk_outfit reset`. Turn `/spk_outfit auto on`, then test respawn (die or `/kill`) and relog: watch for `re-applied <n> after ApplySkin` and check whether face/body survive and whether it flickers. Over 2 good presets, test each layer slot (`/spk_outfit layer hat 1`, `bandana 1`, `gloves 1`, `coat 1`, plus `2`/`3` if needed) and `/spk_outfit layer clear` to see which sit cleanly without clipping. Finish with `/spk_outfit auto off` and `/spk_outfit reset`.
 - GO: list good preset indices per sex, whether face/hair/body survive preset + respawn/relog auto re-apply, and which layer slots sit cleanly without clipping.
 - RESULT: `spk_outfit/README.md` last line (`male good: [..] / female good: [..] / face kept Y/N / auto after respawn Y/N / after relog Y/N / layers clean: ...`).
+
+## S8 · spk_anim (core animations)
+- Start: `ensure spk_anim`
+- Test: `/spk_anim list` prints the 13 rows. Run `/spk_anim 1` .. `/spk_anim 13`: each plays 3s via the hash form, then 3s via the ox_lib string form (the chat/F8 line says row, name and form). Use `/spk_anim <n> hash` or `/spk_anim <n> string` to replay one form. Row 11 (baseline) is the known-working control. Mark per row: plays in hash form Y/N, plays in string form Y/N, looks right Y/N. `/spk_anim stop` clears.
+- GO: per row, which form(s) work and whether it looks right; row 11 must work in both forms or the test is invalid.
+- RESULT: `spk_anim/README.md` last line (one line per row: `row | name | hash Y/N | string Y/N | looks right Y/N | note`), send to the animations lead.
