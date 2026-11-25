@@ -166,6 +166,30 @@ document.addEventListener('click', (e) => {
     renderGrid(chip.dataset.inv);
 });
 
+// FH (core-10 I3): registered pane buttons. With the pane toggle off there is only the one pane, so show them all;
+// with it on, show those registered for the pane that is active.
+function renderPaneButtons() {
+    const box = $('pane-buttons');
+    if (!box) return;
+    const cur = onSaddlebag() ? 'saddlebag' : 'backpack';
+    const nodes = (state.paneButtons || [])
+        .filter((b) => !state.saddlebagPane || b.pane === cur)
+        .map((b) => {
+            const el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'wood-btn small';
+            el.dataset.paneButton = b.id;
+            el.textContent = b.label;
+            return el;
+        });
+    box.replaceChildren(...nodes);
+}
+
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-pane-button]');
+    if (btn) post('paneButton', { id: btn.dataset.paneButton });
+});
+
 function render() {
     if (state.player) {
         $('player-label').textContent = state.player.label || L('ui_satchel', 'Satchel');
@@ -175,6 +199,7 @@ function render() {
     const paneBtn = $('pane-toggle'); // FH (B6f)
     paneBtn.classList.toggle('hidden', !state.saddlebagPane);
     paneBtn.textContent = onSaddlebag() ? L('ui_backpack', 'Backpack') : L('ui_saddlebag', 'Saddlebag');
+    renderPaneButtons();
     const other = state.other;
     $('panel-other').classList.toggle('hidden', !other);
     if (other) {
@@ -721,6 +746,7 @@ window.addEventListener('message', ({ data: msg }) => {
             state.imagePath = d.imagePath || state.imagePath;
             state.hotbarSlots = d.hotbarSlots || 5;
             state.saddlebagPane = d.saddlebagPane === true;
+            state.paneButtons = Array.isArray(d.paneButtons) ? d.paneButtons : [];
             trashEnabled = d.trash !== false;
             state.other = null;
             closeGive();
@@ -742,6 +768,10 @@ window.addEventListener('message', ({ data: msg }) => {
             $('hotbar').classList.add('hidden');
             $('app').classList.remove('hidden');
             render();
+            break;
+        case 'paneButtons':
+            state.paneButtons = Array.isArray(d.paneButtons) ? d.paneButtons : [];
+            if (state.open) renderPaneButtons();
             break;
         case 'refresh':
             setInv('player', d.player);

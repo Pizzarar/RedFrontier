@@ -27,6 +27,13 @@ fork notes below.
   `exports.fh_core:saddlebagPane` before every action and once a second (a failure snaps back to the backpack and the
   action is refused). Use and shop buy/sell are refused on the saddlebag pane. Closing the inventory, leaving or a
   character switch resets to the backpack. Specced in `spec/saddlebag_pane_spec.lua`.
+- **Pane buttons (core-10 I3, client).** `exports.fh_inventory:registerPaneButton({ id = 'wardrobe', label = 'Wardrobe',
+  pane = 'backpack' })` (`pane` is `'saddlebag'` or `'backpack'`, default `'backpack'`; `id`/`label` non-empty strings)
+  returns `true`, or `false, reason` (`bad_args`/`bad_id`/`bad_label`/`bad_pane`). The button renders in the player-pane
+  toolbar; a click fires the client event `fh_inventory:paneButton` with `{ id, pane }` (listen with
+  `AddEventHandler`). Re-registering an id replaces it. With `fh_saddlebag_pane` off there is one pane, so every button
+  shows; with it on, a button shows on its own pane only. Registrations live until the resource restarts, so
+  re-register on `onClientResourceStart` of fh_inventory. Specced in `spec/pane_buttons_spec.lua`.
 - **Shop money goes through the fh_economy ledger** (`server/shops.lua`, core M3). Buy = `exports.fh_economy:charge`
   (reason `shop_buy:<shop>`), then the item add; if the add fails the charge is refunded (`pay`, else `credit` to the
   citizenid; reason `shop_buy_refund:<shop>`). Sell = remove the item, then `pay` (reason `shop_sell:<shop>`); if pay is

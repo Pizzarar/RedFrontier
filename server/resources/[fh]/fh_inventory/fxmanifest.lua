@@ -31,6 +31,7 @@ server_scripts {
 }
 
 client_scripts {
+    'client/panebuttons.lua', -- FH (core-10 I3)
     'client/main.lua',
 }
 

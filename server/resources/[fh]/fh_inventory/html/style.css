@@ -315,3 +315,6 @@ html, body {
 .trash-warning { text-align: center; font-style: italic; color: var(--rdr-cost-over); font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
 .wood-btn.danger { border-color: var(--rdr-cost-over); color: var(--rdr-cost-over); }
 .wood-btn.danger:hover { background: rgba(224, 85, 79, 0.15); }
+
+/* FH (core-10 I3): buttons other resources register on the player pane */
+.pane-buttons { display: contents; }

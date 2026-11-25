@@ -117,7 +117,8 @@ RegisterNetEvent('rsg-inventory:client:open', function(player, other, opts)
         SetNuiFocusKeepInput(true)
     end
     Send('open', { player = player, other = other, imagePath = Config.ImagePath, hotbarSlots = Config.HotbarSlots, trash = Config.Trash.Enabled, labels = UiLabels(), categoryLabels = Config.CategoryLabels,
-        saddlebagPane = type(opts) == 'table' and opts.saddlebagPane == true or nil })
+        saddlebagPane = type(opts) == 'table' and opts.saddlebagPane == true or nil,
+        paneButtons = FhPaneButtons.list() }) -- FH (core-10 I3)
 end)
 
 RegisterNetEvent('rsg-inventory:client:refresh', function(player, other)
@@ -269,6 +270,13 @@ RegisterNUICallback('pane', function(data, cb)
 end)
 
 -- Give list: the server returns the players in range (name, id, distance) so the player picks the recipient
+-- FH (core-10 I3): a click on a registered pane button -> client event for the registering resource
+RegisterNUICallback('paneButton', function(data, cb)
+    local payload = type(data) == 'table' and FhPaneButtons.payload(data.id) or nil
+    if payload then TriggerEvent('fh_inventory:paneButton', payload) end
+    cb('ok')
+end)
+
 RegisterNUICallback('nearby', function(_, cb)
     RSGCore.Functions.TriggerCallback('rsg-inventory:server:getNearbyPlayers', function(list)
         cb(list or {})
@@ -420,3 +428,11 @@ end)
 
 exports('CloseInventory', Close)
 exports('IsOpen', function() return isOpen end)
+
+-- FH (core-10 I3): exports.fh_inventory:registerPaneButton({ id, label, pane = 'saddlebag'|'backpack' }) -> ok, reason.
+-- Fires the client event 'fh_inventory:paneButton' with { id, pane } on click. Works with fh_saddlebag_pane off.
+exports('registerPaneButton', function(def)
+    local ok, why = FhPaneButtons.register(def)
+    if ok and isOpen then Send('paneButtons', { paneButtons = FhPaneButtons.list() }) end
+    return ok, why
+end)
