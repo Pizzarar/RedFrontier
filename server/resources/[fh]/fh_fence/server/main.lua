@@ -139,6 +139,35 @@ end
 
 local core = function(name) return safe(function(...) return exports.fh_core[name](exports.fh_core, ...) end) end
 
+---Buy refund by citizenid (idea-866): exports.fh_economy:credit(citizenid, amount, reason, region_id) -> ok, err, mode
+---('paid' | 'pending'). A throw becomes false, 'credit_unavailable' (outcome unknown: trade.lua logs it as owed and
+---never retries, so a refund is never paid twice).
+local function credit(citizenid, amount, reason, region_id)
+    local called, ok, err, mode = pcall(function()
+        return exports.fh_economy:credit(citizenid, amount, reason, region_id)
+    end)
+    if not called then
+        log('export call failed: %s', tostring(ok))
+        return false, 'credit_unavailable'
+    end
+    if ok == true then return true, nil, mode end
+    return false, type(err) == 'string' and err or 'credit_refused'
+end
+
+---Persisted fence stash marks (idea-867, see trade.lua M.FENCE): resource KVP survives an fh_fence / server restart,
+---so goods already paid for are never handed back by fh_fence_settle after one. Synchronous natives: no yield.
+local MARK_PREFIX = 'fence_mark:'
+local marks = {
+    get = function(id)
+        local v = GetResourceKvpString(MARK_PREFIX .. id)
+        if v == FhFenceTrade.FENCE or v == FhFenceTrade.SALE then return v end
+        return nil
+    end,
+    set = function(id, v)
+        if v then SetResourceKvp(MARK_PREFIX .. id, v) else DeleteResourceKvp(MARK_PREFIX .. id) end
+    end,
+}
+
 local trader = FhFenceTrade.new(cfg, logic, {
     citizenOf = citizenOf,
     stopFor = stopFor,
@@ -158,6 +187,8 @@ local trader = FhFenceTrade.new(cfg, logic, {
     move = core('move'),
     charge = FhFenceCharge.charge, -- pcall-wrapped itself; refusals -> false, err
     pay = safe(function(...) return exports.fh_economy:pay(...) end),
+    credit = credit,
+    marks = marks,
     log = function(msg) print('[fh_fence] ' .. msg) end,
     now = os.time,
 })
@@ -246,18 +277,20 @@ RegisterCommand('fh_fence_next', function(source)
     else TriggerClientEvent('chat:addMessage', source, { args = { 'fh', msg } }) end
 end, true)
 
--- `fh_fence_settle <serverId>`: clears a player's `fence_pending` stash (left by a failed partial delivery / restore,
--- see the WARNING lines). Runs through trader.settle, i.e. under the same per-citizenid lock as buy / sell: a trade in
--- flight gives `fence_busy`. Goods go to the player all-or-nothing (`no_room`: nothing changed); fence-owned leftovers
--- are swept instead. Restricted: console, or ACE `command.fh_fence_settle` (server.cfg: add_ace group.admin command allow).
+-- `fh_fence_settle <serverId> [paid|unpaid]`: clears a player's `fence_pending` stash (left by a failed partial
+-- delivery / restore, see the WARNING lines). Runs through trader.settle, i.e. under the same per-citizenid lock as buy /
+-- sell: a trade in flight gives `fence_busy`. Goods go to the player all-or-nothing (`no_room`: nothing changed);
+-- fence-owned leftovers are swept instead. `sale_unknown`: fh_fence stopped while a sell's pay was in flight; check the
+-- player's `fence_sell:<item>` ledger rows, then rerun with `paid` (sweep: the fence owns them) or `unpaid` (deliver).
+-- Restricted: console, or ACE `command.fh_fence_settle` (server.cfg: add_ace group.admin command allow).
 RegisterCommand('fh_fence_settle', function(source, args)
     if source ~= 0 and not IsPlayerAceAllowed(source, 'command.fh_fence_settle') then return end
-    local target, err = logic.parseSettleArgs(args)
+    local target, err, resolve = logic.parseSettleArgs(args)
     local msg
     if not target then
         msg = 'fh_fence_settle: ' .. err
     else
-        local ok, a, b = trader.settle(target)
+        local ok, a, b = trader.settle(target, resolve)
         if ok then
             msg = b == 'swept' and ('fh_fence_settle: ok (%d: fence-owned leftovers swept)'):format(target)
                 or ('fh_fence_settle: ok (%d units to %d)'):format(a, target)

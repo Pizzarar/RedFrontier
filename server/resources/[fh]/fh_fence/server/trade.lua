@@ -36,7 +36,8 @@
 --     A failed removeItem after pay leaves the sold (fence's) goods flagged for the next trade's sweep.
 --  5. Settle (admin `fh_fence_settle`): runs under the same lock as a trade. A pending stash of player / paid-for goods
 --     goes to the player all-or-nothing (room pre-check; a short transfer is put back step by step); fence-owned
---     leftovers (sweep flag) are swept, never given out. Afterwards the stash is empty and trades work again.
+--     leftovers (mark 'fence') are swept, never given out. A 'sale' mark is refused ('sale_unknown') unless the admin
+--     resolves it (paid = sweep, unpaid = give to the player). Afterwards the stash is empty and trades work again.
 local M = {}
 
 local function countOf(items, name)
@@ -114,6 +115,21 @@ function M.newLocks(now, staleSeconds, onReclaim, onStuck)
     return L
 end
 
+-- ---------------------------------------------------------------- stash marks
+
+---What a non-empty fence stash holds, beyond what the player put in (invariants 4, 5):
+---FENCE: only the fence's goods (unpaid buy stage / sold goods already paid for): sweep, never give out.
+---SALE: a sell's pay was started and its result is not known here: neither give out nor sweep (admin decides).
+---nil: the player's (or paid-for) goods: never swept.
+M.FENCE, M.SALE = 'fence', 'sale'
+
+---In-memory marks (specs / no persistence). Production passes a persisted store (main.lua, resource KVP) so a
+---restart cannot forget that goods were paid for. get / set must not yield.
+function M.memoryMarks()
+    local t = {}
+    return { get = function(id) return t[id] end, set = function(id, v) t[id] = v end }
+end
+
 -- ---------------------------------------------------------------- trader
 
 ---deps (all may yield): citizenOf(src), stopFor(src) -> stop, stopId|reason, currentStop() -> stop|nil (no range check,
@@ -121,8 +137,10 @@ end
 ---ensureStash(ref, stop), snapshot(ref), view(ref), canFit(ref, item, qty), addItem(ref, item, qty, info),
 ---clear(ref), removeItem(ref, item, qty) (all-or-nothing, fh_not_enough), transferAll(from, to, src) -> ok, moved,
 ---leftovers, move(from, to, fromSlot, toSlot, amount, src),
----charge(src, amount, reason, region_id), pay(src, amount, reason, region_id), log(msg), now() -> seconds.
----citizenOf must not yield (the lock is taken right after it). Failures are returned (false/nil, reason), not thrown;
+---charge(src, amount, reason, region_id), pay(src, amount, reason, region_id),
+---credit(citizenid, amount, reason, region_id) -> ok, err, 'paid'|'pending' (fh_economy, by citizenid),
+---log(msg), now() -> seconds. Not yielding: citizenOf (the lock is taken right after it), marks (optional
+---{ get(id), set(id, v) }, default M.memoryMarks()). Failures are returned (false/nil, reason), not thrown;
 ---a throw is still caught, logged and releases the lock.
 function M.new(cfg, logic, deps)
     local function log(fmt, ...) deps.log(fmt:format(...)) end
@@ -132,14 +150,15 @@ function M.new(cfg, logic, deps)
         log('WARNING stale trade lock kept, its trade already changed the stash or money: citizenid=%s src=%s',
             tostring(tok.cid), tostring(tok.src))
     end)
-    -- Every stash mutation and charge / sell pay goes through locks.write (invariant 1): (tok, ...) -> deps.<name>(...).
-    -- The buy refund is deps.pay direct: it only runs after removeItem, so the lock is already pinned.
+    -- Every stash mutation and every money call (charge, sell pay, buy refund credit) goes through locks.write
+    -- (invariant 1): (tok, ...) -> deps.<name>(...).
     local function writer(name) return function(tok, ...) return locks.write(tok, deps[name], ...) end end
     local addItem, clear, removeItem = writer('addItem'), writer('clear'), writer('removeItem')
-    local transferAll, move, charge, pay = writer('transferAll'), writer('move'), writer('charge'), writer('pay')
-    -- stash id -> true: what is in that stash is known to be the fence's (safe to wipe). Cleared whenever the stash
-    -- is seen empty or player-owned / paid-for goods are left in it (pin).
-    local sweep = {}
+    local transferAll, move, charge, credit = writer('transferAll'), writer('move'), writer('charge'), writer('credit')
+    -- stash id -> FENCE | SALE | nil (see M.FENCE). Persisted when deps.marks is (production). Cleared whenever the
+    -- stash is seen empty or player-owned / paid-for goods are left in it (pin).
+    local marks = deps.marks or M.memoryMarks()
+    local FENCE, SALE = M.FENCE, M.SALE
     local T = { locks = locks }
     local owned, alive = locks.owned, locks.alive
 
@@ -157,11 +176,11 @@ function M.new(cfg, logic, deps)
         return table.unpack(res, 2, res.n)
     end
 
-    ---The ONLY writer of the sweep flag, and owner-only: a trade that lost its lock must not touch any in-memory stash
-    ---state either (a newer trade may have flagged its own unpaid stage / sold goods; clearing that flag would let
-    ---settle hand them out). v = true: the stash holds only the fence's goods; nil: never sweep it.
+    ---The ONLY writer of the stash mark, and owner-only: a trade that lost its lock must not touch any stash state
+    ---either (a newer trade may have flagged its own unpaid stage / sold goods; clearing that flag would let settle
+    ---hand them out). v = FENCE: the stash holds only the fence's goods; SALE: a pay is in flight; nil: never sweep.
     local function flag(tok, stash, v)
-        if owned(tok) then sweep[stash.id] = v end
+        if owned(tok) then marks.set(stash.id, v) end
     end
     ---Player goods or paid-for goods stay in the stash: never sweep them (owner only, see flag).
     local function pin(tok, stash) flag(tok, stash, nil) end
@@ -180,7 +199,7 @@ function M.new(cfg, logic, deps)
             pin(tok, stash)
             return true
         end
-        flag(tok, stash, sweepable and true or nil)
+        flag(tok, stash, sweepable and FENCE or nil)
         log('WARNING %s: clear %s failed (%s)%s', why, stash.id, tostring(err),
             sweepable and ', retried on the next trade' or ', left for an admin')
         return false
@@ -204,7 +223,7 @@ function M.new(cfg, logic, deps)
             pin(tok, stash) -- emptied elsewhere: an old sweep flag must not outlive what it was about
             return true
         end
-        if sweep[stash.id] and discard(tok, stash, true, 'sweep') then
+        if marks.get(stash.id) == FENCE and discard(tok, stash, true, 'sweep') then
             items = deps.snapshot(stash)
             if not owned(tok) then return false, 'fence_busy' end
             if items and next(items) == nil then return true end
@@ -212,8 +231,8 @@ function M.new(cfg, logic, deps)
         local parts = {}
         for slot, it in pairs(items or {}) do parts[#parts + 1] = ('%s:%sx%s'):format(slot, tostring(it.name), tostring(it.amount)) end
         table.sort(parts)
-        log('WARNING fence stash not empty, trade refused: citizenid=%s stash=%s items=[%s]', tostring(cid), stash.id,
-            table.concat(parts, ','))
+        log('WARNING fence stash not empty, trade refused: citizenid=%s stash=%s items=[%s] mark=%s', tostring(cid),
+            stash.id, table.concat(parts, ','), tostring(marks.get(stash.id) or 'player'))
         return false, 'fence_pending'
     end
 
@@ -287,11 +306,19 @@ function M.new(cfg, logic, deps)
                 item, undelivered, refund, tostring(rmErr))
             return false, 'delivery_incomplete'
         end
-        -- the units are gone: the refund is ours to finish (money only; the lock is pinned since the stage)
-        local rok, rerr = deps.pay(src, refund, 'fence_refund', stop.region_id)
-        if not rok then
+        -- the units are gone: the refund is ours to finish (money only; the lock is pinned since the stage, so the
+        -- write runs). By the citizenid taken at trade start, never by src (idea-866): the player may have dropped or
+        -- switched character during the awaits above; credit queues it ('pending') for an offline character.
+        -- Called ONCE, never retried: a refusal or a throw (outcome unknown) is logged as owed for an admin.
+        local rok, rerr, mode = credit(tok, cid, refund, 'fence_refund', stop.region_id)
+        if rok then
+            if mode == 'pending' then
+                log('buy refund queued as a pending credit (character offline or switched): citizenid=%s src=%s amount=%d',
+                    tostring(cid), tostring(src), refund)
+            end
+        else
             -- the undelivered units are already gone, so this is money owed (the charge ledger row proves it)
-            log('WARNING REFUND FAILED, refund owed: citizenid=%s src=%s item=%s undelivered=%d amount=%d: %s',
+            log('WARNING REFUND FAILED, refund owed, pay by hand (check the fence_refund ledger first): citizenid=%s src=%s item=%s undelivered=%d amount=%d: %s',
                 tostring(cid), tostring(src), item, undelivered, refund, tostring(rerr))
         end
         local delivered = qty - undelivered
@@ -336,8 +363,8 @@ function M.new(cfg, logic, deps)
             if not owned(tok) then return false, 'reclaimed' end
             transferAll(tok, stash, backpack, src)
             local left = deps.snapshot(stash)
+            pin(tok, stash) -- emptied, or the player's (unpaid) goods: never swept; also ends a 'sale' mark
             if left and next(left) == nil then return true end
-            pin(tok, stash) -- the player's goods: never swept
             return false, left and 'restore_incomplete' or 'restore_unknown'
         end
 
@@ -357,21 +384,28 @@ function M.new(cfg, logic, deps)
             return false, alive(tok) and 'inventory_changed' or 'fence_busy'
         end
 
-        -- 3. pay; on failure give the goods back (sellOutcome; restore is owner-only)
+        -- 3. pay; on failure give the goods back (sellOutcome; restore is owner-only). The persisted SALE mark is set
+        --    inside the same locks.write as the pay, with no yield between: if fh_fence dies while the pay is in
+        --    flight, the goods stay marked "paid or not unknown" and no later trade or settle hands them out
+        --    (idea-867). Once the pay returned, the mark says what the goods are (FENCE paid / nil restored).
         local total = cfg.buys[item] * sold
-        local paid, payWhy = pay(tok, src, total, 'fence_sell:' .. item, stop.region_id)
+        local paid, payWhy = locks.write(tok, function()
+            flag(tok, stash, SALE)
+            return deps.pay(src, total, 'fence_sell:' .. item, stop.region_id)
+        end)
+        if paid then flag(tok, stash, FENCE) end -- owner-only; a reclaimed trade leaves SALE (never handed out)
         local out = logic.sellOutcome(paid, payWhy, restore, { citizenid = cid, item = item, qty = sold })
         if out.log then deps.log(out.log) end
         if out.action ~= 'complete' then return false, out.reason end
 
-        -- 4. paid: the goods are the fence's. Remove exactly the sold units only while owned (all-or-nothing); a failure
-        --    flags them for the next trade's sweep. A reclaimed trade leaves them (logged).
+        -- 4. paid: the goods are the fence's (marked FENCE above). Remove exactly the sold units only while owned
+        --    (all-or-nothing); a failure leaves them marked for the next trade's sweep. A reclaimed trade leaves them.
         if owned(tok) then
             local rok, rerr = removeItem(tok, stash, item, sold)
             if rok then
                 pin(tok, stash)
             elseif owned(tok) then -- removeItem yields: only a trade that still owns the stash may flag it
-                flag(tok, stash, true)
+                flag(tok, stash, FENCE)
                 log('WARNING sell: removing %dx %s from %s failed (%s), retried on the next trade', sold, item,
                     stash.id, tostring(rerr))
             else
@@ -403,8 +437,11 @@ function M.new(cfg, logic, deps)
         return table.concat(parts, ',')
     end
 
-    ---Clear a fence_pending stash (invariant 5). @return true, units, 'delivered'|'swept' | false, reason
-    local function settle(tok, cid, src)
+    ---Clear a fence_pending stash (invariant 5). resolve ('paid' | 'unpaid' | nil) is only for a SALE mark, after the
+    ---admin checked the ledger: paid = the fence's (sweep), unpaid = the player's (deliver). Without it a SALE stash is
+    ---refused ('sale_unknown'); with it on any other stash: 'no_sale_pending' (nothing changes).
+    ---@return true, units, 'delivered'|'swept' | false, reason
+    local function settle(tok, cid, src, resolve)
         local stop = deps.currentStop()
         if not stop then return false, 'no_schedule' end
         local backpack, stash = { type = 'backpack', id = src }, M.stashRef(cid, cfg.fenceId)
@@ -418,7 +455,22 @@ function M.new(cfg, logic, deps)
             return false, 'nothing_pending'
         end
         local want, names = totalsOf(items)
-        if sweep[stash.id] then -- the fence's own (unpaid stage / goods already paid for): sweep, never give out
+        local mark = marks.get(stash.id)
+        if resolve ~= nil and mark ~= SALE then return false, 'no_sale_pending' end
+        if mark == SALE then
+            if resolve == nil then
+                log('WARNING settle refused: a sell pay was in flight when fh_fence stopped, paid or not unknown: '
+                    .. 'citizenid=%s stash=%s items=[%s]. Check the fence_sell ledger rows, then fh_fence_settle %s paid|unpaid',
+                    tostring(cid), stash.id, describe(want, names), tostring(src))
+                return false, 'sale_unknown'
+            end
+            if not alive(tok) then return false, 'fence_busy' end
+            log('settle: admin resolved a sale as %s: citizenid=%s stash=%s items=[%s]', resolve, tostring(cid),
+                stash.id, describe(want, names))
+            mark = resolve == 'paid' and FENCE or nil
+            flag(tok, stash, mark) -- alive just checked, no yield since
+        end
+        if mark == FENCE then -- the fence's own (unpaid stage / goods already paid for): sweep, never give out
             if not alive(tok) then return false, 'fence_busy' end
             if not discard(tok, stash, true, 'settle sweep') then return false, 'fh_unavailable' end
             log('settle: swept fence-owned leftovers: citizenid=%s stash=%s items=[%s]', tostring(cid), stash.id,
@@ -475,7 +527,10 @@ function M.new(cfg, logic, deps)
     end
 
     function T.buy(src, item, qty) return run('buy', src, buy, src, item, qty) end
-    function T.settle(src) return run('settle', src, settle, src) end
+    function T.settle(src, resolve)
+        if resolve ~= nil and resolve ~= 'paid' and resolve ~= 'unpaid' then return false, 'fh_bad_resolve' end
+        return run('settle', src, settle, src, resolve)
+    end
     function T.sell(src, item, qty) return run('sell', src, sell, src, item, qty) end
     function T.dropped(src) locks.dropSrc(src) end
     return T

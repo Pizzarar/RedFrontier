@@ -178,9 +178,12 @@ case('messages: every core B7 charge/pay refusal has player text (no raw code in
     end
 end)
 
-case('parseSettleArgs: one whole positive server id', function()
+case('parseSettleArgs: one whole positive server id, optional paid|unpaid', function()
     T.eq(3, logic.parseSettleArgs({ '3' }))
-    for _, bad in ipairs({ {}, { 'abc' }, { '0' }, { '-2' }, { '2.5' }, { 'inf' }, { 'nan' }, { '3', 'x' } }) do
+    T.same({ 3, nil, 'paid', n = 3 }, table.pack(logic.parseSettleArgs({ '3', 'paid' })))
+    T.same({ 3, nil, 'unpaid', n = 3 }, table.pack(logic.parseSettleArgs({ '3', 'unpaid' })))
+    for _, bad in ipairs({ {}, { 'abc' }, { '0' }, { '-2' }, { '2.5' }, { 'inf' }, { 'nan' }, { '3', 'x' },
+        { '3', 'paid', 'x' }, { 'paid' } }) do
         local t, err = logic.parseSettleArgs(bad)
         T.eq(nil, t); T.eq('fh_bad_target', err)
     end

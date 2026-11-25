@@ -54,6 +54,8 @@ local function world(o)
         players = { C1 = { money = 1000, bag = {}, room = 100 }, C2 = { money = 1000, bag = {}, room = 100 } },
         srcs = { [1] = 'C1', [2] = 'C1', [3] = 'C2' }, -- src 2 = C1 reconnected
         stashes = {}, fail = {}, hooks = {}, calls = {}, logs = {}, refunds = {}, clock = 0,
+        offline = {}, pending = {}, credits = {}, -- credit(citizenid): offline cid -> queued in pending
+        marks = trade.memoryMarks(), -- persisted in production (KVP): survives restart() below
     }
     for cid, p in pairs(o.players or {}) do for k, v in pairs(p) do W.players[cid][k] = v end end
     if o.stash then W.stashes[STASH] = o.stash end
@@ -172,13 +174,27 @@ local function world(o)
             local f = W.fail.pay
             if f and reason:find(f.reason, 1, true) then return false, f.err end
             P(src).money = P(src).money + amount
-            if reason == 'fence_refund' then W.refunds[#W.refunds + 1] = amount end
             return true
+        end,
+        credit = function(cid, amount, reason) -- fh_economy credit: by citizenid, never by src
+            step('credit')
+            W.credits[#W.credits + 1] = { cid = cid, amount = amount, reason = reason }
+            if W.fail.credit then return false, W.fail.credit end
+            if reason == 'fence_refund' then W.refunds[#W.refunds + 1] = amount end
+            if W.offline[cid] then
+                W.pending[cid] = (W.pending[cid] or 0) + amount
+                return true, nil, 'pending'
+            end
+            W.players[cid].money = W.players[cid].money + amount
+            return true, nil, 'paid'
         end,
         log = function(m) W.logs[#W.logs + 1] = m end,
         now = function() return W.clock end,
     }
+    W.deps.marks = W.marks
     W.T = trade.new(cfg, logic, W.deps)
+    ---fh_fence restart: new trader (in-memory locks gone, any suspended trade never resumes), same world + marks.
+    W.restart = function() W.T = trade.new(cfg, logic, W.deps) end
     W.stash = function() return W.stashes[STASH] or {} end
     W.C1 = W.players.C1
     return W
@@ -568,9 +584,48 @@ end)
 case('buy: refund pay fails -> logged as owed, reported refund 0', function()
     local W = world()
     W.hooks.charge = function() W.C1.room = 1 end
-    W.fail.pay = { reason = 'fence_refund', err = 'ledger_failed' }
+    W.fail.credit = 'ledger_failed'
     T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(1, GUN, 3)))
     T.eq(0, size(W.stash())); assert(logged(W, 'REFUND FAILED, refund owed'))
+end)
+
+-- ---------------------------------------------------------------- refund by citizenid (idea-866)
+
+case('refund: character switch on the src during the trade -> refund lands on the ORIGINAL citizen via credit', function()
+    local W = world()
+    W.hooks.charge = function() W.C1.room = 1 end
+    W.hooks.removeItem = function() W.srcs[1] = 'C2' end -- src 1 now plays C2, just before the refund
+    T.same({ true, 1, 2 * PRICE, n = 3 }, table.pack(W.T.buy(1, GUN, 3)))
+    T.same({ { cid = 'C1', amount = 2 * PRICE, reason = 'fence_refund' } }, W.credits)
+    T.eq(1000 - PRICE, W.C1.money); T.eq(1000, W.players.C2.money) -- C2 got nothing
+    T.eq(1, count(W.C1.bag, GUN)); T.eq(0, size(W.stash()))
+    T.eq(nil, W.calls.pay) -- no pay(src) on the buy path at all
+end)
+
+case('refund: player dropped before the refund -> credit queues it for C1 (pending), logged, reported refunded', function()
+    local W = world()
+    W.hooks.charge = function() W.C1.room = 1 end
+    W.hooks.removeItem = function() W.srcs[1] = nil; W.offline.C1 = true end
+    T.same({ true, 1, 2 * PRICE, n = 3 }, table.pack(W.T.buy(1, GUN, 3)))
+    T.eq(2 * PRICE, W.pending.C1); T.eq(1000 - 3 * PRICE, W.C1.money)
+    assert(logged(W, 'queued as a pending credit'))
+end)
+
+case('refund: credit fails -> logged as owed ONCE, no retry, no double refund; next trade unaffected', function()
+    local W = world()
+    W.hooks.charge = function() W.C1.room = 1 end
+    W.fail.credit = 'ledger_failed'
+    T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(1, GUN, 3)))
+    T.eq(1, W.calls.credit); T.eq(0, #W.refunds); T.eq(1000 - 3 * PRICE, W.C1.money)
+    local owed = 0
+    for _, l in ipairs(W.logs) do if l:find('REFUND FAILED, refund owed', 1, true) then owed = owed + 1 end end
+    T.eq(1, owed); assert(logged(W, 'amount=' .. 2 * PRICE)); assert(logged(W, 'ledger_failed'))
+    T.eq(0, size(W.stash())); assert(not W.T.locks.held('C1'))
+    -- the failed refund is never re-attempted by a later trade or settle
+    W.hooks.charge, W.fail.credit, W.C1.room = nil, nil, 10
+    T.same({ true, 1, 0, n = 3 }, table.pack(W.T.buy(1, GUN, 1)))
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
+    T.eq(1, W.calls.credit); T.eq(1000 - 4 * PRICE, W.C1.money)
 end)
 
 -- ---------------------------------------------------------------- sell rollback
@@ -915,6 +970,87 @@ case('menu stock: a lead row carries only its spot id; an id missing from the sp
     T.same({}, logic.filterStock(broken, true, true, leadOk))
     T.eq(1, #logic.filterStock(broken, true, true)) -- no predicate (specs / old callers): listed as before
     T.eq(nil, logic.leadInfo({ lead = { coords = { x = 1, y = 2, z = 3 } } })) -- an old-shape entry writes nothing
+end)
+
+-- ---------------------------------------------------------------- persisted marks (idea-867)
+
+case('restart: sold goods whose removal failed stay the fence\'s after a restart; settle sweeps, never hands back', function()
+    local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 3 } } } } })
+    W.hooks.pay = function() W.fail.removeItem = 'fh_inventory_down' end
+    T.same({ true, 2, 2 * SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 2)))
+    T.eq(2, count(W.stash(), GUN)); T.eq(trade.FENCE, W.marks.get(STASH))
+    W.hooks.pay, W.fail.removeItem = nil, nil
+    W.restart()
+    T.same({ true, 0, 'swept', n = 3 }, table.pack(W.T.settle(1)))
+    T.eq(0, size(W.stash())); T.eq(1, count(W.C1.bag, GUN)); T.eq(1000 + 2 * SELL, W.C1.money)
+    T.eq(nil, W.marks.get(STASH))
+end)
+
+---Sell of 2 stopped at its pay; the pay lands in fh_economy but fh_fence restarts before it returns.
+local function diedMidPay()
+    local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
+    start(function() return W.T.sell(1, GUN, 2) end, 'pay') -- never resumed again: fh_fence died
+    T.eq(trade.SALE, W.marks.get(STASH))
+    W.C1.money = W.C1.money + 2 * SELL -- fh_economy finished the pay on its side
+    W.restart()
+    return W
+end
+
+case('restart mid-pay: goods are neither handed back nor swept until an admin resolves; trades stay refused', function()
+    local W = diedMidPay()
+    T.same({ false, 'sale_unknown', n = 2 }, table.pack(W.T.settle(1)))
+    assert(logged(W, 'fh_fence_settle 1 paid|unpaid'))
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.sell(1, GUN, 1))) -- begin never sweeps a SALE
+    T.same({ false, 'fence_pending', n = 2 }, table.pack(W.T.buy(1, GUN, 1)))
+    T.eq(2, count(W.stash(), GUN)); T.eq(0, count(W.C1.bag, GUN)); T.eq(nil, W.calls.clear)
+    T.eq(trade.SALE, W.marks.get(STASH))
+    -- admin checked the ledger: paid -> swept (the fence owns them)
+    T.same({ true, 0, 'swept', n = 3 }, table.pack(W.T.settle(1, 'paid')))
+    T.eq(0, size(W.stash())); T.eq(0, count(W.C1.bag, GUN)); T.eq(1000 + 2 * SELL, W.C1.money)
+    T.eq(nil, W.marks.get(STASH))
+    T.same({ false, 'nothing_pending', n = 2 }, table.pack(W.T.settle(1)))
+end)
+
+case('restart mid-pay, ledger shows unpaid: admin resolves unpaid -> goods back to the player', function()
+    local W = diedMidPay()
+    W.C1.money = 1000 -- the pay never landed
+    T.same({ true, 2, 'delivered', n = 3 }, table.pack(W.T.settle(1, 'unpaid')))
+    T.eq(2, count(W.C1.bag, GUN)); T.eq(0, size(W.stash())); T.eq(nil, W.marks.get(STASH))
+end)
+
+case('settle resolve: only for a SALE stash; bad value refused before the lock', function()
+    local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 3 } } } } })
+    W.hooks.pay = function() W.fail.removeItem = 'fh_inventory_down' end
+    T.same({ true, 2, 2 * SELL, n = 3 }, table.pack(W.T.sell(1, GUN, 2))) -- FENCE mark
+    W.hooks.pay, W.fail.removeItem = nil, nil
+    T.same({ false, 'no_sale_pending', n = 2 }, table.pack(W.T.settle(1, 'unpaid'))) -- would hand out paid goods
+    T.eq(2, count(W.stash(), GUN)); T.eq(1, count(W.C1.bag, GUN))
+    T.same({ false, 'fh_bad_resolve', n = 2 }, table.pack(W.T.settle(1, 'yes')))
+    assert(not W.T.locks.held('C1'))
+end)
+
+case('marks: a failed pay with goods restored or kept for the player clears SALE (unpaid goods stay the player\'s)', function()
+    local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 3 } } } } })
+    W.fail.pay = { reason = 'fence_sell', err = 'ledger_failed' }
+    T.same({ false, 'ledger_failed', n = 2 }, table.pack(W.T.sell(1, GUN, 2)))
+    T.eq(nil, W.marks.get(STASH)); T.eq(3, count(W.C1.bag, GUN))
+    W.hooks.pay = function() W.fail.transferAll = 'fh_inventory_down' end -- restore fails too
+    T.same({ false, 'ledger_failed', n = 2 }, table.pack(W.T.sell(1, GUN, 2)))
+    T.eq(nil, W.marks.get(STASH)); T.eq(2, count(W.stash(), GUN))
+    W.hooks.pay, W.fail.transferAll, W.fail.pay = nil, nil, nil
+    W.restart()
+    T.same({ true, 2, 'delivered', n = 3 }, table.pack(W.T.settle(1))) -- never paid: the player's
+    T.eq(3, count(W.C1.bag, GUN)); T.eq(1000, W.C1.money)
+end)
+
+case('marks: a successful sell leaves no mark; a reclaim attempt during the pay is refused (pinned)', function()
+    local W = world({ players = { C1 = { bag = { [1] = { name = GUN, amount = 2 } } } } })
+    local a = start(function() return W.T.sell(1, GUN, 2) end, 'pay')
+    T.eq(trade.SALE, W.marks.get(STASH))
+    W.clock = W.clock + cfg.lockStaleSeconds + 1
+    T.same({ false, 'fence_busy', n = 2 }, table.pack(W.T.settle(1))) -- pinned: no reclaim, nothing handed out
+    T.same({ true, 2, 2 * SELL, n = 3 }, drain(a))
+    T.eq(nil, W.marks.get(STASH)); T.eq(0, size(W.stash())); T.eq(0, count(W.C1.bag, GUN))
 end)
 
 T.finish()

@@ -151,13 +151,18 @@ function M.sellOutcome(payOk, payErr, restore, who)
             reason, tostring(err or 'restore_failed'), tostring(who.citizenid), tostring(who.item), tostring(who.qty)) }
 end
 
----Admin `fh_fence_settle <serverId>` argument parsing: one whole positive server id.
----@return number|nil target, string|nil err
+---Admin `fh_fence_settle <serverId> [paid|unpaid]` argument parsing: one whole positive server id, then optionally
+---how to resolve a `sale_unknown` stash (server/trade.lua settle).
+---@return number|nil target, string|nil err, string|nil resolve
 function M.parseSettleArgs(args)
     args = type(args) == 'table' and args or {}
     local t = tonumber(args[1])
-    if not t or t ~= t or t <= 0 or t % 1 ~= 0 or t == math.huge or args[2] ~= nil then return nil, 'fh_bad_target' end
-    return math.tointeger(t) or t
+    local r = args[2]
+    if not t or t ~= t or t <= 0 or t % 1 ~= 0 or t == math.huge or args[3] ~= nil
+        or (r ~= nil and r ~= 'paid' and r ~= 'unpaid') then
+        return nil, 'fh_bad_target'
+    end
+    return math.tointeger(t) or t, nil, r
 end
 
 ---Player-facing text per refusal code (client menu). Covers every core B7 charge / pay error so none shows as a raw
