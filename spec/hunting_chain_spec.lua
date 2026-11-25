@@ -296,4 +296,48 @@ describe('hunting chain: distance reads vector3 (CfxLua 5.4)', function()
     end)
 end)
 
+describe('chainState (readState, read-only export for @quests)', function()
+    local function deps(rows, opts)
+        opts = opts or {}
+        local d = { byId = Chain.legendaries().byId, calls = 0, logs = {} }
+        d.query = function(cid, id)
+            d.calls = d.calls + 1
+            if opts.err then error('db down') end
+            return rows
+        end
+        d.log = function(m) d.logs[#d.logs + 1] = m end
+        return d
+    end
+    local ID = Chain.CHAIN_ID
+    it("'complete' when completed", function()
+        eq('complete', Chain.readState(deps({ { step = 5, completed = 1 } }), 'CID1', ID))
+        eq('complete', Chain.readState(deps({ { step = 4, completed = true } }), 'CID1', ID))
+    end)
+    it('stored step mid-chain', function()
+        eq(1, Chain.readState(deps({ { step = 1, completed = 0 } }), 'CID1', ID))
+        eq(3, Chain.readState(deps({ { step = '3', completed = 0 } }), 'CID1', ID))
+        eq(4, Chain.readState(deps({ { step = 4, completed = 0 } }), 'CID1', ID))
+    end)
+    it('nil with no row', function()
+        eq(nil, Chain.readState(deps({}), 'CID1', ID))
+        eq(nil, Chain.readState(deps(nil), 'CID1', ID))
+    end)
+    it('nil for unknown chain / bad args without querying', function()
+        local d = deps({ { step = 2, completed = 0 } })
+        eq(nil, Chain.readState(d, 'CID1', 'legendary_nope'))
+        eq(nil, Chain.readState(d, 'CID1', nil))
+        eq(nil, Chain.readState(d, 'CID1', 7))
+        eq(nil, Chain.readState(d, '', ID))
+        eq(nil, Chain.readState(d, nil, ID))
+        eq(nil, Chain.readState(d, 42, ID))
+        eq(0, d.calls)
+    end)
+    it('query error -> nil, logged once', function()
+        local d = deps(nil, { err = true })
+        eq(nil, Chain.readState(d, 'CID1', ID))
+        eq(nil, Chain.readState(d, 'CID1', ID))
+        eq(1, #d.logs)
+    end)
+end)
+
 T.finish()

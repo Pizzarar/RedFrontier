@@ -62,6 +62,7 @@ Images reuse rsg-inventory pelt images (`resource_pelt_*`, `good_pelt`, `perfect
 - `getPeltItem(model|hash, legendary)`: pelt item id or nil.
 - `price(peltItem, stars)`: payout amount or `nil, err`.
 - `getTrophyComfort(itemId)`: comfort number for any legendary trophy item (`trophy_<id>`, e.g. `legendary_bear` -> `trophy_legendary_bear`, 25 from `data/legendaries/*.lua`; see [Legendaries](#legendaries-hunting-02)), nil for pelts, unknown ids and non-strings. Homestead places the trophy and reads this; Hunting fires no trophy events.
+- `chainState(citizenid, chain_id)`: read-only legendary chain progress for one character: `'complete'` once the chain is finished, else the stored step (1 rumour, 2 track, 3 carcass, 4 spawned), or nil when there is no `fh_hunting_chains` row, `chain_id` is not a known legendary id, or the args are bad (or the query failed; logged once). Reads the table directly, mutates nothing, emits nothing.
 
 ## Trapper (H3)
 

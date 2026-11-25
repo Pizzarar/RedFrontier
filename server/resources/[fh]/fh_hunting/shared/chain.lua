@@ -332,5 +332,29 @@ end
 if GetCurrentResourceName then
     FhHuntingChain = M
 else
-    return M
+    -- Read-only public view for other resources (exports.fh_hunting:chainState). Pure: deps = { byId = legendary registry
+-- by id, query(cid, chainId) -> rows (may throw), log(msg) }. Reads the persisted row only: it never touches the chain
+-- cache (so it cannot create a default state) and emits nothing. nil = no row / unknown chain / bad args / query error
+-- (the error is logged once per process).
+local chainStateLogged = false
+---@return nil|integer|string  nil | stored step (1..4) | 'complete'
+function M.readState(deps, citizenid, chainId)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil end
+    if type(chainId) ~= 'string' or not (deps.byId and deps.byId[chainId]) then return nil end
+    local ok, rows = pcall(deps.query, citizenid, chainId)
+    if not ok then
+        if not chainStateLogged then
+            chainStateLogged = true
+            if deps.log then pcall(deps.log, 'chainState query failed: ' .. tostring(rows)) end
+        end
+        return nil
+    end
+    local r = type(rows) == 'table' and rows[1] or nil
+    if type(r) ~= 'table' then return nil end
+    local st = M.normalise({ step = tonumber(r.step), completed = r.completed == 1 or r.completed == true }, chainId)
+    if st.completed or st.step >= M.STEP_COMPLETE then return 'complete' end
+    return st.step
+end
+
+return M
 end

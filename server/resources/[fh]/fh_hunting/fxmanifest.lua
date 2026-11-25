@@ -42,4 +42,4 @@ client_scripts {
 
 dependencies { 'fh_core', 'fh_economy', 'ox_lib', 'rsg-target', 'oxmysql' }
 
-server_exports { 'getAnimal', 'getPeltItem', 'price', 'getTrophyComfort', 'getTrappers' }
+server_exports { 'getAnimal', 'getPeltItem', 'price', 'getTrophyComfort', 'getTrappers', 'chainState' }
