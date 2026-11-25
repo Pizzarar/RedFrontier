@@ -5,12 +5,13 @@
 ## Who's here
 - Brainstorm: Roads
 - Lead: ★ Roa4
-- Workers: 2
+- Workers: 0
 
 ## Done when
 - M4 + M5 (spec §6) code-complete: specs green, `## Roads` card in OWNER-TESTS.md, `decision roads playtest-ready <hash>` logged.
 
 ## Decided
+- 2026-11-25 roads-03 merged+pushed c1c8df5 (card 32-35); roads-fixes d074ea3 (idea-864/848/865). roads-04 (plans/roads-04-wagon-ownership.md): buy/call/stow owned wagons at trade posts (fh_wagons table, charge+refund, wagon_t2/t3 gate, ox_lib stopgap) + idea-915 farm supplies. Covers idea-850/915; idea-863 parked on @spikes.
 - 2026-11-25 R13 call (b): contracts gate = regional getTier only; contracts_t2/t3 canUnlock dropped (heartlands-bound); kill switch = fh_trade freight.t2/t3.enabled. Told @progression the ids are unused.
 - 2026-11-25 roads-02 merged+pushed main a447017, playtest-ready logged (card steps 25-31).
 - 2026-11-25 roads-03 (plans/roads-03-regional-freight.md): destinations from FhRegions posts; contract tier gate is regional (getTier(src, origin) plus global canUnlock); T3 = 2x T2; fail closed to T1.
@@ -31,5 +32,5 @@
 - (none blocking) Inbox follow-ups for a later plan: idea-669 (r5 lows), idea-676 (R4 abandon/check reorder). Card notes for the owner's playtest: step 10 needs Hunting's pelt flow; off-road wheel break is an inactive TODO.
 
 ## In flight
-- 2026-11-25 roads-03 handed to Roa3 rn-c9b952c0fd51 (R12→R13→R14 stacked, R15 last). Latest plan file = roads-03.
-- 2026-11-25 roads-03 PASS (Roa4): R12 a2b0c2e, R13 f77511f (tierA), R14 ce8c86d, R15 card steps 32-35; merged via Red4 slot.
+- 2026-11-25 roads-04 handed to Roa4. Latest plan file = roads-04.
+- 2026-11-25 roads-04 PASS (Roa4): R16 90c1db4+1a4ff08 (tierA), R17 0eb126b+ce63938, R18 48c1ecd, R19 card steps 36-48; migration renumbered 0022; merged via Red4 slot.
