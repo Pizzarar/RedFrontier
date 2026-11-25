@@ -1,0 +1,3 @@
+# G5 "load-all manifests" known findings — one per line: kind|resource|file|msg-substring|reason
+# A finding is "known" (does not fail the gate) when kind+resource+file match and msg-substring (if any)
+# appears in the message. `*` is not a wildcard; entries are exact. Keep a reason for every entry.
