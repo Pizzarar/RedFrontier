@@ -68,6 +68,44 @@ it('index lists each physical spot once (no duplicate coordinates)', function()
     end
 end)
 
+it('every place id across all FhPlaceResolver.index sources is unique (nothing silently dropped)', function()
+    -- fh_trade posts are not indexed separately by FhPlaceResolver.index; they share ids 1:1 with regions.posts
+    -- (resolved via resolvePosts, checked in world_coords_spec). fh_zones camps alias their territory entry in byId
+    -- under their own distinct camp id.
+    local seen = {}
+    local function claim(id, source, expectedKind)
+        assert(type(id) == 'string' and id ~= '', 'missing id in ' .. source)
+        assert(not seen[id], ('duplicate place id %q (%s vs %s)'):format(id, source, tostring(seen[id])))
+        seen[id] = source
+        local entry = byId[id]
+        assert(entry ~= nil, ('place id %q (%s) missing from byId'):format(id, source))
+        eq(expectedKind, entry.kind, ('place id %q (%s) kind'):format(id, source))
+    end
+
+    for rId, region in pairs(regions.regions) do
+        for _, town in ipairs(region.towns or {}) do
+            claim(town.id, 'town:' .. rId, 'town')
+        end
+        for _, amb in ipairs(region.ambush or {}) do
+            claim(amb.id, 'ambush:' .. rId, 'ambush')
+        end
+    end
+    for _, t in pairs(regions.territories) do
+        claim(t.id, 'territory', 'camp')
+    end
+    for _, post in pairs(regions.posts) do
+        claim(post.id, 'post', 'post')
+    end
+    for id, plot in pairs(_G.FhHomesteadConfig.plots) do
+        claim(id, 'homestead:' .. tostring(plot.class), plot.class == 'town_lot' and 'lot' or 'claim')
+    end
+    for id, camp in pairs(_G.FhZonesConfig.camps) do
+        if id ~= camp.territory then
+            claim(id, 'zones_camp', 'camp')
+        end
+    end
+end)
+
 it('index order is deterministic: sorted by kind then id', function()
     for i = 2, #places do
         local a, b = places[i - 1], places[i]

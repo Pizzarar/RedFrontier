@@ -210,7 +210,7 @@ regions.regions = {
         state = 'west_elizabeth',
         enabled = false,
         towns = {
-            { id = 'manzanita_post', label = 'Manzanita Post', x = -1795.0, y = -1600.0, z = 150.0 },
+            { id = 'manzanita', label = 'Manzanita Post', x = -1795.0, y = -1600.0, z = 150.0 },
         },
         factions = { 'lawmen', 'outlaws', 'bounty_hunters' },
         territories = { 'tall_trees_t1_camp', 'tall_trees_t1_camp_2', 'tall_trees_t2_camp' },
