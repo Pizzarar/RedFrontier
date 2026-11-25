@@ -79,3 +79,4 @@
 - 11-25 core-09 N1 PASS (Gemini tierA 0/0/0) df718fa: useables unload settle + monotonic gen, money applying depth counter, fh_log buffered + rotated.
 - 11-25 core-09 W1 PASS (Gemini 0/0/2) 57fc935: weapon wear on info.quality across fh_zones/fh_gunsmith/fh_crafting, read quality-or-condition, conditionChanged kept (@crafting OK). Lows -> W1-nit. core-09 COMPLETE.
 - 11-25 core-09 R1-nit+W1-nit PASS (Sonnet 0/0/2) 5f770d2: groundZAt scan catches aliases/value refs, plotcheck exemption tied to runPlotcheckProbe span; wear doc/spec drift fixed.
+- 11-25 core-10 PASS: I1 commit-safe fh_api + createDropBag leftovers (Gemini tierA 0/0/0) 3ebd2d9; I2 starter items via fh_starter_granted pending row at create + atomic claim at spawn (Gemini tierA 0/0/0) 7d50738; I3 registerPaneButton hook (Gemini 0/0/1) 57b9275. core-10 COMPLETE.

@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-25T17:25:12.129Z",
+  "updatedAt": "2026-11-25T17:40:26.805Z",
   "units": [
     {
       "id": "B5",
@@ -226,10 +226,10 @@
     },
     {
       "id": "I1",
-      "goal": "core-06 infra: 743 ACE grants, 744 Meshnet host, 750 idempotent 0001 rocks_zones",
+      "goal": "PASS (Gemini) stacked on core-i1, awaiting slot",
       "files": [],
       "doneCheck": "",
-      "status": "done",
+      "status": "running",
       "branch": "core-i1",
       "commit": "47b4fd5"
     },
@@ -424,10 +424,10 @@
     },
     {
       "id": "R1-nit",
-      "goal": "5f770d2 on core-nits2, Review Sonnet rn-7e7dc49eaf92 PASS 0/0/2; awaiting slot",
+      "goal": "merged 65d70d1 (code 5f770d2)",
       "files": [],
       "doneCheck": "",
-      "status": "running"
+      "status": "done"
     },
     {
       "id": "CHEST-COORDS",
@@ -438,7 +438,21 @@
     },
     {
       "id": "W1-nit",
-      "goal": "5f770d2 on core-nits2, Review Sonnet rn-7e7dc49eaf92 PASS 0/0/2; awaiting slot",
+      "goal": "merged 65d70d1 (code 5f770d2)",
+      "files": [],
+      "doneCheck": "",
+      "status": "done"
+    },
+    {
+      "id": "I2",
+      "goal": "PASS (Gemini) stacked on core-i1, awaiting slot",
+      "files": [],
+      "doneCheck": "",
+      "status": "running"
+    },
+    {
+      "id": "I3",
+      "goal": "PASS (Gemini) stacked on core-i1, awaiting slot",
       "files": [],
       "doneCheck": "",
       "status": "running"
