@@ -5,7 +5,7 @@
 ## Who's here
 - Brainstorm: Core
 - Lead: ★ Cor3
-- Workers: 2
+- Workers: 0
 
 ## Done when
 - §6 M1 extraction loop playable end-to-end by Aub, boot-check + busted green.
@@ -65,3 +65,5 @@
 - 11-24 core-07 L1 PASS: tools/check-contracts.py (exports/events/items lint, allowlist, run-specs --contracts) 645cc93+fix; Gemini FAIL 0/2/3 then PASS 0/0/0; 0 findings, 5 allowlisted.
 - 11-24 X1 (live) PASS: fh_core access claim moved to resource-local access.txt (Save/LoadResourceFile), re-applied at boot; io errors logged; server.cfg add_ace resource.fh_core command.add_principal. Gemini tierA-security PASS 0/0/2; X1-nit queued.
 - 11-24 core-07 B6f PASS: saddlebag player pane toggle DARK behind fh_saddlebag_pane=false (c895347+e2474f7+c7d4c9c), Gemini tierA PASS 0/0/4 then delta PASS 0/0/2 e4e00ab; venv 98/1808/0. Lows + /saddlebag in|out removal -> B6f-cleanup (after owner RESULT + flip).
+- 11-25 core-07 N1 PASS: X1-nit case-insensitive admin/allow keywords fail closed + L1-nit stale hands allowlist dropped (998dd55), Gemini tierA-security PASS 0/0/0.
+- 11-25 core-07 M2 PASS: rsg-core AddMoney/RemoveMoney/SetMoney return false and restore balance when cash items cannot fit (d062662), Gemini tierA PASS 0/0/2 6895248; lows -> M2-nit. venv 99/1826/0.

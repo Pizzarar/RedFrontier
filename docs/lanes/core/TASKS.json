@@ -1,6 +1,6 @@
 {
   "laneId": "core",
-  "updatedAt": "2026-11-24T23:19:57.943Z",
+  "updatedAt": "2026-11-25T01:31:37.651Z",
   "units": [
     {
       "id": "B5",
@@ -283,7 +283,7 @@
       "goal": "money items always fit: rsg-core moneyitems.lua:77-88 AddMoney returns true when cash item can't be placed; next sync drops it (A1 high-plausible). tierA",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-m2"
     },
     {
@@ -308,7 +308,7 @@
       "goal": "drop stale allowlist lines fh:hands:hired/fired from tools/contracts-allowlist.txt (fixed by progression G1/G3)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-n1"
     },
     {
@@ -316,7 +316,7 @@
       "goal": "access_rules.lua:134 match admin lines case-insensitively so a malformed ADMIN line still fails closed (X1 review low)",
       "files": [],
       "doneCheck": "",
-      "status": "running",
+      "status": "done",
       "branch": "core-n1"
     },
     {
@@ -325,6 +325,13 @@
       "files": [],
       "doneCheck": "",
       "status": "blocked"
+    },
+    {
+      "id": "M2-nit",
+      "goal": "rsg-core moneyitems.lua:60-68 removeItems removes cent stacks one RemoveItem per slot; >=100 cents split over 2+ slots (DB load/SetInventory path) triggers ConvertCoins mid-loop -> first slot's cents lost on a false return. Use one RemoveItem(name, amount) across stacks. Plus cosmetic HUD OnMoneyChange flicker on multi-step moves (player.lua:356-364). M2 review lows, tierA",
+      "files": [],
+      "doneCheck": "",
+      "status": "todo"
     }
   ]
 }
