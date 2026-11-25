@@ -26,7 +26,7 @@ The first time a new character loads, a short guide starts. It walks you through
 12. Meet a family quest giver — Ruth Hale.
 
 The order is deliberate: needs first, then a home and stash, then shopping, then jobs once the first sale has proved
-the money loop, and the family giver as the graduation; the fence comes last because it is the crime loop. It lives in
+the money loop, the fence eleventh because it is the crime loop, and the family giver last as the graduation. It lives in
 `FhTutorialConfig.order` (`fh_tutorial/config.lua`), not in code, so reordering it is a config edit; unknown step ids
 are dropped with a warning.
 
@@ -38,10 +38,10 @@ re-starts unless you ask it to.
 | id | Advances on | Source |
 |---|---|---|
 | `greeting` | client check `fh:tutorial:check greeting` (ack after 2.5 s) | `fh_tutorial/client/main.lua:42` |
-| `inventory` | client check `rsg-inventory:client:open` | `fh_inventory/server/main.lua:1066` |
+| `inventory` | client check `rsg-inventory:client:open` | `fh_inventory/server/main.lua:1169`,`:1171` |
 | `eat_drink` | server event `fh:buffs:applied` (`well_fed`/`hydrated`) | `fh_buffs/server/main.lua:19` |
 | `claim_plot` | `fh:homestead:claimed` | `fh_homestead/server/main.lua:219` |
-| `stash` | client check `rsg-inventory:client:open` where `other.id` = `fh:chest:<plot>:<n>` | `fh_inventory/server/main.lua:1066` · `fh_homestead/shared/plot_rules.lua:107` |
+| `stash` | client check `rsg-inventory:client:open` where `other.id` = `fh:chest:<plot>:<n>` | `fh_inventory/server/main.lua:1169`,`:1171` · `fh_homestead/shared/plot_rules.lua:107` |
 | `trade_post` | client check `fh:trade:menu` | `fh_trade/server/main.lua:276` |
 | `hunt` | `fh:hunting:pelt_sold` | `fh_hunting/shared/sell.lua:157` |
 | `gunsmith` | client check `fh_gunsmith:conditionChanged` (after `/fh_restore`) | `fh_gunsmith/server/main.lua:94` |

@@ -35,7 +35,7 @@ M.CARGO_EVENT = 'fh:cargo:wagon_spawned'
 -- Waypoints for the steps that have a location. Coordinates are copied from the owning lanes' configs (never invented
 -- here); re-sync if a lane moves one. All are approximate / unverified in game, like their sources.
 M.WAYPOINTS = {
-    trader     = { x = -176.0, y = 630.0, z = 114.0, label = 'Valentine Trade Post' }, -- fh_trade/config.lua:37
+    trader     = { x = -176.0, y = 630.0, z = 114.0, label = 'Valentine Trade Post' }, -- fh_core/shared/regions.lua:668 valentine_post
     homestead  = { x = -500.0, y = 750.0, z = 105.0, label = 'Homestead plot' },        -- fh_homestead/config.lua heartlands_01.center (nearest Heartlands claim)
     trapper    = { x = -299.0, y = 792.0, z = 118.2, label = 'Trapper' },                -- fh_hunting/config.lua:39
     giver_hale = { x = -296.0, y = 788.0, z = 118.2, label = 'Ruth Hale' },               -- fh_quests/shared/givers.lua:9
@@ -159,7 +159,7 @@ function M.waypointOf(step)
     return k and M.WAYPOINTS[k] or nil
 end
 
----The client-check id a step expects (one of M.CHECKS, or 'survival'), or nil.
+---The client-check id a step expects (one of M.CHECKS, or 'survival'/'cargo'), or nil.
 function M.checkOf(step) return step and step.check or nil end
 
 ---How a step advances: 'event' (fh_quests intake), 'client_check' (client reports a signal),

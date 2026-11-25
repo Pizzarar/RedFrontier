@@ -15,8 +15,8 @@ The intro tutorial (plan guide-02, `@guide`), built on the fh_quests API. One qu
 
 The order comes from `FhTutorialConfig.order` in `config.lua`: greeting, inventory, eat/drink, claim plot, stash,
 trade post, hunt, gunsmith, jobs, cargo, fence, family giver. Teach needs before they bite, home and stash before
-shopping, jobs after the first sale proves the money loop, and the family giver is the graduation; the fence comes
-last because it is the crime loop. Unknown ids in the list are dropped with a warning; `greeting` and `inventory` are
+shopping, jobs after the first sale proves the money loop, the fence eleventh because it is the crime loop, and the
+family giver last as the graduation. Unknown ids in the list are dropped with a warning; `greeting` and `inventory` are
 mandatory (an order missing either falls back to the built-in default order).
 
 Steps advance on the fh_quests intake whitelist plus `fh:quests:talked`. Where a real `fh:*` event exists we use it;
@@ -26,11 +26,11 @@ location sets a GPS waypoint (drawn as the yellow multi-route, since RDR3 has no
 | # | id | Prompt (summary) | Advances on (signal, source) | Waypoint (source) |
 |---|---|---|---|---|
 | 1 | `greeting` | Welcome; read this, then the inventory prompt follows | client check `fh:tutorial:check greeting` (client ack after 2.5s on screen; `fh_tutorial/client/main.lua:42`) | — |
-| 2 | `inventory` | Open your inventory (`I`) | client check `rsg-inventory:client:open` (`fh_inventory/server/main.lua:1066`) | — |
+| 2 | `inventory` | Open your inventory (`I`) | client check `rsg-inventory:client:open` (`fh_inventory/server/main.lua:1169`,`:1171`) | — |
 | 3 | `eat_drink` | Eat and drink | server event `fh:buffs:applied` (`well_fed`/`hydrated`; `fh_buffs/server/main.lua:19`) | — |
 | 4 | `claim_plot` | Claim a homestead plot (`/fh_claim`) | `fh:homestead:claimed` (`fh_homestead/server/main.lua:219`) | homestead = `fh_homestead/config.lua:105` `heartlands_01.center` |
-| 5 | `stash` | Open your homestead chest | client check `rsg-inventory:client:open` where `other.id` = `fh:chest:<plot>:<n>` (`fh_inventory/server/main.lua:1066`; id prefix `fh_homestead/shared/plot_rules.lua:107`) | chest = `fh_homestead/config.lua:107` `heartlands_01.chest.coords` |
-| 6 | `trade_post` | Go to the Valentine Trade Post, quote/sell | client check `fh:trade:menu` (`fh_trade/server/main.lua:276`) | trader = `fh_trade/config.lua:37` |
+| 5 | `stash` | Open your homestead chest | client check `rsg-inventory:client:open` where `other.id` = `fh:chest:<plot>:<n>` (`fh_inventory/server/main.lua:1169`,`:1171`; id prefix `fh_homestead/shared/plot_rules.lua:107`) | chest = `fh_homestead/config.lua:107` `heartlands_01.chest.coords` |
+| 6 | `trade_post` | Go to the Valentine Trade Post, quote/sell | client check `fh:trade:menu` (`fh_trade/server/main.lua:276`) | trader = `fh_core/shared/regions.lua:668` `valentine_post` |
 | 7 | `hunt` | Hunt, skin, sell a pelt to the trapper | `fh:hunting:pelt_sold` (`fh_hunting/shared/sell.lua:157`) | trapper = `fh_hunting/config.lua:39` |
 | 8 | `gunsmith` | Restore a worn gun at your workbench (`/fh_restore`) | client check `fh_gunsmith:conditionChanged` (after a successful restore; `fh_gunsmith/server/main.lua:94`) | — |
 | 9 | `jobs` | Open the jobs board (`/jobs`) | client check `fh:ui:open` screen `jobs` (`fh_quests/server/ui.lua:11`) | — |
