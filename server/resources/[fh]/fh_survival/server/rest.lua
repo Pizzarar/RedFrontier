@@ -25,7 +25,15 @@ exports('restBedroll', function(src) return rest(src, 'bedroll') end)
 exports('restAtBed', function(src) return rest(src, 'bed') end)
 
 -- The server re-checks proximity itself; a client can only ask.
-RegisterNetEvent('fh:survival:restBed', function() rest(source, 'bed') end)
+RegisterNetEvent('fh:survival:restBed', function()
+    local src = source
+    local ok, res = rest(src, 'bed')
+    local msg
+    if ok then msg = 'You rest and feel rested.'
+    elseif res == 'no_bed' then msg = 'You need to be at your bed to rest.'
+    else msg = 'You cannot rest right now.' end
+    TriggerClientEvent('fh:survival:notify', src, msg)
+end)
 
 -- ---- bedroll item ----
 -- The item definition lives in shared/items.lua (FhSurvivalItems.ITEMS) and is registered with the S3 items by

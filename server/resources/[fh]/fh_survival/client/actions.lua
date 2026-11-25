@@ -1,4 +1,4 @@
--- fh_survival client actions (S3): refill / wash commands and notifications. The server decides everything.
+-- fh_survival client actions (S3): refill / wash / rest commands and notifications. The server decides everything.
 -- In WaterCheck = 'native' mode the client reports IsEntityInWater; otherwise no water native is ever called.
 -- Natives (UNVERIFIED in game, see fh_core/docs/natives.md): PlayerPedId, IsEntityInWater (native mode only).
 
@@ -16,3 +16,4 @@ end)
 
 RegisterCommand('refill', FH.wrap(function() TriggerServerEvent('fh:survival:refill', pedInWater()) end), false)
 RegisterCommand('wash', FH.wrap(function() TriggerServerEvent('fh:survival:wash', pedInWater()) end), false)
+RegisterCommand('rest', FH.wrap(function() TriggerServerEvent('fh:survival:restBed') end), false)

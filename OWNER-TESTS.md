@@ -996,6 +996,9 @@ drinks use the same consume path as the S3 items; fractions are of `Durations` (
 28. Sluggish native spike: with `SluggishEffect = 'native'` and fh_survival restarted, starve the needs to level 2, then level 3 (as in steps 17-18), and sprint/swim to drain stamina at each level.
     Expected: stamina regenerates visibly slower at level 2 (~70%) then level 3 (~50%), never stops, and the notify line still shows. Dead-eye is untouched (`SluggishDeadeyeHash` nil) and health never drops. Record PASS/FAIL per native: the default stays `'notify'` unless this is PASS. Leave `SluggishEffect` back on `'notify'` and `WaterCheck` back on `'zones'` afterwards.
     RESULT: PASS/FAIL sluggish stamina:
+29. Rest at the bed (idea-857): stand next to your homestead bed (built `bed` station) and run `/rest`. Then walk well away from any bed and run `/rest` again.
+    Expected: at the bed `You rest and feel rested.` and `rested` appears at 1.0 + comfort*`ComfortK` (capped at `RestedCap`), for `Durations.rested`. Away from a bed `You need to be at your bed to rest.` and no `rested` change. The bedroll item still gives `rested` 1.0 anywhere.
+    RESULT:
 
 ## Roads
 

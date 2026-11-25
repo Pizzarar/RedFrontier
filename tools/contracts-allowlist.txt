@@ -1,5 +1,4 @@
 # check-contracts.py allowlist: `<rule>|<key>  # reason / idea id`. Stale entries are reported as warnings.
 events|fh:cargo:offroad_hint  # TODO(R2 off-road) in fh_cargo/README.md: no verified road native yet, client never sends it (@roads, no lane dir; reported to core lead)
 events|fh:alife:camp_flipped  # published event, no consumer or README mention; fh_alife has no lane dir, reported to core lead
-events|fh:survival:restBed  # idea-857 (survival inbox)
 events|fh:alife:squad_wiped  # false positive: consumed via constant M.SQUAD_EVENT (fh_alife/shared/contracts_rules.lua:18,126) -> fh_quests/server/api.lua:59 AddEventHandler(name)

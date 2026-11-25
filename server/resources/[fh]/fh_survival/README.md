@@ -47,7 +47,7 @@ again on `rsg-core` restart) and skips (one log line) any row whose item is not 
 | `stew_veg` | consumed, `well_fed` 1.0 for 85% |
 | `water` | consumed, `hydrated` 1.0 for 100% |
 | `coffee` | consumed, `hydrated` 1.0 for 60% |
-Commands (client, any player): `/refill` (canteen back to full) and `/wash` (`clean`, once per `WashCooldownSeconds`). Both need standing in water:
+Commands (client, any player): `/refill` (canteen back to full), `/wash` (`clean`, once per `WashCooldownSeconds`) and `/rest` (at your homestead bed: `rested` with the comfort magnitude; refused with a notify when no bed is near, server re-checks via `fh:survival:restBed`). `/refill` and `/wash` need standing in water:
 server-side zone check against `WaterZones` by default; `WaterCheck = 'native'` trusts the client's `IsEntityInWater` (unverified, see `fh_core/docs/natives.md`).
 Warmth: every `HeatCheckSeconds` a player within `HeatRadius` of a `Campfires` entry (or a `setHeatSource` source) gets `warm` 1.0 for the full `warm` duration.
 Warm is only a bonus: `ColdRegions` stays `{}`.
