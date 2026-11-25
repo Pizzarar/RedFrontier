@@ -4,7 +4,7 @@
 
 ## Who's here
 - Brainstorm: Spikes
-- Lead: none
+- Lead: Spikes Lead · spk_herb
 - Workers: 0
 
 ## Done when
@@ -35,10 +35,14 @@
 
 - Spikes merged to local main (382de5e; main now 32527fe, 4d11954 is ancestor, verified). Not pushed. Primary checkout on main; cards at server/resources/[spikes]/TEST-CARDS.md.
 
+- idea-847 spk_herb: plan docs/brainstorm/plans/spikes-02-herb.md. Client-local plant props + blip probe (S6). Not gated on fh_spike_gated (that is S1/S2 ownership); crafting wires the cue only after GO. crafting-herb-spike branch empty (verified). Handed to Spikes Lead rn-3095b3717f66 (2026-11-24).
+
 ## Open
 - Does Aub have a 2nd RedM account? (adds true 2-client S1 check)
 
 ## In flight
+- PASS spk_herb K1-K3 (plan spikes-02-herb complete): merged to main ff 1680b5b (rebased 659d31b, content identical, lupa OK), Gemini PASS 0/0/0. Next: S6 card to Aub; on GO inbox @crafting to wire the cue.
+- spk_herb K1 PASS a7a1ea2 on spikes-herb (4 files, all [spikes]/, Buddy verified); K2 Gemini FAIL (clearProps/clearBlip used before local decl = nil crash; blip loop re-entry; model release), fixed 659d31b (Buddy verified); K2 Gemini re-review PASS 0/0/0; K3 merge slot requested (Red4) -> K3 merge slot (lead rn-3095b3717f66). On GO: inbox @crafting to wire cue.
 - PARKED forge freeze 2026-11-23: no unit running; spikes in main (4d11954), cards held for keyed boot; worktree spikes-probes clean. Resume = relay TEST-CARDS.md to Aub after Cor2 boot ping.
 - PASS S1-S5 build+review: spikes/probes 4d11954 (on core/b1-boot ee8eef5), Gemini PASS-WITH-NITS, 3 fixed, 2 nits skipped; Core lead merges to main; in-game RESULTs pending Aub.
 - Next: Gemini review of all 5 (after machine restart) → test cards to Aub once Core server boots.
