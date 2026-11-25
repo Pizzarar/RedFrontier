@@ -1033,6 +1033,12 @@ drinks use the same consume path as the S3 items; fractions are of `Durations` (
 29. Rest at the bed (idea-857): stand next to your homestead bed (built `bed` station) and run `/rest`. Then walk well away from any bed and run `/rest` again.
     Expected: at the bed `You rest and feel rested.` and `rested` appears at 1.0 + comfort*`ComfortK` (capped at `RestedCap`), for `Durations.rested`. Away from a bed `You need to be at your bed to rest.` and no `rested` change. The bedroll item still gives `rested` 1.0 anywhere.
     RESULT:
+30. Offline-owner campfire still warms (idea-893): have character A build a homestead campfire (`/fh_build station_2`) and log off; on a second character (character B), stand within `HomesteadHeatRadius` (8 m) of character A's campfire and wait up to `HomesteadHeatSyncSeconds` + `HeatCheckSeconds` (~25 s). Then walk more than `HomesteadHeatSearchRadius` (25 m) away.
+    Expected: `warm` appears and refreshes for character B even while character A is offline (superseding the offline half of step 26). Walking away stops refreshes and `warm` expires on its own.
+    RESULT:
+31. `/rest` cooldown (idea-948): run `/rest` at your homestead bed, then immediately run `/rest` again within `RestBedCooldownSeconds` (10 s). Wait out the cooldown and run `/rest` once more.
+    Expected: the first `/rest` succeeds (`You rest and feel rested.`); the immediate repeat is refused with `Please wait N s before resting again.`; after 10 s `/rest` succeeds again.
+    RESULT:
 
 ## Roads
 

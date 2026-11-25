@@ -3,7 +3,22 @@
 -- values in; this module decides. Not near a bed means no bed (bedroll only) and comfort 0.
 local R = {}
 
+R.DEFAULT_BED_COOLDOWN = 10
+
 local function isNum(v) return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge end
+
+---Per-player cooldown check for fh:survival:restBed. lastAt nil = never rested.
+---A clock that went backwards counts as still cooling down.
+---@return boolean ok, number|nil remainingSeconds
+function R.cooldownReady(lastAt, now, cooldown)
+    if not isNum(now) then return false, nil end
+    if not (isNum(cooldown) and cooldown >= 0) then cooldown = R.DEFAULT_BED_COOLDOWN end
+    if lastAt == nil then return true end
+    if not isNum(lastAt) then return false, cooldown end
+    local rem = lastAt + cooldown - now
+    if rem > 0 then return false, rem end
+    return true
+end
 
 ---Interpret the homestead adapter's raw export results.
 ---@param nearVal any isNearStation(src,'bed') return value (only `true` counts)

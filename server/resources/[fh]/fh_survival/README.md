@@ -52,19 +52,19 @@ server-side zone check against `WaterZones` by default; `WaterCheck = 'native'` 
 Warmth: every `HeatCheckSeconds` a player within `HeatRadius` of a `Campfires` entry (or a `setHeatSource` source) gets `warm` 1.0 for the full `warm` duration.
 Warm is only a bonus: `ColdRegions` stays `{}`.
 
-## Owned campfire heat (F2)
-A player's own homestead `campfire` station warms whoever stands at it: `server/homestead_heat.lua` feeds the
-stations from `exports.fh_homestead:getStations(citizenid)` (only `station_type == 'campfire'`) into the existing
-`setHeatSource(id, coords, radius)` / `removeHeatSource(id)` exports with ids `hs:<plot_id>:<slot_id>`. Ownership only
-decides which fires exist; the warm tick (`server/actions.lua`) applies `warm` unchanged. fh_homestead has no
-station-removed event and no all-stations accessor, so sources are synced per online player on a timer
-(`HomesteadHeatSyncSeconds`) and on player load/unload, gated on `GetResourceState('fh_homestead') == 'started'`
-(as S4b). While homestead is stopped our `hs:*` sources are cleared and the seeded `config.Campfires` are left alone.
+## Homestead campfire heat (F2 / idea-893)
+Any built homestead `campfire` station warms whoever stands at it, whether or not its plot owner is online:
+`server/homestead_heat.lua` polls `exports.fh_homestead:stationAt(coords, HomesteadHeatSearchRadius, 'campfire')` for
+each online player on the periodic timer (`HomesteadHeatSyncSeconds`) and feeds the found stations into the existing
+`setHeatSource(id, coords, radius)` / `removeHeatSource(id)` exports with ids `hs:<plot_id>:<slot_id>` and radius
+`HomesteadHeatRadius`. `hs:*` ids that no online player is near any more are removed; the warm tick (`server/actions.lua`)
+applies `warm` unchanged. Sync is gated on `GetResourceState('fh_homestead') == 'started'` (with `pcall` around the
+export). While homestead is stopped our `hs:*` sources are cleared and the seeded `config.Campfires` are left alone.
 Pure diff logic lives in `shared/homestead_heat.lua` (`FhSurvivalHomesteadHeat.reconcile`), specced in
 `spec/survival_homestead_heat_spec.lua`.
 
 ## Rest and comfort (S4)
-Server: `restBedroll(src)` (rested 1.0), `restAtBed(src)` (needs a homestead `bed` station nearby; magnitude 1.0 + comfort x `ComfortK`, capped at `RestedCap`). Both return `ok, magnitude|err`. Net event `fh:survival:restBed` (client asks; server re-checks proximity). Bedroll item `bedroll` (usable) is defined in `shared/items.lua` `ITEMS` and registered with the S3 items by `server/actions.lua` through `fh_core:registerItems`; `server/rest.lua` only registers its usable callback (again on `rsg-core` restart).
+Server: `restBedroll(src)` (rested 1.0), `restAtBed(src)` (needs a homestead `bed` station nearby; magnitude 1.0 + comfort x `ComfortK`, capped at `RestedCap`). Both return `ok, magnitude|err`. Net event `fh:survival:restBed` (client asks; server re-checks proximity and enforces a per-player cooldown of `RestBedCooldownSeconds`, cleaned on `playerDropped`, idea-948). Bedroll item `bedroll` (usable) is defined in `shared/items.lua` `ITEMS` and registered with the S3 items by `server/actions.lua` through `fh_core:registerItems`; `server/rest.lua` only registers its usable callback (again on `rsg-core` restart).
 Homestead exports `isNearStation(src,'bed')` (H3) and `getComfort(citizenid)` (H4) are called directly by `server/homestead_adapter.lua` (fh_homestead is a declared dependency); if fh_homestead is not started the adapter reports no bed and comfort 0.
 
 ## Events
@@ -77,9 +77,8 @@ Homestead exports `isNearStation(src,'bed')` (H3) and `getComfort(citizenid)` (H
   `onResourceStart` (boot check, pick up online players), `onResourceStop` and `txAdmin:events:serverShuttingDown`
   (save everyone, non-yielding), `fh:buffs:applied` (refresh the cached snapshot used on drop).
 - Reads (not events): `exports.fh_buffs:get(src)`; writes: `exports.fh_buffs:apply(src, id, magnitude, duration)` on restore (S2) and for food/canteen/wash/campfire (S3: `well_fed`, `hydrated`, `clean`, `warm`) and on rest (S4: `rested`).
-- Consumes (client -> server, net) `fh:survival:restBed` (no payload; server re-checks bed proximity). Also `onResourceStart` of `rsg-core` (re-register its usable callback).
-- F2 (`server/homestead_heat.lua`): also consumes `RSGCore:Server:PlayerLoaded` / `RSGCore:Server:OnPlayerUnload` / `playerDropped`
-  (sync/clear a player's owned `hs:*` heat sources) and `onResourceStart` / `onResourceStop` of `fh_homestead` (re-sync on start, clear ours on stop). Reads `exports.fh_homestead:getStations(citizenid)`; writes `exports.fh_survival:setHeatSource` / `removeHeatSource` (self).
+- Consumes (client -> server, net) `fh:survival:restBed` (no payload; server re-checks bed proximity and per-player `RestBedCooldownSeconds` cooldown, cleaned on `playerDropped`). Also `onResourceStart` of `rsg-core` (re-register its usable callback).
+- F2 / idea-893 (`server/homestead_heat.lua`): consumes `onResourceStart` / `onResourceStop` of `fh_homestead` (re-sync on start, clear ours on stop). Reads `exports.fh_homestead:stationAt(coords, HomesteadHeatSearchRadius, 'campfire')` per online player; writes `exports.fh_survival:setHeatSource` / `removeHeatSource` (self).
 - Buffs show in the U2 HUD via `fh:buffs:sync` already.
 
 ## Persistence
@@ -100,7 +99,7 @@ Lifecycle rules (Tier A):
 
 ## Config keys (`config.lua`, `FhSurvivalConfig`)
 `TickSeconds` (15), `LoginGraceSeconds` (600), `Durations`, `ColdRegions` (`{ region_id = true }`, empty: no cold region exists yet),
-`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). S4 keys: `ComfortK` (0.01), `RestedCap` (1.20). F2 keys: `HomesteadHeatRadius` (8.0), `HomesteadHeatSyncSeconds` (15). S5 keys: `SluggishText`, `SluggishRegen`, `SluggishClipset` (nil), `SluggishDeadeyeHash` (nil), `SluggishNotifyCooldownMs` (60000).
+`LevelMap` (missing count -> level), `SluggishEffect` (`'notify'` | `'native'`). S3 keys: `CanteenMax` (5), `WashCooldownSeconds` (300), `WaterCheck` (`'zones'` | `'native'`), `WaterZones` and `Campfires` (`{x,y,z?,radius?}` lists), `HeatRadius` (4.0), `HeatCheckSeconds` (10). S4 keys: `ComfortK` (0.01), `RestedCap` (1.20). F2 / G1 keys: `HomesteadHeatRadius` (8.0), `HomesteadHeatSyncSeconds` (15), `HomesteadHeatSearchRadius` (25.0), `RestBedCooldownSeconds` (10). S5 keys: `SluggishText`, `SluggishRegen`, `SluggishClipset` (nil), `SluggishDeadeyeHash` (nil), `SluggishNotifyCooldownMs` (60000).
 Seeded defaults (approximate, owner-verifiable, all 2D): `WaterZones` (-250,760,r40) and (-140,790,r40) on the Dakota River near the
 heartlands homestead (-300,790,118) / outlaw camp (-145,845,117); `Campfires` (-300,790,r8) homestead and (-145,845,r8) camp.
 Native mode never runs unless `WaterCheck = 'native'`: the client does not call `IsEntityInWater` in zones mode.

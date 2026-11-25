@@ -24,9 +24,20 @@ end
 exports('restBedroll', function(src) return rest(src, 'bedroll') end)
 exports('restAtBed', function(src) return rest(src, 'bed') end)
 
+local function now() return GetGameTimer() / 1000.0 end
+
+local lastRestBed = {} -- [src] = seconds; per-player cooldown on fh:survival:restBed (idea-948)
+
 -- The server re-checks proximity itself; a client can only ask.
 RegisterNetEvent('fh:survival:restBed', function()
     local src = source
+    local t = now()
+    local ready, rem = R.cooldownReady(lastRestBed[src], t, cfg.RestBedCooldownSeconds)
+    if not ready then
+        TriggerClientEvent('fh:survival:notify', src, ('Please wait %d s before resting again.'):format(math.ceil(rem or 0)))
+        return
+    end
+    lastRestBed[src] = t
     local ok, res = rest(src, 'bed')
     local msg
     if ok then msg = 'You rest and feel rested.'
@@ -34,6 +45,8 @@ RegisterNetEvent('fh:survival:restBed', function()
     else msg = 'You cannot rest right now.' end
     TriggerClientEvent('fh:survival:notify', src, msg)
 end)
+
+AddEventHandler('playerDropped', function() lastRestBed[source] = nil end)
 
 -- ---- bedroll item ----
 -- The item definition lives in shared/items.lua (FhSurvivalItems.ITEMS) and is registered with the S3 items by

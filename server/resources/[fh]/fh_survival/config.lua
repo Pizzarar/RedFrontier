@@ -56,4 +56,7 @@ FhSurvivalConfig = {
     -- == F2 owned homestead campfire heat (server/homestead_heat.lua) ==
     HomesteadHeatRadius = 8.0,       -- heat radius for a player's own homestead campfire (matches the seeded fires)
     HomesteadHeatSyncSeconds = 15,   -- re-sync owned campfire heat sources this often per online player
+    -- == G1 any-owner campfire heat & rest cooldown (idea-893, idea-948) ==
+    HomesteadHeatSearchRadius = 25.0, -- max distance for exports.fh_homestead:stationAt(..., 'campfire') per online player
+    RestBedCooldownSeconds = 10,      -- per-player cooldown on fh:survival:restBed (/rest)
 }
