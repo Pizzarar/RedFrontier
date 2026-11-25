@@ -1,0 +1,70 @@
+local here = debug.getinfo(1, 'S').source:match('^@(.*[/\\])') or './'
+local T = dofile(here .. 'support/fh_prelude.lua')
+local case = T.it
+local dir = here .. '../server/resources/[fh]/fh_homestead/'
+dofile(dir .. 'config.lua')
+local R = dofile(dir .. 'shared/trough.lua')
+local cfg = FhHomesteadConfig.trough
+local CD = cfg.cooldownSeconds
+
+local function st(over)
+    local s = { isOwner = true, inRadius = true, feedbags = 1, lastRefillAt = 1000, now = 1000 + CD }
+    for k, v in pairs(over or {}) do if v == '__nil' then s[k] = nil else s[k] = v end end
+    return s
+end
+local function refuse(s, reason)
+    local ok, why = R.canRefill(s)
+    assert(ok == false, 'expected refusal ' .. reason)
+    T.eq(reason, why)
+end
+
+case('config: feedbag, 30 min, flag off', function()
+    T.eq('feedbag', cfg.item); T.eq(1800, cfg.cooldownSeconds); T.eq(false, cfg.troughRefill)
+    assert(cfg.slots > 0 and cfg.maxWeight > 0)
+end)
+case('accepts feedbag only', function()
+    assert(R.accepts('feedbag') == true)
+    for _, v in ipairs({ 'bread', 'feedtrough', 'Feedbag', '', 5, true }) do assert(R.accepts(v) == false) end
+    assert(R.accepts(nil) == false and R.accepts({}) == false)
+    assert(R.accepts('feedbag', { item = 'x' }) == false and R.accepts('x', { item = 'x' }) == true)
+end)
+case('containerId', function()
+    T.eq('fh:trough:heartlands_01', R.containerId('heartlands_01'))
+    assert(R.containerId(nil) == nil and R.containerId('') == nil and R.containerId(3) == nil)
+end)
+case('nextRefillAt', function()
+    T.eq(1000 + CD, R.nextRefillAt(1000)); T.eq(0, R.nextRefillAt(nil))
+    assert(R.nextRefillAt('x') == nil and R.nextRefillAt(0/0) == nil and R.nextRefillAt(math.huge) == nil)
+    assert(R.nextRefillAt(1, { cooldownSeconds = -1 }) == nil and R.nextRefillAt(1, { cooldownSeconds = 'a' }) == nil)
+end)
+case('refill ok', function()
+    local ok, why = R.canRefill(st())
+    assert(ok == true and why == nil)
+    assert(R.canRefill(st({ lastRefillAt = '__nil', now = 5, feedbags = 9 })) == true) -- never refilled
+end)
+case('cooldown boundary', function()
+    refuse(st({ now = 1000 + CD - 1 }), 'fh_cooldown')
+    assert(R.canRefill(st({ now = 1000 + CD })) == true)
+    assert(R.canRefill(st({ now = 1000 + CD + 1 })) == true)
+end)
+case('empty trough', function()
+    refuse(st({ feedbags = 0 }), 'fh_trough_empty')
+    refuse(st({ feedbags = -1 }), 'fh_trough_empty')
+    refuse(st({ feedbags = '__nil' }), 'fh_trough_empty')
+end)
+case('non-owner and out of range', function()
+    refuse(st({ isOwner = false }), 'fh_not_owner')
+    refuse(st({ isOwner = 'yes' }), 'fh_not_owner')
+    refuse(st({ inRadius = false }), 'fh_out_of_range')
+    refuse(st({ inRadius = '__nil' }), 'fh_out_of_range')
+end)
+case('bad inputs fail closed', function()
+    assert(R.canRefill(nil) == false and R.canRefill(5) == false and R.canRefill('x') == false)
+    refuse(st({ now = '__nil' }), 'fh_cooldown')
+    refuse(st({ now = 'a' }), 'fh_cooldown')
+    refuse(st({ now = 0/0 }), 'fh_cooldown')
+    refuse(st({ lastRefillAt = 'a' }), 'fh_cooldown')
+    refuse(st({ feedbags = 0/0 }), 'fh_trough_empty')
+    assert(R.canRefill(st(), { cooldownSeconds = 'a' }) == false)
+end)
+T.finish()

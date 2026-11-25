@@ -16,6 +16,7 @@ shared_scripts {
     'shared/comfort.lua',
     'shared/plotcheck.lua', -- FhPlotCheck (H16 /fh_plotcheck pure math)
     'shared/garden.lua', -- FhGarden (H18 garden pure rules)
+    'shared/trough.lua', -- FhTrough (H20a pure refill rules)
 }
 
 server_scripts {

@@ -101,6 +101,9 @@ FhHomesteadConfig = {
             seedcorn   = { item = 'corn' },
         },
     },
+    -- H20: trough slot. Container fh:trough:<plot> accepts `item` only; one refill consumes 1 feedbag, then cooldownSeconds
+    -- must pass. `troughRefill` gates the client refill (native cores) and the server consume: false until verified in game.
+    trough = { item = 'feedbag', cooldownSeconds = 1800, slots = 4, maxWeight = 20000, troughRefill = false },
     -- H2: build materials, registered with exports.fh_core:registerItems from fh_homestead ONLY (full §4.1 defs).
     -- Materials are taken from the plot's main chest (fh:chest:<plot>:1) when a slot is built. Weights in grams.
     buildItems = {
