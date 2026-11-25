@@ -4,7 +4,8 @@
 --
 -- State (one row of fh_quest_state per citizenid + quest_id):
 --   { citizenid, quest_id, status = 'active'|'done'|'failed'|'abandoned', step = 1..#steps,
---     progress = { count = n, completions = n, reward_pending = bool, step_id = string|nil },
+--     progress = { count = n, completions = n, reward_pending = bool, step_id = string|nil,
+--                  accepted_at = unix seconds (start time; idea-1017 job order, rows from before it have none) },
 --     cooldown_until = unix seconds|nil, updated_at = unix seconds }
 -- `step` is the index into the CURRENT def; `progress.step_id` is the step's optional stable id. A def may give
 -- steps ids ({ id = 'claim_plot', ... }); progress is then resolved by id first, so reordering/inserting steps does
@@ -279,7 +280,7 @@ function M.start(def, stateByQuest, citizenid, now)
     local state = {
         citizenid = citizenid, quest_id = def.id, status = 'active', step = 1,
         progress = { count = 0, completions = prev and (prev.progress or {}).completions or 0,
-            step_id = M.stepIdOf(def, 1) },
+            step_id = M.stepIdOf(def, 1), accepted_at = nowOf(now) },
         cooldown_until = prev and prev.cooldown_until or nil, updated_at = nowOf(now),
     }
     return state, { effect('started', def, state) }

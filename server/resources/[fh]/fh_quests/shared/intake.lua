@@ -60,37 +60,80 @@ local function shallow(t)
     return c
 end
 
+-- idea-1017 (quests-04 L1): delivery events where ONE event is ONE delivery. fh:hunting:pelt_sold fires once per
+-- pelt (fh_hunting/shared/sell.lua), so it may advance at most one job-kind quest, or a player holding N matching
+-- orders would be paid N times for one pelt. Line/tutorial quests are progress, not deliveries: they still all see it.
+-- Every other event keeps feeding every matching job.
+M.ONE_JOB_EVENTS = { ['fh:hunting:pelt_sold'] = true }
+
+-- Accept-order key of a state: (rank, at). progress.accepted_at is stamped by engine.start (persisted by store).
+-- A row without it was saved before idea-1017, so it was accepted before any row that has one: rank 0, ordered by
+-- updated_at (for an active count-1 job such as hunt_request that is still the accept write: only a progress step
+-- rewrites an active row; a re-keyed idea-902 row keeps its updated_at). Ties are broken by quest id in acceptOrder.
+local function acceptKey(st)
+    local p = type(st) == 'table' and type(st.progress) == 'table' and st.progress or {}
+    if math.type(p.accepted_at) == 'integer' then return 1, p.accepted_at end
+    local u = type(st) == 'table' and st.updated_at or nil
+    return 0, (type(u) == 'number' and u == u) and u or 0
+end
+
+---Quest ids of `states`, oldest accepted first; ties (and equal fallbacks) by quest id. See acceptKey.
+function M.acceptOrder(states)
+    local keys = sortedKeys(states)
+    local rank, at = {}, {}
+    for _, qid in ipairs(keys) do rank[qid], at[qid] = acceptKey(states[qid]) end
+    table.sort(keys, function(a, b)
+        if rank[a] ~= rank[b] then return rank[a] < rank[b] end
+        if at[a] ~= at[b] then return at[a] < at[b] end
+        return a < b
+    end)
+    return keys
+end
+
 ---Feed one event to every active quest in `states` (one character). Deterministic order (quest_id).
 ---hookFor(def) (optional) routes job quests: nil = the engine matches the step itself, a callable = the job type's
 ---hooks.onEvent(name, payload, stateCopy) decides the verdict (engine.apply, so a reward still pays once),
 ---false = the job type is not registered right now (the job pauses).
----@return table changes  { { quest_id, before, after, effects }... } only for quests that changed;
+---For M.ONE_JOB_EVENTS only the first job-kind quest in acceptOrder that reacts takes the event (later jobs, and
+---their hooks, are not asked); non-job quests are fed as usual.
+---@return table changes  { { quest_id, before, after, effects }... } only for quests that changed, by quest_id;
 ---        table errors  { { quest_id, err }... } hooks that threw
 function M.feed(defs, states, eventName, payload, now, hookFor)
     local changes, errors = {}, {}
-    for _, qid in ipairs(sortedKeys(states)) do
+    local function feedOne(qid)
         local st, def = states[qid], defs[qid]
         local hook = nil
         if def and hookFor then hook = hookFor(def) end
-        if def and st.status == 'active' and hook ~= false then
-            local after, effects = st, {}
-            if hook then
-                if engine().eligible(st, eventName, payload) then
-                    local ok, verdict = pcall(hook, eventName, payload, shallow(st))
-                    if ok then
-                        after, effects = engine().apply(def, st, verdict, now)
-                    else
-                        errors[#errors + 1] = { quest_id = qid, err = tostring(verdict) }
-                    end
+        if not (def and st.status == 'active' and hook ~= false) then return nil end
+        local after, effects = st, {}
+        if hook then
+            if engine().eligible(st, eventName, payload) then
+                local ok, verdict = pcall(hook, eventName, payload, shallow(st))
+                if ok then
+                    after, effects = engine().apply(def, st, verdict, now)
+                else
+                    errors[#errors + 1] = { quest_id = qid, err = tostring(verdict) }
                 end
-            else
-                after, effects = engine().onEvent(def, st, eventName, payload, now)
             end
-            if #effects > 0 then
-                changes[#changes + 1] = { quest_id = qid, before = st, after = after, effects = effects }
-            end
+        else
+            after, effects = engine().onEvent(def, st, eventName, payload, now)
+        end
+        if #effects == 0 then return nil end
+        local c = { quest_id = qid, before = st, after = after, effects = effects }
+        changes[#changes + 1] = c
+        return c
+    end
+    local oneJob = M.ONE_JOB_EVENTS[eventName] == true
+    local function isJob(qid) return defs[qid] ~= nil and defs[qid].kind == 'job' end
+    if oneJob then
+        for _, qid in ipairs(M.acceptOrder(states)) do
+            if isJob(qid) and feedOne(qid) then break end
         end
     end
+    for _, qid in ipairs(sortedKeys(states)) do
+        if not (oneJob and isJob(qid)) then feedOne(qid) end
+    end
+    if oneJob then table.sort(changes, function(a, b) return a.quest_id < b.quest_id end) end
     return changes, errors
 end
 

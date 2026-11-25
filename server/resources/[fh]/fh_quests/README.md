@@ -110,6 +110,16 @@ A registered job type may add its own event names via `hooks.events` (below); th
 job type is registered and stop counting when it is dropped. New whitelist entries are additive changes to this
 table.
 
+**One pelt, one job (idea-1017).** `fh:hunting:pelt_sold` fires once per pelt (fh_hunting `shared/sell.lua`), so it
+advances at most **one** `kind = 'job'` quest of the seller: of the active jobs whose current step matches, only the
+oldest accepted takes it, and ties go to the lowest quest id. A job that does not match (wrong animal, quality or
+region) or is paused never takes the pelt, and later jobs are not asked once one has. `line` and `tutorial` quests
+listening to `pelt_sold` still all advance alongside it. Accept order comes from `progress.accepted_at` (stamped by
+`engine.start`). A row saved before that field existed has none. It counts as older than every row that has one,
+and such rows are ordered among themselves by `updated_at`, the accept write for a count-1 job like hunt_request
+(`intake.acceptOrder`). Only the events in `intake.ONE_JOB_EVENTS` (just `pelt_sold`) work this way. Every other
+event still feeds every matching job.
+
 ## Server exports
 
 All player exports take `src` (player server id) and resolve the citizenid themselves. Errors are string codes
@@ -267,7 +277,8 @@ models and camp ids are guesses (TODO-verify-in-game). Default cooldown 60 min (
   the region of the trapper the pelt was sold at (one trapper per region, `fh_hunting/data/legendaries/<region>.lua`
   `trapper`; emit at `fh_hunting/shared/sell.lua:218-221`; a disabled region's trapper refuses `fh_region_closed`).
   So a sale completes only the hunt jobs of its own region, and a `pelt_sold` without `region_id` never credits one.
-  Within a region one sale still credits every held job it matches (`deer_1star` / `deer_2star`). Every region with
+  Within a region one sale matches every held job it qualifies for (`deer_1star` / `deer_2star`), but it completes
+  only one of them (idea-1017, "One pelt, one job" under Event intake). Every region with
   hunt data has a trapper (guard: `quests_content` "every region with hunt offers has an fh_hunting trapper").
   A job whose region is later disabled cannot be completed until it is re-enabled (abandon it). Rows saved under the
   old key `<animal>_<N>star` are re-keyed on load (Persistence, "Legacy job ids"); their stored `where`, like that of
@@ -523,6 +534,7 @@ one row; `cooldown_until` is set on each completion and `progress.completions` c
 |---|---|
 | `count`, `completions` | events counted toward the current step; completions so far |
 | `step_id` | the current step's stable `id` when the def gives steps ids; resolved before `step` on load |
+| `accepted_at` | unix seconds the quest was started/accepted (`engine.start`); one-job order for `pelt_sold` (idea-1017). Absent on rows saved before it |
 | `reward_pending` | `true` while any reward part is still owed |
 | `reward_paid` | `{ [part key] = true }` parts already delivered (`money`, `rep`, `item:<i>`) |
 | `reward_inflight` | `{ key, at }` the part being paid right now (crash recovery) |

@@ -538,6 +538,25 @@ describe('quests hunt rekey: server load path (persisted re-key)', function()
         assert(S.logged('already exists'))
     end)
 
+    -- idea-1017: one pelt_sold completes one job. The re-keyed row keeps its unscoped where, so a scarlett_meadows
+    -- sale matches it and the scoped scarlett_meadows job: the legacy row (no accepted_at: it predates the field)
+    -- is the older one and takes the pelt; the next pelt goes to the scoped job.
+    it('a re-keyed legacy job and a newly accepted matching job: one pelt pays one job, oldest first', function()
+        local S = boot({ legacyState() })
+        S.now = T0 + 100
+        local ok, err, qid = S.exports.acceptOffer(1, S.offerId('scarlett_meadows'))
+        eq(true, ok, tostring(err)); eq(NEW_SM, qid)
+        eq(T0 + 100, S.row(ME, NEW_SM).progress.accepted_at, 'accept time persisted')
+        eq(nil, S.row(ME, NEW_HL).progress.accepted_at, 'legacy row has none')
+        S.now = T0 + 200
+        S.emit('fh:hunting:pelt_sold', sold({ region_id = 'scarlett_meadows' }))
+        eq('done', S.row(ME, NEW_HL).status); eq('active', S.row(ME, NEW_SM).status)
+        eq(2, #S.economy); eq('quest:' .. OLD_ID, S.economy[1].reason)
+        S.emit('fh:hunting:pelt_sold', sold({ region_id = 'scarlett_meadows' }))
+        eq('done', S.row(ME, NEW_SM).status)
+        eq(4, #S.economy); eq('quest:' .. NEW_SM, S.economy[3].reason)
+    end)
+
     it('abandon with the old id from a stale journal abandons the re-keyed job', function()
         local S = boot({ legacyState() })
         local ok, err = S.exports.abandon(1, OLD_ID)
