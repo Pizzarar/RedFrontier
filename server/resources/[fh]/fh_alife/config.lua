@@ -46,6 +46,28 @@ FhAlifeConfig = {
         holdTicks = 10,
     },
 
+    -- a-life-03 claim raids (shared/raid_rules.lua; Implemented A-Life — Thanks to S.T.A.L.K.E.R. A-Life by GSC Game
+    -- World). Only a raidable wilderness claim (never a town lot) whose owner is online can be raided. Each tick, each
+    -- eligible claim rolls baseChance x (outlaw-held camps in its region) x (1 - fenceMitigation if a fence is built).
+    -- The owner is warned; the squad arrives warnTicks later. Owner at the claim (within raidRadius metres) -> a fight
+    -- on foot for up to fightTicks; owner away -> the raiders take up to stealStacks stacks from chest 1, at most
+    -- stealMaxFraction of each stack (always >= 1 item), into the raiding camp's stash. Then they ride home
+    -- (returnTicks). One raid per claim per cooldownTicks; at most liveCap live raids in the world.
+    claimRaids = {
+        baseChance = 0.01,      -- per tick, per outlaw-held camp in the region (1% at 60 s/tick)
+        fenceMitigation = 0.5,  -- a built fence halves the odds
+        cooldownTicks = 180,    -- ~3 h at 60 s/tick, from the warning
+        liveCap = 2,            -- world-wide live (not returning) raids
+        warnTicks = 5,          -- ~5 min warning before arrival
+        fightTicks = 10,        -- an unbeaten raid squad withdraws after ~10 min
+        returnTicks = 3,        -- ride home (data only, never visible)
+        strengthMin = 3,
+        strengthMax = 5,
+        stealStacks = 2,
+        stealMaxFraction = 0.5,
+        raidRadius = 60.0,      -- metres: owner "home" at arrival (server/C2 reads it). TODO-verify-in-game.
+    },
+
     -- Camp-ownership shortage effects. `item` is the region's initialShortages good (fh_trade config).
     -- `raised` restores the shortage when outlaws retake a camp; `relieved` clears it when law holds the camp.
     shortages = {

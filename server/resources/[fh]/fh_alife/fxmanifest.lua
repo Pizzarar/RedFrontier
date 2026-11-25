@@ -14,6 +14,7 @@ shared_scripts {
     '@fh_zones/shared/camp_rules.lua', -- FhCampRules.safeParticipants (squad_wiped participants, as camp_cleared)
     'config.lua',
     'shared/alife_rules.lua',
+    'shared/raid_rules.lua',  -- FhAlifeRaidRules (a-life-03 claim raids; needs FhAlifeRules)
     'shared/contracts_rules.lua',
 }
 

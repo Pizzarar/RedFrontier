@@ -511,13 +511,13 @@ case('B1 save v2 roundtrip: ambush/reinforce squads and regionPressure survive',
     R.tick(heartCtx, st, 2, function() return 100 end)
     st.regionPressure.heartlands = { outlaws = 2 }
     local saved = R.serialize(st)
-    eq(2, saved.version)
+    eq(R.VERSION, saved.version)
     local st2, err, eff = R.deserialize(saved, heartCtx)
     eq(nil, err); same({}, eff)
     same(st.squads, st2.squads); same(st.regionPressure, st2.regionPressure); same(st.owners, st2.owners)
 end)
 
-case('B1 old save (a-life-01 v1) loads: owners and retake squads kept, regionPressure empty, saved as v2', function()
+case('B1 old save (a-life-01 v1) loads: owners and retake squads kept, regionPressure empty, saved as current', function()
     local v1 = { version = 1, tick = 7, nextSquadId = 2, owners = { [heartlandsCamp] = 'lawmen' },
         squads = { sq1 = { id = 'sq1', faction = 'outlaws', strength = 4, from = 'heartlands', to = heartlandsCamp,
             etaTick = 22, goal = 'retake' } } }
@@ -525,7 +525,7 @@ case('B1 old save (a-life-01 v1) loads: owners and retake squads kept, regionPre
     eq(nil, err); same({}, eff)
     eq(7, st.tick); eq('lawmen', st.owners[heartlandsCamp]); eq(4, st.squads.sq1.strength)
     same({}, st.regionPressure)
-    eq(2, R.serialize(st).version)
+    eq(R.VERSION, R.serialize(st).version)
     local effects = R.tick(ctx, st, 15, noRng) -- reinforce arrives, retake lands at 22 (4 > 2)
     eq('flipped', effects[1].type)
 end)

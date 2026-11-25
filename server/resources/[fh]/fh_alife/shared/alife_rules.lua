@@ -22,13 +22,17 @@
 --  * reinforce squads (goal 'reinforce', data only, no rng): a law-held camp with none gets one of
 --    reinforce.strength; it travels reinforce.travelTicks, then holds while the camp stays law-held.
 --  * save format v2 = v1 + regionPressure + the squad fields node/region/phase/travel. v1 saves load (migrated).
+-- a-life-03 C1 (wilderness-claim raids, shared/raid_rules.lua). Raid squads live in state.squads with goal 'raid' so
+-- onSquadKill's regionPressure and the B2 death watch apply to them unchanged; raid_rules owns their lifecycle, so
+-- tick() here never advances or resolves a 'raid' squad. Save format v3 = v2 + raidCooldowns { [plotId] = untilTick }
+-- (+ 'raid' squads). v1 and v2 saves load (no raids, no cooldowns).
 -- Law detection: a faction is law if its `kind == 'law'`; when `kind` is absent, fall back to { lawmen, rhodes_law }.
 local M = {}
 
-M.VERSION = 2
+M.VERSION = 3
 
--- Save versions deserialize accepts (v1 = a-life-01: owners + retake squads only).
-local LOADABLE = { [1] = true, [2] = true }
+-- Save versions deserialize accepts (v1 = a-life-01: owners + retake squads only; v2 = a-life-02).
+local LOADABLE = { [1] = true, [2] = true, [3] = true }
 
 -- Fallback set used only when a faction has no `kind` field (hardcoded aliases; rhodes_law is an alias of lawmen).
 local LAW_FALLBACK = { lawmen = true, rhodes_law = true }
@@ -111,13 +115,15 @@ function M.context(cfg, regions, camps)
 end
 
 function M.newState()
-    return { version = M.VERSION, tick = 0, owners = {}, squads = {}, nextSquadId = 1, regionPressure = {} }
+    return { version = M.VERSION, tick = 0, owners = {}, squads = {}, nextSquadId = 1, regionPressure = {},
+        raidCooldowns = {} }
 end
 
 ---Plain-table serialization (JSON-safe; the server json.encode's it for KVP). Deserialize reverses it.
 function M.serialize(state)
     return { version = state.version, tick = state.tick, owners = state.owners, squads = state.squads,
-        nextSquadId = state.nextSquadId, regionPressure = state.regionPressure or {} }
+        nextSquadId = state.nextSquadId, regionPressure = state.regionPressure or {},
+        raidCooldowns = state.raidCooldowns or {} }
 end
 
 local PHASES = { travel = true, hold = true, ['return'] = true }
@@ -167,7 +173,7 @@ function M.pruneSquads(ctx, state)
     return effects
 end
 
----Rebuild state from a saved table (v1 or v2). With `ctx`, squads whose node is gone are pruned (see pruneSquads).
+---Rebuild state from a saved table (v1, v2 or v3). With `ctx`, squads whose node is gone are pruned (see pruneSquads).
 ---@return table|nil state, string|nil err, table effects (prune effects; {} without ctx or on error)
 function M.deserialize(t, ctx)
     if type(t) ~= 'table' then return nil, 'fh_alife_bad_state', {} end
@@ -194,6 +200,12 @@ function M.deserialize(t, ctx)
                     end
                 end
             end
+        end
+    end
+    if type(t.raidCooldowns) == 'table' then
+        for plotId, untilTick in pairs(t.raidCooldowns) do
+            local n = nonNegInt(untilTick)
+            if type(plotId) == 'string' and n then s.raidCooldowns[plotId] = n end
         end
     end
     local effects = ctx and M.pruneSquads(ctx, s) or {}
@@ -520,7 +532,8 @@ function M.onSquadKill(ctx, state, squadId, n)
 end
 
 ---Advance the sim by `n` ticks (default 1). Each step: prune squads whose node is gone, resolve squads due at or
----before the new tick (etaTick, then id order), then plan reinforcements and raids. @return table effects
+---before the new tick (etaTick, then id order), then plan reinforcements and raids. 'raid' squads (a-life-03) are
+---skipped here: the caller runs FhAlifeRaidRules.tick after each step. @return table effects
 function M.tick(ctx, state, n, rng)
     rng = rng or math.random
     state.regionPressure = state.regionPressure or {}
@@ -539,7 +552,8 @@ function M.tick(ctx, state, n, rng)
             return a.id < b.id
         end)
         for _, squad in ipairs(due) do
-            if state.squads[squad.id] == squad then -- an earlier resolution may have removed it
+            -- an earlier resolution may have removed it; 'raid' squads belong to raid_rules.tick
+            if state.squads[squad.id] == squad and squad.goal ~= 'raid' then
                 if squad.goal == 'ambush' or squad.goal == 'reinforce' then
                     add(advanceSquad(ctx, state, squad))
                 else

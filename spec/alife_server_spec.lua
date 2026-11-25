@@ -177,10 +177,12 @@ local function boot(preKvp, ambush)
     run(R .. 'fh_zones/shared/camp_rules.lua')
     run(R .. 'fh_alife/config.lua')
     run(R .. 'fh_alife/shared/alife_rules.lua')
+    run(R .. 'fh_alife/shared/raid_rules.lua') -- fxmanifest order: reads the FhAlifeRules global
     run(R .. 'fh_alife/server/main.lua')
     run(R .. 'fh_alife/server/squads.lua')
     B.cfg = env.FhAlifeConfig
     B.rules = env.FhAlifeRules
+    B.raidRules = env.FhAlifeRaidRules
     B.server = env.FhAlifeServer
     B.squads = env.FhAlifeSquads
     B.regions = env.FhRegions
@@ -188,6 +190,13 @@ local function boot(preKvp, ambush)
 end
 
 T.describe('fh_alife server wiring (stubbed server)', function()
+    T.it('a-life-03: raid_rules loads after alife_rules as the FhAlifeRaidRules global', function()
+        local B = boot()
+        T.eq('table', type(B.raidRules))
+        T.eq('function', type(B.raidRules.tick))
+        T.eq(B.rules.serialize, B.raidRules.serialize)
+    end)
+
     T.it('exports: getOwner default owner + isLawHeld', function()
         local B = boot()
         T.eq('outlaws', B.exported.getOwner('heartlands_t1_01'))
