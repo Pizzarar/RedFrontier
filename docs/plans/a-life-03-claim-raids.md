@@ -45,3 +45,8 @@ Done-check: `~/.venvs/rf/bin/python tools/run-specs.py` green; Gemini review PAS
 - Raids by law factions.
 - Escort and rescue contracts (a-life-04 candidate).
 - Owner-coloured blips.
+
+## Change 2026-11-25 (AL3, per Buddy): C2b dropped, C2c loot ledger
+- The fh_zones stash is wiped at every fh_zones start (boot, restart windows twice a day), so stolen goods kept there would almost never survive (Sonnet review rn-598e05840f2d).
+- C2c: a steal removes from chest 1 (confirmed remove only) and records {name, amount, info} in a per-camp loot ledger in fh_alife's persisted state (cap `lootStacksMax` 20, oldest dropped). On `fh:zones:camp_cleared` the ledger is emptied into `fh:camp:<campId>`; refused entries go to a drop bag at the camp, and if the bag is refused they go back into the ledger. fh_zones is unchanged.
+- Branch a-life-c2c: 522fcbc (C2 rebased on 8d0b4f1) + d1765d8 (C2c, incl. idea-961 truthful notices) + c0ce68f (C3). Gates: 128/2321/0, load-manifests 0 unknown, contracts 0 findings / 0 stale.

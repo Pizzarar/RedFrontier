@@ -4,8 +4,8 @@
 
 ## Who's here
 - Brainstorm: A-Life
-- Lead: ★ AL2
-- Workers: 3
+- Lead: ★ AL3
+- Workers: 0
 
 ## Done when
 - v1 camp-ownership sim merged: clearing a camp flips it to law, outlaws retake it over time, flips move fh_trade shortages and fh_heat. Verified by the owner in-game (OWNER-TESTS).
@@ -31,3 +31,6 @@
 - a-life-02 (`docs/plans/a-life-02-roads-raids.md`): outlaw squads on road ambush nodes that materialise on foot near players, kills weaken retakes, law reinforce squads as data, `alife_contract` board jobs. Handed to Ali1, now AL2 rn-700965813307 after a lead handoff; 2026-11-24 per Red3 ("use the quota"). W1 dropped by AL2: relies on @world world-03 H for regions[].ambush; with no nodes, ambush is a no-op. B1 MERGED+pushed 4937d4f (99/1833/0). B2 7261650 + B3 5077d49 being joined on a-life-b23 (rn-21134fee7048); squad_wiped payload fixed as {squad_id,node_id,region_id,faction,participants=citizenids} (matches camp_cleared, fh_zones/server/main.lua:154). b23 joined c9aef99 (100/1852/0), Gemini PASS 0/0/1 c9aef99; B4 PASS d5301ac. B2+B3+B4 on a-life-b4 047aed9 (main merged in, 105/1947/0), slot asked of Red4. Inert in-game until @world world-i (regions[].ambush) merges. Follow-ups queued idea-898 (2D vs 3D range), 899 (squad heat, with 807), 900.
 - a-life-02 MERGED + pushed (047aed9 on origin). Inert until @world world-i regions[].ambush merges.
 - a-life-03 (`docs/plans/a-life-03-claim-raids.md`): online-only raids on wilderness claims (town lots never), warning first, fight at home or lose 2 stacks from chest 1 to the camp stash; C0 = @homestead plotInfo extension. Handed to the lead 2026-11-25.
+- a-life-03 progress: C0+C1 merged 6b98510. C2 PASS 0/0/1 e9b16b5 (Gemini). C2b dropped (Buddy: stolen goods go in an fh_alife per-camp ledger, delivered on camp_cleared). C2c ledger + C3 on a-life-c2c, rn-56a8edede5cd (Opus, tierA). Lead AL3 rn-3421c23f06df.
+- Decision 2026-11-25: stolen claim goods go into a persisted per-camp loot ledger in fh_alife (cap 20 stacks) and are paid into the camp stash on camp_cleared. C2b (fh_zones stash-wipe change) dropped: a boot wipe would lose goods at every restart window. C2 Gemini PASS 0/0/1 (idea-961 rides along).
+- a-life-03 PASS: MERGED ff (C2 + C2c loot ledger + fixes + C3 OWNER-TESTS) on 5fca77a, 132/2428/0. Owner in-game check pending (OWNER-TESTS "A-life: claim raids"). Follow-ups idea-958/959/987/1006.
