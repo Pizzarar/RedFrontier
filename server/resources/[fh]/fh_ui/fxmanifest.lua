@@ -46,6 +46,7 @@ client_scripts {
     'client/main.lua',
     'client/hud.lua',
     'client/adapter.lua',
+    'client/trappers.lua',
     'client/blips.lua',
     'client/where.lua',
 }

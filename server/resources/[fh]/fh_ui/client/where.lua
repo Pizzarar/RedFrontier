@@ -13,6 +13,7 @@
 --   RemoveBlip(blip)                     [exposed by name]  REMOVE_BLIP 0xF2C3C9DA47AAA54A takes Blip* (pointer)
 -- Style 1664425300 = BLIP_STYLE_PICKUP_WEAPON (base style rsg-character uses; the sprite is overridden anyway).
 local P = FhUiPlaces
+local T = FhUiTrappers
 
 local BLIP_ADD_FOR_COORDS = 0x554D9D53F696D002
 local BLIP_STYLE = 1664425300 -- BLIP_STYLE_PICKUP_WEAPON
@@ -41,15 +42,6 @@ local function sources(trappers)
         zones = FhZonesConfig, crafting = FhCraftingConfig, fence = FhFenceConfig,
         quests = { givers = FhQuestsGivers, boards = FhQuestsBoardSpots },
     }
-end
-
--- Enabled-region trappers, from the read-only `fh:ui:trappers` callback (fh_ui server -> fh_hunting getTrappers).
--- nil when the fetch fails (places.lua falls back to FhHuntingConfig.Trapper).
-local function fetchTrappers()
-    if not (lib and lib.callback) then return nil end
-    local ok, list = pcall(function() return lib.callback.await('fh:ui:trappers', false) end)
-    if ok and type(list) == 'table' then return list end
-    return nil
 end
 
 -- Claimed homestead plots, from the read-only `fh:ui:plot_claims` callback (fh_ui server -> fh_homestead getClaims).
@@ -86,7 +78,7 @@ end
 local function run(query)
     local player = playerPos()
     local ids = showIds()
-    local places = P.gather(sources(fetchTrappers()), { claimed = claimedSet(), isEnabled = FhRegions and FhRegions.isEnabled })
+    local places = P.gather(sources(T.fetch()), { claimed = claimedSet(), isEnabled = FhRegions and FhRegions.isEnabled })
 
     if (query or ''):gsub('%s+', '') == '' then
         local rows = P.list(places, player)
