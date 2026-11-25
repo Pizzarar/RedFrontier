@@ -455,6 +455,20 @@ local function hasHands(src)
     return type(hands) == 'table' and next(hands) ~= nil
 end
 
+---H19: planted garden beds of the plot (server/garden.lua reads fh_plot_beds), or nil, reason. The garden module
+---missing or its read failing fails closed ('fh_garden_check_failed'): no release while beds cannot be checked. Never throws.
+local function gardenBeds(plotId)
+    local G = FhHomesteadGarden
+    if not (G and G.plantedBeds) then return nil, 'fh_garden_check_failed' end
+    local called, rows, why = pcall(G.plantedBeds, plotId)
+    if not called then
+        print(('^1[fh_homestead] garden check of %s errored: %s^7'):format(plotId, tostring(rows)))
+        return nil, 'fh_garden_check_failed'
+    end
+    if type(rows) ~= 'table' then return nil, why or 'fh_garden_check_failed' end
+    return rows
+end
+
 ---Release a plot. Owner (by src) or admin (src 0 = console). With no plotId the caller's CLAIM is released; a town lot
 ---is only released by naming its id. The class comes from the plot's row.
 ---H13 stashes: refused 'fh_chests_not_empty' while any of the plot's chests (chest 1, chest_2, chest_3 as its class has
@@ -463,6 +477,9 @@ end
 ---is taken (no new chest open, build or trophy change can start) and before the rep-back and the DELETE; a final sweep
 ---after the DELETE catches anything a pane opened before the lock (or fh_hands) slipped in, so the next owner always
 ---opens empty chests.
+---H19 garden: refused 'fh_garden_not_empty' while any garden bed of the plot is planted (read from the DB under the
+---lock, before the stash check; a failed read refuses 'fh_garden_check_failed'). `force` instead logs every bed and
+---deletes the rows after the fh_plots DELETE (the FK cascade normally already removed them).
 ---H13b: the owner releasing their own CLAIM while fh_hands reports a hired hand is refused 'fh_hand_active' (fire the
 ---hand first): fh_hands works the claim chest (getPlot(cid) = claim only), so a town lot is not blocked. Admin `force`
 ---skips it; an admin release of someone else's plot is not checked (getHands needs the owner's src).
@@ -492,6 +509,17 @@ local function unclaim(src, plotId, force)
     if not force and class == DEFAULT_CLASS and citizenid ~= nil and citizenid == owner and hasHands(src) then
         busy[plotId] = nil
         return false, 'fh_hand_active'
+    end
+    -- H19: planted beds block a release like full chests; under the lock, before any rep or DB change (garden flows
+    -- hold beginChestWrite, so no plant/harvest is mid-flight here and none can start until the lock is released)
+    local beds, bwhy = gardenBeds(plotId)
+    if not beds then
+        busy[plotId] = nil
+        return false, bwhy
+    end
+    if #beds > 0 and not force then
+        busy[plotId] = nil
+        return false, 'fh_garden_not_empty'
     end
     -- H13: stash check under the lock, before any rep or DB change (a refusal here needs no undo)
     local read, stashes, swhy = pcall(readStashes, plotId)
@@ -549,6 +577,13 @@ local function unclaim(src, plotId, force)
         return false, 'fh_unclaim_failed'
     end
     clearClaim(plotId, owner, class)
+    if #beds > 0 then
+        local cleared, cerr = pcall(FhHomesteadGarden.clearPlot, plotId, owner, beds, 'force unclaim')
+        if not cleared then
+            print(('^1[fh_homestead] plot %s released; clearing its garden beds errored (%s): check fh_plot_beds by hand^7')
+                :format(plotId, tostring(cerr)))
+        end
+    end
     local swept, sweepErr = pcall(sweepStashes, src, owner, plotId)
     if not swept then
         print(('^1[fh_homestead] plot %s released; the stash sweep errored (%s): check fh:chest:%s:<n> by hand^7')

@@ -229,6 +229,9 @@ local function isNearStation(src, stationType, maxDist)
     return stations.nearest(owned, GetEntityCoords(ped), maxDist, stationType) ~= nil
 end
 
+-- H19: in-resource access for server/garden.lua (same function as the stationAt export, without the export hop).
+S.stationAt = stationAt
+
 exports('getStations', getStations)
 exports('stationAt', stationAt)
 exports('isNearStation', isNearStation)

@@ -181,6 +181,8 @@ return function(T, cfg)
                 safeRadiusFor = function(p) return p.radius end }, { __index = BR }),
             FhRegions = opts.isEnabled and { isEnabled = opts.isEnabled } or nil,
             FhHomesteadSlots = opts.slots, -- H13: { isReady, getTiers } stub (extra chests' built tiers)
+            -- H19: unclaim asks server/garden.lua for planted beds (none here; spec/garden_server_spec.lua runs the real one)
+            FhHomesteadGarden = opts.garden or { plantedBeds = function() return {} end, clearPlot = function() return true end },
             MySQL = { query = { await = db }, update = { await = db }, insert = { await = db } },
             CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
             AddEventHandler = function() end, RegisterNetEvent = function(name, fn) W.net[name] = fn end,

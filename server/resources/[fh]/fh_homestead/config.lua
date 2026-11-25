@@ -58,6 +58,13 @@ function slotTemplates.claim()
             tiers = { [1] = { cost = { money = 60, items = { lumber = 10 } }, comfort = 2, unlocks = {} } },
             prop = { model = 'p_chest01x', offset = { x = -4.0, y = 4.0, z = 0.0 } }, -- TODO-verify
         },
+        -- H19 garden (claims only: the town lot template below never copies it). A station of type 'garden', so
+        -- /fh_plant and /fh_harvest find it with stationAt(coords, garden.reach, 'garden'). Beds: garden.beds.
+        garden = {
+            kind = 'station', stationType = 'garden', maxTier = 1,
+            tiers = { [1] = { cost = { money = 50, items = { lumber = 10 } }, comfort = 3, unlocks = { stationType = 'garden' } } },
+            prop = { model = 'p_chest01x', offset = { x = 0.0, y = -10.0, z = 0.0 } }, -- TODO-verify: real garden bed prop
+        },
     }
 end
 -- Town lot (owner Q3 default): one extra chest and a workbench only. No cabin, so chest_2 has no cabin prerequisite.
@@ -79,11 +86,13 @@ FhHomesteadConfig = {
     -- (best-valued first) count per wall tier.
     trophyComfortCap = 20,
     trophyMaxByWallTier = { [1] = 6 },
-    -- H18/H19: garden crops and defaults (the 'garden' build slot is added in H19).
+    -- H18/H19: garden crops and defaults (the 'garden' build slot is in slotTemplates.claim above).
     -- Seeds (rsg-core/shared/items.lua:185-191) map to harvested veg items (items.lua:89, 141, 149).
     -- Per-crop growthSeconds / yield are optional overrides over the garden defaults.
+    -- H19: reach = metres from the garden prop within which /fh_plant and /fh_harvest work (owner only).
     garden = {
         beds = 3,
+        reach = 5.0,
         growthSeconds = 7200,
         yield = 3,
         crops = {

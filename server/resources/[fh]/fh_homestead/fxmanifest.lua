@@ -25,6 +25,7 @@ server_scripts {
     'server/comfort.lua',
     'server/build.lua',
     'server/plotcheck.lua', -- H16 /fh_plotcheck (admin)
+    'server/garden.lua', -- H19 /fh_plant, /fh_harvest, /fh_garden (FhHomesteadGarden; after build.lua: reads its BAG_ADD_UNCHANGED)
 }
 
 client_scripts {

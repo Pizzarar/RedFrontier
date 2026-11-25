@@ -263,6 +263,7 @@ local function newWorld(wcfg)
     })
     W.env = setmetatable({
         FhHomesteadConfig = cfg, FhPlotRules = PR, FhStations = ST, FhBuildRules = R,
+        FhHomesteadGarden = { plantedBeds = function() return {} end, clearPlot = function() return true end }, -- H19 stub
         MySQL = { query = { await = db }, update = { await = db }, insert = { await = db }, scalar = { await = db } },
         CreateThread = function(fn) W.threads[#W.threads + 1] = fn end, Wait = function() end,
         AddEventHandler = function(name, fn) W.handlers[name] = W.handlers[name] or {}; table.insert(W.handlers[name], fn) end,

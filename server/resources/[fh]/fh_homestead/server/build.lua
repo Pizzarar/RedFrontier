@@ -82,6 +82,9 @@ local BAG_ADD_UNCHANGED = {
     fh_size_class = true, fh_too_heavy = true, fh_no_slot = true, fh_bad_slot = true, fh_slot_taken = true,
     invalid_item = true, too_heavy = true, no_space = true,
 }
+-- H19: the garden (server/garden.lua) gives harvests and refunds seeds under the same rule; it reads this list (a
+-- read-only proxy, so nothing outside this file can widen it).
+B.BAG_ADD_UNCHANGED = setmetatable({}, { __index = BAG_ADD_UNCHANGED, __newindex = function() error('read-only', 2) end })
 
 -- Same character, same plot, no unclaim since generation g was read. The plot may be a claim or a town lot (H9).
 local function stillOwns(cid, plotId, g)

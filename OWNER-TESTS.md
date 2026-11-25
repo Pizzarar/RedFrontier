@@ -6,7 +6,7 @@ file back. Setup for the first join is in `OWNER-STEPS.md`. Admin commands need 
 
 ## Playtest order (start here)
 
-One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 400 minutes total.
+One in-game session, in this order (it groups sections so state carries over: gear and money from early sections feed later ones). Setup is in `OWNER-STEPS.md`; give yourself the materials from its section 7 before Homestead and Crafting. Section headings below are links. Times are rough, about 415 minutes total.
 
 | # | Section | ~min | Notes |
 |---|---|---|---|
@@ -22,15 +22,16 @@ One in-game session, in this order (it groups sections so state carries over: ge
 | 10 | [B6e saddlebag](#b6e-saddlebag) | 10 | solo |
 | 11 | [Homestead (H1-H4 + H2): slots, build, stations, comfort](#homestead-h1-h4--h2-slots-build-stations-comfort) | 30 | step with a second player at your workbench/comfort needs a friend (or 2nd character); get `lumber`/`nails` first: buy at the Valentine trade post or give via OWNER-STEPS section 7 |
 | 12 | [Homestead > Town lots (H8-H10): buy, build, abandon, law-safe](#town-lots-h8-h10-buy-build-abandon-law-safe) | 15 | right after Homestead; needs $500 cash and lumber; step 5 needs a second character with under $300 and step 7 (law-safe) a second character too; find a lot with `/where lot` |
-| 13 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
-| 14 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
-| 15 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
-| 16 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
-| 17 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
-| 18 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7; giver talk/accept now opens the fh_ui dialogue screen (reach steps need walking >5 m away) |
-| 19 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 50 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away); steps 25-29 trade post, trapper and heat HUD (need a trade post, a pelt, `fh_trade`/`fh_hunting`/`fh_heat` ensured) |
+| 13 | [Homestead > Garden (H19): plant, grow offline, harvest, unclaim guard](#garden-h19-plant-grow-offline-harvest-unclaim-guard) | 15 | right after Town lots; solo; set `garden.growthSeconds = 120` first (step 5 restarts the server); needs 10 lumber, $50 and `/giveitem` seeds |
+| 14 | [Survival (fh_survival, plan survival-01, S1-S5 combined)](#survival-fh_survival-plan-survival-01-s1-s5-combined) | 25 | solo; shorten durations in fh_survival/config.lua first; SKIP steps marked needs @core caps (idea-613). Its "S1-S5" are survival steps, not the spike verdicts |
+| 15 | [Crafting (fh_crafting, fh_gunsmith)](#crafting-fh_crafting-fh_gunsmith) | 25 | solo; give materials first (OWNER-STEPS section 7) |
+| 16 | [Hunting](#hunting) | 25 | solo; H2 skin flow, H3 trapper, H5 trophy comfort, H4 legendary bear chain (long), H7 |
+| 17 | [Progression (fh_progression, fh_fence, fh_hands)](#progression-fh_progression-fh_fence-fh_hands) | 20 | solo; step 15 permission check needs a non-admin account (friend) |
+| 18 | [Roads](#roads) | 40 | M4 wagon/freight and M5 heat; the second-character `fh_not_owner` check needs a friend; ungated passes only after spike verdicts S2/S3 are GO |
+| 19 | [Q5: quests (fh_quests)](#q5-quests-fh_quests) | 25 | solo; do after Roads, freight needs quests + core B7; giver talk/accept now opens the fh_ui dialogue screen (reach steps need walking >5 m away) |
+| 20 | [UI (fh_ui shell, buff/bag HUD, screens)](#ui-fh_ui-shell-buffbag-hud-screens) | 50 | solo; do last, live fence/jobs steps need those resources already exercised; steps 19-24 giver dialogue (step 23 walk >5 m away); steps 25-29 trade post, trapper and heat HUD (need a trade post, a pelt, `fh_trade`/`fh_hunting`/`fh_heat` ensured) |
 
-Needs another person (table rows): 1 (B-access steps 4-5), 6 (death, two characters), 11 (Homestead second player), 12 (Town lots steps 5 and 7, second character), 16 (step 15 permission check as non-admin), 17 (`fh_not_owner` from a second character). Row 2 (Tutorial) needs a brand-new character slot, not a friend. Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
+Needs another person (table rows): 1 (B-access steps 4-5), 6 (death, two characters), 11 (Homestead second player), 12 (Town lots steps 5 and 7, second character), 17 (step 15 permission check as non-admin), 18 (`fh_not_owner` from a second character). Row 2 (Tutorial) needs a brand-new character slot, not a friend. Get your friend allowlisted first (OWNER-STEPS section 6) and run those steps in one go.
 
 Out of order is fine for the HUD-only checks in UI, but run sections 1-8 first so there is state to look at. The Hunting subsections sit under one `## Hunting` heading ([Hunting](#hunting)).
 
@@ -426,7 +427,7 @@ Resource: `fh_homestead`. Everything runs today except steps 6-7, which need Hun
    RESULT:
 3. Build. Prepare: `/giveitem <id> lumber 65` (or buy 65 lumber at any trade post, $3 each, then give yourself that money back), move all 65 lumber into the plot chest, then `/givemoney <id> cash 500`. Note your cash (call it C).
    a. `/fh_build`
-      Expected: `fh_build: plot heartlands_01: cabin 0/2 next: $150, 20 lumber; chest_2 0/1 next: $40, 8 lumber; chest_3 0/1 next: $60, 10 lumber; fence 0/1 next: $100, 15 lumber; station_1 0/1 next: $60, 10 lumber; station_2 0/1 next: $25, 5 lumber; station_3 0/1 next: $80, 12 lumber; trophy_wall 0/1 next: $120, 10 lumber`
+      Expected: `fh_build: plot heartlands_01: cabin 0/2 next: $150, 20 lumber; chest_2 0/1 next: $40, 8 lumber; chest_3 0/1 next: $60, 10 lumber; fence 0/1 next: $100, 15 lumber; garden 0/1 next: $50, 10 lumber; station_1 0/1 next: $60, 10 lumber; station_2 0/1 next: $25, 5 lumber; station_3 0/1 next: $80, 12 lumber; trophy_wall 0/1 next: $120, 10 lumber`
    b. `/fh_build chest_2` (needs the cabin first).
       Expected: `fh_build: fh_prereq_missing`. Chest still 65 lumber, cash still C.
    c. Run these in order. After each one, check the reply and the lumber left in the plot chest:
@@ -529,6 +530,44 @@ Resource: `fh_homestead` (+ `fh_economy`, `fh_heat` for step 7). One lot AND one
 7. Law encounters skipped in your own lot, not in a stranger's. Roadblocks fire when heat CROSSES the roadblock level (as in M5 step 17), so each check is: heat to 0, then to 55. Own heartlands_lot_01 (step 6) and stand in the middle of it. Run `exports.fh_heat:set(<yourId>, "outlaws", 0)`, then `exports.fh_heat:set(<yourId>, "outlaws", 55)`.
    Expected: no roadblock spawns; the console shows once `[fh_heat] <id>/<cid> law-safe in own lot heartlands_lot_01: skipping spawn`. Walk out of the lot (more than 14 m from its center), set heat 0 then 55 again: the roadblock spawns as in M5 step 17 (the skipped one started no cooldown). Set heat back to 0.
    Second character (no lot of their own) stands in YOUR lot and does the same 0 -> 55: their roadblock spawns normally and there is no law-safe line for them. Also at your wilderness claim (step 3) a 0 -> 55 spawns normally (claims are not law-safe).
+   RESULT:
+
+### Garden (H19): plant, grow offline, harvest, unclaim guard
+
+Resource: `fh_homestead`. Claims only. Prepare: in `fh_homestead/config.lua` set `garden.growthSeconds = 120` (2 minutes instead of 2 hours) and restart the server; put it back to `7200` after this card. Own `heartlands_01` (center (-500, 750, 105)); the garden prop will stand at about (-500, 740), 10 m south of the center. Have $50+ cash and 10 lumber (backpack or plot chest). `/giveitem <id> seedcarrot 2`, `/giveitem <id> seedpotato 1`, `/giveitem <id> seedcorn 1`. Plot chests empty.
+
+1. Not built yet. Stand at about (-500, 740) and run `/fh_plant seedcarrot`.
+   Expected: `fh_plant: fh_no_garden (build it first: /fh_build garden)`. You still have 2 seedcarrot.
+   RESULT:
+2. Build. `/fh_build garden`.
+   Expected: `fh_build: built garden tier 1 ($50, 10 lumber)`. A placeholder `p_chest01x` prop stands at about (-500, 740). `/fh_comfort` is 3 higher than before.
+   RESULT:
+3. Plant. At the plot center (-500, 750) run `/fh_plant seedcarrot`.
+   Expected: `fh_plant: fh_not_near_garden (stand at your garden)`, 2 seedcarrot still.
+   Walk to the garden prop (within 5 m) and run, in order:
+   - `/fh_plant seedmystery` -> `fh_plant: fh_unknown_seed (seeds: seedcarrot, seedpotato, seedcorn)`
+   - `/fh_plant seedcarrot` -> `fh_plant: planted seedcarrot in bed 1 (ready in 2m)`, backpack seedcarrot 2 -> 1
+   - `/fh_plant seedpotato` -> `... in bed 2 ...`, `/fh_plant seedcorn` -> `... in bed 3 ...`
+   - `/fh_plant seedcarrot` -> `fh_plant: fh_garden_full (every bed is planted)`, still 1 seedcarrot
+   DB: `SELECT bed, crop, planted_at FROM fh_plot_beds WHERE plot_id = 'heartlands_01' ORDER BY bed;` -> 3 rows: 1 seedcarrot, 2 seedpotato, 3 seedcorn, `planted_at` = unix seconds a few seconds apart.
+   RESULT:
+4. Not ripe. Right away run `/fh_garden`, then `/fh_harvest`.
+   Expected: `fh_garden: plot heartlands_01: bed 1 carrot 2m; bed 2 potato 2m; bed 3 corn 2m` (1m if a minute passed) and `fh_harvest: fh_not_ripe (ready in 2m)` (or 1m). Nothing given, still 3 rows in the DB.
+   RESULT:
+5. Grows offline and across a restart. Quit the game, stop the server, start it, wait until 2 minutes have passed since step 3, rejoin.
+   Expected: `/fh_garden` (from anywhere on the map) -> `fh_garden: plot heartlands_01: bed 1 carrot ready; bed 2 potato ready; bed 3 corn ready`.
+   RESULT:
+6. Harvest. At the garden prop run `/fh_harvest 2`, then `/fh_harvest 2` again, then `/fh_harvest`, then `/fh_harvest 4`.
+   Expected: `fh_harvest: bed 2 gave 3 potato (backpack)` (backpack potato +3); then `fh_harvest: fh_bed_empty` (nothing more given); then `fh_harvest: bed 1 gave 3 carrot (backpack)`; then `fh_harvest: fh_bad_bed`. DB: one row left (bed 3 seedcorn).
+   RESULT:
+7. Backpack full -> plot chest 1. Fill the backpack until a `/giveitem <id> lumber 20` is refused as too heavy, then at the garden run `/fh_harvest`.
+   Expected: `fh_harvest: bed 3 gave 3 corn (plot chest 1: backpack full)`. Plot chest 1 holds 3 corn; the console shows one yellow `garden harvest: backpack refused 3 corn (...); put into plot chest fh:chest:heartlands_01:1 instead` line and no `ITEM LOST`. DB: 0 rows. Empty the plot chest and drop the extra lumber.
+   RESULT:
+8. Unclaim guard. Plant your last seedcarrot (`fh_plant: planted seedcarrot in bed 1 ...`), then run `/fh_unclaim`.
+   Expected: `fh_unclaim: fh_garden_not_empty`. Nothing changes: props stay, the bed row stays, `/fh_garden` still lists the carrot.
+   Admin force: on the server console run `fh_unclaim heartlands_01 force`.
+   Expected: a yellow `force unclaim: plot=heartlands_01 owner=<cid> bed=1 crop=seedcarrot planted_at=<n> cleared` line, then `[fh_homestead] fh_unclaim: released plot heartlands_01`. No red lines. DB: `SELECT * FROM fh_plot_beds WHERE plot_id = 'heartlands_01';` -> 0 rows. Claim again with `/fh_claim`: `/fh_garden` -> `fh_garden: fh_no_garden (build it first: /fh_build garden)`.
+   The whole card: the console shows no `ITEM LOST` line and no red errors. Set `garden.growthSeconds` back to `7200`.
    RESULT:
 
 ## Q5: quests (fh_quests)

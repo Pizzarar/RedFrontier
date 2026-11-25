@@ -99,10 +99,14 @@ Server to client (H2): `fh:homestead:slot_props` `(plot_id, props)` to everyone 
 - `slots[<slot_id>]` (claim template): `kind` (`cabin`, `fence`, `station`, `trophy_wall`, `chest`), `maxTier`,
   `stationType` (stations), `requires = { slot = minTier }`, `prop`, and `tiers[n] = { cost { money, items }, comfort,
   unlocks { chests, safeRadiusBonus, stationType, trophyComfort } }`. Slots: `cabin` (2 tiers), `fence`, `station_1`
-  workbench, `station_2` campfire, `station_3` tanning_rack, `trophy_wall`, `chest_2` (needs cabin 1), `chest_3` (needs cabin 2).
+  workbench, `station_2` campfire, `station_3` tanning_rack, `trophy_wall`, `chest_2` (needs cabin 1), `chest_3` (needs cabin 2),
+  `garden` (H19: station type `garden`, 1 tier, $50 + 10 lumber, comfort 3; claims only, never on a town lot).
   Costs are charged by the H2 build flow (below).
 - `buildItems` (H2): the build materials `lumber` and `nails`, full §4.1 item defs, registered with
   `exports.fh_core:registerItems` from this resource only (at start and again when fh_core restarts).
+- `garden` (H18/H19): `beds` (3), `reach` (5.0 m from the garden prop for `/fh_plant` / `/fh_harvest`), `growthSeconds`
+  (7200 = 2 real hours), `yield` (3), `crops[<seed>] = { item, growthSeconds?, yield? }`: `seedcarrot` -> `carrot`,
+  `seedpotato` -> `potato`, `seedcorn` -> `corn` (per-crop values override the defaults). Pure rules: `shared/garden.lua`.
 - `trophyComfortCap` (20): max total trophy points. `trophyMaxByWallTier` (`{ [1] = 6 }`): how many trophies (best first) count.
   Trophy comfort counts only with the trophy wall built.
 
@@ -111,6 +115,9 @@ Server to client (H2): `fh:homestead:slot_props` `(plot_id, props)` to everyone 
 - `fh_plots` / `fh_plot_chests` (0003): claim and chest rows. `fh_plots.class` (0018) `'claim'` | `'town_lot'`,
   `UNIQUE(citizenid, class)`: one plot per character per class.
 - `fh_plot_slots` (0005): `plot_id`, `slot_id`, `tier`, `built_at`. PK `(plot_id, slot_id)`. Tier 0 = no row. FK to `fh_plots` ON DELETE CASCADE.
+- `fh_plot_beds` (0021): `plot_id`, `bed` (1..beds), `crop` (seed key),
+  `planted_at` (server unix seconds, bigint: no time-zone conversion). PK `(plot_id, bed)`; no row = empty bed. FK to
+  `fh_plots` ON DELETE CASCADE. `server/garden.lua` also creates it at start (`CREATE TABLE IF NOT EXISTS`, same DDL).
 - `fh_plot_trophies` (0011): `plot_id`, `trophy_id` (varchar 64), `points`, `placed_at`. PK `(plot_id, trophy_id)`. FK to `fh_plots` ON DELETE CASCADE.
 
 ## Build flow (H2, `server/build.lua`)
@@ -244,6 +251,10 @@ No inherited stashes: the next owner of a plot always opens empty chests.
   the lock, a final sweep logs anything that slipped in (a pane opened before the lock) as `ITEM LOST: added during
   unclaim` and clears it; if that clear fails the release stands and the console names the stash to wipe by hand.
 
+Planted garden beds (H19) block a release the same way: `fh_garden_not_empty` (read under the lock, before the stash
+check; a failed read is `fh_garden_check_failed`). Admin `force` logs one line per bed (`force unclaim: plot=.. owner=..
+bed=.. crop=.. planted_at=.. cleared`) and deletes the rows after the `fh_plots` DELETE (the FK cascade normally already did).
+
 ### Hired hand (H13b, idea-859)
 
 The owner releasing their own **claim** while `exports.fh_hands:getHands(src)` lists a hand is refused `fh_hand_active`
@@ -252,6 +263,38 @@ refusal. fh_hands works the claim chest only (`getPlot(cid)`), so a town lot aba
 with the player src (it re-checks the loaded character; a citizenid would always read as no hand). fh_hands not started,
 export missing or erroring = allowed (`pcall`, console warns `hired-hand check skipped`). Admin `force` skips the check;
 an admin / console release of someone else's plot is not checked (the owner may be offline, `getHands` needs their src).
+
+## Garden (H19, `server/garden.lua`)
+
+Build `/fh_build garden` on your claim (prop at plot center + (0, -10), placeholder `p_chest01x`, TODO-verify). Every
+command works only for the owner, standing within `garden.reach` of their own garden prop (`fh_not_near_garden`,
+`fh_not_owner`, `fh_no_garden` before it is built, `fh_no_plot` without a claim).
+
+- `/fh_plant <seed>`: 1 seed from your backpack into the lowest free bed. Reply `fh_plant: planted <seed> in bed <n>
+  (ready in <time>)`. Refusals take nothing: `fh_unknown_seed`, `fh_no_seed`, `fh_garden_full`, `fh_garden_busy`.
+- `/fh_harvest [bed]`: the given bed, or the first ready one. Reply `fh_harvest: bed <n> gave <yield> <item> (backpack)`
+  or `(plot chest 1: backpack full)`. Not ready: `fh_not_ripe (ready in <time>)`; `fh_bed_empty` / `fh_garden_empty`;
+  `fh_bad_bed` outside 1..beds.
+- `/fh_garden`: `fh_garden: plot <id>: bed 1 carrot 1h 59m; bed 2 empty; bed 3 potato ready` (no need to stand there).
+
+Server-local: `FhHomesteadGarden.plant(src, seed)` -> `true, bed, planted_at`; `.harvest(src, bed?)` -> `true, { bed,
+item, amount, to = 'bag'|'chest' }`; `.status(src)`; all `false, reason, detail` on a refusal. `.plantedBeds(plotId)` is
+the DB read the unclaim guard uses.
+
+Rules (tier A: no free crop, no lost seed, no double harvest):
+
+- Growth is the DB timestamp only (no cache): a crop grows while its owner is offline and keeps its timer across restarts.
+- Lock: one garden flow per plot and per character, plus `FhHomesteadClaims.beginChestWrite` for the plot, so an unclaim
+  during a plant/harvest is refused `fh_chest_busy` and a plant/harvest during an unclaim `fh_claim_busy`. Released on
+  every path, also on a Lua error.
+- Plant: the seed is taken (fh_core `removeItem`, backpack ref, right after re-checking the same character is on the src)
+  before the bed row is written, and the write is conditional on `fh_plots` still naming the owner. If the write fails
+  the seed goes back: backpack, else plot chest 1 when the backpack refusal is one of build.lua's `BAG_ADD_UNCHANGED`
+  reasons, else `ITEM LOST` is logged (never rerouted) and the reply is `fh_garden_refund_failed`.
+- Harvest: the exact planting (plot, bed, crop, planted_at, owner) is deleted first and must affect exactly 1 row
+  before anything is given, so a second harvest of the same planting gives nothing (a racing one: `fh_bed_changed`). Then the yield goes to the backpack,
+  else plot chest 1 (same rule as above). When neither takes it and nothing landed, the bed row is put back as it was and
+  the reply is `fh_no_room`; any other failure is logged `ITEM LOST` and the reply is `fh_harvest_lost`.
 
 ## Open
 
