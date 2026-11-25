@@ -6,6 +6,9 @@ local describe, it, eq, same = T.describe, T.it, T.eq, T.same
 local base = here .. '../server/resources/[fh]/fh_hunting/'
 local Coats = dofile(base .. 'shared/coats.lua')
 
+local Tl = dofile(here .. '../server/resources/[fh]/fh_tailor/shared/tailor_logic.lua')
+local L = dofile(base .. 'shared/legendaries.lua')
+
 local function world(w)
     w = w or {}
     local W = { calls = {}, logs = {}, available = true, results = {} }
@@ -28,7 +31,7 @@ describe('coat ids', function()
     it('follow the convention and the source matches the tailor pattern', function()
         local m, f = Coats.ids('legendary_bear')
         eq(m, 'coat_legendary_bear_male'); eq(f, 'coat_legendary_bear_female')
-        eq(Coats.source('legendary_bear'), 'hunting:legendary:legendary_bear')
+        eq(Coats.source('legendary_bear'), 'hunting:bear')
         eq(Coats.source('legendary_bear'):match('^[%w_:%-%.]+$') ~= nil, true)
     end)
     it('reject invalid legendary ids', function()
@@ -41,8 +44,8 @@ describe('grantFor', function()
         local W = world()
         eq(W.coats.grantFor('CID1', 'legendary_bear'), 2)
         same(W.calls, {
-            { cid = 'CID1', id = 'coat_legendary_bear_male', src = 'hunting:legendary:legendary_bear' },
-            { cid = 'CID1', id = 'coat_legendary_bear_female', src = 'hunting:legendary:legendary_bear' } })
+            { cid = 'CID1', id = 'coat_legendary_bear_male', src = 'hunting:bear' },
+            { cid = 'CID1', id = 'coat_legendary_bear_female', src = 'hunting:bear' } })
     end)
     it('wrong_sex is ignored silently', function()
         local W = world({ results = { coat_x_female = 'wrong_sex' } })
@@ -63,22 +66,39 @@ describe('grantFor', function()
     end)
 end)
 
+describe('real legendaries', function()
+    it('every legendary source passes fh_tailor validSource and every coat id passes validId', function()
+        eq(#L.list, 15)
+        for _, e in ipairs(L.list) do
+            local m, f = Coats.ids(e.id)
+            eq(Tl.validSource(Coats.source(e.id)), true, e.id .. ' source ' .. tostring(Coats.source(e.id)))
+            eq(Tl.validId(m), true, m); eq(Tl.validId(f), true, f)
+        end
+    end)
+end)
+
+describe('refusals are logged once per (id, code)', function()
+    it('invalid_source / db_failed warn once each; wrong_sex stays silent', function()
+        local W = world({ results = { coat_x_male = 'invalid_source', coat_x_female = 'wrong_sex' } })
+        W.coats.grantFor('C1', 'x'); W.coats.grantFor('C2', 'x')
+        eq(#W.logs, 1)
+        W.results.coat_x_male = 'db_failed'
+        W.coats.grantFor('C1', 'x'); W.coats.grantFor('C1', 'x')
+        eq(#W.logs, 2)
+    end)
+end)
+
 describe('backfill', function()
-    it('grants only completed chains', function()
+    it('grants for the given completed ids only', function()
         local W = world()
-        local done = W.coats.backfill('CID1', { 'a', 'b', 'c' }, function(_, id) return id ~= 'b' end)
-        same(done, { 'a', 'c' }); eq(#W.calls, 4)
+        same(W.coats.backfill('CID1', { 'a', 'c' }), { 'a', 'c' }); eq(#W.calls, 4)
         eq(W.calls[1].id, 'coat_a_male'); eq(W.calls[3].id, 'coat_c_male')
     end)
-    it('no completed chains, or fh_tailor missing: no calls', function()
+    it('empty list, or fh_tailor missing: no calls; available() reflects it', function()
         local W = world()
-        same(W.coats.backfill('CID1', { 'a' }, function() return false end), {}); eq(#W.calls, 0)
+        same(W.coats.backfill('CID1', {}), {}); eq(#W.calls, 0); eq(W.coats.available(), true)
         local W2 = world({ available = false })
-        same(W2.coats.backfill('CID1', { 'a' }, function() return true end), {}); eq(#W2.calls, 0)
-    end)
-    it('a throwing completed-check skips that chain only', function()
-        local W = world()
-        same(W.coats.backfill('CID1', { 'a', 'b' }, function(_, id) if id == 'a' then error('x') end return true end), { 'b' })
+        same(W2.coats.backfill('CID1', { 'a' }), {}); eq(#W2.calls, 0); eq(W2.coats.available(), false)
     end)
 end)
 

@@ -1,13 +1,14 @@
 -- Legendary coats (hunting-03 C2). Pure: no natives. A completed legendary chain grants two fh_tailor wardrobe entries,
--- `coat_<legendary_id>_male` and `coat_<legendary_id>_female`, with source `hunting:legendary:<legendary_id>`.
+-- `coat_<legendary_id>_male` and `coat_<legendary_id>_female`, with source `hunting:<id minus 'legendary_'>`
+-- (fh_tailor_owned.source is varchar(32): the longer 'hunting:legendary:<id>' form was refused as invalid_source).
 -- fh_tailor.grant is idempotent and offline-safe; `wrong_sex` (the entry for the other sex) is the expected result of
--- one of the two calls and is ignored. `unknown_entry` (the catalog has no such coat yet) is logged once per id and
--- never breaks chain completion. fh_tailor missing/stopped = silent no-op.
+-- one of the two calls and is ignored. Any other failure (unknown_entry, invalid_source, db_failed, not_ready...) is
+-- logged once per (coat id, code) and never breaks chain completion. fh_tailor missing/stopped = silent no-op.
 --
 -- M.new({ grant = fn(citizenid, id, source) -> ok, code, available = fn() -> bool, log = fn(msg) })
 local M = {}
 
-M.SOURCE_PREFIX = 'hunting:legendary:'
+M.SOURCE_PREFIX = 'hunting:'
 
 local function validId(id) return type(id) == 'string' and id:match('^[%w_]+$') ~= nil end
 
@@ -17,10 +18,10 @@ function M.ids(legendaryId)
     return 'coat_' .. legendaryId .. '_male', 'coat_' .. legendaryId .. '_female'
 end
 
----Source string; matches ^[%w_:%-%.]+$ (fh_tailor's validSource).
+---Source string, e.g. 'hunting:cinderjaw_coyote'; matches ^[%w_:%-%.]+$ and fits fh_tailor's MAX_SOURCE (32).
 function M.source(legendaryId)
     if not validId(legendaryId) then return nil end
-    return M.SOURCE_PREFIX .. legendaryId
+    return M.SOURCE_PREFIX .. (legendaryId:gsub('^legendary_', ''))
 end
 
 function M.new(deps)
@@ -36,25 +37,29 @@ function M.new(deps)
         for _, id in ipairs({ male, female }) do
             n = n + 1
             local ok, a, b = pcall(deps.grant, citizenid, id, src)
-            local code = ok and (b ~= nil and b or a) or nil
-            if not ok then
-                if not warned[id] then warned[id] = true; deps.log(('coat grant %s threw: %s'):format(id, tostring(a))) end
-            elseif code == 'unknown_entry' and not warned[id] then
-                warned[id] = true
-                deps.log(('coat %s is not in the fh_tailor catalog (unknown_entry); skipped'):format(id))
+            local code
+            if not ok then code = 'threw: ' .. tostring(a)
+            elseif a == false then code = tostring(b) end
+            if code and code ~= 'wrong_sex' then
+                local key = id .. '|' .. code
+                if not warned[key] then
+                    warned[key] = true
+                    deps.log(('coat grant %s refused (%s); skipped'):format(id, code))
+                end
             end
-            -- granted / already_owned / wrong_sex / other codes: nothing to do (idempotent, retried on next load)
         end
         return n
     end
 
-    ---Grant for every legendary id in `ids` whose chain is completed. isCompleted(citizenid, id) -> bool.
-    ---Returns the legendary ids granted for.
-    function C.backfill(citizenid, ids, isCompleted)
+    ---True when fh_tailor can take grants (callers skip their completed-chain query when false).
+    function C.available() return deps.available() == true end
+
+    ---Grant for each legendary id in `completedIds` (the caller's single completed-chains query). Returns the ids
+    ---granted for (empty when fh_tailor is unavailable).
+    function C.backfill(citizenid, completedIds)
         local done = {}
-        for _, lid in ipairs(ids) do
-            local okc, completed = pcall(isCompleted, citizenid, lid)
-            if okc and completed == true and C.grantFor(citizenid, lid) > 0 then done[#done + 1] = lid end
+        for _, lid in ipairs(completedIds) do
+            if C.grantFor(citizenid, lid) > 0 then done[#done + 1] = lid end
         end
         return done
     end
