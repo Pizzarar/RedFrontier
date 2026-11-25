@@ -82,7 +82,7 @@ CreateThread(function()
                 local e = watch[key]
                 local rows = Q.cache[e.cid]
                 local row = rows and rows[e.qid]
-                if WR.heal(e, row) == 'drop' then disarm(key, row and row.status == 'done' and 'done' or 'gone') end
+                if WR.heal(e, row) == 'drop' then disarm(key, WR.dropReason(e, row)) end
             end
             -- WR.tick snapshots hits before anything yields; TriggerEvent below takes the quest lock.
             for _, hit in ipairs(WR.tick(watch, posOf)) do
@@ -199,7 +199,13 @@ do
             onReady = function(netId, requestId) -- again with a new netId after a re-request (spawner drop)
                 if watch[key] ~= e then despawnReq(requestId) return end
                 e.netId = netId
-                if ownerOnline(e) then TriggerClientEvent('fh:quests:escort_follow', e.src, { netId = netId }) end
+                if not ownerOnline(e) then return end
+                -- a re-request replaced the escortee: the client stops following the old netId first
+                if e.followNetId and e.followNetId ~= netId then
+                    TriggerClientEvent('fh:quests:escort_stop', e.src, { netId = e.followNetId })
+                end
+                e.followNetId = netId
+                TriggerClientEvent('fh:quests:escort_follow', e.src, { netId = netId })
             end,
             onFailed = function(reason)
                 if watch[key] ~= e then return end
@@ -213,7 +219,9 @@ do
     end
 
     kind.onDisarm = function(e, why)
-        if e.netId and ownerOnline(e) then TriggerClientEvent('fh:quests:escort_stop', e.src, { netId = e.netId }) end
+        if e.followNetId and ownerOnline(e) then
+            TriggerClientEvent('fh:quests:escort_stop', e.src, { netId = e.followNetId })
+        end
         if why == 'done' then
             local reqId = e.reqId
             SetTimeout(DONE_DESPAWN_MS, function() despawnReq(reqId) end)

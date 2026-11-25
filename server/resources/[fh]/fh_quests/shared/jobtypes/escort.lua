@@ -37,7 +37,8 @@ JT.registerBuilder('escort', function(region_id, d)
     return out
 end)
 
----Tag of an escortee's spawn request: one per holder + region + offer key (client/escort.lua matches the prefix).
+---Tag of an escortee's spawn request: one per holder + region + offer key. The client
+---tracks the escortee by netId (fh:quests:escort_follow / escort_stop), not by this tag.
 function JT.escortTag(region_id, key, cid) return JT.ESCORT_TAG_PREFIX .. region_id .. ':' .. key .. ':' .. tostring(cid) end
 
 local function payload(e) return { citizenid = e.cid, offer_key = e.offer_key, region_id = e.region_id } end

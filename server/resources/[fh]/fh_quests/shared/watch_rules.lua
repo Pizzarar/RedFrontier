@@ -199,6 +199,13 @@ function M.heal(e, state)
     return 'keep'
 end
 
+---onDisarm reason when heal drops an entry: 'done' only for an entry that has seen its row active and now reads
+---done (completed). A pending entry that timed out reads a previous run's done row: 'gone', not 'done'.
+function M.dropReason(e, state)
+    if not e.pending and type(state) == 'table' and state.status == 'done' then return 'done' end
+    return 'gone'
+end
+
 ---Watch key of a held job: one entry per character + quest id.
 function M.key(cid, qid) return tostring(cid) .. '|' .. tostring(qid) end
 

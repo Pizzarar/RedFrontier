@@ -284,6 +284,20 @@ describe('quests watch rules: pending entries (C2 review LOW)', function()
         eq('drop', WR.heal(e, st('done', 0))) -- completed: dropped, no leak
         WR.KINDS.spec_one = nil
     end)
+    it('dropReason: done only after the row was seen active; a timed-out pending entry is gone', function()
+        local e = onePoint()
+        for _ = 1, WR.PENDING_TICKS do WR.heal(e, st('done', 0)) end
+        eq('drop', WR.heal(e, st('done', 0)))
+        eq('gone', WR.dropReason(e, st('done', 0)))
+        eq('gone', WR.dropReason(e, nil))
+        local f = onePoint()
+        eq('keep', WR.heal(f, st('active', 0)))
+        eq('drop', WR.heal(f, st('done', 1)))
+        eq('done', WR.dropReason(f, st('done', 1)))
+        eq('gone', WR.dropReason(f, st('failed', 0)))
+        eq('gone', WR.dropReason(f, nil))
+        WR.KINDS.spec_one = nil
+    end)
     it('a pending entry whose row never turns active is dropped after PENDING_TICKS', function()
         local e = onePoint()
         for _ = 1, WR.PENDING_TICKS do eq('keep', WR.heal(e, st('done', 0))) end
